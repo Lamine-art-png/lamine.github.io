@@ -1,0 +1,122 @@
+name: Assurance Portal I18n Diagnostics
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/assurance-portal-i18n-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  diagnose:
+    name: Isolate portal i18n sub-check
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install
+        working-directory: figma-enterprise-v4
+        run: npm ci
+
+      - name: Literal inventory
+        working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --check
+      - name: Status literal inventory
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/literal-inventory",description:"Literal inventory passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Core i18n contract
+        working-directory: figma-enterprise-v4
+        run: node tests/i18n-contract.mjs
+      - name: Status core i18n
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/core",description:"Core i18n contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Commercial boundary i18n
+        working-directory: figma-enterprise-v4
+        run: node tests/commercial-boundary-i18n-contract.mjs
+      - name: Status commercial i18n
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/commercial",description:"Commercial i18n contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Paywall refinements
+        working-directory: figma-enterprise-v4
+        run: node tests/paywall-refinements-v4-contract.mjs
+      - name: Status paywall
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/paywall",description:"Paywall contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Dynamic UI coverage
+        working-directory: figma-enterprise-v4
+        run: node tests/dynamic-ui-i18n-coverage-contract.mjs
+      - name: Status dynamic coverage
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/dynamic",description:"Dynamic UI coverage passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Product tour source library
+        working-directory: figma-enterprise-v4
+        run: node tests/product-tour-source-library-contract.mjs
+      - name: Status product tour
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/product-tour",description:"Product tour contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Mobile responsive
+        working-directory: figma-enterprise-v4
+        run: node tests/mobile-portal-responsive-contract.mjs
+      - name: Status mobile
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/mobile",description:"Mobile portal contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Frontend recovery
+        working-directory: figma-enterprise-v4
+        run: node tests/frontend-runtime-recovery-contract.mjs
+      - name: Status recovery
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/recovery",description:"Frontend recovery contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Assurance route isolation
+        working-directory: figma-enterprise-v4
+        run: node tests/assurance-route-isolation-contract.mjs
+      - name: Status Assurance route isolation
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/assurance-route",description:"Assurance route isolation passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Field Intelligence offline
+        working-directory: figma-enterprise-v4
+        run: node tests/field-intelligence-offline-contract.mjs
+      - name: Status FI offline
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/fi-offline",description:"Field Intelligence offline contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Field Intelligence multimodal
+        working-directory: figma-enterprise-v4
+        run: node tests/field-intelligence-multimodal-contract.mjs
+      - name: Status FI multimodal
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/fi-multimodal",description:"Field Intelligence multimodal contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Field Intelligence operating loop
+        working-directory: figma-enterprise-v4
+        run: node tests/field-intelligence-operating-loop-contract.mjs
+      - name: Status FI operating loop
+        run: |
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc '{state:"success",context:"assurance-i18n/fi-loop",description:"Field Intelligence operating-loop contract passed"}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Publish final diagnostic status
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then state=success; description="All portal i18n sub-checks passed"; else state=failure; description="Portal i18n sub-check diagnostics failed"; fi
+          curl --fail-with-body --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" --data "$(jq -nc --arg state "$state" --arg context assurance-i18n-diagnostics --arg description "$description" '{state:$state,context:$context,description:$description}')" "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
