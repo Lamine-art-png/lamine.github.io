@@ -70,8 +70,8 @@ assert(indexHtml.includes('<title>AGRO-AI Enterprise Portal</title>'), "portal b
 assert(indexHtml.includes('rel="icon"'), "portal must declare a browser favicon");
 assert(indexHtml.includes('type="image/png"'), "portal favicon must use the official raster mark");
 assert(indexHtml.includes('data:image/png;base64,'), "portal favicon must be bootstrap-safe and self-contained");
-assert(app.includes("MAX_LOCALE_TRANSITION_COVER_MS"), "locale transition cover must have a hard availability bound");
-assert(app.includes("localeCoverVisible"), "locale transition cover visibility must be independently fail-open");
+assert(!app.includes("MAX_LOCALE_TRANSITION_COVER_MS"), "retired full-screen locale transition timeout must not return");
+assert(!app.includes("localeCoverVisible"), "retired full-screen locale transition cover must not return");
 assert(app.includes("OFFICIAL_AGRO_AI_LOADER_LOGO"), "portal loader must use the official AGRO-AI brand mark");
 assert(!app.includes('>{"AGRO"}</span>'), "stale text-only AGRO loader badge must not return");
 assert(app.includes("agroai-loader-sweep"), "official portal loader must keep a branded loading motion");
