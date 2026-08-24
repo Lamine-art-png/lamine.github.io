@@ -158,5 +158,5 @@ export function portalCopySourceForValues(values: readonly string[]): Record<str
 }
 
 export function fullEnglishUiSource(base: Record<string, string>): Record<string, string> {
-  return { ...base, ...STATIC_PORTAL_LITERAL_CATALOG, ...DECISION_MEMORY_UI_CATALOG };
+  return { ...base, ...STATIC_PORTAL_LITERAL_CATALOG };
 }
