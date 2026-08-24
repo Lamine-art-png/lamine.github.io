@@ -1,0 +1,92 @@
+name: Assurance Literal Delta Extract
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/assurance-literal-delta-extract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  DIAG_BRANCH_PREFIX: diagnostics/assurance-literal-delta
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute deterministic literal mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          root = Path('figma-enterprise-v4').resolve()
+          sys.path.insert(0, str(root))
+          from scripts.check_ui_literal_inventory import build_catalog, load_parts
+          expected = build_catalog()
+          current, paths = load_parts()
+          missing = {k: expected[k] for k in sorted(set(expected) - set(current))}
+          extra = {k: current[k] for k in sorted(set(current) - set(expected))}
+          changed = {
+              k: {"current": current[k], "expected": expected[k]}
+              for k in sorted(set(current).intersection(expected))
+              if current[k] != expected[k]
+          }
+          payload = {
+              "expected_count": len(expected),
+              "current_count": len(current),
+              "catalog_parts": [str(p) for p in paths],
+              "missing": missing,
+              "extra": extra,
+              "changed": changed,
+          }
+          Path('diagnostics').mkdir(exist_ok=True)
+          Path('diagnostics/assurance-literal-inventory.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({
+              "expected_count": len(expected),
+              "current_count": len(current),
+              "missing_count": len(missing),
+              "extra_count": len(extra),
+              "changed_count": len(changed),
+          }, sort_keys=True))
+          PY
+
+      - name: Publish diagnostic branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA:0:12}"
+          branch="${DIAG_BRANCH_PREFIX}-${short}"
+          git config user.name "AGRO-AI Release Diagnostics"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add diagnostics/assurance-literal-inventory.json
+          git commit -m "diagnostics: capture Assurance literal inventory mismatch"
+          git push origin "$branch"
+          echo "DIAG_BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Publish extraction status
+        shell: bash
+        run: |
+          set -euo pipefail
+          description="Literal delta extracted to ${DIAG_BRANCH}"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg description "$description" '{state:"success",context:"assurance-literal-delta-extracted",description:$description}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
