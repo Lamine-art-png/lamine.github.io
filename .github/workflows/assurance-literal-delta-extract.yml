@@ -1,4 +1,5 @@
 name: Assurance Literal Delta Extract
+# Retrigger after workflow registration so the main push is observed by Actions.
 
 on:
   push:
