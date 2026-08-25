@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AGRO-AI Assurance</title>
+  <desc id="desc">Editorial cover for AGRO-AI Assurance in the Enterprise Portal.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f7f2"/>
+      <stop offset="0.58" stop-color="#eef3e8"/>
+      <stop offset="1" stop-color="#dce9d5"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c8f15b"/>
+      <stop offset="1" stop-color="#64b95c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <circle cx="1415" cy="80" r="360" fill="#123a2b" opacity="0.045"/>
+  <circle cx="1440" cy="100" r="235" fill="#123a2b" opacity="0.05"/>
+  <path d="M1070 170h310v310h-310z" fill="none" stroke="#123a2b" stroke-width="2" opacity="0.13"/>
+  <path d="M1130 230h310v310h-310z" fill="none" stroke="#123a2b" stroke-width="2" opacity="0.09"/>
+  <rect x="88" y="78" width="186" height="50" rx="25" fill="#123a2b"/>
+  <text x="181" y="111" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="2.5" fill="#ffffff">AGRO-AI</text>
+  <text x="88" y="238" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" letter-spacing="5" fill="#286247">ENTERPRISE PORTAL</text>
+  <text x="88" y="360" font-family="Arial, Helvetica, sans-serif" font-size="110" font-weight="700" letter-spacing="-5" fill="#0d2018">ASSURANCE</text>
+  <text x="88" y="448" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="400" letter-spacing="-1" fill="#344a3e">Evidence readiness. Human review. Traceable proof.</text>
+  <rect x="88" y="520" width="290" height="10" rx="5" fill="url(#accent)"/>
+  <g transform="translate(88 620)">
+    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+    <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">READINESS</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">See what is missing</text>
+  </g>
+  <g transform="translate(370 620)">
+    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+    <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">REVIEW</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">Keep people in control</text>
+  </g>
+  <g transform="translate(652 620)">
+    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+    <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">PROOF</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">Preserve the record</text>
+  </g>
+  <text x="88" y="824" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#647168">San Francisco, California · August 25, 2026</text>
+</svg>

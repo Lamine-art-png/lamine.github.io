@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AGRO-AI Field Intelligence upgrade</title>
+  <desc id="desc">Editorial cover for the AGRO-AI Field Intelligence live evidence and operating loop update.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#09281d"/>
+      <stop offset="0.62" stop-color="#123f2e"/>
+      <stop offset="1" stop-color="#2b684d"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c7f052"/>
+      <stop offset="1" stop-color="#7ed668"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g opacity="0.16" fill="none" stroke="#dff4d7" stroke-width="2">
+    <path d="M1050 80v740M1160 80v740M1270 80v740M1380 80v740M1490 80v740"/>
+    <path d="M970 180h590M970 290h590M970 400h590M970 510h590M970 620h590M970 730h590"/>
+  </g>
+  <g opacity="0.34" fill="none" stroke="url(#pulse)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M920 575h80l30-70 50 155 55-250 65 185 55-90 55 70h170"/>
+  </g>
+  <g fill="#c7f052">
+    <circle cx="1030" cy="505" r="8"/><circle cx="1080" cy="660" r="8"/><circle cx="1135" cy="410" r="8"/><circle cx="1200" cy="595" r="8"/><circle cx="1255" cy="505" r="8"/>
+  </g>
+  <rect x="88" y="78" width="186" height="50" rx="25" fill="#ffffff"/>
+  <text x="181" y="111" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="2.5" fill="#123a2b">AGRO-AI</text>
+  <text x="88" y="238" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" letter-spacing="5" fill="#c7f052">FIELD INTELLIGENCE</text>
+  <text x="88" y="350" font-family="Arial, Helvetica, sans-serif" font-size="102" font-weight="700" letter-spacing="-5" fill="#ffffff">FROM FIELD</text>
+  <text x="88" y="458" font-family="Arial, Helvetica, sans-serif" font-size="102" font-weight="700" letter-spacing="-5" fill="#ffffff">EVIDENCE TO</text>
+  <text x="88" y="566" font-family="Arial, Helvetica, sans-serif" font-size="102" font-weight="700" letter-spacing="-5" fill="#ffffff">ACTION.</text>
+  <text x="88" y="652" font-family="Arial, Helvetica, sans-serif" font-size="35" font-weight="400" fill="#dbe8df">Live analysis · transcription · linked tasks · verification · memory</text>
+  <rect x="88" y="715" width="360" height="10" rx="5" fill="url(#pulse)"/>
+  <text x="88" y="824" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#c8d8ce">San Francisco, California · August 26, 2026</text>
+</svg>
