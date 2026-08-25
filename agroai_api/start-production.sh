@@ -11,13 +11,19 @@ for asset in \
   "$APP_ROOT/shared/supported-locales.json" \
   "$APP_ROOT/shared/chatgpt-language-targets.json" \
   "$APP_ROOT/shared/ui-catalog.en.json" \
-  "$APP_ROOT/shared/ui-commercial-boundary.en.json"
+  "$APP_ROOT/shared/ui-commercial-boundary.en.json" \
+  "$APP_ROOT/shared/ui-decision-memory.en.json"
 do
   if [ ! -s "$asset" ]; then
     echo "fatal: required runtime asset is missing: $asset" >&2
     exit 78
   fi
 done
+
+if ! find "$APP_ROOT/shared" -maxdepth 1 -type f -name 'ui-literals.en.*.json' -size +0c -print -quit | grep -q .; then
+  echo "fatal: required UI literal catalog parts are missing" >&2
+  exit 78
+fi
 
 # app/__init__.py now enforces the complete-live-configuration contract before
 # app.core.config is imported under every valid app.main:app start path. The
@@ -47,9 +53,22 @@ esac
 
 python - <<'PY'
 from app.main import app
+from app.api.v1.i18n import canonical_source_catalog
 
 if app.title != "AGRO-AI API":
     raise RuntimeError("FastAPI application import preflight failed")
+
+catalog = canonical_source_catalog()
+for required_key in (
+    "language",
+    "settings",
+    "save",
+    "support",
+    "decisionMemory.lifecycle",
+    "decisionMemory.verify",
+):
+    if required_key not in catalog:
+        raise RuntimeError(f"Canonical UI catalog missing required key: {required_key}")
 PY
 
 python - <<'PY'
