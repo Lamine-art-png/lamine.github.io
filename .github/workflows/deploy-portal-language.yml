@@ -57,46 +57,83 @@ jobs:
             --branch main \
             --commit-hash "${GITHUB_SHA}"
 
-      - name: Smoke production language bundle
+      - name: Smoke exact production language bundle after deployment convergence
         shell: bash
         run: |
           set -euo pipefail
           rm -rf portal-smoke
           mkdir -p portal-smoke/assets
 
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' figma-enterprise-v4/dist/index.html \
+            | sed 's#^/##' \
+            | sort -u > portal-smoke/expected-assets.txt
+          test -s portal-smoke/expected-assets.txt
+
           ready=0
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}/" -o portal-smoke/index.html; then
-              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
-              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
-                ready=1
+          for attempt in $(seq 1 60); do
+            cache_key="${GITHUB_SHA}-${attempt}-$(date +%s)"
+            if ! curl --fail --silent --show-error --location --max-time 20 \
+              "${PORTAL_URL}/?portal_release=${cache_key}" -o portal-smoke/index.html; then
+              sleep 5
+              continue
+            fi
+
+            title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
+            if [ "$title" != "AGRO-AI Enterprise Portal" ]; then
+              sleep 5
+              continue
+            fi
+
+            grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html \
+              | sed 's#^/##' \
+              | sort -u > portal-smoke/production-assets.txt || true
+
+            exact=1
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              if ! grep -Fx "$asset" portal-smoke/production-assets.txt >/dev/null 2>&1; then
+                exact=0
                 break
               fi
+            done < portal-smoke/expected-assets.txt
+
+            if [ "$exact" -eq 1 ]; then
+              printf '%s\n' "$cache_key" > portal-smoke/release-cache-key.txt
+              ready=1
+              break
             fi
             sleep 5
           done
           test "$ready" -eq 1
 
-          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html | sed 's#^/##' > portal-smoke/queue.txt
+          cp portal-smoke/production-assets.txt portal-smoke/queue.txt
           : > portal-smoke/seen.txt
           for pass in 1 2 3 4; do
             sort -u portal-smoke/queue.txt -o portal-smoke/queue.txt
+            cp portal-smoke/queue.txt portal-smoke/pass-queue.txt
             while IFS= read -r asset; do
               [ -n "$asset" ] || continue
               grep -Fx "$asset" portal-smoke/seen.txt >/dev/null 2>&1 && continue
               echo "$asset" >> portal-smoke/seen.txt
-              target="portal-smoke/assets/$(basename "$asset")"
-              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              target="portal-smoke/assets/$(printf '%s' "$asset" | tr '/' '_')"
+              cache_key="$(cat portal-smoke/release-cache-key.txt)"
+              curl --fail --silent --show-error --max-time 20 \
+                "${PORTAL_URL}/${asset}?portal_release=${cache_key}" -o "$target"
               grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
-              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
-            done < portal-smoke/queue.txt
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" \
+                | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
+            done < portal-smoke/pass-queue.txt
           done
 
-          cat portal-smoke/assets/*.js > portal-smoke/all-js.txt
-          grep -F 'agroai_ui_catalog_v4:' portal-smoke/all-js.txt >/dev/null
-          grep -F 'commercialBoundary.title.upgrade' portal-smoke/all-js.txt >/dev/null
-          grep -F 'Kiswahili' portal-smoke/all-js.txt >/dev/null
-          grep -F 'Українська' portal-smoke/all-js.txt >/dev/null
-          grep -F '日本語' portal-smoke/all-js.txt >/dev/null
-          grep -F 'Ελληνικά' portal-smoke/all-js.txt >/dev/null
+          compgen -G 'portal-smoke/assets/*' >/dev/null
+          cat portal-smoke/assets/* > portal-smoke/all-js.txt
+          for marker in \
+            'agroai_ui_catalog_v4:' \
+            'commercialBoundary.title.upgrade' \
+            'Kiswahili' \
+            'Українська' \
+            '日本語' \
+            'Ελληνικά'; do
+            grep -F "$marker" portal-smoke/all-js.txt >/dev/null
+          done
           printf 'production_portal_language_bundle=ok\n'
