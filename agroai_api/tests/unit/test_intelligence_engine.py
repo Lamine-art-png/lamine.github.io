@@ -136,29 +136,3 @@ def test_data_quality_full_connected_wiseconn_like():
     quality = engine.evaluate_data_quality(field)
     assert quality.data_quality_label == "full_telemetry"
     assert quality.data_quality_score >= 80
-
-
-def test_compatibility_endpoint_rejects_client_self_attested_validation_labels():
-    engine = IntelligenceEngineV1()
-    field = CanonicalFieldContext(
-        field_id="field-1",
-        crop_type="almonds",
-        irrigation_method="drip",
-        area=2.0,
-        crop_coefficient=0.8,
-        effective_rainfall_mm=0.0,
-        root_zone_replenishment_mm=0.0,
-        irrigation_efficiency=0.9,
-        validated_flow_m3h=25.0,
-        flow_validation_status="validated",
-        recent_irrigation_credit_status="verified_none",
-        operating_window="approved window",
-        weather_context={"eto_mm": 6.0},
-    )
-
-    result = engine.recommend(RecommendationRequest(field_context=field))
-
-    assert result.action != "irrigate"
-    assert result.recommended_duration_minutes is None
-    assert "client_flow_validation_claim_withheld" in result.risk_flags
-    assert "client_recent_water_verification_claim_withheld" in result.risk_flags

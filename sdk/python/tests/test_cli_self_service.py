@@ -24,26 +24,26 @@ def run_cli(argv):
     return code, out.getvalue(), err.getvalue()
 
 
-def test_service_account_commands_fail_closed_or_use_human_control_plane(monkeypatch):
+def test_service_account_commands_are_human_control_plane(monkeypatch):
     calls = []
 
     def fake(method, path, *, json_body=None, timeout=20.0):
         calls.append((method, path, json_body))
+        if method == "GET":
+            return FakeResponse({"status": "ok", "service_accounts": []})
         return FakeResponse({"status": "ok", "service_account": {"id": "sa_1"}}, 201)
 
     monkeypatch.setattr(session, "control_plane_request", fake)
-    code, _, err = run_cli(["service-accounts", "list", "--project-id", "prj_1"])
-    assert code == cli.EXIT_USAGE
-    assert "not exposed" in err
-    assert calls == []
-
+    code, _, _ = run_cli(["service-accounts", "list", "--project-id", "prj_1"])
+    assert code == cli.EXIT_OK
     code, _, _ = run_cli([
         "service-accounts", "create", "--project-id", "prj_1", "--name", "local-dev",
         "--scope", "fields:read", "--scope", "fields:write",
     ])
     assert code == cli.EXIT_OK
-    assert calls[0][0:2] == ("POST", "/v1/platform/developer/projects/prj_1/service-accounts")
-    assert calls[0][2]["scopes"] == ["fields:read", "fields:write"]
+    assert calls[0][:2] == ("GET", "/v1/platform/developer/service-accounts?project_id=prj_1")
+    assert calls[1][0:2] == ("POST", "/v1/platform/developer/projects/prj_1/service-accounts")
+    assert calls[1][2]["scopes"] == ["fields:read", "fields:write"]
 
 
 def test_bootstrap_creates_test_project_service_account_and_one_time_key(monkeypatch):

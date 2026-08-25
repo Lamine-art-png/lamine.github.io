@@ -61,6 +61,7 @@ function copyNamespacesForPath(pathname: string): string[] {
   if (pathname === "/operations") return ["operations", "shared"];
   if (["/", "/field-queue", "/tasks"].includes(pathname)) return ["overview", "shared"];
   if (["/readiness", "/fields", "/exceptions", "/decision-workbench", "/report-factory"].includes(pathname)) return ["cockpit", "shared"];
+  if (pathname === "/assurance") return ["assurance", "shared"];
   return [];
 }
 
@@ -114,6 +115,7 @@ export function MainLayout() {
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
   const canAskAgroAi = capabilityEnabled(entitlements, "intelligence.ask", !["free", "pilot"].includes(currentPlan));
   const canFieldIntelligence = capabilityEnabled(entitlements, "field_intelligence.capture", true);
+  const canAssurance = capabilityEnabled(entitlements, "assurance.readiness", false);
   const currentPlanLabel = PLAN_LABELS[currentPlan] || "Free";
   const organizationWorkspaces = useMemo(
     () => currentOrganization?.id
@@ -130,6 +132,7 @@ export function MainLayout() {
     { name: t("tasks"), path: "/tasks", icon: ClipboardCheck },
     { name: t("decisions"), path: "/operations", icon: SlidersHorizontal },
     { name: t("evidence"), path: "/evidence", icon: FileSearch },
+    { name: tx("Assurance"), path: "/assurance", icon: Shield, locked: !canAssurance, upgradeTo: "professional" },
     { name: t("reports"), path: "/reports", icon: FileText, locked: !canGeneratePdf, upgradeTo: "professional" },
     { name: t("connectors"), path: "/integrations", icon: PlugZap },
   ];

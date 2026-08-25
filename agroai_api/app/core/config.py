@@ -187,6 +187,12 @@ class Settings(BaseSettings):
     FIELD_RELEASE_PORTAL_SHA: str = ""  # deploy pipeline reports the portal build SHA
     FIELD_RELEASE_EDGE_SHA: str = ""  # deploy pipeline reports the edge gateway SHA
 
+    # Assurance Intelligence V2 controlled rollout. Unset is fail-closed in
+    # production/staging and general in development/test.
+    ASSURANCE_RELEASE_STATE: str = ""  # disabled | internal | canary | general
+    ASSURANCE_INTERNAL_ORGANIZATION_IDS: str = ""
+    ASSURANCE_CANARY_ORGANIZATION_IDS: str = ""
+
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15
     SYNC_LOOKBACK_DAYS: int = 14

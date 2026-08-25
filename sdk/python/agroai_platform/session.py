@@ -48,7 +48,7 @@ def save_session(data: dict[str, Any]) -> None:
             pass
     path = _config_path()
     path.write_text(payload, encoding="utf-8")
-    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0600, owner-only
 
 
 def load_session() -> dict[str, Any] | None:
@@ -70,7 +70,10 @@ def load_session() -> dict[str, Any] | None:
 
 
 def logout(timeout: float = 15.0) -> str:
-    """Revoke the CLI session server-side, then remove the local credential."""
+    """Revoke the CLI session server-side, then remove the local credential.
+
+    Server revocation happens first so the token stops working immediately even
+    if local removal fails. Returns a short status string."""
     session = load_session()
     server_status = "no_session"
     if session and session.get("access_token"):
@@ -145,14 +148,7 @@ def login(base_url: str | None = None, *, open_browser: bool = True, timeout: fl
         raise TimeoutError("device authorization timed out before approval")
 
 
-def control_plane_request(
-    method: str,
-    path: str,
-    *,
-    json_body: Any = None,
-    params: dict[str, Any] | None = None,
-    timeout: float = 20.0,
-) -> httpx.Response:
+def control_plane_request(method: str, path: str, *, json_body: Any = None, timeout: float = 20.0) -> httpx.Response:
     session = load_session()
     if not session or not session.get("access_token"):
         raise RuntimeError("not logged in — run `agroai login` first")
@@ -163,5 +159,4 @@ def control_plane_request(
             f"{base}{path}",
             headers={"Authorization": f"Bearer {session['access_token']}", "Content-Type": "application/json"},
             json=json_body,
-            params=params,
         )

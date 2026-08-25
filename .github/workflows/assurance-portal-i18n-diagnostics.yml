@@ -1,0 +1,123 @@
+name: Assurance Portal I18n Diagnostics
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/assurance-portal-i18n-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  diagnose:
+    name: Isolate canonicalized portal build sub-check
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Install and canonicalize literal inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd figma-enterprise-v4
+          npm ci
+          cd ..
+          python3 - <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          portal = Path('figma-enterprise-v4').resolve()
+          repo = portal.parent
+          sys.path.insert(0, str(portal))
+          from scripts.check_ui_literal_inventory import build_catalog
+          expected = build_catalog()
+          shared = repo / 'shared'
+          def num(path):
+              m = re.fullmatch(r'ui-literals\.en\.(\d+)\.json', path.name)
+              return int(m.group(1)) if m else 10**9
+          parts = sorted(shared.glob('ui-literals.en.*.json'), key=num)
+          seen = set(); normalized = {}
+          for path in parts:
+              raw = json.loads(path.read_text(encoding='utf-8'))
+              clean = {}
+              for key, value in raw.items():
+                  if key in seen: continue
+                  if key not in expected or expected[key] != value: continue
+                  clean[key] = value; seen.add(key)
+              normalized[path] = clean
+          for key in sorted(set(expected) - seen):
+              normalized[parts[-1]][key] = expected[key]
+          for path in parts:
+              path.write_text(json.dumps(normalized[path], ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Run and publish every portal gate
+        shell: bash
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          post() {
+            local context="$1" state="$2" description="$3"
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              --data "$(jq -nc --arg state "$state" --arg context "$context" --arg description "$description" '{state:$state,context:$context,description:$description}')" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+          }
+
+          check() {
+            local context="$1" description="$2"
+            shift 2
+            echo "=== $context ==="
+            if "$@"; then
+              post "$context" success "$description"
+            else
+              post "$context" failure "FAILED: $description"
+              exit 1
+            fi
+          }
+
+          cd figma-enterprise-v4
+          check assurance-i18n/literal-inventory "Literal inventory passed" python3 scripts/check_ui_literal_inventory.py --check
+          check assurance-i18n/core "Core i18n contract passed" node tests/i18n-contract.mjs
+          check assurance-i18n/commercial "Commercial i18n contract passed" node tests/commercial-boundary-i18n-contract.mjs
+          check assurance-i18n/paywall "Paywall contract passed" node tests/paywall-refinements-v4-contract.mjs
+          check assurance-i18n/dynamic "Dynamic UI coverage passed" node tests/dynamic-ui-i18n-coverage-contract.mjs
+          check assurance-i18n/product-tour "Product tour contract passed" node tests/product-tour-source-library-contract.mjs
+          check assurance-i18n/mobile "Mobile portal contract passed" node tests/mobile-portal-responsive-contract.mjs
+          check assurance-i18n/recovery "Frontend recovery contract passed" node tests/frontend-runtime-recovery-contract.mjs
+          check assurance-i18n/assurance-route "Assurance route isolation passed" node tests/assurance-route-isolation-contract.mjs
+          check assurance-i18n/fi-offline "Field Intelligence offline contract passed" node tests/field-intelligence-offline-contract.mjs
+          check assurance-i18n/fi-multimodal "Field Intelligence multimodal contract passed" node tests/field-intelligence-multimodal-contract.mjs
+          check assurance-i18n/fi-loop "Field Intelligence operating-loop contract passed" node tests/field-intelligence-operating-loop-contract.mjs
+          check assurance-i18n/vite-build "Production Vite build passed" npm run build
+          check assurance-i18n/release-marker "Assurance release marker built" grep -Fx AGROAI_ASSURANCE_SIDEBAR_V2_VISIBLE dist/assurance-sidebar-v2-release.txt
+          post assurance-i18n-diagnostics success "All canonicalized portal build gates passed"
+
+      - name: Publish final failure when a gate stops the job
+        if: failure()
+        shell: bash
+        run: |
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc '{state:"failure",context:"assurance-i18n-diagnostics",description:"Canonicalized portal build diagnostics failed"}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null

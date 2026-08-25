@@ -13,14 +13,9 @@ import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
 import dynamicAssuranceCatalog from "../../../shared/ui-dynamic-copy-assurance.en.json";
-import decisionMemoryCatalog from "../../../shared/ui-decision-memory.en.json";
 import { formatTranslation, getStoredLocale, t, TRANSLATIONS } from "./i18n";
 
-// Generic value matching is intentionally limited to literal.* sources. Explicit
-// Decision Memory keys are hydrated globally below, but excluded from generic
-// matching so common values such as "Water" or "Failed" cannot collide with
-// unrelated Portal copy.
-const GENERIC_STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
+export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
   {},
   literalCatalogPart1,
   literalCatalogPart2,
@@ -35,17 +30,6 @@ const GENERIC_STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.ass
   literalCatalogPart11,
 );
 
-export const DECISION_MEMORY_UI_CATALOG: Record<string, string> = {
-  ...decisionMemoryCatalog,
-};
-
-// Full background hydration includes every static literal plus Decision Memory's
-// explicit keyed catalog. Route-scoped dynamic copy remains excluded.
-export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = {
-  ...GENERIC_STATIC_PORTAL_LITERAL_CATALOG,
-  ...DECISION_MEMORY_UI_CATALOG,
-};
-
 export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
   ...dynamicCopyCatalog,
   ...dynamicCopyExtraCatalog,
@@ -53,10 +37,11 @@ export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
   ...dynamicAssuranceCatalog,
 };
 
-// Lookup/template matching sees generic static and route-scoped dynamic copy.
-// Decision Memory remains explicit-key only and therefore collision-safe.
+// Lookup/template matching sees both static and dynamic UI copy. Dynamic copy is
+// intentionally excluded from fullEnglishUiSource below and hydrates only for
+// the active route via usePortalCopy.
 export const PORTAL_LITERAL_CATALOG: Record<string, string> = {
-  ...GENERIC_STATIC_PORTAL_LITERAL_CATALOG,
+  ...STATIC_PORTAL_LITERAL_CATALOG,
   ...DYNAMIC_UI_COPY_CATALOG,
 };
 

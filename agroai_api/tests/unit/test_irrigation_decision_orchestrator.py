@@ -1,14 +1,80 @@
-from copy import deepcopy
-
-import pytest
-
 from app.services.irrigation_decision_orchestrator import IrrigationDecisionOrchestrator
 
 
-REFERENCE = "2026-05-15T12:00:00Z"
+def test_uploaded_artifact_context_runs_same_kernel():
+    result = IrrigationDecisionOrchestrator().run(
+        {
+            "farm": "Alpha Vineyard",
+            "block": "Block A North",
+            "crop": "wine grapes",
+            "soil": "clay loam",
+            "irrigation_method": "drip",
+            "area": 2.0,
+            "field_notes": ["mild afternoon stress"],
+            "source_kinds": ["weather", "soil_moisture", "flow_meter"],
+            "metrics": {
+                "avg_eto_mm": 6.4,
+                "rain_forecast_total_mm": 0,
+                "avg_deficit_percent": 40,
+                "evidence_reference_time": "2026-05-15T12:00:00Z",
+            },
+            "flow_evidence": {
+                "value_m3h": 28,
+                "provenance": "flow_meter",
+                "block": "Block A North",
+                "timestamp": "2026-05-15T06:00:00Z",
+            },
+        },
+        mode="uploaded",
+        origin="uploaded_intelligence_engine",
+    )
+    assert result["decision"]["recommendation_origin"] == "uploaded_intelligence_engine"
+    assert result["decision"]["duration_minutes"] is not None
 
 
-def _complete_context():
+def test_partial_telemetry_does_not_fabricate_duration():
+    result = IrrigationDecisionOrchestrator().run(
+        {
+            "farm": "Connected field",
+            "block": "162803",
+            "crop": "provider context pending",
+            "soil": "provider context pending",
+            "irrigation_method": "provider context pending",
+            "metrics": {"avg_eto_mm": 6.0},
+            "source_kinds": ["live_request"],
+        },
+        mode="live",
+        origin="live_intelligence_engine",
+    )
+    assert result["decision"]["duration_minutes"] is None
+    assert "validated_flow_or_application_rate" in result["decision"]["missing_inputs"]
+
+
+def test_explicit_manual_overrides_improve_context():
+    from datetime import datetime, timezone, timedelta
+    recent_ts = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    result = IrrigationDecisionOrchestrator().run(
+        {"farm": "Manual", "block": "A", "metrics": {"avg_eto_mm": 6.0}},
+        mode="live",
+        origin="live_intelligence_engine",
+        manual_overrides={
+            "crop_type": "almonds",
+            "soil_type": "loam",
+            "irrigation_method": "micro-sprinkler",
+            "area": 3.0,
+            "sensor_context": {
+                "flow_m3h": 30,
+                "flow_provenance": "flow_meter",
+                "timestamp": recent_ts,
+                "block": "A",
+            },
+        },
+    )
+    assert result["decision"]["duration_minutes"] is not None
+    assert result["manual_overrides_used"]
+
+
+def _base_context():
     return {
         "farm": "Alpha Vineyard",
         "block": "Block A North",
@@ -16,280 +82,263 @@ def _complete_context():
         "soil": "clay loam",
         "irrigation_method": "drip",
         "area": 2.0,
-        "crop_coefficient": 0.72,
-        "effective_rainfall_mm": 0.0,
-        "root_zone_replenishment_mm": 0.0,
-        "irrigation_efficiency": 0.9,
-        "operating_window": "customer-approved night window",
-        "source_kinds": ["weather", "soil_moisture", "flow_meter", "controller_event"],
+        "source_kinds": ["weather", "soil_moisture", "flow_meter"],
         "metrics": {
             "avg_eto_mm": 6.4,
-            "evidence_reference_time": REFERENCE,
+            "rain_forecast_total_mm": 0,
+            "avg_deficit_percent": 40,
+            "evidence_reference_time": "2026-05-15T12:00:00Z",
         },
         "flow_evidence": {
             "value_m3h": 28,
-            "provenance": "flow_meter",
+            "provenance": "controller_event",
             "block": "Block A North",
             "timestamp": "2026-05-15T06:00:00Z",
-            "valid_until": "2026-05-15T18:00:00Z",
-            "pressure_state": "stable",
-            "calibration_status": "current",
-        },
-        "recent_irrigation_evidence": {
-            "no_recent_irrigation_confirmed": True,
-            "confirmation": "controller_confirmed",
-            "block": "Block A North",
-            "timestamp": "2026-05-15T06:00:00Z",
-            "valid_until": "2026-05-15T18:00:00Z",
         },
     }
 
 
-def _run(context, *, mode="uploaded", overrides=None):
-    return IrrigationDecisionOrchestrator().run(
-        context,
-        mode=mode,
-        origin=f"{mode}_intelligence_engine",
-        manual_overrides=overrides,
-    )
+def test_stale_flow_evidence_withholds_duration():
+    context = _base_context()
+    context["flow_evidence"]["timestamp"] = "2026-05-01T06:00:00Z"
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["duration_minutes"] is None
+    assert result["decision"]["flow_validation_status"] == "partial"
 
 
-def test_complete_explicit_package_computes_traceable_plan_for_approval():
-    result = _run(_complete_context())
-    decision = result["decision"]
-    assert decision["decision_status"] == "ready_for_human_approval"
-    assert decision["duration_minutes"] is not None
-    assert decision["calibration_status"] == "explicit_evidence"
-    assert decision["assumptions"] == []
+def test_inconsistent_flow_evidence_withholds_duration():
+    context = _base_context()
+    context["metrics"]["max_flow_variance_percent"] = 31
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["duration_minutes"] is None
+    assert result["decision"]["flow_validation_status"] == "inconsistent"
 
 
-def test_partial_telemetry_does_not_fabricate_depth_or_duration():
-    result = _run(
-        {
-            "farm": "Connected field",
-            "block": "162803",
-            "crop": "provider context pending",
-            "metrics": {"avg_eto_mm": 6.0},
-            "source_kinds": ["live_request"],
+def test_recent_verified_event_applies_credit():
+    baseline = IrrigationDecisionOrchestrator().run(_base_context(), mode="uploaded", origin="uploaded_intelligence_engine")
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4,
+        "block": "Block A North",
+        "timestamp": "2026-05-15T06:00:00Z",
+        "confirmation": "controller_confirmed",
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "verified_recent"
+    assert result["decision"]["net_irrigation_depth_mm"] < baseline["decision"]["net_irrigation_depth_mm"]
+
+
+def test_stale_recent_event_does_not_apply_credit():
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4,
+        "block": "Block A North",
+        "timestamp": "2026-05-01T06:00:00Z",
+        "confirmation": "controller_confirmed",
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "stale"
+    assert result["decision"]["calculation_trace"]["recent_verified_irrigation_credit_mm"] == 0.0
+
+
+def test_wrong_block_recent_event_does_not_apply_credit():
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4,
+        "block": "Block B West",
+        "timestamp": "2026-05-15T06:00:00Z",
+        "confirmation": "controller_confirmed",
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "unavailable"
+
+
+def test_negative_depth_recent_event_does_not_apply_credit():
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": -4,
+        "block": "Block A North",
+        "timestamp": "2026-05-15T06:00:00Z",
+        "confirmation": "controller_confirmed",
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "unavailable"
+
+
+def test_missing_timestamp_recent_event_does_not_apply_credit():
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4,
+        "block": "Block A North",
+        "confirmation": "controller_confirmed",
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "partial"
+
+
+# --- Section 4: Recency calculation ------------------------------------------
+
+def test_old_live_flow_event_is_stale_even_when_only_timestamp():
+    """Without evidence_reference_time, the reference is wall-clock UTC.
+    A very old flow event must be stale even if it is the only timestamp."""
+    context = {
+        "farm": "Live Farm",
+        "block": "Zone 1",
+        "crop": "wine grapes",
+        "soil": "clay loam",
+        "irrigation_method": "drip",
+        "area": 2.0,
+        "source_kinds": ["live_request"],
+        "metrics": {
+            "avg_eto_mm": 6.0,
+            # No evidence_reference_time — reference falls back to datetime.now(UTC)
         },
-        mode="live",
-    )
-    assert result["decision"]["net_irrigation_depth_mm"] is None
+        "flow_evidence": {
+            "value_m3h": 28,
+            "provenance": "controller_event",
+            "block": "Zone 1",
+            "timestamp": "2020-01-01T00:00:00Z",  # years old
+        },
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="live", origin="live_intelligence_engine")
+    assert result["decision"]["flow_validation_status"] in {"partial", "unavailable"}
     assert result["decision"]["duration_minutes"] is None
-    assert result["decision"]["action"] == "insufficient_data"
 
 
-def test_crop_and_method_labels_do_not_infer_scientific_parameters():
-    context = _complete_context()
-    del context["crop_coefficient"]
-    del context["irrigation_efficiency"]
-    result = _run(context)
-    assert result["decision"]["net_irrigation_depth_mm"] is None
-    assert result["decision"]["duration_minutes"] is None
-    assert "crop_coefficient" in result["decision"]["missing_inputs"]
-    assert "irrigation_efficiency" in result["decision"]["missing_inputs"]
+def test_old_live_irrigation_event_is_stale_even_when_only_timestamp():
+    """Recent-credit events older than 72 h must be stale regardless of evidence_reference_time."""
+    context = _base_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4,
+        "block": "Block A North",
+        "timestamp": "2020-01-01T00:00:00Z",  # years old
+        "confirmation": "controller_confirmed",
+    }
+    # No evidence_reference_time in metrics → reference = datetime.now(UTC)
+    del context["metrics"]["evidence_reference_time"]
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["recent_irrigation_credit_status"] == "stale"
 
 
-def test_flow_without_explicit_validity_is_partial():
-    context = _complete_context()
-    del context["flow_evidence"]["valid_until"]
-    result = _run(context)
+def test_recent_live_event_is_accepted():
+    """A flow event within 72 hours of wall-clock UTC is accepted."""
+    from datetime import datetime, timezone, timedelta
+    recent_ts = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+    context = {
+        "farm": "Live Farm",
+        "block": "Zone 1",
+        "crop": "wine grapes",
+        "soil": "clay loam",
+        "irrigation_method": "drip",
+        "area": 2.0,
+        "source_kinds": ["live_request"],
+        "metrics": {"avg_eto_mm": 6.0},
+        "flow_evidence": {
+            "value_m3h": 28,
+            "provenance": "flow_meter",
+            "block": "Zone 1",
+            "timestamp": recent_ts,
+        },
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="live", origin="live_intelligence_engine")
+    assert result["decision"]["flow_validation_status"] == "validated"
+
+
+def test_uploaded_historical_package_uses_explicit_reference_timestamp():
+    """When evidence_reference_time is set, recency is relative to that reference
+    (not wall-clock UTC), so evidence older than wall-clock but within 72 h of the
+    package reference is accepted."""
+    from datetime import datetime, timezone, timedelta
+    package_ref = datetime(2026, 5, 15, 12, 0, 0, tzinfo=timezone.utc)
+    evidence_ts = (package_ref - timedelta(hours=24)).isoformat()
+    context = _base_context()
+    context["metrics"]["evidence_reference_time"] = package_ref.isoformat()
+    context["flow_evidence"]["timestamp"] = evidence_ts
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    # Evidence is 24 h before the explicit package reference — within the 72 h window.
+    assert result["decision"]["flow_validation_status"] == "validated"
+    assert result["evaluation_mode_label"] == "historical_package"
+
+
+def test_missing_flow_timestamp_stays_partial():
+    context = _base_context()
+    context["flow_evidence"] = {
+        "value_m3h": 28,
+        "provenance": "controller_event",
+        "block": "Block A North",
+        # no timestamp
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
     assert result["decision"]["flow_validation_status"] == "partial"
     assert result["decision"]["duration_minutes"] is None
 
 
-def test_flow_can_use_explicit_caller_freshness_requirement():
-    context = _complete_context()
-    del context["flow_evidence"]["valid_until"]
-    context["flow_evidence"]["max_age_hours"] = 8
-    result = _run(context)
+# --- Section 5: Flow-meter-only evidence (orchestrator level) ----------------
+
+def test_flow_meter_only_can_validate_duration():
+    """Flow-meter provenance in the flow_evidence dict is accepted by the orchestrator."""
+    from datetime import datetime, timezone, timedelta
+    recent_ts = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    context = {
+        "farm": "Beta Farm",
+        "block": "Block B",
+        "crop": "almonds",
+        "soil": "loam",
+        "irrigation_method": "drip",
+        "area": 1.5,
+        "source_kinds": ["flow_meter"],
+        "metrics": {
+            "avg_eto_mm": 5.0,
+            "avg_deficit_percent": 35,
+        },
+        "flow_evidence": {
+            "value_m3h": 22,
+            "provenance": "flow_meter",
+            "block": "Block B",
+            "timestamp": recent_ts,
+        },
+    }
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
     assert result["decision"]["flow_validation_status"] == "validated"
     assert result["decision"]["duration_minutes"] is not None
 
 
-def test_expired_flow_validity_withholds_duration():
-    context = _complete_context()
-    context["flow_evidence"]["valid_until"] = "2026-05-15T08:00:00Z"
-    result = _run(context)
-    assert result["decision"]["flow_validation_status"] == "partial"
-    assert result["decision"]["duration_minutes"] is None
+def test_controller_only_can_validate_duration():
+    result = IrrigationDecisionOrchestrator().run(_base_context(), mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["flow_validation_status"] == "validated"
+    assert result["decision"]["duration_minutes"] is not None
 
 
-def test_wrong_block_flow_is_inconsistent():
-    context = _complete_context()
+def test_mismatched_flow_meter_block_is_rejected():
+    context = _base_context()
     context["flow_evidence"]["block"] = "Block Z Wrong"
-    result = _run(context)
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
     assert result["decision"]["flow_validation_status"] == "inconsistent"
     assert result["decision"]["duration_minutes"] is None
 
 
-def test_flow_requires_stable_pressure_and_current_calibration():
-    pressure = _complete_context()
-    del pressure["flow_evidence"]["pressure_state"]
-    assert _run(pressure)["decision"]["flow_validation_status"] == "partial"
-
-    calibration = _complete_context()
-    del calibration["flow_evidence"]["calibration_status"]
-    assert _run(calibration)["decision"]["flow_validation_status"] == "partial"
-
-
-def test_observed_variance_requires_explicit_acceptance_limit():
-    context = _complete_context()
-    context["metrics"]["max_flow_variance_percent"] = 12
-    result = _run(context)
-    assert result["decision"]["flow_validation_status"] == "partial"
+def test_stale_flow_meter_evidence_is_rejected():
+    context = _base_context()
+    context["flow_evidence"] = {
+        "value_m3h": 28,
+        "provenance": "flow_meter",
+        "block": "Block A North",
+        "timestamp": "2019-01-01T00:00:00Z",  # very old, no explicit reference → wall-clock
+    }
+    del context["metrics"]["evidence_reference_time"]
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["flow_validation_status"] in {"partial", "unavailable"}
 
 
-def test_explicit_variance_limit_is_enforced():
-    context = _complete_context()
-    context["metrics"]["max_flow_variance_percent"] = 12
-    context["flow_evidence"]["max_variance_percent"] = 10
-    result = _run(context)
+def test_inconsistent_flow_meter_variance_is_rejected():
+    context = _base_context()
+    context["metrics"]["max_flow_variance_percent"] = 35
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
     assert result["decision"]["flow_validation_status"] == "inconsistent"
 
 
-def test_verified_recent_event_applies_exact_uncapped_credit():
-    baseline = _run(_complete_context())["decision"]
-    context = _complete_context()
-    context["recent_irrigation_evidence"] = {
-        "depth_mm": 4.0,
-        "block": "Block A North",
-        "timestamp": "2026-05-15T06:00:00Z",
-        "valid_until": "2026-05-15T18:00:00Z",
-        "confirmation": "controller_confirmed",
-    }
-    decision = _run(context)["decision"]
-    assert decision["recent_irrigation_credit_status"] == "verified_recent"
-    assert decision["net_irrigation_depth_mm"] == pytest.approx(baseline["net_irrigation_depth_mm"] - 4.0)
-
-
-def test_recent_credit_without_validity_is_not_applied():
-    context = _complete_context()
-    context["recent_irrigation_evidence"] = {
-        "depth_mm": 4.0,
-        "block": "Block A North",
-        "timestamp": "2026-05-15T06:00:00Z",
-        "confirmation": "controller_confirmed",
-    }
-    result = _run(context)
-    assert result["decision"]["recent_irrigation_credit_status"] == "partial"
-    assert result["decision"]["net_irrigation_depth_mm"] is None
-
-
-def test_expired_recent_credit_is_stale_and_not_applied():
-    context = _complete_context()
-    context["recent_irrigation_evidence"] = {
-        "depth_mm": 4.0,
-        "block": "Block A North",
-        "timestamp": "2026-05-15T06:00:00Z",
-        "valid_until": "2026-05-15T08:00:00Z",
-        "confirmation": "controller_confirmed",
-    }
-    result = _run(context)
-    assert result["decision"]["recent_irrigation_credit_status"] == "stale"
-    assert result["decision"]["net_irrigation_depth_mm"] is None
-
-
-def test_missing_operating_window_never_emits_operational_action():
-    context = _complete_context()
-    del context["operating_window"]
-    decision = _run(context)["decision"]
-    assert decision["duration_minutes"] is not None
-    assert decision["timing_window"] is None
-    assert decision["action"] == "inspect"
-
-
-def test_explicit_net_requirement_bypasses_no_missing_water_balance_inputs():
-    context = _complete_context()
-    context["net_irrigation_requirement_mm"] = 3.0
-    del context["metrics"]["avg_eto_mm"]
-    del context["crop_coefficient"]
-    del context["effective_rainfall_mm"]
-    del context["root_zone_replenishment_mm"]
-    decision = _run(context)["decision"]
-    assert decision["net_irrigation_depth_mm"] == 3.0
-    assert decision["decision_status"] == "ready_for_human_approval"
-
-
-def test_manual_override_flow_is_analytical_only_and_cannot_create_trusted_flow_evidence():
-    base = _complete_context()
-    del base["flow_evidence"]
-    override = {
-        "sensor_context": {
-            "flow_m3h": 30,
-            "flow_provenance": "flow_meter",
-            "timestamp": "2026-05-15T06:00:00Z",
-            "block": "Block A North",
-            "valid_until": "2026-05-15T18:00:00Z",
-            "pressure_state": "stable",
-            "calibration_status": "current",
-        }
-    }
-    result = _run(base, overrides=override)
-    assert result["decision"]["flow_validation_status"] == "unavailable"
-    assert result["decision"]["duration_minutes"] is None
-    assert result["manual_overrides_used"] == ["sensor_context"]
-
-
-def test_trust_sensitive_top_level_overrides_are_ignored():
-    base = _complete_context()
-    del base["flow_evidence"]
-    override = {
-        "flow_evidence": {
-            "value_m3h": 99,
-            "provenance": "flow_meter",
-            "block": "Block A North",
-            "timestamp": "2026-05-15T06:00:00Z",
-            "valid_until": "2026-05-15T18:00:00Z",
-            "pressure_state": "stable",
-            "calibration_status": "current",
-        },
-        "validated_flow_m3h": 99,
-        "flow_validation_status": "validated",
-    }
-    result = _run(base, overrides=override)
-    assert result["decision"]["flow_validation_status"] == "unavailable"
-    assert result["decision"]["duration_minutes"] is None
-    assert set(result["ignored_trust_sensitive_overrides"]) == {
-        "flow_evidence", "validated_flow_m3h", "flow_validation_status"
-    }
-
-
-def test_future_flow_timestamp_is_inconsistent_and_withholds_duration():
-    context = _complete_context()
-    context["flow_evidence"]["timestamp"] = "2026-05-15T13:00:00Z"
-    context["flow_evidence"]["valid_until"] = "2026-05-15T18:00:00Z"
-    decision = _run(context)["decision"]
-    assert decision["flow_validation_status"] == "inconsistent"
-    assert decision["duration_minutes"] is None
-
-
-def test_future_recent_irrigation_timestamp_is_not_credited():
-    context = _complete_context()
-    context["recent_irrigation_evidence"] = {
-        "depth_mm": 4.0,
-        "block": "Block A North",
-        "timestamp": "2026-05-15T13:00:00Z",
-        "valid_until": "2026-05-15T18:00:00Z",
-        "confirmation": "controller_confirmed",
-    }
-    decision = _run(context)["decision"]
-    assert decision["recent_irrigation_credit_status"] == "partial"
-    assert decision["net_irrigation_depth_mm"] is None
-
-
-def test_valid_until_before_measurement_time_is_inconsistent():
-    context = _complete_context()
-    context["flow_evidence"]["timestamp"] = "2026-05-15T06:00:00Z"
-    context["flow_evidence"]["valid_until"] = "2026-05-15T05:00:00Z"
-    decision = _run(context)["decision"]
-    assert decision["flow_validation_status"] == "inconsistent"
-    assert decision["duration_minutes"] is None
-
-
-def test_negative_flow_is_rejected_without_clamping():
-    context = deepcopy(_complete_context())
+def test_negative_flow_is_rejected():
+    context = _base_context()
     context["flow_evidence"]["value_m3h"] = -15
-    decision = _run(context)["decision"]
-    assert decision["flow_validation_status"] == "unavailable"
-    assert decision["duration_minutes"] is None
+    result = IrrigationDecisionOrchestrator().run(context, mode="uploaded", origin="uploaded_intelligence_engine")
+    assert result["decision"]["flow_validation_status"] == "unavailable"

@@ -2,7 +2,6 @@ import { Download, FileText, Mail, MessageSquare, Plus, RefreshCw, Search, Send,
 import { LanguageSelector } from "../LanguageSelector";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "../portalUi";
 import { safeText, AnyRecord } from "./intelligenceSupport";
-import { DecisionEvidencePanel } from "./DecisionEvidencePanel";
 import type { useIntelligenceController } from "./useIntelligenceController";
 
 type Controller = ReturnType<typeof useIntelligenceController>;
@@ -121,7 +120,6 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
                     <article className={message.role === "user" ? "max-w-[90%] sm:max-w-[72%]" : "w-full max-w-[820px]"}>
                       <div className="whitespace-pre-wrap rounded-2xl px-4 py-3 text-[14px] leading-6 sm:px-5 sm:py-4 sm:text-[15px] sm:leading-7" style={{ background: message.role === "user" ? "#0D2B1E" : SURFACE, color: message.role === "user" ? "white" : TEXT, border: `1px solid ${message.role === "user" ? "#0D2B1E" : BORDER}` }}>
                         {safeText(message.content)}
-                        {message.role === "assistant" && message.decision_details ? <DecisionEvidencePanel details={message.decision_details} t={t} /> : null}
                         {message.role === "assistant" && message.artifact ? (
                           <div className="mt-4 flex flex-col gap-2 whitespace-normal min-[420px]:flex-row min-[420px]:flex-wrap">
                             <button type="button" onClick={() => downloadReportFor(message)} disabled={reportBusyId === String(message.id || index)} className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>{reportBusyId === String(message.id || index) ? <FileText size={15} /> : <Download size={15} />}{reportBusyId === String(message.id || index) ? t("intelligence.preparingPdf") : t("intelligence.downloadPdf")}</button>

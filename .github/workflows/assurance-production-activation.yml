@@ -1,0 +1,245 @@
+name: Activate Assurance Production
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - '.github/workflows/assurance-production-activation.yml'
+      - '.github/assurance-production-activation.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: assurance-production-activation
+  cancel-in-progress: false
+
+env:
+  API_BASE: https://api.agroai-pilot.com
+  PORTAL_URL: https://app.agroai-pilot.com
+  ACTIVATION_STAGE: started
+
+jobs:
+  activate:
+    name: Fail-closed Assurance general activation
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SERVICE_ID: ${{ vars.PRODUCTION_API_SERVICE_ID }}
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse stale or non-main activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Assurance activation must run from main" >&2; exit 1; }
+          git fetch origin main --depth=1
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || { echo "Activation SHA is not current main" >&2; exit 1; }
+          echo "ACTIVATION_STAGE=main-sha-ok" >> "$GITHUB_ENV"
+
+      - name: Require protected production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RENDER_API_KEY SERVICE_ID QUEUE_CONSUMER_TOKEN GH_TOKEN; do
+            [[ -n "${!name:-}" ]] || { echo "Missing required production value: $name" >&2; exit 1; }
+          done
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Accept: application/json" \
+            "https://api.render.com/v1/services/$SERVICE_ID" | jq -e '.id != null' >/dev/null
+          echo "ACTIVATION_STAGE=credentials-ok" >> "$GITHUB_ENV"
+
+      - name: Publish pending activation status
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg state pending --arg context assurance-production-activation --arg description 'Assurance production activation is running' '{state:$state,context:$context,description:$description}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+          echo "ACTIVATION_STAGE=pending-status-ok" >> "$GITHUB_ENV"
+
+      - name: Stage exact release with Assurance disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          put_env() {
+            local key="$1" value="$2"
+            curl --fail-with-body --silent --show-error -X PUT \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data "$(jq -nc --arg value "$value" '{value:$value}')" \
+              "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$key" >/dev/null
+          }
+          put_env ASSURANCE_RELEASE_STATE disabled
+          current="$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/ASSURANCE_RELEASE_STATE" | jq -r '.value // empty')"
+          [[ "$current" == "disabled" ]] || { echo "Render did not persist disabled Assurance state" >&2; exit 1; }
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" | jq -e '.id != null' >/dev/null
+          echo "ACTIVATION_STAGE=disabled-deploy-requested" >> "$GITHUB_ENV"
+
+      - name: Require exact disabled release, schema, Queue, and R2 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_body=''
+          for attempt in $(seq 1 120); do
+            body="$(curl --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer $QUEUE_CONSUMER_TOKEN" \
+              "$API_BASE/v1/internal/release/health" 2>/dev/null || true)"
+            last_body="$body"
+            if printf '%s' "$body" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true and .assurance_release_state == "disabled"' \
+              >/dev/null 2>&1; then
+              printf '%s' "$body" > disabled-release-health.json
+              echo "Exact disabled release is production-ready"
+              echo "ACTIVATION_STAGE=disabled-release-ready" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 5
+          done
+          printf '%s' "$last_body" > disabled-release-health-failure.json
+          echo "Exact disabled release never reached the full production contract" >&2
+          exit 1
+
+      - name: Enable Assurance general access and redeploy exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error -X PUT \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"value":"general"}' \
+            "https://api.render.com/v1/services/$SERVICE_ID/env-vars/ASSURANCE_RELEASE_STATE" >/dev/null
+          current="$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/ASSURANCE_RELEASE_STATE" | jq -r '.value // empty')"
+          [[ "$current" == "general" ]] || { echo "Render did not persist general Assurance state" >&2; exit 1; }
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" | jq -e '.id != null' >/dev/null
+          echo "ACTIVATION_STAGE=general-deploy-requested" >> "$GITHUB_ENV"
+
+      - name: Verify exact live Assurance release
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_body=''
+          for attempt in $(seq 1 120); do
+            body="$(curl --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer $QUEUE_CONSUMER_TOKEN" \
+              "$API_BASE/v1/internal/release/health" 2>/dev/null || true)"
+            last_body="$body"
+            if printf '%s' "$body" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true and .assurance_release_state == "general"' \
+              >/dev/null 2>&1; then
+              printf '%s' "$body" > live-release-health.json
+              echo "Assurance release state is general on the exact production SHA"
+              echo "ACTIVATION_STAGE=general-release-ready" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 5
+          done
+          printf '%s' "$last_body" > live-release-health-failure.json
+          echo "Assurance never reached verified general state on the exact production SHA" >&2
+          exit 1
+
+      - name: Smoke production Enterprise Portal Assurance route
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 20 "$PORTAL_URL/assurance" -o assurance.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' assurance.html | head -1)"
+              if [[ "$title" == "AGRO-AI Enterprise Portal" ]]; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          [[ "$ready" == "1" ]] || { echo "Production Assurance route did not serve the Enterprise Portal" >&2; exit 1; }
+          echo "ACTIVATION_STAGE=portal-smoke-ok" >> "$GITHUB_ENV"
+
+      - name: Upload activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assurance-production-activation-${{ github.sha }}
+          path: |
+            disabled-release-health.json
+            disabled-release-health-failure.json
+            live-release-health.json
+            live-release-health-failure.json
+            assurance.html
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Fail closed on any activation failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo "Activation failed at stage: ${ACTIVATION_STAGE:-started}; forcing ASSURANCE_RELEASE_STATE=disabled"
+          curl --silent --show-error -X PUT \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"value":"disabled"}' \
+            "https://api.render.com/v1/services/$SERVICE_ID/env-vars/ASSURANCE_RELEASE_STATE" >/dev/null
+          curl --silent --show-error -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" >/dev/null
+          for attempt in $(seq 1 60); do
+            body="$(curl --silent --show-error --max-time 20 -H "Authorization: Bearer $QUEUE_CONSUMER_TOKEN" "$API_BASE/v1/internal/release/health" 2>/dev/null || true)"
+            if printf '%s' "$body" | jq -e '.assurance_release_state == "disabled"' >/dev/null 2>&1; then
+              echo "Fail-closed rollback confirmed"
+              echo "ACTIVATION_STAGE=rollback-confirmed-after-${ACTIVATION_STAGE:-started}" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Rollback request was sent; disabled-state verification timed out" >&2
+          exit 1
+
+      - name: Publish final activation status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="${ACTIVATION_STAGE:-started}"
+          if [[ "${{ job.status }}" == "success" ]]; then
+            state=success
+            description="Assurance is live on the exact production release"
+          else
+            state=failure
+            description="Assurance activation failed; stage=${stage}"
+          fi
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg state "$state" --arg context assurance-production-activation --arg description "$description" '{state:$state,context:$context,description:$description}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg state "$state" --arg context "assurance-activation-stage/${stage}" --arg description "$description" '{state:$state,context:$context,description:$description}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null

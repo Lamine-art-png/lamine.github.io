@@ -1,5 +1,4 @@
 import { API_BASE_URL, apiClient } from "../api/client";
-import { DecisionMemoryWorkspace } from "./intelligence/DecisionMemoryWorkspace";
 import { IntelligencePlanControls, REASONING_MODE_STORAGE_KEY } from "./intelligence/IntelligencePlanControls";
 import { IntelligenceView } from "./intelligence/IntelligenceView";
 import {
@@ -110,6 +109,9 @@ const intelligenceDependencies: IntelligenceDependencies = {
   async runIntelligence(request: AnyRecord) {
     const languageAwareRequest = withIndependentResponseLanguage(request);
 
+    // Production route: normal hybrid router plus independent edge and free-hosted
+    // recovery lanes. This protects Ask AGRO-AI from a broken provider/base-url
+    // pairing, an unfunded paid route, or a missing edge env on one Render service.
     try {
       return await apiClient.post(
         "/v1/runtime/intelligence-run",
@@ -117,6 +119,8 @@ const intelligenceDependencies: IntelligenceDependencies = {
       ) as AnyRecord;
     } catch (resilientRouteError) {
       if (!shouldUseLegacyRoute(resilientRouteError)) throw resilientRouteError;
+
+      // Rolling-deploy compatibility while the backend revision propagates.
       try {
         return await apiClient.post(
           "/v1/intelligence/brain/run",
@@ -171,7 +175,6 @@ export function Intelligence() {
   const controller = useIntelligenceController(intelligenceDependencies);
   return <>
     <IntelligencePlanControls />
-    <DecisionMemoryWorkspace />
     <IntelligenceView controller={controller} />
   </>;
 }

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
+import { AssuranceRouteRecovery } from "./components/AssuranceRouteRecovery";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
 import { PlatformCliDeviceApproval } from "./components/PlatformCliDeviceApproval";
 import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate";
@@ -38,6 +39,8 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
   return { Component: module[exportName] as ComponentType };
 };
 
+const assuranceRouteRecovery = <AssuranceRouteRecovery />;
+
 const operationRoutes = [
   { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
@@ -50,7 +53,7 @@ const operationRoutes = [
   { path: "report-factory", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "ReportFactory") },
   { path: "operations/new", lazy: lazyComponent(() => import("./components/NewOperationPage"), "NewOperationPage") },
   { path: "operations", lazy: lazyComponent(() => import("./components/Operations"), "Operations") },
-  { path: "assurance", lazy: lazyComponent(() => import("./components/Assurance"), "Assurance") },
+  { path: "assurance", lazy: lazyComponent(() => import("./components/Assurance"), "Assurance"), errorElement: assuranceRouteRecovery },
   { path: "evidence", lazy: lazyComponent(() => import("./components/Evidence"), "Evidence") },
   { path: "reports", lazy: lazyComponent(() => import("./components/MonetizedReportsV2"), "MonetizedReportsV2") },
   { path: "agents", lazy: lazyComponent(() => import("./components/Agents"), "Agents") },

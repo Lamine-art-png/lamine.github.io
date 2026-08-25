@@ -8,7 +8,6 @@ import {
   ConversationSummary,
   PROMPT_KEYS,
   buildReportTitle,
-  decisionDetailsFromResponse,
   isLanguageGenerationFailed,
   isReportIntent,
   mapServerMessage,
@@ -310,7 +309,6 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         return;
       }
       const assistantText = normalizeAssistantResponse(response);
-      const decisionDetails = decisionDetailsFromResponse(response);
       const modelStatus = String(response.model_status || response.status || "");
       if (modelStatus.includes("unavailable") || !assistantText) {
         setMessages(withUser);
@@ -334,10 +332,10 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
           } catch { /* Manual report actions remain available. */ }
         }
       }
-      const assistantMessage = { id: `assistant-${Date.now()}`, role: "assistant", content: assistantText, question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, decision_details: decisionDetails, model_status: modelStatus };
+      const assistantMessage = { id: `assistant-${Date.now()}`, role: "assistant", content: assistantText, question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, model_status: modelStatus };
       const nextRows = [...withUser, assistantMessage];
       setMessages(nextRows);
-      await persistExchange(conversationId, clean, assistantText, { question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, decision_details: decisionDetails, model_status: modelStatus }, nextRows);
+      await persistExchange(conversationId, clean, assistantText, { question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, model_status: modelStatus }, nextRows);
       setFileImports([]);
     } catch (err) {
       setMessages(withUser);

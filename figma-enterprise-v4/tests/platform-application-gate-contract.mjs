@@ -17,7 +17,7 @@ assert.ok(!source.includes("mailto:support@agroai-pilot.com?subject=Platform%20A
 assert.ok(routes.includes('import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate"'), "unenrolled Platform users must enter the self-service-aware gate");
 assert.ok(routes.includes("if (!platformDeveloper) return <PlatformSelfServiceGate />"), "the standalone Platform route must not force public developers into the legacy application flow");
 assert.ok(selfService.includes('apiClient.get("/v1/platform/terms")'), "self-service must load the server-authoritative effective legal catalog");
-assert.ok(selfService.includes('document.legal_review_status !== "approved_effective"'), "the UI must fail closed on a non-effective legal catalog");
+assert.ok(selfService.includes('item.legal_review_status !== "approved_effective"'), "the UI must fail closed when any required legal document is not effective");
 assert.ok(selfService.includes('apiClient.post("/v1/platform/terms/accept"'), "self-service must record versioned legal acceptance server-side");
 assert.ok(selfService.includes("await refreshMe()"), "successful acceptance must refresh the authenticated enrollment state");
 assert.ok(selfService.includes("if (apiError?.status === 404)"), "self-service must preserve the reviewed private-beta fallback until launch flags are active");

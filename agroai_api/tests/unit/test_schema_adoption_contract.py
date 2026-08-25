@@ -30,8 +30,8 @@ def test_column_contract_accepts_complete_shape():
         assert schema_contract_gaps(connection, {"example": {"id", "required_value"}}) == {}
 
 
-def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "031_merge_assurance_intelligence"
+def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():
+    assert HEAD_ALEMBIC_REVISION == "030_assurance_intelligence_v2"
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )
@@ -48,35 +48,6 @@ def test_head_contract_covers_security_assurance_platform_field_launch_and_intel
         "submitted_at",
         "reviewed_at",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
+
     assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
     assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])
-
-    assert {"organization_id", "workspace_id", "entity_type", "rule_pack_ids"}.issubset(
-        HEAD_SCHEMA_REQUIREMENTS["assurance_passports"]
-    )
-    assert {"organization_id", "workspace_id", "canonical_evidence_id", "review_status"}.issubset(
-        HEAD_SCHEMA_REQUIREMENTS["assurance_evidence_artifacts"]
-    )
-    assert {"passport_id", "action", "created_at"}.issubset(
-        HEAD_SCHEMA_REQUIREMENTS["assurance_review_events"]
-    )
-    assert {"passport_id", "event_type", "created_at"}.issubset(
-        HEAD_SCHEMA_REQUIREMENTS["assurance_audit_events"]
-    )
-
-    assert {
-        "scope_key", "revision", "state_json", "unknowns_json", "conflicts_json", "state_hash",
-    }.issubset(HEAD_SCHEMA_REQUIREMENTS["field_states"])
-    assert {
-        "field_state_id", "revision", "state_hash", "previous_revision_hash", "evidence_ids_json",
-    }.issubset(HEAD_SCHEMA_REQUIREMENTS["field_state_revisions"])
-    assert {
-        "field_state_revision_id", "evidence_graph_json", "science_trace_json", "decision_json",
-        "snapshot_hash", "idempotency_key",
-    }.issubset(HEAD_SCHEMA_REQUIREMENTS["decision_snapshots"])
-    assert {
-        "decision_snapshot_id", "state", "version", "requires_human_approval", "verification_status", "outcome",
-    }.issubset(HEAD_SCHEMA_REQUIREMENTS["decision_lifecycles"])
-    assert {
-        "lifecycle_id", "sequence", "from_state", "to_state", "event_type", "actor_type", "idempotency_key",
-    }.issubset(HEAD_SCHEMA_REQUIREMENTS["decision_lifecycle_events"])

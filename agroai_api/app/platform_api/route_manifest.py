@@ -55,6 +55,8 @@ ROUTE_MANIFEST: tuple[RouteSurface, ...] = (
     RouteSurface("GET", "/v1/platform/developer/projects", "enterprise_portal", "portal_jwt", ("projects:read",), False),
     RouteSurface("POST", "/v1/platform/developer/projects", "enterprise_portal", "portal_jwt", ("projects:write",), False, True),
     RouteSurface("POST", "/v1/platform/developer/projects/{project_id}/service-accounts", "enterprise_portal", "portal_jwt", ("service_accounts:write",), False, True),
+    RouteSurface("GET", "/v1/platform/developer/service-accounts", "enterprise_portal", "portal_jwt", ("service_accounts:read",), False),
+    RouteSurface("PATCH", "/v1/platform/developer/service-accounts/{service_account_id}", "enterprise_portal", "portal_jwt", ("service_accounts:write",), False, True),
     RouteSurface("POST", "/v1/platform/developer/service-accounts/{service_account_id}/keys", "enterprise_portal", "portal_jwt", ("keys:write",), False, True),
     RouteSurface("GET", "/v1/platform/developer/keys", "enterprise_portal", "portal_jwt", ("keys:read",), False),
     RouteSurface("POST", "/v1/platform/developer/keys/{key_id}/revoke", "enterprise_portal", "portal_jwt", ("keys:write",), False, True),
