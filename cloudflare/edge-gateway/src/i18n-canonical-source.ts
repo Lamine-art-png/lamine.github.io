@@ -9,11 +9,12 @@ import literalCatalog7 from "../../../shared/ui-literals.en.7.json";
 import literalCatalog8 from "../../../shared/ui-literals.en.8.json";
 import literalCatalog9 from "../../../shared/ui-literals.en.9.json";
 import literalCatalog10 from "../../../shared/ui-literals.en.10.json";
-import literalCatalog11 from "../../../shared/ui-literals.en.11.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
+import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
 import dynamicAssuranceCatalog from "../../../shared/ui-dynamic-copy-assurance.en.json";
 import commercialBoundaryCatalog from "../../../shared/ui-commercial-boundary.en.json";
+import decisionMemoryCatalog from "../../../shared/ui-decision-memory.en.json";
 
 const MAX_KEYS = 2_000;
 const MAX_KEY_CHARS = 160;
@@ -33,11 +34,12 @@ const CANONICAL_SOURCE: Record<string, string> = Object.assign(
   literalCatalog8,
   literalCatalog9,
   literalCatalog10,
-  literalCatalog11,
   dynamicCopyCatalog,
   dynamicCopyExtraCatalog,
+  dynamicFieldIntelligenceCatalog,
   dynamicAssuranceCatalog,
   commercialBoundaryCatalog,
+  decisionMemoryCatalog,
 );
 
 export function canonicalRequestedSource(value: unknown): Record<string, string> | null {
