@@ -160,7 +160,6 @@ def test_area_with_valid_unit_flows_to_context():
     s = e.create_session()
     res = e.analyze_session(s.session_id, mode='live', live_source='wiseconn', live_entity_id='162803',
                              manual_overrides={'area': 5.0, 'area_unit': 'acres'})
-    # A valid area + unit must not produce any area-unit warnings.
     area_warnings = [w for w in (res.warnings or []) if 'area unit' in str(w).lower() or 'unknown area' in str(w).lower()]
     assert not area_warnings
 
@@ -170,8 +169,6 @@ def test_area_with_valid_unit_flows_to_context():
 def test_ordinary_uploaded_session_does_not_auto_set_reference_time():
     """Ordinary uploaded sessions must not auto-set evidence_reference_time from artifact timestamps."""
     s = e.create_session()
-    # Use old timestamps that would be stale under wall-clock UTC but NOT under an
-    # old reference time — confirming no auto-reference is injected.
     art = e.WorkbenchDataArtifact(
         artifact_id='x', session_id=s.session_id, filename='weather.csv',
         content_type='text/csv', source_kind='weather',
@@ -180,32 +177,28 @@ def test_ordinary_uploaded_session_does_not_auto_set_reference_time():
         parsed_rows=[{'eto_mm': '6.4', 'timestamp': '2019-01-01T00:00:00'}],
     )
     e.SESSIONS[s.session_id]['artifacts'].append(art)
-    # The assembled context metrics must NOT contain evidence_reference_time.
     ctx = e.assemble_context_from_artifacts(e.SESSIONS[s.session_id]['artifacts'])
     assert ctx['metrics'].get('evidence_reference_time') is None
 
 
 def test_sample_package_session_sets_reference_time():
-    """Sample package sessions must inject evidence_reference_time so stale timestamps
-    are evaluated against the package's own reference, not wall-clock UTC."""
+    """Sample package sessions inject a package reference clock but do not fabricate validation metadata."""
     sample = e.create_sample_package_session()
     sid = sample['session'].session_id
     assert e.SESSIONS[sid].get('is_sample_package') is True
     res = e.analyze_session(sid)
-    # Sample package has fixed old timestamps — analysis must still return a result.
     assert res.recommendation.get('action')
 
 
-def test_explicit_historical_evaluation_uses_supplied_reference():
-    """When historical_evaluation=True and evidence_reference_time is set, that
-    reference is used for recency checks (not wall-clock UTC)."""
+def test_explicit_historical_evaluation_does_not_turn_recency_into_full_validation():
+    """A historical reference clock proves recency only. It cannot prove flow calibration,
+    pressure stability, or a source-specific validity policy, so runtime stays withheld."""
     from datetime import datetime, timezone, timedelta
     ref = datetime(2026, 5, 15, 12, 0, 0, tzinfo=timezone.utc)
     evidence_ts = (ref - timedelta(hours=6)).isoformat()
     sample = e.create_sample_package_session()
     sid = sample['session'].session_id
-    e.SESSIONS[sid]['is_sample_package'] = False  # clear sample flag to test explicit path
-    # Add flow artifact with evidence_ts that is 6 h before the explicit reference.
+    e.SESSIONS[sid]['is_sample_package'] = False
     art = e.WorkbenchDataArtifact(
         artifact_id='y', session_id=sid, filename='controller_events.csv',
         content_type='text/csv', source_kind='controller_events',
@@ -217,7 +210,8 @@ def test_explicit_historical_evaluation_uses_supplied_reference():
     )
     e.SESSIONS[sid]['artifacts'].append(art)
     res = e.analyze_session(sid, historical_evaluation=True, evidence_reference_time=ref.isoformat())
-    assert res.recommendation.get('flow_validation_status') == 'validated'
+    assert res.recommendation.get('flow_validation_status') == 'partial'
+    assert res.recommendation.get('duration_min') is None
 
 
 def test_historical_evaluation_without_reference_time_degrades_safely():
