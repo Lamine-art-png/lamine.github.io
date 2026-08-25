@@ -2,6 +2,8 @@ const NEWSROOM_PATH = "/news";
 const NEWSROOM_SCRIPT_PATH = "/news/agroai-news-card-restore.js";
 const NEWSROOM_ORIGIN = "https://agroai-343.pages.dev";
 
+const ASSURANCE_ARTICLE_PATH = "/news/agro-ai-assurance-enterprise-portal";
+const FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH = "/news/agro-ai-field-intelligence-upgrade";
 const PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch";
 const FIELD_INTELLIGENCE_ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
 const JOHN_DEERE_ARTICLE_PATH = "/news/agro-ai-connected-john-deere-operations-center";
@@ -9,6 +11,10 @@ const LEGACY_JOHN_DEERE_ARTICLE_PATH = "/news/john-deere-api-access";
 const JOHN_DEERE_PUBLISH_AT = "2026-07-28T08:00:00-07:00";
 const JOHN_DEERE_PUBLISH_AT_MS = Date.parse(JOHN_DEERE_PUBLISH_AT);
 
+const ASSURANCE_COVER_PATH = `${ASSURANCE_ARTICLE_PATH}/cover.svg`;
+const ASSURANCE_LOGO_PATH = `${ASSURANCE_ARTICLE_PATH}/agro-ai-logo.png`;
+const FIELD_INTELLIGENCE_UPDATE_COVER_PATH = `${FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH}/cover.svg`;
+const FIELD_INTELLIGENCE_UPDATE_LOGO_PATH = `${FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH}/agro-ai-logo.png`;
 const PLATFORM_API_COVER_PATH = `${PLATFORM_API_ARTICLE_PATH}/cover.svg`;
 const PLATFORM_API_LOGO_PATH = `${PLATFORM_API_ARTICLE_PATH}/agro-ai-logo.png`;
 const FIELD_INTELLIGENCE_COVER_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/cover.webp`;
@@ -16,6 +22,10 @@ const FIELD_INTELLIGENCE_LOGO_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/agro-ai
 const JOHN_DEERE_COVER_PATH = `${JOHN_DEERE_ARTICLE_PATH}/cover.webp`;
 const JOHN_DEERE_LOGO_PATH = `${JOHN_DEERE_ARTICLE_PATH}/agro-ai-logo.png`;
 
+const ASSURANCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-assurance-enterprise-portal/index.html";
+const ASSURANCE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-assurance-enterprise-portal/cover.svg";
+const FIELD_INTELLIGENCE_UPDATE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-field-intelligence-upgrade/index.html";
+const FIELD_INTELLIGENCE_UPDATE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-field-intelligence-upgrade/cover.svg";
 const PLATFORM_API_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-launch/index.html";
 const PLATFORM_API_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-launch/cover.svg";
 const FIELD_INTELLIGENCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-field-intelligence/index.html";
@@ -28,6 +38,22 @@ const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefa
 
 const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
+    {
+      path:"/news/agro-ai-field-intelligence-upgrade",
+      image:"/news/agro-ai-field-intelligence-upgrade/cover.svg",
+      category:"Product News",
+      title:"AGRO-AI expands Field Intelligence",
+      description:"Live visual analysis, multilingual transcription, linked tasks, verification and decision memory now connect field evidence to the operating decision.",
+      date:"San Francisco, California — August 26, 2026"
+    },
+    {
+      path:"/news/agro-ai-assurance-enterprise-portal",
+      image:"/news/agro-ai-assurance-enterprise-portal/cover.svg",
+      category:"Product News",
+      title:"AGRO-AI launches Assurance in the Enterprise Portal",
+      description:"Evidence readiness, human review, traceable requirements, field follow-up and proof packages now live inside the Enterprise Portal.",
+      date:"San Francisco, California — August 25, 2026"
+    },
     {
       path:"/news/agro-ai-platform-api-launch",
       image:"/news/agro-ai-platform-api-launch/cover.svg",
@@ -83,7 +109,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
     const cards=directCards(grid);
     const paths=cards.map((card)=>normalize(card.getAttribute("href")||card.href));
     const counts=new Map(paths.map((path)=>[path,paths.filter((candidate)=>candidate===path).length]));
-    const valid=cards.length===7&&new Set(paths).size===7&&preserved.every((path)=>counts.get(path)===1)&&managed.every((item)=>counts.get(item.path)===1)&&!paths.includes(legacyPath)&&!grid.textContent.toLowerCase().includes(legacyTitle)&&cards.every((card)=>(card.textContent.match(/Read article/g)||[]).length===1);
+    const valid=cards.length===9&&new Set(paths).size===9&&preserved.every((path)=>counts.get(path)===1)&&managed.every((item)=>counts.get(item.path)===1)&&!paths.includes(legacyPath)&&!grid.textContent.toLowerCase().includes(legacyTitle)&&cards.every((card)=>(card.textContent.match(/Read article/g)||[]).length===1);
     if(valid){
       grid.setAttribute("data-agroai-newsroom-grid","complete");
       document.documentElement.setAttribute("data-agroai-news-cards-restored","true");
@@ -135,6 +161,20 @@ async function fetchArticleSource(source: string, userAgent: string): Promise<Re
     cf: { cacheEverything: true, cacheTtl: 60 },
     headers: { "user-agent": userAgent, "cache-control": "no-cache" },
   } as RequestInit & { cf: { cacheEverything: boolean; cacheTtl: number } });
+}
+
+async function sourceArticleResponse(request: Request, source: string, userAgent: string, unavailable: string): Promise<Response> {
+  const upstream = await fetchArticleSource(source, userAgent);
+  if (!upstream.ok) return new Response(unavailable, { status: 503, headers: articleHeaders() });
+  return new Response(request.method === "HEAD" ? null : await upstream.text(), { status: 200, headers: articleHeaders() });
+}
+
+async function assuranceArticleResponse(request: Request): Promise<Response> {
+  return sourceArticleResponse(request, ASSURANCE_ARTICLE_SOURCE, "AGRO-AI-Assurance-News/1.0", "The AGRO-AI Assurance article is temporarily unavailable.");
+}
+
+async function fieldIntelligenceUpdateArticleResponse(request: Request): Promise<Response> {
+  return sourceArticleResponse(request, FIELD_INTELLIGENCE_UPDATE_ARTICLE_SOURCE, "AGRO-AI-Field-Intelligence-Update/1.0", "The AGRO-AI Field Intelligence update is temporarily unavailable.");
 }
 
 async function platformApiArticleResponse(request: Request): Promise<Response> {
@@ -229,7 +269,7 @@ async function newsroomResponse(request: Request): Promise<Response> {
   headers.set("cache-control", "private, no-cache, must-revalidate");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-agroai-newsroom-source", "native-pages-origin");
-  headers.set("x-agroai-newsroom-change", "preserve-four-native-cards-add-three-remove-one-obsolete");
+  headers.set("x-agroai-newsroom-change", "preserve-four-native-cards-add-five-remove-one-obsolete");
   return new Response(request.method === "HEAD" ? null : body, { status: 200, headers });
 }
 
@@ -247,6 +287,15 @@ export default {
 
     if (normalized === NEWSROOM_PATH) return newsroomResponse(request);
     if (normalized === NEWSROOM_SCRIPT_PATH) return newsroomScriptResponse(request);
+
+    if (normalized === ASSURANCE_ARTICLE_PATH) return assuranceArticleResponse(request);
+    if (normalized === ASSURANCE_COVER_PATH) return repositoryAssetResponse(request, ASSURANCE_COVER_SOURCE, "image/svg+xml", "reviewed-assurance-cover");
+    if (normalized === ASSURANCE_LOGO_PATH) return officialLogoResponse(request);
+
+    if (normalized === FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH) return fieldIntelligenceUpdateArticleResponse(request);
+    if (normalized === FIELD_INTELLIGENCE_UPDATE_COVER_PATH) return repositoryAssetResponse(request, FIELD_INTELLIGENCE_UPDATE_COVER_SOURCE, "image/svg+xml", "reviewed-field-intelligence-update-cover");
+    if (normalized === FIELD_INTELLIGENCE_UPDATE_LOGO_PATH) return officialLogoResponse(request);
+
     if (normalized === PLATFORM_API_ARTICLE_PATH) return platformApiArticleResponse(request);
     if (normalized === PLATFORM_API_COVER_PATH) return repositoryAssetResponse(request, PLATFORM_API_COVER_SOURCE, "image/svg+xml", "reviewed-platform-api-cover");
     if (normalized === PLATFORM_API_LOGO_PATH) return officialLogoResponse(request);
