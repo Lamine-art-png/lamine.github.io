@@ -1,3 +1,10 @@
+"""Legacy preview calibration fixtures.
+
+These values are retained only for backward-compatible display/research code.
+They are not farm calibration, are not an operational authority, and must not
+be used to emit a depth, duration, schedule, dosage, or physical action.  The
+production decision kernel deliberately has no import path to this module.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,6 +12,7 @@ from typing import Any, Dict, Literal
 
 
 CALIBRATION_PACK_VERSION = "agroai_calibration_pack_v0.2"
+OPERATIONAL_USE_ALLOWED = False
 
 CalibrationStatus = Literal[
     "calibrated_context",
@@ -117,6 +125,8 @@ def resolve_calibration(crop_type: Any, soil_type: Any, irrigation_method: Any, 
 
     return {
         "version": CALIBRATION_PACK_VERSION,
+        "operational_use_allowed": OPERATIONAL_USE_ALLOWED,
+        "warning": "Legacy preview defaults only; not valid for operational recommendations.",
         "status": status,
         "crop": crop,
         "soil": soil,

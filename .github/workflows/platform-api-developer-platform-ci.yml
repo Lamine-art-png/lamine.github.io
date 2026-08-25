@@ -59,7 +59,7 @@ jobs:
       - name: Assert a single migration head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "030_assurance_intelligence_v2 (head)"
+          test "$(alembic heads)" = "031_merge_assurance_intelligence (head)"
       - name: TEST self-service developer acceptance (release gate)
         id: self_service_gate
         shell: bash
@@ -94,6 +94,8 @@ jobs:
         run: python -m pytest tests/unit/test_cli_device_auth_secret_readiness.py -q --tb=short
       - name: Real Postgres + Redis platform integration
         run: python -m pytest tests/integration/test_platform_api_idempotency_postgres.py tests/integration/test_platform_api_product_concurrency_postgres.py tests/integration/test_platform_api_redis_limiter.py -q --tb=short
+      - name: Intelligence memory PostgreSQL integrity
+        run: python -m pytest tests/integration/test_intelligence_memory_postgres.py -q --tb=short
       - name: OpenAPI / SDK / CLI contract-drift gate
         run: python -m pytest tests/unit/test_platform_api_contract_drift.py -q --tb=short
 

@@ -38,6 +38,15 @@ class LiveRecommendationRequest(BaseModel):
     controller_context: Dict[str, Any] | None = None
     recent_irrigation_context: Dict[str, Any] | None = None
     field_observations: list[str] | None = None
+    crop_coefficient: float | None = None
+    effective_rainfall_mm: float | None = None
+    root_zone_replenishment_mm: float | None = None
+    net_irrigation_requirement_mm: float | None = None
+    irrigation_efficiency: float | None = None
+    validated_flow_m3h: float | None = None
+    flow_validation_status: str | None = None
+    recent_irrigation_credit_status: str | None = None
+    operating_window: str | None = None
     language: str = "en"
     user_role: str | None = None
     units: str | None = None
@@ -55,6 +64,15 @@ class LiveRecommendationOverridesRequest(BaseModel):
     controller_context: Dict[str, Any] | None = None
     recent_irrigation_context: Dict[str, Any] | None = None
     field_observations: list[str] | None = None
+    crop_coefficient: float | None = None
+    effective_rainfall_mm: float | None = None
+    root_zone_replenishment_mm: float | None = None
+    net_irrigation_requirement_mm: float | None = None
+    irrigation_efficiency: float | None = None
+    validated_flow_m3h: float | None = None
+    flow_validation_status: str | None = None
+    recent_irrigation_credit_status: str | None = None
+    operating_window: str | None = None
     language: str = "en"
     user_role: str | None = None
     units: str | None = None
@@ -99,6 +117,15 @@ def _merge_overrides(base_context: Dict[str, Any], payload: LiveRecommendationRe
         "controller_context",
         "recent_irrigation_context",
         "field_observations",
+        "crop_coefficient",
+        "effective_rainfall_mm",
+        "root_zone_replenishment_mm",
+        "net_irrigation_requirement_mm",
+        "irrigation_efficiency",
+        "validated_flow_m3h",
+        "flow_validation_status",
+        "recent_irrigation_credit_status",
+        "operating_window",
     ):
         value = getattr(payload, field_name)
         if value is not None:

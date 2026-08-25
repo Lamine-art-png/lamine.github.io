@@ -5,11 +5,36 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "030_assurance_intelligence_v2"
+HEAD_ALEMBIC_REVISION = "031_merge_assurance_intelligence"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_cli_device_authorizations": {"device_code_hash", "user_code", "status", "expires_at", "consumed_at"},
+    "field_states": {
+        "id", "organization_id", "workspace_id", "field_id", "block_id", "scope_key",
+        "schema_version", "revision", "as_of_at", "state_json", "unknowns_json",
+        "conflicts_json", "evidence_ids_json", "state_hash",
+    },
+    "field_state_revisions": {
+        "id", "field_state_id", "organization_id", "workspace_id", "field_id", "block_id",
+        "revision", "schema_version", "as_of_at", "state_json", "unknowns_json",
+        "conflicts_json", "evidence_ids_json", "state_hash", "previous_revision_hash",
+    },
+    "decision_snapshots": {
+        "id", "organization_id", "workspace_id", "field_state_revision_id", "domain", "task",
+        "decision_schema_version", "grounding_schema_version", "science_ruleset_version",
+        "evidence_graph_json", "evidence_ids_json", "science_trace_json", "decision_json",
+        "grounding_confidence", "policy_version", "action_policy_version", "snapshot_hash", "idempotency_key",
+    },
+    "decision_lifecycles": {
+        "id", "decision_snapshot_id", "organization_id", "workspace_id", "state", "version",
+        "requires_human_approval", "approved_at", "executed_at", "verified_at",
+        "verification_status", "outcome",
+    },
+    "decision_lifecycle_events": {
+        "id", "lifecycle_id", "organization_id", "workspace_id", "sequence", "from_state",
+        "to_state", "event_type", "actor_type", "payload_json", "idempotency_key", "created_at",
+    },
     "compliance_export_metadata": {"id", "tenant_id"},
     "assurance_passports": {"id", "organization_id", "workspace_id", "entity_type", "rule_pack_ids"},
     "assurance_evidence_artifacts": {

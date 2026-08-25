@@ -1,8 +1,9 @@
-"""Commercial intelligence policy resolution for AGRO-AI runtime execution."""
+"""Commercial and deterministic safety policy resolution for AGRO-AI intelligence."""
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -118,24 +119,9 @@ PROFILE_BASE = {
 
 
 TASK_ADJUSTMENTS = {
-    "fast": {
-        "output_multiplier": 0.45,
-        "context_multiplier": 0.6,
-        "timeout_multiplier": 0.55,
-        "attempt_delta": -1,
-    },
-    "reasoning": {
-        "output_multiplier": 1.0,
-        "context_multiplier": 1.0,
-        "timeout_multiplier": 1.0,
-        "attempt_delta": 0,
-    },
-    "report": {
-        "output_multiplier": 1.35,
-        "context_multiplier": 1.2,
-        "timeout_multiplier": 1.15,
-        "attempt_delta": 0,
-    },
+    "fast": {"output_multiplier": 0.45, "context_multiplier": 0.6, "timeout_multiplier": 0.55, "attempt_delta": -1},
+    "reasoning": {"output_multiplier": 1.0, "context_multiplier": 1.0, "timeout_multiplier": 1.0, "attempt_delta": 0},
+    "report": {"output_multiplier": 1.35, "context_multiplier": 1.2, "timeout_multiplier": 1.15, "attempt_delta": 0},
 }
 
 
@@ -162,23 +148,107 @@ def resolve_intelligence_policy(
         base["deep_analysis_enabled"] = False
         base["max_agent_steps"] = min(base["max_agent_steps"], 2)
         base["max_tool_calls"] = min(base["max_tool_calls"], 2)
-
     if request_risk in {"high", "critical"}:
         base["max_agent_steps"] = min(base["max_agent_steps"], 3)
         base["max_tool_calls"] = min(base["max_tool_calls"], 4)
         base["reasoning_budget"] = "safety_bounded"
-
     if not evidence_available:
         base["max_sources"] = min(base["max_sources"], 8)
         base["reasoning_budget"] = "evidence_constrained"
-
     if system_degraded:
         base["max_model_attempts"] = min(base["max_model_attempts"], 2)
         base["timeout_seconds"] = min(base["timeout_seconds"], 30)
         base["priority_class"] = "degraded"
 
-    return IntelligencePolicy(
-        commercial_profile=commercial_profile,
-        task_profile=task_profile,
-        **base,
-    )
+    return IntelligencePolicy(commercial_profile=commercial_profile, task_profile=task_profile, **base)
+
+
+# ---------------------------------------------------------------------------
+# Deterministic action safety policy
+# ---------------------------------------------------------------------------
+
+ActionKind = Literal[
+    "informational",
+    "inspection",
+    "data_collection",
+    "operational_recommendation",
+    "physical_execution",
+    "chemical_application",
+    "external_submission",
+]
+
+_CHEMICAL_TERMS = (
+    "pesticide", "herbicide", "fungicide", "insecticide", "chemical",
+    "spray", "fertilizer", "fertiliser", "nutrient application", "dose", "dosage",
+)
+_EXTERNAL_TERMS = ("submit", "file with", "send externally", "publish", "transmit to", "report to regulator")
+_PHYSICAL_PATTERNS = (
+    r"\birrigate\b",
+    r"\bwater\s+(?:the\s+)?(?:field|block|zone|crop|row|orchard|vineyard)\b",
+    r"\b(?:start|stop|run|activate|deactivate|open|close)\b.{0,40}\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b",
+    r"\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b.{0,40}\b(?:start|stop|run|activate|deactivate|open|close)\b",
+)
+_EXECUTABLE_INSTRUCTION_PATTERNS = (
+    r"\b(?:irrigate|spray|fertilize|fertilise|apply|dose|submit|publish|transmit)\b",
+    r"\b(?:start|stop|run|activate|deactivate|open|close)\b.{0,50}\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b",
+    r"\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b.{0,50}\b(?:start|stop|run|activate|deactivate|open|close)\b",
+)
+_INFORMATIONAL_PREFIXES = (
+    "summarize ", "summarise ", "explain ", "describe ", "compare ", "document ",
+    "list ", "show ", "review the report", "review the evidence", "review the data",
+)
+_INSPECTION_PREFIXES = ("inspect ", "check ", "visually inspect ", "review the field", "review the equipment")
+_DATA_COLLECTION_PREFIXES = (
+    "measure ", "collect ", "capture ", "sample ", "record ", "verify ", "confirm ",
+    "re-read ", "reread ", "obtain ", "request a reading", "monitor ",
+)
+
+
+def _normalize_action_text(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip().casefold()
+
+
+def classify_action_kind(action: str) -> ActionKind:
+    """Conservatively classify actions without trusting model-supplied labels."""
+    text = _normalize_action_text(action)
+    if not text:
+        return "operational_recommendation"
+    if any(term in text for term in _CHEMICAL_TERMS):
+        return "chemical_application"
+    if any(term in text for term in _EXTERNAL_TERMS):
+        return "external_submission"
+    if any(re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL) for pattern in _PHYSICAL_PATTERNS):
+        return "physical_execution"
+    if text.startswith(_DATA_COLLECTION_PREFIXES):
+        return "data_collection"
+    if text.startswith(_INSPECTION_PREFIXES):
+        return "inspection"
+    if text.startswith(_INFORMATIONAL_PREFIXES):
+        return "informational"
+    return "operational_recommendation"
+
+
+def action_requires_human_approval(kind: ActionKind) -> bool:
+    return kind in {"operational_recommendation", "physical_execution", "chemical_application", "external_submission"}
+
+
+def contains_consequential_action(text: str) -> bool:
+    normalized = _normalize_action_text(text)
+    if not normalized:
+        return False
+    if any(term in normalized for term in _CHEMICAL_TERMS + _EXTERNAL_TERMS):
+        return True
+    return any(re.search(pattern, normalized, flags=re.IGNORECASE | re.DOTALL) for pattern in _PHYSICAL_PATTERNS)
+
+
+def contains_executable_instruction(text: str) -> bool:
+    """Detect free-form instructions that a recovery model must never issue."""
+    normalized = _normalize_action_text(text)
+    if not normalized:
+        return False
+    if any(re.search(pattern, normalized, flags=re.IGNORECASE | re.DOTALL) for pattern in _EXECUTABLE_INSTRUCTION_PATTERNS):
+        # Avoid treating explicit inability/withholding statements as instructions.
+        if re.search(r"\b(?:cannot|can't|unable to|withheld|do not have enough evidence to|not enough evidence to)\b.{0,35}\b(?:recommend|determine|authorize)\b", normalized):
+            return False
+        return True
+    return False
