@@ -24,19 +24,19 @@
   <text x="88" y="448" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="400" letter-spacing="-1" fill="#344a3e">Evidence readiness. Human review. Traceable proof.</text>
   <rect x="88" y="520" width="290" height="10" rx="5" fill="url(#accent)"/>
   <g transform="translate(88 620)">
-    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+    <rect width="320" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
     <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">READINESS</text>
-    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">See what is missing</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#123a2b">See what is missing</text>
   </g>
-  <g transform="translate(370 620)">
-    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+  <g transform="translate(428 620)">
+    <rect width="320" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
     <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">REVIEW</text>
-    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">Keep people in control</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#123a2b">Keep people in control</text>
   </g>
-  <g transform="translate(652 620)">
-    <rect width="260" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
+  <g transform="translate(768 620)">
+    <rect width="320" height="100" rx="18" fill="#ffffff" opacity="0.86"/>
     <text x="28" y="42" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#647168">PROOF</text>
-    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#123a2b">Preserve the record</text>
+    <text x="28" y="76" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#123a2b">Preserve the record</text>
   </g>
   <text x="88" y="824" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#647168">San Francisco, California · August 25, 2026</text>
 </svg>
