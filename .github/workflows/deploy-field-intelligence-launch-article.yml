@@ -113,11 +113,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
-            bust="$(date +%s)-${attempt}"
-            origin_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o origin-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_ORIGIN_URL}?verify=${bust}" || true)"
-            live_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D live-newsroom.headers -o live-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_URL}?verify=${bust}" || true)"
-            script_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o newsroom-script.js -w '%{http_code}' --max-time 25 "${NEWSROOM_SCRIPT_URL}?verify=${bust}" || true)"
+
+          # Cloudflare route matching includes the query string. The exact News
+          # routes intentionally do not use broad wildcards, so production
+          # verification must exercise the same clean URLs that visitors use.
+          for attempt in $(seq 1 24); do
+            origin_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -o origin-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_ORIGIN_URL}" || true)"
+            live_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D live-newsroom.headers -o live-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_URL}" || true)"
+            script_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -o newsroom-script.js -w '%{http_code}' --max-time 25 "${NEWSROOM_SCRIPT_URL}" || true)"
 
             if [ "$origin_status" = "200" ] && [ "$live_status" = "200" ] && [ "$script_status" = "200" ] && \
                grep -Fi 'x-agroai-newsroom-source: native-pages-origin' live-newsroom.headers >/dev/null && \
@@ -147,6 +150,7 @@ jobs:
           done
 
           echo "Native newsroom preservation did not verify"
+          printf 'origin_status=%s live_status=%s script_status=%s\n' "$origin_status" "$live_status" "$script_status"
           cat live-newsroom.headers || true
           exit 1
 
@@ -154,16 +158,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
-            bust="$(date +%s)-${attempt}"
-            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D assurance.headers -o assurance.html -w '%{http_code}' --max-time 25 "${ASSURANCE_ARTICLE_URL}?verify=${bust}" || true)"
-            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D assurance-cover.headers -o assurance-cover.svg -w '%{http_code}' --max-time 25 "${ASSURANCE_COVER_URL}?verify=${bust}" || true)"
-            logo_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D assurance-logo.headers -o assurance-logo.bin -w '%{http_code}' --max-time 25 "${ASSURANCE_LOGO_URL}?verify=${bust}" || true)"
+          for attempt in $(seq 1 24); do
+            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D assurance.headers -o assurance.html -w '%{http_code}' --max-time 25 "${ASSURANCE_ARTICLE_URL}" || true)"
+            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D assurance-cover.headers -o assurance-cover.svg -w '%{http_code}' --max-time 25 "${ASSURANCE_COVER_URL}" || true)"
+            logo_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D assurance-logo.headers -o assurance-logo.bin -w '%{http_code}' --max-time 25 "${ASSURANCE_LOGO_URL}" || true)"
 
             if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
                grep -F "AGRO-AI launches Assurance in the Enterprise Portal" assurance.html >/dev/null && \
                grep -F "Tuesday, August 25, 2026" assurance.html >/dev/null && \
                grep -F '"@type":"NewsArticle"' assurance.html >/dev/null && \
+               grep -Fi 'x-robots-tag: index, follow, max-image-preview:large' assurance.headers >/dev/null && \
                grep -Fi 'x-agroai-asset-source: reviewed-assurance-cover' assurance-cover.headers >/dev/null && \
                grep -Fi 'x-agroai-asset-source: official-repository-logo' assurance-logo.headers >/dev/null; then
               echo "assurance_article=verified_live"
@@ -173,22 +177,23 @@ jobs:
           done
 
           echo "Assurance article did not verify live"
+          printf 'article_status=%s cover_status=%s logo_status=%s\n' "$article_status" "$cover_status" "$logo_status"
           exit 1
 
       - name: Prove Field Intelligence update and official assets live
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
-            bust="$(date +%s)-${attempt}"
-            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D field-update.headers -o field-update.html -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_ARTICLE_URL}?verify=${bust}" || true)"
-            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D field-update-cover.headers -o field-update-cover.svg -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_COVER_URL}?verify=${bust}" || true)"
-            logo_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D field-update-logo.headers -o field-update-logo.bin -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_LOGO_URL}?verify=${bust}" || true)"
+          for attempt in $(seq 1 24); do
+            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D field-update.headers -o field-update.html -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_ARTICLE_URL}" || true)"
+            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D field-update-cover.headers -o field-update-cover.svg -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_COVER_URL}" || true)"
+            logo_status="$(curl -sS -L -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D field-update-logo.headers -o field-update-logo.bin -w '%{http_code}' --max-time 25 "${FIELD_UPDATE_LOGO_URL}" || true)"
 
             if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
                grep -F "Field Intelligence now connects the field visit to the operating decision." field-update.html >/dev/null && \
                grep -F "Wednesday, August 26, 2026" field-update.html >/dev/null && \
                grep -F '"@type":"NewsArticle"' field-update.html >/dev/null && \
+               grep -Fi 'x-robots-tag: index, follow, max-image-preview:large' field-update.headers >/dev/null && \
                grep -Fi 'x-agroai-asset-source: reviewed-field-intelligence-update-cover' field-update-cover.headers >/dev/null && \
                grep -Fi 'x-agroai-asset-source: official-repository-logo' field-update-logo.headers >/dev/null; then
               echo "field_intelligence_update_article=verified_live"
@@ -198,6 +203,7 @@ jobs:
           done
 
           echo "Field Intelligence update article did not verify live"
+          printf 'article_status=%s cover_status=%s logo_status=%s\n' "$article_status" "$cover_status" "$logo_status"
           exit 1
 
       - name: Prove existing managed articles remain live
@@ -205,9 +211,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          platform_status="$(curl -sS -L -o platform.html -w '%{http_code}' --max-time 25 "${PLATFORM_ARTICLE_URL}?verify=${GITHUB_SHA}" || true)"
-          field_status="$(curl -sS -L -o field.html -w '%{http_code}' --max-time 25 "${FIELD_ARTICLE_URL}?verify=${GITHUB_SHA}" || true)"
-          deere_status="$(curl -sS -L -o deere.html -w '%{http_code}' --max-time 25 "${JOHN_DEERE_ARTICLE_URL}?verify=${GITHUB_SHA}" || true)"
+          platform_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o platform.html -w '%{http_code}' --max-time 25 "${PLATFORM_ARTICLE_URL}" || true)"
+          field_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o field.html -w '%{http_code}' --max-time 25 "${FIELD_ARTICLE_URL}" || true)"
+          deere_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o deere.html -w '%{http_code}' --max-time 25 "${JOHN_DEERE_ARTICLE_URL}" || true)"
 
           test "$platform_status" = "200"
           test "$field_status" = "200"
