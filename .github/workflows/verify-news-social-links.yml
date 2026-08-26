@@ -1,0 +1,44 @@
+name: Verify News Social Links
+
+on:
+  workflow_run:
+    workflows: ["Deploy News Articles"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Instagram-style tracked article URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          instagram_ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 400.0.0.0'
+          assurance='https://agroai-pilot.com/news/agro-ai-assurance-enterprise-portal?fbclid=agroai-instagram-verification&utm_source=instagram&utm_medium=story'
+          field='https://agroai-pilot.com/news/agro-ai-field-intelligence-upgrade?fbclid=agroai-instagram-verification&utm_source=instagram&utm_medium=story'
+
+          for attempt in $(seq 1 24); do
+            assurance_status="$(curl -sS -L -A "$instagram_ua" -H 'Cache-Control: no-cache' -D assurance.headers -o assurance.html -w '%{http_code}' --max-time 25 "$assurance" || true)"
+            field_status="$(curl -sS -L -A "$instagram_ua" -H 'Cache-Control: no-cache' -D field.headers -o field.html -w '%{http_code}' --max-time 25 "$field" || true)"
+
+            if [ "$assurance_status" = "200" ] && [ "$field_status" = "200" ] && \
+               grep -F 'AGRO-AI launches Assurance in the Enterprise Portal' assurance.html >/dev/null && \
+               grep -F 'Field Intelligence now connects the field visit to the operating decision.' field.html >/dev/null && \
+               ! grep -F 'Article not found' assurance.html >/dev/null && \
+               ! grep -F 'Article not found' field.html >/dev/null; then
+              echo 'instagram_tracked_assurance_link=verified'
+              echo 'instagram_tracked_field_intelligence_link=verified'
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Tracked social URLs did not verify"
+          printf 'assurance_status=%s field_status=%s\n' "$assurance_status" "$field_status"
+          exit 1
