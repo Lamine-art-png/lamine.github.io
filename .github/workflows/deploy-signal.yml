@@ -59,3 +59,5 @@ jobs:
           done
           echo "SIGNAL deployment completed, but the custom domain did not pass the production smoke test in time."
           exit 1
+
+# trigger SIGNAL deployment
