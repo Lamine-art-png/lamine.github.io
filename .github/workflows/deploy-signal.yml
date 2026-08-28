@@ -1,0 +1,61 @@
+name: Deploy SIGNAL publication
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "signal/**"
+      - ".github/workflows/deploy-signal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signal-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy signal.agroai-pilot.com
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production secret: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Deploy SIGNAL Worker + static assets
+        run: npx --yes wrangler@4.107.0 deploy --config signal/wrangler.toml
+
+      - name: Smoke custom domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            if html="$(curl --fail --silent --show-error --location --max-time 20 https://signal.agroai-pilot.com/ 2>/dev/null)"; then
+              if printf '%s' "$html" | grep -Fq '<title>SIGNAL by AGRO-AI' && printf '%s' "$html" | grep -Fq 'Where frontier technology meets the'; then
+                echo "SIGNAL production domain is live."
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "SIGNAL deployment completed, but the custom domain did not pass the production smoke test in time."
+          exit 1

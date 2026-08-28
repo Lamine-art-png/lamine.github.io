@@ -1,0 +1,11 @@
+name = "agroai-signal"
+compatibility_date = "2026-08-28"
+workers_dev = true
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+[[routes]]
+pattern = "signal.agroai-pilot.com"
+custom_domain = true

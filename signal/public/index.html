@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SIGNAL by AGRO-AI | Where frontier technology meets the physical world</title>
+  <meta name="description" content="SIGNAL is an editorial publication from AGRO-AI about the people, systems and decisions reshaping agriculture, AI, industry and the physical world." />
+  <meta name="theme-color" content="#f2efe7" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://signal.agroai-pilot.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://signal.agroai-pilot.com/" />
+  <meta property="og:title" content="SIGNAL by AGRO-AI" />
+  <meta property="og:description" content="Where frontier technology meets the physical world." />
+  <meta property="og:image" content="https://signal.agroai-pilot.com/media/signal-hero.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SIGNAL by AGRO-AI" />
+  <meta name="twitter:description" content="Where frontier technology meets the physical world." />
+  <meta name="twitter:image" content="https://signal.agroai-pilot.com/media/signal-hero.webp" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper:#f2efe7;
+      --paper-2:#ebe6db;
+      --ink:#10120f;
+      --muted:#65685e;
+      --green:#234224;
+      --green-2:#2c6400;
+      --line:rgba(16,18,15,.18);
+      --serif:"Newsreader", Georgia, serif;
+      --sans:"DM Sans", Arial, sans-serif;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    img{display:block;max-width:100%}
+    .wrap{width:min(1240px,calc(100% - 48px));margin:0 auto}
+    .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:600}
+    .rule{height:1px;background:var(--line)}
+
+    header{position:sticky;top:0;z-index:20;background:rgba(242,239,231,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;gap:28px}
+    .brand{display:flex;align-items:baseline;gap:12px;white-space:nowrap}
+    .brand strong{font-family:var(--serif);font-size:28px;font-weight:500;letter-spacing:.04em}
+    .brand span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--green);font-weight:600}
+    .navlinks{display:flex;gap:26px;align-items:center;font-size:14px}
+    .navlinks a{opacity:.72;transition:.2s ease}
+    .navlinks a:hover{opacity:1}
+    .nav-cta{border:1px solid var(--ink);padding:10px 14px;opacity:1!important}
+
+    .hero{min-height:calc(100svh - 72px);display:grid;grid-template-columns:minmax(0,1.08fr) minmax(360px,.72fr);gap:58px;align-items:stretch;padding:54px 0 58px}
+    .hero-copy{display:flex;flex-direction:column;justify-content:space-between;padding:12px 0 2px}
+    .hero-top{display:flex;align-items:center;justify-content:space-between;gap:20px;color:var(--green)}
+    .issue{font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+    .masthead{margin:52px 0 26px;font-family:var(--serif);font-weight:400;font-size:clamp(90px,12vw,180px);line-height:.76;letter-spacing:-.055em}
+    .positioning{max-width:760px;font-family:var(--serif);font-size:clamp(31px,4vw,58px);line-height:1.02;letter-spacing:-.02em;margin:0 0 26px}
+    .positioning em{font-style:normal;color:var(--green)}
+    .hero-desc{max-width:660px;font-size:18px;color:#3c4038;margin:0 0 34px}
+    .hero-actions{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+    .button{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:13px 18px;border:1px solid var(--ink);font-size:14px;font-weight:600;transition:.2s ease}
+    .button.primary{background:var(--ink);color:var(--paper)}
+    .button:hover{transform:translateY(-1px)}
+    .hero-foot{margin-top:58px;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);padding-top:18px;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+
+    .hero-visual{position:relative;min-height:660px;overflow:hidden;background:#c9b997}
+    .hero-visual img{width:100%;height:100%;object-fit:cover;object-position:center 43%}
+    .hero-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 62%,rgba(10,12,9,.56))}
+    .visual-note{position:absolute;left:24px;right:24px;bottom:22px;z-index:2;color:#f6f2e9;display:flex;align-items:flex-end;justify-content:space-between;gap:22px}
+    .visual-note strong{font-family:var(--serif);font-size:29px;font-weight:400;line-height:1.02;max-width:300px}
+    .visual-note span{font-size:11px;text-transform:uppercase;letter-spacing:.15em;text-align:right;opacity:.85}
+
+    section{padding:112px 0;border-top:1px solid var(--line)}
+    .section-grid{display:grid;grid-template-columns:270px 1fr;gap:90px}
+    .section-label{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);font-weight:600}
+    .section-title{font-family:var(--serif);font-size:clamp(48px,6vw,86px);line-height:.98;letter-spacing:-.035em;font-weight:400;margin:0 0 32px;max-width:920px}
+    .lead{font-size:22px;line-height:1.45;max-width:860px;color:#33372f;margin:0}
+    .lead strong{color:var(--ink);font-weight:500}
+
+    .principles{margin-top:72px;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+    .principle{padding:28px 26px 34px 0;border-right:1px solid var(--line)}
+    .principle:not(:first-child){padding-left:26px}
+    .principle:last-child{border-right:0}
+    .principle .n{font-family:var(--serif);font-size:14px;color:var(--green);margin-bottom:36px}
+    .principle h3{font-family:var(--serif);font-size:26px;font-weight:400;margin:0 0 12px}
+    .principle p{font-size:14px;color:var(--muted);margin:0}
+
+    .method{background:var(--ink);color:var(--paper)}
+    .method .section-label{color:#93b47e}
+    .method .section-title{max-width:860px}
+    .method-grid{margin-top:68px;display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid rgba(242,239,231,.24);border-bottom:1px solid rgba(242,239,231,.24)}
+    .method-card{padding:30px 30px 38px 0;border-right:1px solid rgba(242,239,231,.24)}
+    .method-card:not(:first-child){padding-left:30px}
+    .method-card:last-child{border-right:0}
+    .method-card .num{font-size:11px;letter-spacing:.14em;color:#93b47e;margin-bottom:54px}
+    .method-card h3{font-family:var(--serif);font-size:30px;font-weight:400;margin:0 0 12px}
+    .method-card p{font-size:14px;color:#b9bdb3;margin:0}
+
+    .issue-card{display:grid;grid-template-columns:1.08fr .92fr;min-height:560px;border:1px solid var(--line);background:#ded7ca}
+    .issue-art{padding:42px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(155deg,#161a15 0%,#263e28 100%);color:#f2efe7;position:relative;overflow:hidden}
+    .issue-art:before{content:"";position:absolute;left:-20%;right:-20%;bottom:-46%;height:72%;border-radius:50%;background:repeating-radial-gradient(ellipse at center,rgba(255,255,255,.11) 0 1px,transparent 2px 15px);opacity:.45;transform:scaleY(.55)}
+    .issue-art .topline,.issue-art .bottomline{position:relative;z-index:2;display:flex;justify-content:space-between;gap:12px;font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+    .issue-art h3{position:relative;z-index:2;font-family:var(--serif);font-size:clamp(48px,5vw,76px);font-weight:400;line-height:.93;letter-spacing:-.03em;margin:0;max-width:720px}
+    .issue-body{padding:54px 52px;display:flex;flex-direction:column;justify-content:center;background:var(--paper)}
+    .issue-body .eyebrow{color:var(--green)}
+    .issue-body h4{font-family:var(--serif);font-size:39px;font-weight:400;line-height:1.04;margin:18px 0 18px}
+    .issue-body p{font-size:17px;color:#494d44;margin:0 0 26px}
+
+    .conversation-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:58px}
+    .conversation{min-height:290px;padding:30px;border:1px solid var(--line);display:flex;flex-direction:column;justify-content:space-between;transition:.2s ease;background:rgba(255,255,255,.14)}
+    .conversation:hover{background:rgba(255,255,255,.38);transform:translateY(-2px)}
+    .conversation .role{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--green)}
+    .conversation h3{font-family:var(--serif);font-size:31px;font-weight:400;line-height:1.05;margin:0;max-width:320px}
+    .conversation .arrow{font-size:18px}
+
+    .beyond{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:start}
+    .beyond .big{font-family:var(--serif);font-size:clamp(54px,7vw,100px);line-height:.9;letter-spacing:-.04em;margin:0}
+    .beyond .copy{padding-top:8px}
+    .beyond .copy p{font-size:20px;color:#3c4038;margin:0 0 24px}
+    .topic-list{margin-top:34px;border-top:1px solid var(--line)}
+    .topic{display:grid;grid-template-columns:130px 1fr;padding:15px 0;border-bottom:1px solid var(--line);font-size:14px}
+    .topic span:first-child{color:var(--green);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+
+    .join{padding:100px 0;background:var(--green);color:#f4f1e8;border-top:0}
+    .join-inner{display:grid;grid-template-columns:1.15fr .85fr;gap:70px;align-items:end}
+    .join h2{font-family:var(--serif);font-size:clamp(58px,7vw,100px);line-height:.9;letter-spacing:-.04em;font-weight:400;margin:0}
+    .join p{font-size:18px;max-width:520px;color:#d8e0d3;margin:0 0 25px}
+    .join .button{border-color:#f4f1e8;color:#f4f1e8}
+
+    footer{padding:30px 0 42px;background:var(--ink);color:#d7dacd}
+    .footer-top{display:flex;justify-content:space-between;gap:30px;align-items:flex-start}
+    .footer-brand{font-family:var(--serif);font-size:33px;color:white}
+    .footer-meta{font-size:12px;max-width:580px;color:#a8ada2;text-align:right}
+    .footer-bottom{margin-top:36px;padding-top:18px;border-top:1px solid rgba(255,255,255,.14);display:flex;justify-content:space-between;gap:18px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#8f958a}
+
+    @media (max-width: 980px){
+      .navlinks a:not(.nav-cta){display:none}
+      .hero{grid-template-columns:1fr;min-height:auto;gap:34px}
+      .hero-visual{min-height:620px;max-height:760px}
+      .hero-foot{grid-template-columns:repeat(2,1fr);gap:10px}
+      .section-grid{grid-template-columns:1fr;gap:28px}
+      .principles,.method-grid{grid-template-columns:repeat(2,1fr)}
+      .principle:nth-child(2){border-right:0}
+      .principle:nth-child(-n+2){border-bottom:1px solid var(--line)}
+      .method-card:nth-child(2){border-right:0}
+      .method-card:nth-child(-n+2){border-bottom:1px solid rgba(242,239,231,.24)}
+      .issue-card{grid-template-columns:1fr}
+      .conversation-grid{grid-template-columns:1fr 1fr}
+      .beyond,.join-inner{grid-template-columns:1fr}
+    }
+    @media (max-width: 640px){
+      .wrap{width:min(100% - 28px,1240px)}
+      .nav{height:62px}
+      .brand strong{font-size:24px}
+      .brand span{display:none}
+      .nav-cta{padding:8px 10px;font-size:12px}
+      .hero{padding-top:34px}
+      .masthead{font-size:27vw;margin-top:38px}
+      .positioning{font-size:38px}
+      .hero-desc{font-size:16px}
+      .hero-visual{min-height:560px}
+      .visual-note strong{font-size:24px}
+      section{padding:78px 0}
+      .section-title{font-size:52px}
+      .lead{font-size:18px}
+      .principles,.method-grid,.conversation-grid{grid-template-columns:1fr}
+      .principle,.principle:not(:first-child),.method-card,.method-card:not(:first-child){padding:26px 0;border-right:0;border-bottom:1px solid var(--line)}
+      .method-card,.method-card:not(:first-child){border-bottom:1px solid rgba(242,239,231,.24)}
+      .issue-art{min-height:470px;padding:28px}
+      .issue-body{padding:36px 28px}
+      .issue-body h4{font-size:33px}
+      .beyond .big{font-size:64px}
+      .topic{grid-template-columns:1fr;gap:6px}
+      .join{padding:72px 0}
+      .footer-top,.footer-bottom{flex-direction:column}
+      .footer-meta{text-align:left}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="#top" aria-label="SIGNAL home"><strong>SIGNAL</strong><span>by AGRO-AI</span></a>
+      <nav class="navlinks" aria-label="Primary">
+        <a href="#why">Why SIGNAL</a>
+        <a href="#method">Our method</a>
+        <a href="#conversations">Conversations</a>
+        <a href="#issue">Issue 001</a>
+        <a class="nav-cta" href="mailto:contact@agroai-pilot.com?subject=SIGNAL%20%E2%80%94%20First%20Issue">Get SIGNAL ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="wrap hero">
+      <div class="hero-copy">
+        <div>
+          <div class="hero-top"><span class="eyebrow">An AGRO-AI publication</span><span class="issue">San Francisco · 2026</span></div>
+          <h1 class="masthead">SIGNAL</h1>
+          <p class="positioning">Where frontier technology meets the <em>physical world.</em></p>
+          <p class="hero-desc">Independent-minded analysis and serious conversations with the people building, operating, financing, regulating and living through the next technological shift — starting with agriculture.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#issue">Read what we’re launching →</a>
+            <a class="button" href="#conversations">See the conversations</a>
+          </div>
+        </div>
+        <div class="hero-foot" aria-label="Coverage areas">
+          <span>Agriculture</span><span>Artificial intelligence</span><span>Industry</span><span>Policy & capital</span>
+        </div>
+      </div>
+      <figure class="hero-visual" aria-label="Young person standing in a field at golden hour">
+        <img src="/media/signal-hero.webp" alt="A young girl standing in a field at golden hour, looking toward the horizon" />
+        <figcaption class="visual-note"><strong>Ideas matter when they meet reality.</strong><span>Field / System / Human</span></figcaption>
+      </figure>
+    </div>
+
+    <section id="why">
+      <div class="wrap section-grid">
+        <div class="section-label">01 / Why SIGNAL</div>
+        <div>
+          <h2 class="section-title">We build inside the world we cover.</h2>
+          <p class="lead">SIGNAL comes from AGRO-AI, a company working where software meets farms, machines, infrastructure and human decisions. <strong>That gives us a different vantage point:</strong> close enough to understand the technical detail, but grounded enough to ask whether any of it works in the real world.</p>
+          <div class="principles">
+            <article class="principle"><div class="n">01</div><h3>Specificity over hype.</h3><p>We care about what changed, what is measurable and what survives contact with operations.</p></article>
+            <article class="principle"><div class="n">02</div><h3>Operators belong in the room.</h3><p>Farmers, engineers and frontline teams carry knowledge that rarely fits into a press release.</p></article>
+            <article class="principle"><div class="n">03</div><h3>Curiosity over promotion.</h3><p>We cover technologies and companies on their merits, including ideas that challenge our own assumptions.</p></article>
+            <article class="principle"><div class="n">04</div><h3>Facts and judgment stay distinct.</h3><p>Readers should always know what happened, what we think it means and where reasonable people disagree.</p></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="method" class="method">
+      <div class="wrap section-grid">
+        <div class="section-label">02 / The SIGNAL method</div>
+        <div>
+          <h2 class="section-title">Less noise. More consequence.</h2>
+          <p class="lead" style="color:#c8ccc1">Every SIGNAL piece is built around four questions. The format is simple on purpose. We want clarity before volume.</p>
+          <div class="method-grid">
+            <article class="method-card"><div class="num">01 / THE CHANGE</div><h3>What actually happened?</h3><p>The facts, stripped of announcement language and market theater.</p></article>
+            <article class="method-card"><div class="num">02 / THE STAKES</div><h3>Why does it matter?</h3><p>The second-order effects for companies, operators, institutions and markets.</p></article>
+            <article class="method-card"><div class="num">03 / THE FIELD</div><h3>What survives reality?</h3><p>The operational view: economics, constraints, deployment and the human system around the technology.</p></article>
+            <article class="method-card"><div class="num">04 / THE NEXT QUESTION</div><h3>What should we watch now?</h3><p>The unresolved question that matters more than the headline.</p></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="issue">
+      <div class="wrap section-grid">
+        <div class="section-label">03 / Issue 001</div>
+        <div>
+          <h2 class="section-title">Start with the question beneath the industry.</h2>
+          <div class="issue-card">
+            <div class="issue-art">
+              <div class="topline"><span>SIGNAL / 001</span><span>AGRICULTURE × AI</span></div>
+              <h3>WHO WILL OWN AGRICULTURE’S INTELLIGENCE LAYER?</h3>
+              <div class="bottomline"><span>Data. Models. Decisions.</span><span>2026</span></div>
+            </div>
+            <div class="issue-body">
+              <span class="eyebrow">Launch analysis</span>
+              <h4>The farm is becoming a software system. The power question is who gets to interpret it.</h4>
+              <p>Machinery companies, input giants, cloud platforms, AI labs and independent software companies are all moving toward the same control point: the layer that turns fragmented physical-world data into decisions.</p>
+              <p>SIGNAL / 001 maps the race, the economics and the questions growers and agribusinesses should be asking before the architecture hardens.</p>
+              <a class="button" href="mailto:contact@agroai-pilot.com?subject=SIGNAL%20001%20%E2%80%94%20Request%20the%20first%20issue">Request Issue 001 →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="conversations">
+      <div class="wrap section-grid">
+        <div class="section-label">04 / SIGNAL Conversations</div>
+        <div>
+          <h2 class="section-title">No “tell us about your journey.”</h2>
+          <p class="lead">We invite people because they know something worth understanding. Every conversation begins with a real question, not a biography.</p>
+          <div class="conversation-grid">
+            <article class="conversation"><span class="role">Farmer / Operator</span><h3>What do technology companies still misunderstand about running a farm?</h3><span class="arrow">↗</span></article>
+            <article class="conversation"><span class="role">AI Builder</span><h3>What changes when intelligence moves from the screen into machines and infrastructure?</h3><span class="arrow">↗</span></article>
+            <article class="conversation"><span class="role">Researcher</span><h3>Where is AI genuinely ahead of the evidence?</h3><span class="arrow">↗</span></article>
+            <article class="conversation"><span class="role">Executive</span><h3>Who should own the decision layer inside a modern enterprise?</h3><span class="arrow">↗</span></article>
+            <article class="conversation"><span class="role">Policymaker</span><h3>How do you regulate systems that learn faster than institutions change?</h3><span class="arrow">↗</span></article>
+            <article class="conversation"><span class="role">Investor / Founder</span><h3>Which physical industries are finally ready for software-scale economics?</h3><span class="arrow">↗</span></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap beyond">
+        <h2 class="big">Agriculture is where we start. Reality is the beat.</h2>
+        <div class="copy">
+          <p>Agriculture is one of the hardest places to deploy technology: biology, weather, machines, labor, regulation, capital and thin margins all collide in the same operating environment.</p>
+          <p>That makes it a powerful lens for a larger question: <strong>what happens when frontier software has to work in the physical world?</strong></p>
+          <div class="topic-list">
+            <div class="topic"><span>Intelligence</span><span>Models, agents, data infrastructure and decision systems.</span></div>
+            <div class="topic"><span>Physical AI</span><span>Robotics, autonomy, sensing and machines that act.</span></div>
+            <div class="topic"><span>Industry</span><span>Manufacturing, food, energy, logistics and the systems beneath daily life.</span></div>
+            <div class="topic"><span>Institutions</span><span>Policy, capital, labor and the rules that determine what actually scales.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="join">
+      <div class="wrap join-inner">
+        <h2>Bring us the question people are avoiding.</h2>
+        <div>
+          <p>We want conversations with farmers, founders, engineers, researchers, executives, investors and policymakers who have earned a point of view through real work.</p>
+          <a class="button" href="mailto:contact@agroai-pilot.com?subject=SIGNAL%20%E2%80%94%20Conversation%20or%20story%20idea">Pitch a conversation or story ↗</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="footer-top">
+        <div><div class="footer-brand">SIGNAL</div><div class="eyebrow" style="color:#8fa586;margin-top:5px">by AGRO-AI</div></div>
+        <div class="footer-meta">SIGNAL is an editorial publication from AGRO-AI Inc. Coverage is selected for editorial value and does not constitute endorsement of AGRO-AI products, partners or commercial relationships.</div>
+      </div>
+      <div class="footer-bottom"><span>© 2026 AGRO-AI Inc.</span><span>San Francisco, California</span><a href="https://agroai-pilot.com">AGRO-AI ↗</a></div>
+    </div>
+  </footer>
+</body>
+</html>
