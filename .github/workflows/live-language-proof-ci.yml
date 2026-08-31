@@ -1,0 +1,117 @@
+name: Live Global Language Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/live-language-proof-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PORTAL_URL: https://app.agroai-pilot.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for live edge and global language contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p live-proof
+          ready=0
+          for attempt in $(seq 1 30); do
+            edge_ok=false
+            health_ok=false
+            languages_ok=false
+            if curl --fail --silent --show-error --max-time 15 "${PORTAL_URL}/v1/edge-health" -o live-proof/edge-health.json \
+              && jq -e '.status == "ok"' live-proof/edge-health.json >/dev/null 2>&1; then
+              edge_ok=true
+            fi
+            if curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/v1/health" -o live-proof/health.json \
+              && jq -e '.status == "ok"' live-proof/health.json >/dev/null 2>&1; then
+              health_ok=true
+            fi
+            if curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/v1/i18n/languages" -o live-proof/languages.json \
+              && jq -e '
+                .status == "ok"
+                and (.count >= 50)
+                and ([.languages[].code] | index("de") != null)
+                and ([.languages[].code] | index("ar") != null)
+                and ([.languages[].code] | index("sw") != null)
+                and ([.languages[].code] | index("ja") != null)
+                and ([.languages[].code] | index("uk") != null)
+              ' live-proof/languages.json >/dev/null 2>&1; then
+              languages_ok=true
+            fi
+            echo "attempt=${attempt} edge=${edge_ok} health=${health_ok} languages=${languages_ok}"
+            if [ "$edge_ok" = true ] && [ "$health_ok" = true ] && [ "$languages_ok" = true ]; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+          jq '{status, count, sample: [.languages[] | select(.code == "de" or .code == "ar" or .code == "sw" or .code == "ja" or .code == "uk")]}' live-proof/languages.json
+
+      - name: Verify live readiness remains production-ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/v1/readiness" -o live-proof/readiness.json
+          jq -e '.status == "ready" and .schema.ready == true and .production.ready == true and (.production.blockers | length == 0)' live-proof/readiness.json >/dev/null
+          jq '{status, schema_ready: .schema.ready, production_ready: .production.ready, blockers: .production.blockers}' live-proof/readiness.json
+
+      - name: Verify deployed portal bundle contains global selector and safe cache markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p live-proof/assets
+          curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/" -o live-proof/portal.html
+          : > live-proof/asset-paths.txt
+          grep -oE 'assets/[A-Za-z0-9._/-]+\.js' live-proof/portal.html >> live-proof/asset-paths.txt || true
+          for pass in 1 2 3; do
+            sort -u live-proof/asset-paths.txt -o live-proof/asset-paths.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              target="live-proof/assets/$(basename "$asset")"
+              if [ ! -f "$target" ]; then
+                curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              fi
+            done < live-proof/asset-paths.txt
+            grep -rhoE 'assets/[A-Za-z0-9._/-]+\.js' live-proof/assets >> live-proof/asset-paths.txt || true
+          done
+          cat live-proof/assets/*.js > live-proof/all-js.txt
+          grep -F 'Kiswahili' live-proof/all-js.txt >/dev/null
+          grep -F 'Українська' live-proof/all-js.txt >/dev/null
+          grep -F '日本語' live-proof/all-js.txt >/dev/null
+          grep -F 'agroai_ui_catalog_v3:' live-proof/all-js.txt >/dev/null
+          printf 'portal_bundle_global_markers=ok\n'
+
+      - name: Record proof summary
+        shell: bash
+        env:
+          EXPECTED_MAIN_SHA: 0118ded8e94540da9981b0d8a2f148eeb8cfe8e0
+        run: |
+          set -euo pipefail
+          count="$(jq -r '.count' live-proof/languages.json)"
+          jq -n \
+            --arg checked_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg expected_main_sha "$EXPECTED_MAIN_SHA" \
+            --argjson language_count "$count" \
+            '{checked_at: $checked_at, expected_main_sha: $expected_main_sha, language_count: $language_count, edge: "ok", health: "ok", readiness: "ready", portal_bundle_global_markers: "ok"}' \
+            | tee live-proof/summary.json
+
+      - name: Upload live proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-global-language-proof
+          path: live-proof
+          if-no-files-found: error
+          retention-days: 2
