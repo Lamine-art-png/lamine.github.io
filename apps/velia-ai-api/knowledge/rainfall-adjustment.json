@@ -3,11 +3,11 @@
   "title": "Rainfall Adjustment",
   "topic": "rainfall",
   "sourceType": "internal_guidance",
-  "content": "Expected rainfall should reduce irrigation urgency when probability and forecast amount are meaningful. Light rain may not replace irrigation, especially under high heat or severe field dryness. If meaningful rain is likely soon, Velia should prefer wait or check-field-first unless field evidence indicates acute water stress. Rain forecasts should be presented as forecasts with uncertainty, not guaranteed rainfall.",
+  "content": "Expected rainfall should reduce irrigation urgency when probability and forecast amount are meaningful. Light rain may not replace irrigation, especially under high heat or severe field dryness. If meaningful rain is likely soon, Terris should prefer wait or check-field-first unless field evidence indicates acute water stress. Rain forecasts should be presented as forecasts with uncertainty, not guaranteed rainfall.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Rainfall adjustment",
     "url": null
   }

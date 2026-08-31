@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 
 const playwrightModule = process.env.PLAYWRIGHT_MODULE || "playwright";
 const { chromium } = await import(playwrightModule);
-const baseUrl = process.env.VELIA_MOBILE_URL || "http://127.0.0.1:4174";
-const screenshotDir = new URL("../screenshots/", import.meta.url);
+const baseUrl = process.env.TERRIS_MOBILE_URL || process.env.VELIA_MOBILE_URL || "http://127.0.0.1:4174";
+const screenshotDir = process.env.TERRIS_SCREENSHOT_DIR
+  ? new URL(`${process.env.TERRIS_SCREENSHOT_DIR.replace(/\/$/, "")}/`, "file://")
+  : new URL("../screenshots/", import.meta.url);
 
 const browser = await chromium.launch({
   headless: process.env.HEADLESS !== "0",
@@ -107,4 +109,4 @@ await expectText("Offline mode active");
 await expectText("Silverado Vineyard");
 
 await browser.close();
-console.log("Velia mobile browser acceptance passed");
+console.log("Terris mobile browser acceptance passed");

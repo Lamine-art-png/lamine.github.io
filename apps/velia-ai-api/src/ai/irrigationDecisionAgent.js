@@ -63,7 +63,7 @@ function redactableContextForPrompt({ context, signals, memory, rag }) {
 }
 
 function buildReasoningPrompt(payload) {
-  return `You are Velia, a field-specific irrigation decision engine.
+  return `You are Terris, a field-specific irrigation decision engine.
 Return only JSON matching the schema. Use the deterministic signals as safety-authoritative constraints.
 Do not invent sensor data, exact soil moisture, satellite evidence, weather, sources, yield guarantees, or water-savings guarantees.
 If data is missing, name it and choose the smallest useful field check.
