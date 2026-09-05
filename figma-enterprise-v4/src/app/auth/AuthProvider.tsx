@@ -235,17 +235,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPlatformAdmin(normalized.platformAdmin);
       setVerification(normalized.verification);
 
-      const developerHydration = apiClient.platformDeveloper.overview()
+      const hydratePlatformDeveloper = () => apiClient.platformDeveloper.overview()
         .then((developerOverview) => setPlatformDeveloper(Boolean(developerOverview)))
         .catch(() => setPlatformDeveloper(false));
 
       // Developer entitlement is required before first paint only on the
-      // standalone/compatibility Platform API surfaces. It must not hold the
-      // Enterprise Portal login screen hostage.
+      // standalone/compatibility Platform API surfaces. On the Enterprise
+      // Portal, defer this noncritical request so it cannot compete with the
+      // bootstrap and the active page for the same backend/database capacity.
       if (platformDeveloperIsFirstPaintCritical()) {
-        await developerHydration;
+        await hydratePlatformDeveloper();
       } else {
-        void developerHydration;
+        window.setTimeout(() => {
+          void hydratePlatformDeveloper();
+        }, 1500);
       }
     })();
 
