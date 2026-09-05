@@ -26,15 +26,16 @@ function tone(status: string): "neutral" | "good" | "warn" | "locked" { if (["re
 export function Overview() {
   const { currentWorkspace } = useAuth();
   const workspaceId = currentWorkspace?.id;
+  // Command Center already returns operator_tasks and audit_events. Keep first
+  // paint to one authoritative request instead of rebuilding the same heavy
+  // field context three times in parallel.
   const centerState = usePortalResource<Row>(useCallback(() => apiClient.fieldOps.commandCenter(workspaceId), [workspaceId]));
-  const tasksState = usePortalResource<Row>(useCallback(() => apiClient.fieldOps.tasks(workspaceId), [workspaceId]));
-  const auditState = usePortalResource<Row>(useCallback(() => apiClient.fieldOps.auditTrail(workspaceId), [workspaceId]));
   const center = centerState.data || {};
   const queue = arr<Row>(center.field_queue);
-  const tasks = arr<Row>(tasksState.data?.tasks || center.operator_tasks);
+  const tasks = arr<Row>(center.operator_tasks);
   const missing = arr<Row>(center.missing_evidence);
   const reportsReady = arr<Row>(center.reports_ready);
-  const audit = arr<Row>(auditState.data?.events || center.audit_events);
+  const audit = arr<Row>(center.audit_events);
   const priority = center.today_priority || {};
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -46,7 +47,7 @@ export function Overview() {
   const openTasks = useMemo(() => tasks.filter((task) => task.status !== "done").length, [tasks]);
   const fieldsNeedAttention = useMemo(() => queue.filter((row) => row.priority === "high" || row.status === "needs_attention").length, [queue]);
 
-  async function refreshAll() { await Promise.all([centerState.refresh(), tasksState.refresh(), auditState.refresh()]); }
+  async function refreshAll() { await centerState.refresh(); }
   async function createTask(item: Row) {
     setBusy(clean(item.field_id || item.field_name, "task"));
     setMessage("");
