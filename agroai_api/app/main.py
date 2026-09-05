@@ -6,6 +6,7 @@ import datetime
 import logging
 import re
 from contextlib import asynccontextmanager
+from time import perf_counter
 from typing import Any, Dict
 
 from fastapi import FastAPI, Request
@@ -157,8 +158,33 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key"],
-    expose_headers=["x-agroai-runtime", "x-agroai-error"],
+    expose_headers=["x-agroai-runtime", "x-agroai-error", "x-agroai-app-ms", "x-agroai-bootstrap-ms", "server-timing"],
 )
+
+
+@app.middleware("http")
+async def request_performance_boundary(request: Request, call_next):
+    """Expose backend wall-clock time and log slow API requests.
+
+    This intentionally measures the application boundary only; Cloudflare can
+    then be distinguished from backend/database time in production traces.
+    """
+    started = perf_counter()
+    response = await call_next(request)
+    duration_ms = max(0.0, (perf_counter() - started) * 1000)
+    timing = f"agroai_app;dur={duration_ms:.1f}"
+    existing = response.headers.get("Server-Timing")
+    response.headers["Server-Timing"] = f"{existing}, {timing}" if existing else timing
+    response.headers["X-AGROAI-App-Ms"] = f"{duration_ms:.1f}"
+    if duration_ms >= 1500:
+        logger.warning(
+            "slow_api_request method=%s path=%s status=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+    return response
 
 
 def _origin_allowed(origin: str) -> bool:
