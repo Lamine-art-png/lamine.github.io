@@ -19,6 +19,11 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite:///./agroai.db"
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT_SECONDS: int = 5
+    DB_POOL_RECYCLE_SECONDS: int = 900
+    DB_CONNECT_TIMEOUT_SECONDS: int = 5
 
     # Security
     SECRET_KEY: str = "dev-secret-key-change-in-production-min-32-chars"
