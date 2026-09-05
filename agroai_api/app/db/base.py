@@ -13,11 +13,17 @@ _engine_kwargs = {
 if _is_sqlite:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
-    # PostgreSQL connection pool settings for production
-    _engine_kwargs["pool_size"] = 5
-    _engine_kwargs["max_overflow"] = 10
-    _engine_kwargs["pool_timeout"] = 30
-    _engine_kwargs["pool_recycle"] = 300  # Recycle connections every 5 min (Neon compat)
+    # Production requests must fail fast instead of sitting on a depleted pool
+    # for tens of seconds. Keep the values environment-tunable so the pool can
+    # be sized to the actual Render/PostgreSQL instance without code changes.
+    _engine_kwargs["pool_size"] = max(1, int(settings.DB_POOL_SIZE))
+    _engine_kwargs["max_overflow"] = max(0, int(settings.DB_MAX_OVERFLOW))
+    _engine_kwargs["pool_timeout"] = max(1, int(settings.DB_POOL_TIMEOUT_SECONDS))
+    _engine_kwargs["pool_recycle"] = max(60, int(settings.DB_POOL_RECYCLE_SECONDS))
+    _engine_kwargs["pool_use_lifo"] = True
+    _engine_kwargs["connect_args"] = {
+        "connect_timeout": max(1, int(settings.DB_CONNECT_TIMEOUT_SECONDS)),
+    }
 
 engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 
