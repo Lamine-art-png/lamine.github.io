@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Brain } from "lucide-react";
 import { apiClient } from "../api/client";
+import { useAuth } from "../auth/AuthProvider";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
@@ -30,13 +31,20 @@ function value(value: unknown, fallback = "—") {
 }
 
 export function OperatingStatusBar() {
+  const { currentWorkspace } = useAuth();
   const { tx, tf } = usePortalCopy(["statusbar"], STATUSBAR_SHARED_COPY);
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState("");
   const [result, setResult] = useState<AnyRecord | null>(null);
-  const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
+  // The full intelligence brief builds a large evidence/report context. It is
+  // useful inside the Brain drawer, but it must not consume database capacity
+  // on every Portal page before the user asks for it.
+  const briefState = usePortalResource<AnyRecord>(
+    useCallback(() => apiClient.intelligence.brief(), []),
+    { enabled: open },
+  );
   const brief = briefState.data || {};
-  const workspace = (brief.workspace || {}) as AnyRecord;
+  const workspace = (brief.workspace || currentWorkspace || {}) as AnyRecord;
   const field = (brief.field_state || {}) as AnyRecord;
   const telemetry = (brief.telemetry_status || {}) as AnyRecord;
   const water = (brief.water_status || {}) as AnyRecord;
