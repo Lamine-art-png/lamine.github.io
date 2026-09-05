@@ -131,8 +131,12 @@ async function fetchWithTimeout(request: Request, timeoutMs: number): Promise<Re
   }
 }
 
-function timeoutForPath(pathname: string): number {
-  return /\/(?:brain|intelligence|ai)(?:\/|$)/.test(pathname) ? 120_000 : 45_000;
+export function upstreamTimeBudgetMs(method: string, pathname: string): number {
+  const normalizedMethod = method.toUpperCase();
+  const longRunningMutation =
+    !["GET", "HEAD"].includes(normalizedMethod) &&
+    /\/(?:brain|intelligence|ai)(?:\/|$)/.test(pathname);
+  return longRunningMutation ? 120_000 : 15_000;
 }
 
 export function upstreamRequest(request: Request, upstream: URL, id: string, env: Pick<Env, "EDGE_ORIGIN_AUTH_TOKEN">): Request {
@@ -180,21 +184,41 @@ async function proxyToUpstream(request: Request, env: Env): Promise<Response> {
   const id = requestId(request);
   const origin = request.headers.get("origin");
   const retryableMethod = request.method === "GET" || request.method === "HEAD";
-  const timeoutMs = timeoutForPath(incoming.pathname);
+  const totalBudgetMs = upstreamTimeBudgetMs(request.method, incoming.pathname);
   const attempts = retryableMethod ? 2 : 1;
+  const startedAt = Date.now();
   let lastError: unknown;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = totalBudgetMs - elapsedMs;
+    if (remainingMs <= 0) break;
+
+    // Safe reads get one bounded retry, but both attempts share one wall-clock
+    // budget. A cold or wedged origin therefore cannot turn a 15s bound into
+    // 30-90s of customer-visible waiting.
+    const attemptTimeoutMs =
+      attempt === 0 && attempts > 1
+        ? Math.min(10_000, remainingMs)
+        : remainingMs;
+
     try {
-      const response = await fetchWithTimeout(upstreamRequest(request, upstream, id, env), timeoutMs);
-      if (attempt + 1 < attempts && TRANSIENT_UPSTREAM_STATUS.has(response.status)) {
+      const response = await fetchWithTimeout(
+        upstreamRequest(request, upstream, id, env),
+        attemptTimeoutMs,
+      );
+      if (
+        attempt + 1 < attempts &&
+        TRANSIENT_UPSTREAM_STATUS.has(response.status) &&
+        Date.now() - startedAt < totalBudgetMs
+      ) {
         await response.body?.cancel();
         continue;
       }
       return mergeCors(response, origin, env, id);
     } catch (error) {
       lastError = error;
-      if (attempt + 1 >= attempts) break;
+      if (attempt + 1 >= attempts || Date.now() - startedAt >= totalBudgetMs) break;
     }
   }
 

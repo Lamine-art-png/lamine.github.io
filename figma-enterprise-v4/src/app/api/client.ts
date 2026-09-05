@@ -9,6 +9,8 @@ export const API_BASE_URL_SOURCE =
 const FORMSPREE_SUPPORT_URL = import.meta.env.VITE_FORMSPREE_SUPPORT_URL || import.meta.env.VITE_FORMSPREE_ENDPOINT || "";
 const tokenKey = "agroai_access_token";
 const commercialBoundaryEvent = "agroai:commercial-boundary";
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 const uploadStateEvent = "agroai:upload-state";
 
 export type ApiError = Error & { status?: number; details?: unknown; code?: string };
@@ -77,21 +79,50 @@ function apiErrorFromResponse(data: unknown, response: Response, path: string): 
   return error;
 }
 
+function requestTimeoutMs(path: string, method?: string): number {
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const longRunningMutation =
+    !["GET", "HEAD"].includes(normalizedMethod) &&
+    /\/v1\/(?:brain|intelligence|ai)(?:\/|$)/.test(path);
+  return longRunningMutation ? LONG_RUNNING_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = options.token ?? localStorage.getItem(tokenKey);
   const headers = new Headers(options.headers);
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   if (!headers.has("Content-Type") && options.body && !isFormData) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const controller = new AbortController();
+  const upstreamSignal = options.signal;
+  const forwardAbort = () => controller.abort(upstreamSignal?.reason);
+  if (upstreamSignal?.aborted) forwardAbort();
+  else upstreamSignal?.addEventListener("abort", forwardAbort, { once: true });
+  const timeout = window.setTimeout(
+    () => controller.abort("agroai_request_timeout"),
+    requestTimeoutMs(path, options.method),
+  );
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
   } catch (cause) {
+    if (upstreamSignal?.aborted) throw cause;
+    if (controller.signal.aborted) {
+      const error = new Error("Request timed out. Retry.") as ApiError;
+      error.code = "request_timeout";
+      error.details = cause;
+      throw error;
+    }
     if (cause && typeof cause === "object" && "name" in cause && cause.name === "AbortError") throw cause;
     const error = new Error("Backend unavailable. Retry.") as ApiError;
     error.code = "network_unavailable";
     error.details = cause;
     throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    upstreamSignal?.removeEventListener("abort", forwardAbort);
   }
   const data = await parseResponse(response);
   if (!response.ok) {

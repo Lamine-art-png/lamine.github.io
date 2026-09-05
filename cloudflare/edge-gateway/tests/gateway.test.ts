@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { configuredOrigins, originAllowed, requestId, upstreamRequest, validTask, validatedUpstreamOrigin } from "../src/index";
+import { configuredOrigins, originAllowed, requestId, upstreamRequest, upstreamTimeBudgetMs, validTask, validatedUpstreamOrigin } from "../src/index";
 
 describe("edge origin policy", () => {
   it("allows exact production origins and approved Pages projects", () => {
@@ -31,6 +31,19 @@ describe("upstream safety", () => {
 
   it("rejects recursive gateway routing", () => {
     expect(() => validatedUpstreamOrigin("https://api.agroai-pilot.com", new URL("https://api.agroai-pilot.com/v1/health"))).toThrow(/cannot point back/);
+  });
+});
+
+describe("upstream latency budget", () => {
+  it("keeps ordinary and read-only requests on a short total budget", () => {
+    expect(upstreamTimeBudgetMs("GET", "/v1/health")).toBe(15_000);
+    expect(upstreamTimeBudgetMs("GET", "/v1/intelligence/brief")).toBe(15_000);
+    expect(upstreamTimeBudgetMs("POST", "/v1/field-ops/command-center")).toBe(15_000);
+  });
+
+  it("keeps long AI mutations on the explicit long-running budget", () => {
+    expect(upstreamTimeBudgetMs("POST", "/v1/intelligence/run")).toBe(120_000);
+    expect(upstreamTimeBudgetMs("POST", "/v1/brain/chat")).toBe(120_000);
   });
 });
 
