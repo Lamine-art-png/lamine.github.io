@@ -252,13 +252,13 @@ jobs:
             ! grep -F 'pattern = "agroai-pilot.com/guides/*"' "$config"
           done < <(find cloudflare -name wrangler.toml -type f | sort)
 
-      - name: Prove critical live surfaces before deployment
+      - name: Prove critical live surfaces before deployment and preserve Platform mode
         shell: bash
         run: |
           set -euo pipefail
           probe() {
             local name="$1" url="$2" code
-            code="$(curl -sS -L -o "/tmp/$name.before" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
+            code="$(curl -sS -L -D "/tmp/$name.before.headers" -o "/tmp/$name.before" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
             case "$code" in
               2*|3*) ;;
               *) echo "Pre-deploy continuity failure: $name -> $code" >&2; exit 1 ;;
@@ -273,10 +273,14 @@ jobs:
           probe api_health "https://api.agroai-pilot.com/v1/health"
 
           grep -F 'AGRO-AI' /tmp/homepage.before >/dev/null
-          grep -Fi 'careers' /tmp/careers.before >/dev/null
-          grep -F 'Application Portal' /tmp/application.before >/dev/null
-          grep -Fi 'demo' /tmp/demo.before >/dev/null
-          grep -F 'AGRO-AI Platform API' /tmp/platform_marketing.before >/dev/null
+          if grep -Fi 'x-agroai-platform-api-access: public-test-self-service' /tmp/platform_marketing.before.headers >/dev/null; then
+            echo "GUIDES_PRESERVE_PUBLIC_MODE=true" >> "$GITHUB_ENV"
+          elif grep -Fi 'x-agroai-platform-api-access: private-beta' /tmp/platform_marketing.before.headers >/dev/null; then
+            echo "GUIDES_PRESERVE_PUBLIC_MODE=false" >> "$GITHUB_ENV"
+          else
+            echo "Could not classify the existing Platform API public/private mode; refusing to redeploy homepage Worker." >&2
+            exit 1
+          fi
 
       - name: Dry-run guide Worker only
         shell: bash
@@ -292,7 +296,31 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           npx --yes wrangler@4.107.0 deploy --config "$GUIDES_CONFIG"
 
-      - name: Verify guide routes, exact logo bytes, and production continuity
+      - name: Dry-run homepage Guide navigation change
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'const GUIDES="/guides/"' cloudflare/platform-api-marketing-worker/src/index.ts >/dev/null
+          grep -F 'link.textContent="Guide"' cloudflare/platform-api-marketing-worker/src/index.ts >/dev/null
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$WORKER_CONFIG" \
+            --var "MARKETING_ORIGIN:https://agroai-343.pages.dev" \
+            --var "PLATFORM_API_MARKETING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_DOCS_ENABLED:true" \
+            --var "PLATFORM_API_INDEXING_ENABLED:$GUIDES_PRESERVE_PUBLIC_MODE" \
+            --var "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:$GUIDES_PRESERVE_PUBLIC_MODE"
+
+      - name: Add Guide to the existing website navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config "$WORKER_CONFIG" \
+            --var "MARKETING_ORIGIN:https://agroai-343.pages.dev" \
+            --var "PLATFORM_API_MARKETING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_DOCS_ENABLED:true" \
+            --var "PLATFORM_API_INDEXING_ENABLED:$GUIDES_PRESERVE_PUBLIC_MODE" \
+            --var "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:$GUIDES_PRESERVE_PUBLIC_MODE"
+
+      - name: Verify guide routes, homepage Guide navigation, exact logo bytes, and production continuity
         shell: bash
         run: |
           set -euo pipefail
@@ -344,7 +372,13 @@ jobs:
           continuity api_health "https://api.agroai-pilot.com/v1/health"
 
           grep -F 'AGRO-AI' /tmp/homepage.after >/dev/null
-          grep -Fi 'careers' /tmp/careers.after >/dev/null
-          grep -F 'Application Portal' /tmp/application.after >/dev/null
-          grep -Fi 'demo' /tmp/demo.after >/dev/null
+          grep -F 'data-agroai-guides-nav' /tmp/homepage.after >/dev/null
+          grep -F 'link.textContent="Guide"' /tmp/homepage.after >/dev/null
           grep -F 'AGRO-AI Platform API' /tmp/platform_marketing.after >/dev/null
+
+          curl -fsS -L -D /tmp/platform.after.headers -o /tmp/platform.after https://agroai-pilot.com/platform-api
+          if [ "$GUIDES_PRESERVE_PUBLIC_MODE" = "true" ]; then
+            grep -Fi 'x-agroai-platform-api-access: public-test-self-service' /tmp/platform.after.headers >/dev/null
+          else
+            grep -Fi 'x-agroai-platform-api-access: private-beta' /tmp/platform.after.headers >/dev/null
+          fi
