@@ -159,6 +159,7 @@ async function downloadPost(path: string, payload?: unknown): Promise<Blob> {
 
 function get<T>(path: string, token?: string | null) { return request<T>(path, { token }); }
 function post<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "POST", body: payload ? JSON.stringify(payload) : undefined, token }); }
+function put<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "PUT", body: payload ? JSON.stringify(payload) : undefined, token }); }
 function patch<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "PATCH", body: payload ? JSON.stringify(payload) : undefined, token }); }
 function remove<T>(path: string, token?: string | null) { return request<T>(path, { method: "DELETE", token }); }
 function upload<T>(path: string, file: File) { const form = new FormData(); form.append("file", file); return request<T>(path, { method: "POST", body: form }); }
@@ -448,6 +449,18 @@ export const apiClient = {
   decisions: { workbench: (workspaceId?: string, fieldId?: string) => { const query = new URLSearchParams(); if (workspaceId) query.set("workspace_id", workspaceId); if (fieldId) query.set("field_id", fieldId); const suffix = query.toString() ? `?${query.toString()}` : ""; return get(`/v1/decisions/workbench${suffix}`); }, runWorkbench: (payload: WorkbenchRunPayload) => post("/v1/decisions/workbench/run", payload) },
   reportFactory: { generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload), pdf: (payload: ReportFactoryPayload) => downloadPost("/v1/reports/factory/pdf", payload) },
   fieldOps: { commandCenter: (workspaceId?: string) => get(`/v1/field-ops/command-center${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), tasks: (workspaceId?: string) => get(`/v1/field-ops/tasks${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), createTask: (payload: FieldOpsTaskPayload) => post("/v1/field-ops/tasks/create", payload), updateTaskStatus: (taskId: string, payload: FieldOpsTaskStatusPayload) => post(`/v1/field-ops/tasks/${encodeURIComponent(taskId)}/status`, payload), fieldUpdate: (payload: FieldUpdatePayload) => post("/v1/field-ops/field-update", payload), fieldMessage: (payload: FieldMessagePayload) => post("/v1/field-ops/field-message", payload), autopilotReport: (payload: AutopilotReportPayload) => post("/v1/field-ops/autopilot-report", payload), auditTrail: (workspaceId?: string) => get(`/v1/field-ops/audit-trail${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
+  autonomy: {
+    summary: (workspaceId?: string) => get(`/v1/autonomy/summary${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    procedures: () => get("/v1/autonomy/procedures"),
+    createProcedure: (payload: unknown) => post("/v1/autonomy/procedures", payload),
+    runs: (workspaceId?: string) => get(`/v1/autonomy/runs${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    createRun: (payload: unknown) => post("/v1/autonomy/runs", payload),
+    approveStep: (runId: string, stepId: string) => post(`/v1/autonomy/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/approve`, {}),
+    rejectStep: (runId: string, stepId: string, reason?: string) => post(`/v1/autonomy/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/reject`, { reason }),
+    completeStep: (runId: string, stepId: string, result: Record<string, unknown>) => post(`/v1/autonomy/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/complete`, { result }),
+    updatePolicy: (payload: unknown) => put("/v1/autonomy/policy", payload),
+    contract: () => get("/v1/autonomy/contract"),
+  },
   fieldIntelligence: {
     initiate: (payload: FieldCapturePayload) => post("/v1/field-intelligence/captures/initiate", payload),
     complete: (captureId: string, payload?: unknown) => post(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}/complete`, payload || {}),

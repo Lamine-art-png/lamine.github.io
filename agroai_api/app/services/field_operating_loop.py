@@ -1,6 +1,7 @@
 """Deterministic field operating loop for AGRO-AI."""
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -27,6 +28,8 @@ from app.services.operator_cockpit import (
     readiness_summary,
     report_factory,
 )
+
+logger = logging.getLogger(__name__)
 
 TASK_JOB_TYPE = "field_ops_task"
 MESSAGE_JOB_TYPE = "field_ops_message"
@@ -80,6 +83,17 @@ def command_center(ctx: FieldOpsContext) -> dict[str, Any]:
     audit = audit_trail(ctx)
     priority = today_priority(ctx, queue, tasks)
     status = operating_status(queue, tasks, missing)
+    try:
+        # Keep Command Center as the single first-paint aggregate. Autonomy is
+        # added here instead of creating another expensive browser request.
+        from app.services.autonomy_runtime import autonomy_summary
+
+        autonomy = autonomy_summary(ctx.db, ctx.organization_id, ctx.workspace_id)
+    except Exception:
+        # Rolling deploy safety: the legacy operating room remains available
+        # before migration 032 is applied or if autonomy telemetry degrades.
+        logger.exception("Autonomy summary unavailable for Command Center")
+        autonomy = {"status": "unavailable", "reason": "autonomy_runtime_unavailable"}
     return {
         "status": "ok",
         "workspace_id": ctx.workspace_id,
@@ -92,6 +106,7 @@ def command_center(ctx: FieldOpsContext) -> dict[str, Any]:
         "recent_signals": recent,
         "reports_ready": reports,
         "audit_events": audit,
+        "autonomy": autonomy,
     }
 
 
@@ -161,7 +176,13 @@ def create_task(
     return _task_from_job(job)
 
 
-def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) -> dict[str, Any]:
+def update_task_status(
+    ctx: FieldOpsContext,
+    task_id: str,
+    status_value: str,
+    *,
+    actor: str = "system",
+) -> dict[str, Any]:
     job = (
         ctx.db.query(IngestionJob)
         .filter(
@@ -192,7 +213,31 @@ def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) ->
             job.completed_at = datetime.utcnow()
     ctx.db.commit()
     ctx.db.refresh(job)
-    return _task_from_job(job)
+    task = _task_from_job(job)
+
+    if status_value == "done":
+        autonomy_run_id = str((job.input_json or {}).get("autonomy_run_id") or "")
+        autonomy_step_id = str((job.input_json or {}).get("autonomy_step_id") or "")
+        if autonomy_run_id and autonomy_step_id:
+            try:
+                from app.services.autonomy_runtime import complete_task_dispatch
+
+                autonomy_run = complete_task_dispatch(
+                    ctx.db,
+                    ctx.organization_id,
+                    autonomy_run_id,
+                    autonomy_step_id,
+                    task_id=job.id,
+                    actor=actor,
+                )
+                task["autonomy_run_id"] = autonomy_run["id"]
+                task["autonomy_status"] = autonomy_run["status"]
+            except Exception:
+                # Task truth must survive a rolling autonomy migration or a
+                # secondary state-machine failure; reconciliation is replay-safe.
+                logger.exception("Could not advance autonomous workflow from completed field task")
+
+    return task
 
 
 def create_field_update(

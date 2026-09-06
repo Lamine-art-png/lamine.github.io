@@ -36,6 +36,9 @@ from app.models.intelligence_memory import (
     DecisionLifecycle, DecisionLifecycleEvent, DecisionSnapshot,
     FieldState, FieldStateRevision,
 )
+from app.models.autonomy import (
+    AutonomyProcedure, AutonomyPolicy, AutonomyRun, AutonomyStep, AutonomyEvent,
+)
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
@@ -90,6 +93,7 @@ __all__ = [
     "FieldObservationProcessingRun", "FieldObservationAuditEvent", "FieldStorageReservation",
     "FieldRuntimeFlag", "FieldWorkerHeartbeat",
     "FieldState", "FieldStateRevision", "DecisionSnapshot", "DecisionLifecycle", "DecisionLifecycleEvent",
+    "AutonomyProcedure", "AutonomyPolicy", "AutonomyRun", "AutonomyStep", "AutonomyEvent",
     "ComplianceJurisdiction", "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",

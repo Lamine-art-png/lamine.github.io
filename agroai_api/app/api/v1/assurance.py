@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Callable
 from typing import Any, Literal, TypeVar
@@ -24,6 +25,7 @@ from app.services.quota import commit_reservation, release_reservation, reserve_
 
 router = APIRouter(prefix="/assurance", tags=["assurance"])
 portal_router = APIRouter(tags=["assurance-portal"])
+logger = logging.getLogger(__name__)
 
 
 class AssuranceContext:
@@ -598,7 +600,7 @@ def portal_run_agent(
         client_key=idempotency_key or body_key,
     )
     try:
-        return _metered_operation(
+        result = _metered_operation(
             context,
             metric="agent_run",
             request_id=request_id,
@@ -609,6 +611,41 @@ def portal_run_agent(
                 commit=False,
             ),
         )
+        gaps = list(((result.get("output") or {}).get("gaps") or []))
+        if gaps:
+            try:
+                from app.services.autonomy_runtime import start_run
+
+                autonomy_run = start_run(
+                    context.repo.db,
+                    str(context.organization.id),
+                    procedure_key="assurance_gap_resolution",
+                    workspace_id=str(context.workspace.id),
+                    trigger_type="assurance_agent",
+                    trigger_ref=str(result.get("id") or request_id),
+                    context={
+                        "passport_id": passport_id,
+                        "summary": (result.get("output") or {}).get("summary"),
+                        "task_title": f"Resolve Assurance gaps for {passport_id}",
+                        "recommended_action": "Collect the blocking proof and return it to Assurance review.",
+                        "evidence_required": [
+                            str(item.get("requirement_key") or item.get("title") or "required proof")
+                            for item in gaps[:20]
+                        ],
+                        "priority": "high",
+                    },
+                    actor=str(context.repo.actor_user_id),
+                )
+                result["autonomy_run"] = {
+                    "id": autonomy_run["id"],
+                    "status": autonomy_run["status"],
+                    "current_step": autonomy_run.get("current_step"),
+                }
+            except Exception:
+                # Assurance triage and quota truth must remain valid even if the
+                # additive autonomy layer has not migrated during a rolling deploy.
+                logger.exception("Could not attach Assurance gaps to autonomy runtime")
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Passport not found") from exc
     except ValueError as exc:

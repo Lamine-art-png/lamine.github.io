@@ -198,6 +198,31 @@ def install_field_intelligence_operating_loop() -> None:
             if existing_job is not None:
                 task = operating_loop._task_from_job(existing_job)
                 task["already_existed"] = True
+                try:
+                    from app.services.autonomy_runtime import start_run
+
+                    autonomy_run = start_run(
+                        db,
+                        organization_id,
+                        procedure_key="field_issue_resolution",
+                        workspace_id=observation.workspace_id,
+                        trigger_type="field_observation",
+                        trigger_ref=observation.id,
+                        context={
+                            "observation_id": observation.id,
+                            "existing_task_id": existing_job.id,
+                            "field_name": _safe_text(observation.field_name, limit=200) or None,
+                            "block_name": _safe_text(observation.block_name, limit=200) or None,
+                            "summary": _safe_text(observation.summary, limit=2000),
+                            "recommended_action": _safe_text(observation.recommended_action, limit=2000),
+                        },
+                        actor=str(ctx.user.id),
+                    )
+                    task["autonomy_run_id"] = autonomy_run["id"]
+                except Exception:
+                    # Never make the proven capture/task path depend on a rolling
+                    # autonomy migration or a secondary workflow failure.
+                    logger.exception("Could not attach existing Field Intelligence task to autonomy runtime")
                 return task
 
         workspace = field_service.resolve_workspace(db, organization_id, observation.workspace_id)
@@ -308,6 +333,36 @@ def install_field_intelligence_operating_loop() -> None:
         db.refresh(job)
         task = operating_loop._task_from_job(job)
         task["already_existed"] = False
+
+        try:
+            from app.services.autonomy_runtime import start_run
+
+            autonomy_run = start_run(
+                db,
+                organization_id,
+                procedure_key="field_issue_resolution",
+                workspace_id=task_workspace_id,
+                trigger_type="field_observation",
+                trigger_ref=observation.id,
+                context={
+                    "observation_id": observation.id,
+                    "existing_task_id": task_id,
+                    "field_name": _safe_text(observation.field_name, limit=200) or None,
+                    "block_name": _safe_text(observation.block_name, limit=200) or None,
+                    "summary": summary,
+                    "recommended_action": recommendation,
+                    "instructions": instructions,
+                    "evidence_required": evidence_required,
+                    "priority": task_payload["priority"],
+                    "evidence_ids": source_evidence_ids,
+                },
+                actor=str(ctx.user.id),
+            )
+            task["autonomy_run_id"] = autonomy_run["id"]
+        except Exception:
+            # Field Intelligence remains available during rolling migration and
+            # can be reconciled into autonomy on the next idempotent task read.
+            logger.exception("Could not start Field Intelligence autonomy workflow")
 
         try:
             from app.services.field_intelligence_metrics import tasks_created

@@ -570,6 +570,9 @@ app.include_router(connector_stream_router, prefix="/v1")
 from app.api.v1.operator_cockpit import router as operator_cockpit_router  # noqa: E402
 app.include_router(operator_cockpit_router, prefix="/v1")
 
+from app.api.v1.autonomy import router as autonomy_router  # noqa: E402
+app.include_router(autonomy_router, prefix="/v1")
+
 from app.api.v1.field_operations import router as field_operations_router  # noqa: E402
 app.include_router(field_operations_router, prefix="/v1")
 

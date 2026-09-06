@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "031_merge_assurance_intelligence"
+HEAD_ALEMBIC_REVISION = "032_autonomous_operations"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -47,6 +47,11 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
         "id", "passport_id", "package_type", "package_version", "package_status", "generated_artifact_id",
     },
     "agent_workflow_runs": {"id"},
+    "autonomy_procedures": {"id", "organization_id", "procedure_key", "version", "steps_json", "outcome_contract_json"},
+    "autonomy_policies": {"id", "organization_id", "workspace_id", "autonomy_level", "action_class_caps_json", "risk_caps_json"},
+    "autonomy_runs": {"id", "organization_id", "workspace_id", "procedure_id", "procedure_key", "status", "human_decision_count", "verification_status", "outcome_status"},
+    "autonomy_steps": {"id", "run_id", "organization_id", "sequence", "step_type", "action_class", "risk_level", "status", "idempotency_key"},
+    "autonomy_events": {"id", "run_id", "organization_id", "event_type", "payload_json", "created_at"},
     "users": {
         "id",
         "email",

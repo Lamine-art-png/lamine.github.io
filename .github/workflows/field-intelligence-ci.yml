@@ -83,7 +83,7 @@ jobs:
           from alembic.script import ScriptDirectory
           cfg = Config("alembic.ini")
           heads = sorted(ScriptDirectory.from_config(cfg).get_heads())
-          assert heads == ["030_assurance_intelligence_v2"], heads
+          assert heads == ["032_autonomous_operations"], heads
           engine = sa.create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as connection:
               versions = sorted(row[0] for row in connection.execute(sa.text("SELECT version_num FROM alembic_version")))
