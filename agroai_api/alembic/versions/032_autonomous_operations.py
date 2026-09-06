@@ -101,7 +101,7 @@ def upgrade() -> None:
     op.create_table(
         "autonomy_steps",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="RESTRICT"), nullable=True),
+        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=False),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("step_key", sa.String(length=120), nullable=False),
@@ -135,7 +135,7 @@ def upgrade() -> None:
     op.create_table(
         "autonomy_events",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("step_id", sa.String(), sa.ForeignKey("autonomy_steps.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("event_type", sa.String(length=80), nullable=False),
@@ -152,11 +152,11 @@ def upgrade() -> None:
         op.execute(
             """
             CREATE OR REPLACE FUNCTION protect_autonomy_events_append_only()
-            RETURNS trigger AS $
+            RETURNS trigger AS $agroai$
             BEGIN
                 RAISE EXCEPTION 'AGRO-AI autonomy event history is append-only';
             END;
-            $ LANGUAGE plpgsql;
+            $agroai$ LANGUAGE plpgsql;
             """
         )
         op.execute(
