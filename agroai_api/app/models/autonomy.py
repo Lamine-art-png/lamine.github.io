@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
 
 from app.db.base import Base
 
@@ -88,8 +88,8 @@ class AutonomyRun(Base):
             "uq_autonomy_run_trigger_ref",
             "organization_id", "procedure_key", "trigger_type", "trigger_ref",
             unique=True,
-            postgresql_where=Column("trigger_ref", String).is_not(None),
-            sqlite_where=Column("trigger_ref", String).is_not(None),
+            postgresql_where=text("trigger_ref IS NOT NULL"),
+            sqlite_where=text("trigger_ref IS NOT NULL"),
         ),
     )
 
