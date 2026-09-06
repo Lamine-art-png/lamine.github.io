@@ -84,6 +84,13 @@ class AutonomyRun(Base):
     __table_args__ = (
         Index("ix_autonomy_run_scope_status", "organization_id", "workspace_id", "status", "updated_at"),
         Index("ix_autonomy_run_trigger", "organization_id", "procedure_key", "trigger_type", "trigger_ref"),
+        Index(
+            "uq_autonomy_run_trigger_ref",
+            "organization_id", "procedure_key", "trigger_type", "trigger_ref",
+            unique=True,
+            postgresql_where=Column("trigger_ref", String).is_not(None),
+            sqlite_where=Column("trigger_ref", String).is_not(None),
+        ),
     )
 
 
