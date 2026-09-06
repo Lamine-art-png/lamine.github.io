@@ -26,6 +26,8 @@ from app.services.autonomy_runtime import (
 )
 
 router = APIRouter(prefix="/autonomy", tags=["autonomous-operations"])
+_OPERATION_ROLES = {"owner", "admin", "manager", "operator"}
+_POLICY_ROLES = {"owner", "admin", "manager"}
 
 
 class ProcedureStepIn(BaseModel):
@@ -76,9 +78,18 @@ class PolicyIn(BaseModel):
 
 
 def _organization_id(ctx: AuthContext) -> str:
-    if not ctx.organization:
+    if not ctx.organization or not ctx.membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
     return str(ctx.organization.id)
+
+
+def _require_role(ctx: AuthContext, allowed: set[str]) -> None:
+    role = str(getattr(ctx.membership, "role", "") or "").casefold()
+    if role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "autonomy_role_required", "message": "Your organization role cannot perform this autonomous-operations action."},
+        )
 
 
 def _handle(exc: Exception) -> HTTPException:
@@ -115,6 +126,7 @@ def create_procedure(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _POLICY_ROLES)
     try:
         return create_custom_procedure(
             db,
@@ -147,6 +159,7 @@ def create_run(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _OPERATION_ROLES)
     try:
         return start_run(
             db,
@@ -183,6 +196,7 @@ def approve(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _OPERATION_ROLES)
     try:
         return approve_step(db, _organization_id(ctx), run_id, step_id, actor_user_id=str(ctx.user.id))
     except (KeyError, ValueError) as exc:
@@ -197,6 +211,7 @@ def reject(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _OPERATION_ROLES)
     try:
         return reject_step(
             db, _organization_id(ctx), run_id, step_id,
@@ -215,6 +230,7 @@ def complete(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _OPERATION_ROLES)
     try:
         return complete_step(
             db, _organization_id(ctx), run_id, step_id,
@@ -230,6 +246,7 @@ def policy(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    _require_role(ctx, _POLICY_ROLES)
     try:
         return upsert_policy(
             db,
@@ -246,7 +263,8 @@ def policy(
 
 
 @router.get("/contract")
-def contract() -> dict[str, Any]:
+def contract(ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]:
+    _organization_id(ctx)
     return {
         "autonomy_levels": {
             "A0": "Observe",
