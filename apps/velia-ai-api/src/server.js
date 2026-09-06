@@ -72,12 +72,15 @@ function modelStatusPayload() {
   return {
     terrisCore: {
       enabled: config.terrisCoreEnabled,
-      configured: provider.name === "terris" && provider.mode === "live",
+      configured: config.terrisCoreEnabled && Boolean(config.terrisCoreBaseUrl),
       baseUrlConfigured: Boolean(config.terrisCoreBaseUrl),
       requestedProvider: config.llmProvider,
       activeProvider: provider.name,
       model: provider.model,
       mode: provider.mode,
+      trafficPercent: config.terrisCoreTrafficPercent,
+      fallbackProvider: config.terrisCoreFallbackProvider,
+      fallbackArmed: Boolean(provider.fallback),
       fallbackReason: provider.fallbackReason || null,
     },
     policy: {
