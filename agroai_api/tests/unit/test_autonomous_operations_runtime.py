@@ -4,7 +4,7 @@ import pytest
 
 from app.agents.autonomy_runtime import AutonomyConflict, AutonomyForbidden, AutonomousOperationsRuntime
 from app.models.field_intelligence import FieldObservation
-from app.models.saas import Organization, User
+from app.models.saas import Organization, User, Workspace
 
 
 def _enterprise(db):
@@ -281,3 +281,55 @@ def test_unknown_action_type_is_rejected_before_persistence(db):
             risk_level="critical",
             payload={},
         )
+
+
+
+def test_workspace_scoped_action_rejects_proof_from_another_workspace(db):
+    user, org = _enterprise(db)
+    ws_a = Workspace(id="ws-autonomy-a", organization_id=org.id, name="A", mode="live")
+    ws_b = Workspace(id="ws-autonomy-b", organization_id=org.id, name="B", mode="live")
+    db.add_all([ws_a, ws_b])
+    db.commit()
+    runtime = AutonomousOperationsRuntime(db, organization_id=org.id, workspace_id=ws_a.id, actor_user_id=user.id)
+    procedure = runtime.create_procedure(
+        name="Workspace proof",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="field_observation",
+        definition={},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+    run = runtime.start_run(procedure_id=procedure["id"], idempotency_key="workspace-proof-run")
+    action = runtime.plan_action(
+        run["run"]["id"],
+        action_type="create_field_task",
+        idempotency_key="workspace-proof-action",
+        title="Verify within workspace",
+        description="Proof must come from this workspace.",
+        risk_level="low",
+        payload={},
+    )
+    runtime.begin_action(run["run"]["id"], action["id"])
+    runtime.record_action_result(run["run"]["id"], action["id"], succeeded=True, result={"status": "executed"})
+
+    foreign = FieldObservation(
+        tenant_id=org.id,
+        workspace_id=ws_b.id,
+        field_name="Foreign field",
+        event_type="observation",
+        status="completed",
+        summary="Valid evidence, wrong workspace.",
+        confidence=0.99,
+        structured_json={},
+        uncertain_fields_json=[],
+        correlation_json={},
+        provenance_json={},
+        task_ids_json=[],
+        evidence_ids_json=[],
+        audit_json=[],
+    )
+    db.add(foreign)
+    db.commit()
+
+    with pytest.raises(AutonomyForbidden, match="unavailable"):
+        runtime.verify_action(run["run"]["id"], action["id"], evidence_ids=[foreign.id])

@@ -374,6 +374,7 @@ class AutonomousOperationsRuntime:
                 self.db,
                 tenant_id=self.organization_id,
                 evidence_ids=evidence_ids,
+                workspace_id=self.workspace_id,
             )
         except EvidenceReferenceError as exc:
             raise AutonomyForbidden(str(exc)) from exc
@@ -512,6 +513,38 @@ class AutonomousOperationsRuntime:
         assisted = [row for row in successful if int(row.human_touch_count or 0) > 0]
         active = [row for row in runs if row.status in RUN_ACTIVE]
         denominator = len(successful)
+        run_by_id = {row.id: row for row in runs}
+        run_ids = list(run_by_id)
+        pending_actions = (
+            self.db.query(AgentActionProposal)
+            .filter(
+                AgentActionProposal.run_id.in_(run_ids),
+                AgentActionProposal.status.in_(["approval_required", "waiting_evidence"]),
+            )
+            .order_by(AgentActionProposal.created_at.asc())
+            .all()
+            if run_ids
+            else []
+        )
+
+        def command_action(row: AgentActionProposal) -> dict[str, Any]:
+            data = self._row(row)
+            parent = run_by_id.get(row.run_id)
+            data["run_status"] = parent.status if parent else None
+            data["source_type"] = parent.source_type if parent else None
+            data["source_id"] = parent.source_id if parent else None
+            data["procedure_name"] = (parent.result or {}).get("procedure_name") if parent else None
+            return data
+
+        procedure_query = self.db.query(AgentProcedure).filter(
+            AgentProcedure.organization_id == self.organization_id,
+        )
+        if self.workspace_id:
+            procedure_query = procedure_query.filter(
+                (AgentProcedure.workspace_id == self.workspace_id) | (AgentProcedure.workspace_id.is_(None))
+            )
+        procedures = procedure_query.order_by(AgentProcedure.updated_at.desc()).limit(50).all()
+
         return {
             "organization_id": self.organization_id,
             "workspace_id": self.workspace_id,
@@ -522,6 +555,13 @@ class AutonomousOperationsRuntime:
             "zero_touch_successes": len(zero_touch),
             "human_assisted_successes": len(assisted),
             "autonomous_completion_rate": round((len(zero_touch) / denominator * 100.0), 2) if denominator else 0.0,
+            "pending_approvals": [
+                command_action(row) for row in pending_actions if row.status == "approval_required"
+            ],
+            "pending_verification": [
+                command_action(row) for row in pending_actions if row.status == "waiting_evidence"
+            ],
+            "procedures": [self._row(row) for row in procedures],
             "recent_runs": [self._row(row) for row in runs[:30]],
         }
 
