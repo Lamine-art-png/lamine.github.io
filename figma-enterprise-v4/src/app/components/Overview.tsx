@@ -139,10 +139,11 @@ export function Overview() {
         </section>
 
         <Panel title="Autonomous Operations">
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-6">
             <Metric label="Autonomy policy" value={clean(autonomy.policy?.autonomy_level, "A4")} detail="Maximum execution level allowed by policy" />
             <Metric label="Autonomous verified" value={autonomy.autonomous_completion_rate === null || autonomy.autonomous_completion_rate === undefined ? "Learning" : `${autonomy.autonomous_completion_rate}%`} detail="Eligible workflows · trailing 30 days" />
             <Metric label="Active workflows" value={String(autonomy.active_workflows ?? 0)} detail="Owned from trigger to outcome" />
+            <Metric label="In execution" value={String(autonomy.waiting_execution ?? 0)} detail="Dispatched work not finished yet" />
             <Metric label="Waiting approval" value={String(autonomy.waiting_approval ?? 0)} detail="Human decision explicitly required" />
             <Metric label="Waiting verification" value={String(autonomy.waiting_verification ?? 0)} detail="Execution done; outcome still unverified" />
           </div>
