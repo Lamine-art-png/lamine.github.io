@@ -284,6 +284,42 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     } finally { setActionBusyId(""); }
   }
 
+  async function commitVoiceExchange(userText: string, assistantText: string, metadata: AnyRecord = {}) {
+    const cleanUser = safeText(userText).trim();
+    const cleanAssistant = safeText(assistantText).trim();
+    if (!cleanUser || !cleanAssistant) return;
+
+    const conversationId = await createConversationIfNeeded(cleanUser);
+    const now = Date.now();
+    const userMessage = {
+      id: `voice-user-${now}`,
+      role: "user",
+      content: cleanUser,
+      source: "realtime_voice",
+    };
+    const assistantMessage = {
+      id: `voice-assistant-${now}`,
+      role: "assistant",
+      content: cleanAssistant,
+      source: "realtime_voice",
+      model_status: "realtime_voice",
+    };
+    const nextRows = [...messages, userMessage, assistantMessage];
+    setMessages(nextRows);
+    await persistExchange(
+      conversationId,
+      cleanUser,
+      cleanAssistant,
+      {
+        ...metadata,
+        question: cleanUser,
+        source: "realtime_voice",
+        model_status: "realtime_voice",
+      },
+      nextRows,
+    );
+  }
+
   async function send(prompt = question, options: { retry?: boolean } = {}) {
     const clean = prompt.trim() || (fileImports.length ? t("intelligence.summarizeImportedFiles") : "");
     if (!clean || loading || hasUploading || hasFailed) return;
@@ -387,6 +423,9 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     emailReportFor,
     runAction,
     send,
+    commitVoiceExchange,
+    currentWorkspaceId: currentWorkspace?.id,
+    normalizedLocale,
     onKeyDown,
     sendDisabled: loading || hasUploading || hasFailed || (!question.trim() && !fileImports.length),
   };
