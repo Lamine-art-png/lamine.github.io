@@ -89,6 +89,14 @@ def upgrade() -> None:
         op.create_index(f"ix_autonomy_runs_{name}", "autonomy_runs", [name])
     op.create_index("ix_autonomy_run_scope_status", "autonomy_runs", ["organization_id", "workspace_id", "status", "updated_at"])
     op.create_index("ix_autonomy_run_trigger", "autonomy_runs", ["organization_id", "procedure_key", "trigger_type", "trigger_ref"])
+    op.create_index(
+        "uq_autonomy_run_trigger_ref",
+        "autonomy_runs",
+        ["organization_id", "procedure_key", "trigger_type", "trigger_ref"],
+        unique=True,
+        postgresql_where=sa.text("trigger_ref IS NOT NULL"),
+        sqlite_where=sa.text("trigger_ref IS NOT NULL"),
+    )
 
     op.create_table(
         "autonomy_steps",
