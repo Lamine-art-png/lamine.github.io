@@ -91,7 +91,7 @@ class AutonomyStep(Base):
     __tablename__ = "autonomy_steps"
 
     id = Column(String, primary_key=True)
-    run_id = Column(String, ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_id = Column(String, ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=True, index=True)
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     sequence = Column(Integer, nullable=False)
     step_key = Column(String(120), nullable=False)
