@@ -92,12 +92,26 @@ async function resolveWeather({ field, providedWeather, location }) {
     : weather;
 }
 
+function providerMetadata(provider, result = null) {
+  return {
+    name: result?.provider || provider.name,
+    model: result?.model || provider.model,
+    mode: result?.mode || provider.mode,
+    failoverUsed: Boolean(result?.failoverUsed),
+    failoverReason: result?.failoverReason || null,
+    primaryProvider: result?.primaryProvider || null,
+    primaryModel: result?.primaryModel || null,
+  };
+}
+
 async function callReasoningModel({ prompt, fallbackDecision, provider }) {
   if (provider.mode !== "live") {
     return {
       decision: fallbackDecision,
-      provider,
+      provider: providerMetadata(provider),
       fallbackUsed: true,
+      frontierFailoverUsed: false,
+      frontierFailoverReason: null,
       fallbackReason: provider.fallbackReason || "No live reasoning provider configured",
       repairAttempted: false,
     };
@@ -119,7 +133,14 @@ async function callReasoningModel({ prompt, fallbackDecision, provider }) {
       validation = { ok: false, errors: [error.message] };
     }
     if (validation.ok) {
-      return { decision: normalizeDecisionResponse(parsed, fallbackDecision), provider, fallbackUsed: false, repairAttempted: false };
+      return {
+        decision: normalizeDecisionResponse(parsed, fallbackDecision),
+        provider: providerMetadata(provider, first),
+        fallbackUsed: false,
+        frontierFailoverUsed: Boolean(first.failoverUsed),
+        frontierFailoverReason: first.failoverReason || null,
+        repairAttempted: false,
+      };
     }
 
     const repair = await provider.generate(`${prompt}
@@ -140,21 +161,32 @@ ${first.text}`, {
       validation = { ok: false, errors: [error.message] };
     }
     if (validation.ok) {
-      return { decision: normalizeDecisionResponse(parsed, fallbackDecision), provider, fallbackUsed: false, repairAttempted: true };
+      return {
+        decision: normalizeDecisionResponse(parsed, fallbackDecision),
+        provider: providerMetadata(provider, repair),
+        fallbackUsed: false,
+        frontierFailoverUsed: Boolean(first.failoverUsed || repair.failoverUsed),
+        frontierFailoverReason: repair.failoverReason || first.failoverReason || null,
+        repairAttempted: true,
+      };
     }
 
     return {
       decision: fallbackDecision,
-      provider,
+      provider: providerMetadata(provider, repair),
       fallbackUsed: true,
+      frontierFailoverUsed: Boolean(first.failoverUsed || repair.failoverUsed),
+      frontierFailoverReason: repair.failoverReason || first.failoverReason || null,
       fallbackReason: `Malformed model response after repair: ${validation.errors.join("; ")}`,
       repairAttempted: true,
     };
   } catch (error) {
     return {
       decision: fallbackDecision,
-      provider,
+      provider: providerMetadata(provider),
       fallbackUsed: true,
+      frontierFailoverUsed: false,
+      frontierFailoverReason: null,
       fallbackReason: error.message,
       repairAttempted: false,
     };
@@ -190,6 +222,10 @@ function mergeDecision({ modelDecision, fallbackDecision, signals, context, rag,
     fallbackStatus: {
       llmFallbackUsed: modelResult.fallbackUsed,
       llmFallbackReason: modelResult.fallbackReason || null,
+      frontierFailoverUsed: Boolean(modelResult.frontierFailoverUsed || modelResult.provider.failoverUsed),
+      frontierFailoverReason: modelResult.frontierFailoverReason || modelResult.provider.failoverReason || null,
+      primaryProviderAttempted: modelResult.provider.primaryProvider || null,
+      primaryModelAttempted: modelResult.provider.primaryModel || null,
       repairAttempted: modelResult.repairAttempted,
       ragFallbackUsed: Boolean(rag.fallbackUsed),
       ragFallbackReason: rag.fallbackReason || null,
