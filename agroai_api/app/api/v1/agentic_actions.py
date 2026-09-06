@@ -19,8 +19,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.chat_artifacts import ReportEmailRequest, build_report_pdf_bytes
 from app.db.base import get_db
-from app.models.saas import Workspace
+from app.models.saas import QuotaReservation, Workspace
+from app.services.commercial_control import require_feature
 from app.services.email_delivery import delivery_status, send_email
+from app.services.quota import commit_reservation, release_reservation, reserve_quota
 from app.services.field_operating_loop import build_field_ops_context, create_field_update, create_task, field_message
 
 router = APIRouter(prefix="/agentic", tags=["agentic-actions"])
@@ -74,6 +76,75 @@ class ActionExecuteRequest(BaseModel):
     workspace_id: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     approval_confirmed: bool = False
+
+
+def execute_commercial_action(
+    request: ActionExecuteRequest,
+    *,
+    ctx: AuthContext,
+    db: Session,
+    request_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    before_execute=None,
+) -> dict[str, Any]:
+    """One commercial + quota boundary for every agentic action surface.
+
+    Entitlement and capacity are decided before the optional callback moves a
+    durable autonomy action to executing. The reservation is committed first
+    so adapter-local commits cannot accidentally control quota accounting.
+    """
+    if not ctx.organization:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    approval_gated = request.action_type in APPROVAL_REQUIRED
+    require_feature(
+        db,
+        ctx.organization,
+        "agents.execute_approval_gated" if approval_gated else "agents.execute_safe",
+        recommended_plan="team" if approval_gated else "professional",
+    )
+    if approval_gated and not request.approval_confirmed:
+        return post_action_execute(request, ctx=ctx, db=db)
+
+    reservation = reserve_quota(
+        db,
+        ctx.organization,
+        "agent_run",
+        workspace_id=request.workspace_id,
+        user_id=ctx.user.id,
+        request_id=request_id or str((request.payload or {}).get("request_id") or uuid.uuid4()),
+        metadata={
+            "action_type": request.action_type,
+            "approval_gated": approval_gated,
+            **(metadata or {}),
+        },
+    )
+    reservation_id = reservation.id
+    db.commit()
+    try:
+        if before_execute is not None:
+            before_execute()
+        result = post_action_execute(request, ctx=ctx, db=db)
+        reservation = db.get(QuotaReservation, reservation_id)
+        if reservation is None:
+            raise RuntimeError("Agent execution quota reservation disappeared")
+        if result.get("status") in {"executed", "approval_recorded"}:
+            commit_reservation(
+                db,
+                reservation,
+                event_type="agent_run",
+                metadata={"result_status": result.get("status"), "action_type": request.action_type},
+            )
+        else:
+            release_reservation(db, reservation, reason=f"result:{result.get('status') or 'unknown'}")
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        reservation = db.get(QuotaReservation, reservation_id)
+        if reservation is not None and reservation.state != "committed":
+            release_reservation(db, reservation, reason="execution_failed")
+            db.commit()
+        raise
 
 
 def _require_org(ctx: AuthContext) -> str:

@@ -128,51 +128,16 @@ def user_action_plan(payload: dict[str, Any], ctx: AuthContext = Depends(get_aut
 
 @router.post("/actions/execute")
 def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Execute commercially authorized work while preserving operational safety gates."""
-    from app.api.v1.agentic_actions import APPROVAL_REQUIRED, ActionExecuteRequest, post_action_execute
-
-    if not ctx.organization:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    """Execute through the canonical commercial + operational action boundary."""
+    from app.api.v1.agentic_actions import ActionExecuteRequest, execute_commercial_action
 
     request = ActionExecuteRequest(**payload)
-    approval_gated = request.action_type in APPROVAL_REQUIRED
-    require_feature(
-        db,
-        ctx.organization,
-        "agents.execute_approval_gated" if approval_gated else "agents.execute_safe",
-        recommended_plan="team" if approval_gated else "professional",
-    )
-
-    # Planning an approval-required action does not consume execution capacity.
-    # Capacity is reserved only when safe work executes or explicit approval is present.
-    if approval_gated and not request.approval_confirmed:
-        return post_action_execute(request, ctx=ctx, db=db)
-
-    reservation = reserve_quota(
-        db,
-        ctx.organization,
-        "agent_run",
-        workspace_id=request.workspace_id,
-        user_id=ctx.user.id,
+    return execute_commercial_action(
+        request,
+        ctx=ctx,
+        db=db,
         request_id=str((request.payload or {}).get("request_id") or uuid.uuid4()),
-        metadata={"action_type": request.action_type, "approval_gated": approval_gated},
     )
-    try:
-        result = post_action_execute(request, ctx=ctx, db=db)
-        if result.get("status") in {"executed", "approval_recorded"}:
-            commit_reservation(
-                db,
-                reservation,
-                event_type="agent_run",
-                metadata={"result_status": result.get("status"), "action_type": request.action_type},
-            )
-        else:
-            release_reservation(db, reservation, reason=f"result:{result.get('status') or 'unknown'}")
-        db.commit()
-        return result
-    except Exception:
-        db.rollback()
-        raise
 
 
 # Current Enterprise Portal autonomy routes are nested under the existing agent

@@ -1,7 +1,6 @@
 """Enterprise Portal control plane for AGRO-AI autonomous operations."""
 from __future__ import annotations
 
-import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,11 +11,9 @@ from app.agents.autonomy_runtime import AutonomyConflict, AutonomyForbidden, Aut
 from app.agents.human_touch import record_human_touch
 from app.agents.models import AgentActionProposal, AgentWorkflowOutcome, AgentWorkflowRun
 from app.api.deps import AuthContext, get_auth_context
-from app.api.v1.agentic_actions import APPROVAL_REQUIRED, ActionExecuteRequest, post_action_execute
+from app.api.v1.agentic_actions import ActionExecuteRequest, execute_commercial_action
 from app.db.base import get_db
-from app.services.commercial_control import require_feature
 from app.services.entitlements import require_owner_or_admin
-from app.services.quota import commit_reservation, release_reservation, reserve_quota
 
 router = APIRouter(prefix="/autonomy", tags=["autonomous-operations"])
 
@@ -281,28 +278,6 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
 
     effective_workspace_id = snapshot["run"].get("workspace_id")
     action_type = str(action.get("action_type") or "")
-    approval_gated = bool(action.get("requires_human_approval")) or action_type in APPROVAL_REQUIRED
-    require_feature(
-        db,
-        ctx.organization,
-        "agents.execute_approval_gated" if approval_gated else "agents.execute_safe",
-        recommended_plan="team" if approval_gated else "professional",
-    )
-    reservation = reserve_quota(
-        db,
-        ctx.organization,
-        "agent_run",
-        workspace_id=effective_workspace_id,
-        user_id=ctx.user.id,
-        request_id=f"autonomy-action:{action_id}",
-        metadata={
-            "action_type": action_type,
-            "approval_gated": approval_gated,
-            "autonomy_run_id": run_id,
-            "autonomy_action_id": action_id,
-        },
-    )
-
     _human_touch(
         db,
         ctx,
@@ -311,44 +286,32 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
         reason="portal_action_execute",
         details={"action_id": action_id, "action_type": action_type},
     )
-    _call(runtime.begin_action, run_id, action_id)
     action_payload = action.get("payload") or {}
     nested = {**(action_payload.get("payload") or {}), "request_id": f"autonomy-action:{action_id}"}
+    request = ActionExecuteRequest(
+        action_type=action_type,
+        workspace_id=effective_workspace_id,
+        payload=nested,
+        approval_confirmed=True,
+    )
     try:
-        result = post_action_execute(
-            ActionExecuteRequest(
-                action_type=action_type,
-                workspace_id=effective_workspace_id,
-                payload=nested,
-                approval_confirmed=True,
-            ),
+        result = execute_commercial_action(
+            request,
             ctx=ctx,
             db=db,
+            request_id=f"autonomy-action:{action_id}",
+            metadata={"autonomy_run_id": run_id, "autonomy_action_id": action_id},
+            before_execute=lambda: _call(runtime.begin_action, run_id, action_id),
         )
         executed = result.get("status") in {"executed", "approval_recorded"}
-        result_snapshot = _call(runtime.record_action_result, run_id, action_id, succeeded=executed, result=result)
-        if executed:
-            commit_reservation(
-                db,
-                reservation,
-                event_type="agent_run",
-                metadata={"result_status": result.get("status"), "action_type": action_type, "autonomy_run_id": run_id},
-            )
-        else:
-            release_reservation(db, reservation, reason=f"result:{result.get('status') or 'unknown'}")
-        db.commit()
-        return result_snapshot
+        return _call(runtime.record_action_result, run_id, action_id, succeeded=executed, result=result)
     except Exception:
         db.rollback()
         runtime = _runtime(ctx, db, effective_workspace_id)
-        try:
+        current = _call(runtime.run, run_id)
+        current_action = next((row for row in current["actions"] if row["id"] == action_id), None)
+        if current_action and current_action.get("execution_status") == "executing":
             _call(runtime.record_action_result, run_id, action_id, succeeded=False, result={"error": "executor_failed"})
-        finally:
-            try:
-                release_reservation(db, reservation, reason="executor_failed")
-                db.commit()
-            except Exception:
-                db.rollback()
         raise
 
 
