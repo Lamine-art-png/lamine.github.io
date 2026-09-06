@@ -201,6 +201,7 @@ def upsert_policy(db: Session, organization_id: str, *, workspace_id: str | None
         AutonomyPolicy.organization_id == organization_id,
         AutonomyPolicy.workspace_id == workspace_id,
     ).first()
+    previous = serialize_policy(row) if row else None
     if not row:
         row = AutonomyPolicy(id=_uuid("policy"), organization_id=organization_id, workspace_id=workspace_id)
         db.add(row)
@@ -214,6 +215,15 @@ def upsert_policy(db: Session, organization_id: str, *, workspace_id: str | None
     }
     row.enabled = True
     row.created_by = actor_user_id or row.created_by
+    db.flush()
+    current = serialize_policy(row)
+    _governance_event(
+        db,
+        organization_id,
+        "autonomy_policy_updated",
+        actor_user_id or "system",
+        {"policy_id": row.id, "workspace_id": workspace_id, "previous": previous, "current": current},
+    )
     db.commit()
     db.refresh(row)
     return serialize_policy(row)
@@ -277,6 +287,19 @@ def create_custom_procedure(db: Session, organization_id: str, *, name: str, dom
         outcome_contract_json=outcome_contract or {"verified_outcome_required": True}, metadata_json={},
     )
     db.add(row)
+    db.flush()
+    _governance_event(
+        db,
+        organization_id,
+        "autonomy_procedure_version_created",
+        "system",
+        {
+            "procedure_id": row.id,
+            "procedure_key": row.procedure_key,
+            "version": row.version,
+            "replaces_version": latest.version if latest else None,
+        },
+    )
     db.commit()
     db.refresh(row)
     return serialize_procedure(row)
@@ -704,6 +727,13 @@ def _require_workspace(db: Session, organization_id: str, workspace_id: str) -> 
     if not row:
         raise KeyError(workspace_id)
     return row
+
+
+def _governance_event(db: Session, organization_id: str, event_type: str, actor: str, payload: dict[str, Any]) -> None:
+    db.add(AutonomyEvent(
+        id=_uuid("autevent"), run_id=None, step_id=None, organization_id=organization_id,
+        event_type=event_type, actor=str(actor or "system")[:160], payload_json=payload,
+    ))
 
 
 def _event(db: Session, run: AutonomyRun, event_type: str, actor: str, payload: dict[str, Any],
