@@ -6,6 +6,7 @@ import {
   useIntelligenceController,
   type IntelligenceDependencies,
 } from "./intelligence/useIntelligenceController";
+import { VoiceAssistantDock } from "./voice/VoiceAssistantDock";
 
 type AnyRecord = Record<string, any>;
 
@@ -173,5 +174,14 @@ export function Intelligence() {
     <IntelligencePlanControls />
     <DecisionMemoryWorkspace />
     <IntelligenceView controller={controller} />
+    <VoiceAssistantDock
+      surface="ask"
+      onExchange={async (userText) => {
+        // Keep voice and text on one Ask AGRO-AI thread. The canonical text
+        // controller persists the spoken user turn and an evidence-grounded
+        // response into the current conversation history.
+        await controller.send(userText);
+      }}
+    />
   </>;
 }
