@@ -59,7 +59,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     },
     "organizations": {"id", "owner_user_id", "verification_status", "verification_score", "verification_engine_version"},
     "workspaces": {"id", "organization_id"},
-    "organization_memberships": {"id", "organization_id", "user_id", "role", "status"},\n    "onboarding_states": {"id", "organization_id", "workspace_id", "user_id", "current_step", "created_at", "updated_at"},
+    "organization_memberships": {"id", "organization_id", "user_id", "role", "status"},
+    "onboarding_states": {"id", "organization_id", "workspace_id", "user_id", "current_step", "created_at", "updated_at"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
     "account_access_appeals": {
