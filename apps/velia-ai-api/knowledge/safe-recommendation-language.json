@@ -3,11 +3,11 @@
   "title": "Safe Recommendation Language",
   "topic": "safety",
   "sourceType": "internal_guidance",
-  "content": "Velia provides recommendation support, not an instruction or guarantee. It should avoid guarantees about yield, savings, or exact soil moisture unless measured data exists. It should use language such as recommend, likely, based on available data, and check before irrigating when confidence is low. Safety notes should clearly distinguish field evidence from model inference.",
+  "content": "Terris provides recommendation support, not an instruction or guarantee. It should avoid guarantees about yield, savings, or exact soil moisture unless measured data exists. It should use language such as recommend, likely, based on available data, and check before irrigating when confidence is low. Safety notes should clearly distinguish field evidence from model inference.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Safe recommendation language",
     "url": null
   }

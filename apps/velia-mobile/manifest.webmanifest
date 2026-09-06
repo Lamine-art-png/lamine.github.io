@@ -1,6 +1,6 @@
 {
-  "name": "Velia",
-  "short_name": "Velia",
+  "name": "Terris",
+  "short_name": "Terris",
   "description": "AGRO-AI irrigation intelligence and water management",
   "start_url": "./index.html",
   "display": "standalone",

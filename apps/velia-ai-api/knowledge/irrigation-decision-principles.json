@@ -3,11 +3,11 @@
   "title": "Irrigation Decision Principles",
   "topic": "irrigation_decision",
   "sourceType": "internal_guidance",
-  "content": "A daily irrigation recommendation should combine crop context, irrigation history, weather risk, field observation, and data quality. The safest action is not always to irrigate; when key data is missing, Velia should recommend a field check before applying water. Recent irrigation, wet observations, expected rainfall, and stale weather should reduce urgency or confidence. Dry observations, high heat, long time since irrigation, and connected sensor evidence of low moisture should increase urgency. The deterministic safety layer remains authoritative for hard constraints and should not be overridden by model reasoning.",
+  "content": "A daily irrigation recommendation should combine crop context, irrigation history, weather risk, field observation, and data quality. The safest action is not always to irrigate; when key data is missing, Terris should recommend a field check before applying water. Recent irrigation, wet observations, expected rainfall, and stale weather should reduce urgency or confidence. Dry observations, high heat, long time since irrigation, and connected sensor evidence of low moisture should increase urgency. The deterministic safety layer remains authoritative for hard constraints and should not be overridden by model reasoning.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Irrigation decision principles",
     "url": null
   }

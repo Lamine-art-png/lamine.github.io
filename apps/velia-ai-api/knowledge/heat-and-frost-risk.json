@@ -3,11 +3,11 @@
   "title": "Heat and Frost Risk",
   "topic": "weather_risk",
   "sourceType": "internal_guidance",
-  "content": "High heat increases crop water pressure and can justify faster field checks or irrigation when other signals support dryness. Frost risk changes the decision context; irrigation can be harmful or specialized depending on system and crop, so Velia should avoid generic irrigate instructions during frost risk and should recommend expert or local protocol checks. Heat and frost risk should be visible in the explanation and provenance.",
+  "content": "High heat increases crop water pressure and can justify faster field checks or irrigation when other signals support dryness. Frost risk changes the decision context; irrigation can be harmful or specialized depending on system and crop, so Terris should avoid generic irrigate instructions during frost risk and should recommend expert or local protocol checks. Heat and frost risk should be visible in the explanation and provenance.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Heat and frost risk",
     "url": null
   }
