@@ -1,0 +1,33 @@
+name: Terris Core Runtime Bridge CI
+
+on:
+  push:
+    branches:
+      - feat/terris-core-runtime-bridge-v1
+    paths:
+      - 'apps/velia-ai-api/**'
+      - '.github/workflows/terris-core-runtime-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/velia-ai-api/**'
+      - '.github/workflows/terris-core-runtime-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/velia-ai-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run Terris runtime tests
+        run: npm test
