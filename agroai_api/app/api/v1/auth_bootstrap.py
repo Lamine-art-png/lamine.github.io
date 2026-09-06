@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import AuthContext, get_auth_context, is_platform_admin_user
 from app.api.v1.auth import (
@@ -13,7 +13,7 @@ from app.api.v1.auth import (
 )
 from app.api.v1.saas import _workspace_payload
 from app.db.base import get_db
-from app.models.saas import Workspace
+from app.models.saas import OrganizationMembership, Workspace
 from app.services.entitlements import serialize_entitlements
 
 router = APIRouter()
@@ -31,21 +31,35 @@ def portal_bootstrap(
     waterfall with one authenticated request. Platform developer-console state is
     deliberately excluded because it is not required to render the Enterprise
     Portal shell and can hydrate independently.
+
+    The organization list is loaded explicitly with its organization relation in
+    one query. Do not use ``ctx.user.memberships`` here: that relationship is lazy
+    and can turn Portal bootstrap into an N+1 query path for multi-organization
+    users, adding avoidable database round trips to first paint.
     """
 
     started = perf_counter()
-    memberships = [
-        membership
-        for membership in ctx.user.memberships
-        if str(getattr(membership, "status", "active") or "active") == "active"
-    ]
+
+    memberships_started = perf_counter()
+    memberships = (
+        db.query(OrganizationMembership)
+        .options(joinedload(OrganizationMembership.organization))
+        .filter(
+            OrganizationMembership.user_id == ctx.user.id,
+            OrganizationMembership.status == "active",
+        )
+        .order_by(OrganizationMembership.created_at.asc(), OrganizationMembership.id.asc())
+        .all()
+    )
+    memberships_db_ms = (perf_counter() - memberships_started) * 1000
+
     organizations = [
         _organization_payload(membership.organization, membership.role)
         for membership in memberships
     ]
 
     org_ids = [membership.organization_id for membership in memberships]
-    db_started = perf_counter()
+    workspaces_started = perf_counter()
     workspaces = (
         db.query(Workspace)
         .filter(Workspace.organization_id.in_(org_ids))
@@ -54,7 +68,7 @@ def portal_bootstrap(
         if org_ids
         else []
     )
-    db_ms = (perf_counter() - db_started) * 1000
+    workspaces_db_ms = (perf_counter() - workspaces_started) * 1000
 
     current = (
         _organization_payload(ctx.organization, ctx.membership.role)
@@ -62,7 +76,11 @@ def portal_bootstrap(
         else None
     )
     total_ms = (perf_counter() - started) * 1000
-    response.headers["Server-Timing"] = f"portal_bootstrap_db;dur={db_ms:.1f}, portal_bootstrap_total;dur={total_ms:.1f}"
+    response.headers["Server-Timing"] = (
+        f"portal_bootstrap_memberships_db;dur={memberships_db_ms:.1f}, "
+        f"portal_bootstrap_workspaces_db;dur={workspaces_db_ms:.1f}, "
+        f"portal_bootstrap_total;dur={total_ms:.1f}"
+    )
     response.headers["X-AGROAI-Bootstrap-Ms"] = f"{total_ms:.1f}"
     response.headers["Cache-Control"] = "no-store, max-age=0"
 

@@ -67,7 +67,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "032_autonomous_ops_runtime (head)"
+          test "$(alembic heads)" = "033_autonomous_ops_runtime (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db

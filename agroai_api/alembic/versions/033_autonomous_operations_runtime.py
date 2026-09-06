@@ -1,7 +1,7 @@
 """Extend the existing agent workflow layer into the autonomous operations runtime.
 
-Revision ID: 032_autonomous_ops_runtime
-Revises: 031_merge_assurance_intelligence
+Revision ID: 033_autonomous_ops_runtime
+Revises: 032_repair_onboarding_state
 Create Date: 2026-09-05
 
 The migration is additive apart from relaxing legacy tenant ownership on the two
@@ -14,8 +14,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "032_autonomous_ops_runtime"
-down_revision = "031_merge_assurance_intelligence"
+revision = "033_autonomous_ops_runtime"
+down_revision = "032_repair_onboarding_state"
 branch_labels = None
 depends_on = None
 
@@ -142,6 +142,14 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("agent_workflow_outcomes")
     op.drop_table("agent_action_evidence_links")
+
+    # Autonomous rows deliberately use Organization/Workspace identity and therefore
+    # have tenant_id=NULL. Remove only those feature-owned rows before restoring the
+    # legacy non-null tenant contract; legacy tenant-owned agent rows are preserved.
+    bind = op.get_bind()
+    bind.execute(sa.text("DELETE FROM agent_run_audit_events WHERE tenant_id IS NULL"))
+    bind.execute(sa.text("DELETE FROM agent_action_proposals WHERE tenant_id IS NULL"))
+    bind.execute(sa.text("DELETE FROM agent_workflow_runs WHERE tenant_id IS NULL"))
 
     with op.batch_alter_table("agent_run_audit_events") as batch:
         batch.drop_constraint("fk_agent_audit_workspace", type_="foreignkey")

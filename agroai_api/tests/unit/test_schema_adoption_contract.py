@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_intelligence_and_autonomy():
-    assert HEAD_ALEMBIC_REVISION == "032_autonomous_ops_runtime"
+    assert HEAD_ALEMBIC_REVISION == "033_autonomous_ops_runtime"
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )
@@ -50,6 +50,7 @@ def test_head_contract_covers_security_assurance_platform_field_intelligence_and
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
     assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
     assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])
+    assert {"organization_id", "user_id", "current_step"}.issubset(HEAD_SCHEMA_REQUIREMENTS["onboarding_states"])
 
     assert {"organization_id", "workspace_id", "entity_type", "rule_pack_ids"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["assurance_passports"]
