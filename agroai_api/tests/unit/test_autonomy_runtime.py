@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytest
 
+from app.models.autonomy import AutonomyEvent
 from app.models.operational_records import IngestionJob
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.services.autonomy_runtime import (
@@ -46,6 +47,55 @@ def _scope(db, suffix: str = "one"):
     db.add_all([user, org, membership, workspace])
     db.commit()
     return user, org, workspace
+
+
+def test_policy_governance_records_actor_and_before_after_state(db):
+    user, org, workspace = _scope(db, "governance")
+    first = upsert_policy(
+        db, org.id, workspace_id=workspace.id, autonomy_level="A3", actor_user_id=user.id
+    )
+    second = upsert_policy(
+        db, org.id, workspace_id=workspace.id, autonomy_level="A4", actor_user_id=user.id
+    )
+    events = (
+        db.query(AutonomyEvent)
+        .filter(
+            AutonomyEvent.organization_id == org.id,
+            AutonomyEvent.event_type == "autonomy_policy_updated",
+        )
+        .order_by(AutonomyEvent.created_at.asc())
+        .all()
+    )
+    assert len(events) == 2
+    assert all(event.actor == user.id for event in events)
+    assert events[0].payload_json["previous"] is None
+    assert events[0].payload_json["current"]["autonomy_level"] == "A3"
+    assert events[1].payload_json["previous"]["autonomy_level"] == "A3"
+    assert events[1].payload_json["current"]["autonomy_level"] == "A4"
+    assert first["id"] == second["id"]
+
+
+def test_trigger_ref_is_idempotent_across_replays(db):
+    user, org, workspace = _scope(db, "replay")
+    first = start_run(
+        db, org.id,
+        procedure_key="field_issue_resolution",
+        workspace_id=workspace.id,
+        trigger_type="field_observation",
+        trigger_ref="observation-replayed",
+        context={"summary": "Inspect row 7"},
+        actor=user.id,
+    )
+    second = start_run(
+        db, org.id,
+        procedure_key="field_issue_resolution",
+        workspace_id=workspace.id,
+        trigger_type="field_observation",
+        trigger_ref="observation-replayed",
+        context={"summary": "Inspect row 7"},
+        actor=user.id,
+    )
+    assert first["id"] == second["id"]
 
 
 def test_system_procedures_are_one_runtime_not_separate_products(db):
