@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "032_repair_onboarding_state"
+HEAD_ALEMBIC_REVISION = "033_autonomous_ops_runtime"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -46,7 +46,32 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "assurance_exports": {
         "id", "passport_id", "package_type", "package_version", "package_status", "generated_artifact_id",
     },
-    "agent_workflow_runs": {"id"},
+    "agent_procedures": {
+        "id", "organization_id", "workspace_id", "name", "domain", "version", "status",
+        "autonomy_level", "trigger_type", "definition_json", "created_by", "created_at", "updated_at",
+    },
+    "agent_policies": {
+        "id", "organization_id", "workspace_id", "name", "domain", "enabled", "rules_json",
+        "created_by", "created_at", "updated_at",
+    },
+    "agent_workflow_runs": {
+        "id", "tenant_id", "organization_id", "workspace_id", "procedure_id", "procedure_version",
+        "workflow_type", "source_type", "source_id", "status", "autonomy_level", "current_step",
+        "idempotency_key", "policy_snapshot_json", "human_touch_count", "verified_outcome", "completed_at",
+    },
+    "agent_action_proposals": {
+        "id", "tenant_id", "organization_id", "workspace_id", "run_id", "workflow_type", "action_type",
+        "idempotency_key", "status", "execution_status", "verification_status", "risk_level",
+        "execution_result_json", "requires_human_approval", "executed_at",
+    },
+    "agent_action_evidence_links": {
+        "id", "organization_id", "workspace_id", "run_id", "action_id", "evidence_type", "evidence_id",
+        "verification_status", "verification_method", "metadata_json", "verified_by", "verified_at",
+    },
+    "agent_workflow_outcomes": {
+        "id", "organization_id", "workspace_id", "run_id", "status", "summary", "metrics_json", "created_at",
+    },
+    "agent_run_audit_events": {"id", "tenant_id", "organization_id", "workspace_id", "run_id", "workflow_type", "created_at"},
     "users": {
         "id",
         "email",

@@ -1098,6 +1098,13 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
     if session:
         session.status = "completed"
         session.completed_at = datetime.utcnow()
+    if observation.status == "completed":
+        # Stage the autonomy trigger in this same transaction. The worker will
+        # execute Procedures separately, so an autonomy outage can never roll
+        # back a valid Field Intelligence observation.
+        from app.agents.field_intelligence_bridge import enqueue_completed_observation
+
+        enqueue_completed_observation(db, observation)
     db.flush()
 
 

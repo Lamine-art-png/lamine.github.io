@@ -1,6 +1,7 @@
 """Deterministic field operating loop for AGRO-AI."""
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from dataclasses import dataclass
@@ -131,9 +132,25 @@ def create_task(
     assigned_to: str | None = None,
     source_exception_id: str | None = None,
     source_decision_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    if idempotency_key:
+        digest = hashlib.sha256(f"{ctx.organization_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:20]
+        task_id = f"task_{digest}"
+        existing = (
+            ctx.db.query(IngestionJob)
+            .filter(
+                IngestionJob.id == task_id,
+                IngestionJob.tenant_id == ctx.organization_id,
+                IngestionJob.job_type == TASK_JOB_TYPE,
+            )
+            .first()
+        )
+        if existing:
+            return _task_from_job(existing)
     job = IngestionJob(
-        id=f"task_{uuid.uuid4().hex[:12]}",
+        id=task_id,
         tenant_id=ctx.organization_id,
         workspace_id=ctx.workspace_id,
         job_type=TASK_JOB_TYPE,
@@ -154,6 +171,7 @@ def create_task(
             "workspace_id": ctx.workspace_id,
         },
         output_json={},
+        idempotency_key=idempotency_key,
     )
     ctx.db.add(job)
     ctx.db.commit()
@@ -162,15 +180,14 @@ def create_task(
 
 
 def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) -> dict[str, Any]:
-    job = (
-        ctx.db.query(IngestionJob)
-        .filter(
-            IngestionJob.tenant_id == ctx.organization_id,
-            IngestionJob.id == task_id,
-            IngestionJob.job_type == TASK_JOB_TYPE,
-        )
-        .first()
+    query = ctx.db.query(IngestionJob).filter(
+        IngestionJob.tenant_id == ctx.organization_id,
+        IngestionJob.id == task_id,
+        IngestionJob.job_type == TASK_JOB_TYPE,
     )
+    if ctx.workspace_id:
+        query = query.filter(IngestionJob.workspace_id == ctx.workspace_id)
+    job = query.first()
     if not job:
         generated = next((task for task in _generated_tasks(ctx) if task["id"] == task_id), None)
         if not generated:
@@ -650,6 +667,10 @@ def _task_from_job(job: IngestionJob) -> dict[str, Any]:
         "evidence_required": payload.get("evidence_required", []),
         "source_exception_id": payload.get("source_exception_id"),
         "source_decision_id": payload.get("source_decision_id"),
+        "source_autonomy_run_id": payload.get("source_autonomy_run_id"),
+        "source_autonomy_action_id": payload.get("source_autonomy_action_id"),
+        "requires_verification": bool(payload.get("source_autonomy_action_id")),
+        "verification_evidence_ids": sanitize_public((job.output_json or {}).get("verification_evidence_ids") or []),
         "created_from": payload.get("created_from", "manual"),
         "customer_safe": True,
         "workspace_id": payload.get("workspace_id"),

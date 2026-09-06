@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from app.agents.autonomy_runtime import AutonomousOperationsRuntime
 from app.core.security import create_access_token
 from app.models.block import Block
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, IngestionJob
@@ -225,3 +226,93 @@ def test_field_ops_uses_real_data_not_fake_customer_evidence(client, db):
     assert response.status_code == 200
     assert body["sample_mode"] is False
     assert body["field_queue"][0]["field_name"]
+
+
+
+def test_autonomous_task_requires_canonical_evidence_and_closes_verified_run(client, db):
+    org, workspace, headers = _auth_workspace(
+        db,
+        org_id="org-loop-autonomy",
+        workspace_id="workspace-loop-autonomy",
+    )
+    _seed_loop_data(db, org.id, workspace.id)
+    user = db.query(User).filter(User.id == org.owner_user_id).one()
+    runtime = AutonomousOperationsRuntime(
+        db,
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        actor_user_id=None,
+    )
+    procedure = runtime.create_procedure(
+        name="Verified field follow-up",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="field_observation",
+        definition={},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+    run = runtime.start_run(
+        procedure_id=procedure["id"],
+        idempotency_key="field-task-run",
+        source_type="field_observation",
+        source_id="obs-source",
+    )
+    action = runtime.plan_action(
+        run["run"]["id"],
+        action_type="create_field_task",
+        idempotency_key="field-task-action",
+        title="Verify field issue",
+        description="Close only after proof.",
+        risk_level="low",
+        payload={},
+    )
+    runtime.begin_action(run["run"]["id"], action["id"])
+    runtime.record_action_result(
+        run["run"]["id"],
+        action["id"],
+        succeeded=True,
+        result={"status": "executed"},
+    )
+    task = IngestionJob(
+        id="task-autonomy-proof",
+        tenant_id=org.id,
+        workspace_id=workspace.id,
+        job_type="field_ops_task",
+        status="open",
+        input_json={
+            "title": "Verify field issue",
+            "priority": "high",
+            "created_from": "field_update",
+            "workspace_id": workspace.id,
+            "source_autonomy_run_id": run["run"]["id"],
+            "source_autonomy_action_id": action["id"],
+        },
+        output_json={},
+    )
+    db.add(task)
+    db.commit()
+
+    missing = client.post(
+        f"/v1/field-ops/tasks/{task.id}/status",
+        headers=headers,
+        json={"workspace_id": workspace.id, "status": "done"},
+    )
+    assert missing.status_code == 409
+    assert missing.json()["detail"]["code"] == "verification_evidence_required"
+
+    verified = client.post(
+        f"/v1/field-ops/tasks/{task.id}/status",
+        headers=headers,
+        json={"workspace_id": workspace.id, "status": "done", "evidence_ids": ["evidence-loop"]},
+    )
+    assert verified.status_code == 200, verified.text
+    snapshot = AutonomousOperationsRuntime(
+        db,
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        actor_user_id=user.id,
+    ).run(run["run"]["id"])
+    assert snapshot["run"]["status"] == "succeeded"
+    assert snapshot["run"]["verified_outcome"] is True
+    assert snapshot["run"]["human_touch_count"] == 1
+    assert snapshot["actions"][0]["verification_status"] == "verified"

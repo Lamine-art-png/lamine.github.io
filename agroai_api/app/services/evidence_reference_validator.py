@@ -38,6 +38,7 @@ def validate_evidence_references(
     tenant_id: str,
     evidence_ids: list[str],
     allowed_types: Iterable[str] | None = None,
+    workspace_id: str | None = None,
 ) -> list[ValidatedEvidenceReference]:
     """Resolve every supplied ID inside the active tenant or fail without leakage.
 
@@ -60,20 +61,30 @@ def validate_evidence_references(
 
     resolved: dict[str, str] = {}
     if "evidence_record" in selected_types:
-        for row in db.query(EvidenceRecord.id, EvidenceRecord.quality_status).filter(
+        evidence_query = db.query(EvidenceRecord.id, EvidenceRecord.quality_status).filter(
             EvidenceRecord.tenant_id == tenant_id,
             EvidenceRecord.id.in_(normalized),
-        ).all():
+        )
+        if workspace_id is not None:
+            evidence_query = evidence_query.filter(EvidenceRecord.workspace_id == workspace_id)
+        for row in evidence_query.all():
             if _token(row[1]) in _ACCEPTED_RECORD_QUALITY:
                 resolved[str(row[0])] = "evidence_record"
     if "field_observation" in selected_types:
-        for row in db.query(FieldObservation.id, FieldObservation.status).filter(
+        observation_query = db.query(FieldObservation.id, FieldObservation.status).filter(
             FieldObservation.tenant_id == tenant_id,
             FieldObservation.id.in_(normalized),
-        ).all():
+        )
+        if workspace_id is not None:
+            observation_query = observation_query.filter(FieldObservation.workspace_id == workspace_id)
+        for row in observation_query.all():
             if _token(row[1]) in _ACCEPTED_OBSERVATION_STATUS:
                 resolved[str(row[0])] = "field_observation"
-    if "execution_verification" in selected_types:
+    if "execution_verification" in selected_types and workspace_id is None:
+        # Legacy execution-verification rows predate workspace identity. They
+        # remain valid for organization-scoped lifecycles, but fail closed for
+        # workspace-scoped autonomous work until an explicit workspace binding
+        # exists in that schema.
         for row in db.query(ExecutionVerification.id, ExecutionVerification.verification_status).filter(
             ExecutionVerification.tenant_id == tenant_id,
             ExecutionVerification.id.in_(normalized),
