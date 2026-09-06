@@ -64,7 +64,7 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
     assert not violations, "\n".join(violations)
 
 
-def test_account_verification_platform_api_field_assurance_and_intelligence_revisions_converge_at_one_head():
+def test_account_verification_platform_api_field_assurance_intelligence_and_autonomy_revisions_converge_at_one_head():
     expected = {
         "019_account_verification": "018_outreach_engagement",
         "020_platform_api_private_beta": "019_account_verification",
@@ -83,6 +83,7 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
             "030_assurance_intelligence_v2",
             "030_intelligence_state_memory",
         ),
+        "032_autonomous_ops_runtime": "031_merge_assurance_intelligence",
     }
     actual = {}
 
