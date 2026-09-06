@@ -39,10 +39,7 @@ RUN_TERMINAL = {"succeeded", "failed", "cancelled"}
 RUN_ACTIVE = {"running", "waiting_approval", "waiting_evidence"}
 ACTION_TERMINAL = {"verified", "failed", "rejected", "cancelled"}
 EXECUTABLE_ACTION_TYPES = {
-    "email_report_to_user",
     "create_field_task",
-    "record_field_update",
-    "parse_field_message",
     "request_controller_action",
     "integration_readiness_check",
     "collect_missing_evidence",

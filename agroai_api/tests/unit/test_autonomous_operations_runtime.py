@@ -333,3 +333,28 @@ def test_workspace_scoped_action_rejects_proof_from_another_workspace(db):
 
     with pytest.raises(AutonomyForbidden, match="unavailable"):
         runtime.verify_action(run["run"]["id"], action["id"], evidence_ids=[foreign.id])
+
+
+
+def test_autonomy_rejects_non_idempotent_freeform_adapter_even_when_agentic_surface_supports_it(db):
+    user, org = _enterprise(db)
+    runtime = AutonomousOperationsRuntime(db, organization_id=org.id, workspace_id=None, actor_user_id=user.id)
+    procedure = runtime.create_procedure(
+        name="Durable adapters only",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="manual",
+        definition={},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+    run = runtime.start_run(procedure_id=procedure["id"], idempotency_key="durable-only")
+    with pytest.raises(AutonomyConflict, match="Unsupported executable action type"):
+        runtime.plan_action(
+            run["run"]["id"],
+            action_type="record_field_update",
+            idempotency_key="freeform-write",
+            title="Do not write",
+            description="Free-form evidence writes are not a durable autonomy adapter in v1.",
+            risk_level="low",
+            payload={},
+        )

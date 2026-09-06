@@ -1,6 +1,7 @@
 """Deterministic field operating loop for AGRO-AI."""
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from dataclasses import dataclass
@@ -131,9 +132,25 @@ def create_task(
     assigned_to: str | None = None,
     source_exception_id: str | None = None,
     source_decision_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    if idempotency_key:
+        digest = hashlib.sha256(f"{ctx.organization_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:20]
+        task_id = f"task_{digest}"
+        existing = (
+            ctx.db.query(IngestionJob)
+            .filter(
+                IngestionJob.id == task_id,
+                IngestionJob.tenant_id == ctx.organization_id,
+                IngestionJob.job_type == TASK_JOB_TYPE,
+            )
+            .first()
+        )
+        if existing:
+            return _task_from_job(existing)
     job = IngestionJob(
-        id=f"task_{uuid.uuid4().hex[:12]}",
+        id=task_id,
         tenant_id=ctx.organization_id,
         workspace_id=ctx.workspace_id,
         job_type=TASK_JOB_TYPE,
@@ -154,6 +171,7 @@ def create_task(
             "workspace_id": ctx.workspace_id,
         },
         output_json={},
+        idempotency_key=idempotency_key,
     )
     ctx.db.add(job)
     ctx.db.commit()

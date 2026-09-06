@@ -56,10 +56,7 @@ class RunIn(BaseModel):
 class ActionIn(BaseModel):
     workspace_id: str | None = None
     action_type: Literal[
-        "email_report_to_user",
         "create_field_task",
-        "record_field_update",
-        "parse_field_message",
         "request_controller_action",
         "integration_readiness_check",
         "collect_missing_evidence",
@@ -297,7 +294,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
         "agent_run",
         workspace_id=effective_workspace_id,
         user_id=ctx.user.id,
-        request_id=str(uuid.uuid4()),
+        request_id=f"autonomy-action:{action_id}",
         metadata={
             "action_type": action_type,
             "approval_gated": approval_gated,
@@ -316,7 +313,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
     )
     _call(runtime.begin_action, run_id, action_id)
     action_payload = action.get("payload") or {}
-    nested = action_payload.get("payload") or {}
+    nested = {**(action_payload.get("payload") or {}), "request_id": f"autonomy-action:{action_id}"}
     try:
         result = post_action_execute(
             ActionExecuteRequest(

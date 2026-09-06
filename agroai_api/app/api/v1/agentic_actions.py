@@ -336,6 +336,7 @@ def post_action_execute(
             instructions=[str(item)[:500] for item in data.get("instructions") or []],
             evidence_required=[str(item)[:220] for item in data.get("evidence_required") or []],
             created_from=data.get("created_from") if data.get("created_from") in {"exception", "decision", "missing_evidence", "manual", "field_update"} else "manual",
+            idempotency_key=str(data.get("request_id") or "") or None,
         )
         return {"status": "executed", "action_type": action_type, "created_task": task}
 
@@ -381,6 +382,7 @@ def post_action_execute(
             ],
             evidence_required=["connector status", "field/block match", "operator approval", "audit trail"],
             created_from="manual",
+            idempotency_key=str(data.get("request_id") or "") or None,
         )
         return {"status": "approval_recorded", "action_type": action_type, "created_approval_task": task, "physical_action_executed": False}
 
@@ -407,6 +409,7 @@ def post_action_execute(
             instructions=["Collect each required evidence item and upload it to the workspace.", "Re-run AGRO-AI after the evidence is attached."],
             evidence_required=[str(item)[:220] for item in data.get("evidence_required") or ["field/block", "timestamp", "source system", "units"]],
             created_from="missing_evidence",
+            idempotency_key=str(data.get("request_id") or "") or None,
         )
         return {"status": "executed", "action_type": action_type, "created_task": task}
 
