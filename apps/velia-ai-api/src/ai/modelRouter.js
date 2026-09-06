@@ -1,6 +1,7 @@
 import { AnthropicProvider, MockEmbeddingProvider, MockLLMProvider } from "../providers/mockProviders.js";
 import { GeminiProvider, OpenAIProvider } from "../providers/realLLMProviders.js";
 import { GeminiEmbeddingProvider, OpenAIEmbeddingProvider } from "../providers/realEmbeddingProviders.js";
+import { TerrisCoreProvider } from "../providers/TerrisCoreProvider.js";
 import { config } from "../config.js";
 import { logProviderMode } from "../services/logger.js";
 
@@ -17,6 +18,20 @@ function makeMockLLM(reason) {
 
 function selectLLMProvider() {
   const requested = config.llmProvider;
+
+  if (requested === "terris") {
+    const provider = new TerrisCoreProvider({
+      enabled: config.terrisCoreEnabled,
+      baseUrl: config.terrisCoreBaseUrl,
+      apiKey: config.terrisCoreApiKey,
+      model: config.terrisCoreModel,
+      timeoutMs: config.providerTimeoutMs,
+      retries: config.providerRetryCount,
+    });
+    logProviderMode("llm", { provider: provider.name, mode: provider.mode, model: provider.model, fallbackReason: provider.fallbackReason });
+    return provider.isConfigured() ? provider : makeMockLLM(provider.fallbackReason || "Terris Core is not configured");
+  }
+
   if (requested === "openai") {
     const provider = config.openaiApiKey
       ? new OpenAIProvider({ apiKey: config.openaiApiKey, model: config.openaiModel, timeoutMs: config.providerTimeoutMs, retries: config.providerRetryCount })
