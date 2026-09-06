@@ -1,0 +1,56 @@
+name: AEP Realtime Voice CI
+
+on:
+  pull_request:
+    paths:
+      - "agroai_api/app/api/v1/voice.py"
+      - "agroai_api/app/api/v1/ask_agro_ai_paywall.py"
+      - "agroai_api/tests/unit/test_voice_runtime_contract.py"
+      - "figma-enterprise-v4/src/app/components/voice/**"
+      - "figma-enterprise-v4/src/app/components/Intelligence.tsx"
+      - "figma-enterprise-v4/src/app/components/UploadStatusToast.tsx"
+      - "figma-enterprise-v4/tests/voice-runtime-contract.mjs"
+      - "figma-enterprise-v4/package.json"
+      - "shared/ui-literals.en.*.json"
+      - "cloudflare/edge-gateway/src/i18n-canonical-source.ts"
+      - ".github/workflows/aep-realtime-voice-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  backend-voice-contract:
+    name: Backend realtime voice contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile voice gateway and commercial boundary
+        run: python -m compileall -q app/api/v1/voice.py app/api/v1/ask_agro_ai_paywall.py
+      - name: Voice safety and session contract
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit/test_voice_runtime_contract.py
+
+  portal-voice-contract:
+    name: Portal realtime voice contract and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci
+      - name: Voice client contract
+        run: node tests/voice-runtime-contract.mjs
+      - name: Canonical UI literal inventory
+        run: python3 scripts/check_ui_literal_inventory.py --check
+      - name: Production portal build
+        run: npm run build
