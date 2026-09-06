@@ -241,7 +241,8 @@ def _validate_caps(values: dict[str, str], allowed: set[str]) -> dict[str, str]:
 def create_custom_procedure(db: Session, organization_id: str, *, name: str, domain: str,
                             steps: list[dict[str, Any]], trigger_types: list[str] | None = None,
                             description: str | None = None, procedure_key: str | None = None,
-                            outcome_contract: dict[str, Any] | None = None) -> dict[str, Any]:
+                            outcome_contract: dict[str, Any] | None = None,
+                            actor_user_id: str | None = None) -> dict[str, Any]:
     if not 1 <= len(steps) <= 32:
         raise ValueError("A procedure must contain between 1 and 32 steps")
     key = re.sub(r"[^a-z0-9]+", "_", (procedure_key or name).lower()).strip("_")
@@ -292,7 +293,7 @@ def create_custom_procedure(db: Session, organization_id: str, *, name: str, dom
         db,
         organization_id,
         "autonomy_procedure_version_created",
-        "system",
+        actor_user_id or "system",
         {
             "procedure_id": row.id,
             "procedure_key": row.procedure_key,
