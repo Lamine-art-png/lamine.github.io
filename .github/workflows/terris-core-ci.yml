@@ -1,0 +1,65 @@
+name: Terris Core CI
+
+on:
+  push:
+    branches:
+      - feat/terris-core-model-platform-v1
+    paths:
+      - 'terris-model/**'
+      - 'apps/velia-ai-api/**'
+      - '.github/workflows/terris-core-ci.yml'
+  pull_request:
+    paths:
+      - 'terris-model/**'
+      - 'apps/velia-ai-api/**'
+      - '.github/workflows/terris-core-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  model-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Terris Core lightweight dependencies
+        run: python -m pip install -e ./terris-model
+
+      - name: Compile Python
+        run: python -m compileall -q terris-model/src terris-model/tests
+
+      - name: Run data governance tests
+        run: python -m unittest discover -s terris-model/tests -p 'test_*.py'
+
+      - name: Validate seed training data
+        run: |
+          python -m terris_core.data.prepare \
+            --input terris-model/datasets/seed/terris_core_seed.jsonl \
+            --output /tmp/terris_core_v0_train.jsonl \
+            --manifest /tmp/terris_core_v0_manifest.json
+          test -s /tmp/terris_core_v0_train.jsonl
+          test -s /tmp/terris_core_v0_manifest.json
+
+  terris-runtime:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/velia-ai-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install runtime dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run Terris runtime tests
+        run: npm test
