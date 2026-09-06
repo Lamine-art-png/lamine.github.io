@@ -17,7 +17,7 @@ type Props = {
   language?: string;
   history?: VoiceHistoryItem[];
   conversationId?: string;
-  onExchange?: (userText: string, assistantText: string, metadata?: Record<string, unknown>) => void | Promise<void>;
+  onExchange?: (userText: string, assistantText: string, metadata?: Record<string, unknown>) => unknown;
   compact?: boolean;
 };
 
