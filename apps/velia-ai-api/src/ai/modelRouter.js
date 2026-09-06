@@ -2,6 +2,7 @@ import { AnthropicProvider, MockEmbeddingProvider, MockLLMProvider } from "../pr
 import { GeminiProvider, OpenAIProvider } from "../providers/realLLMProviders.js";
 import { GeminiEmbeddingProvider, OpenAIEmbeddingProvider } from "../providers/realEmbeddingProviders.js";
 import { TerrisCoreProvider } from "../providers/TerrisCoreProvider.js";
+import { FailoverLLMProvider } from "../providers/FailoverLLMProvider.js";
 import { config } from "../config.js";
 import { logProviderMode } from "../services/logger.js";
 
@@ -16,11 +17,31 @@ function makeMockLLM(reason) {
   return new MockLLMProvider("mock", { fallbackReason: reason });
 }
 
+function configuredFrontierProvider(requested) {
+  if (requested === "openai" && config.openaiApiKey) {
+    return new OpenAIProvider({
+      apiKey: config.openaiApiKey,
+      model: config.openaiModel,
+      timeoutMs: config.providerTimeoutMs,
+      retries: config.providerRetryCount,
+    });
+  }
+  if (requested === "gemini" && config.geminiApiKey) {
+    return new GeminiProvider({
+      apiKey: config.geminiApiKey,
+      model: config.geminiModel,
+      timeoutMs: config.providerTimeoutMs,
+      retries: config.providerRetryCount,
+    });
+  }
+  return null;
+}
+
 function selectLLMProvider() {
   const requested = config.llmProvider;
 
   if (requested === "terris") {
-    const provider = new TerrisCoreProvider({
+    const terris = new TerrisCoreProvider({
       enabled: config.terrisCoreEnabled,
       baseUrl: config.terrisCoreBaseUrl,
       apiKey: config.terrisCoreApiKey,
@@ -28,21 +49,33 @@ function selectLLMProvider() {
       timeoutMs: config.providerTimeoutMs,
       retries: config.providerRetryCount,
     });
-    logProviderMode("llm", { provider: provider.name, mode: provider.mode, model: provider.model, fallbackReason: provider.fallbackReason });
-    return provider.isConfigured() ? provider : makeMockLLM(provider.fallbackReason || "Terris Core is not configured");
+    if (!terris.isConfigured()) {
+      logProviderMode("llm", { provider: terris.name, mode: terris.mode, model: terris.model, fallbackReason: terris.fallbackReason });
+      return makeMockLLM(terris.fallbackReason || "Terris Core is not configured");
+    }
+
+    const fallback = configuredFrontierProvider(config.terrisCoreFallbackProvider);
+    const terrisSelected = !fallback
+      || config.terrisCoreTrafficPercent >= 100
+      || (config.terrisCoreTrafficPercent > 0 && Math.random() * 100 < config.terrisCoreTrafficPercent);
+
+    if (!terrisSelected && fallback) {
+      logProviderMode("llm", { provider: fallback.name, mode: fallback.mode, model: fallback.model, fallbackReason: "Terris Core rollout traffic split" });
+      return fallback;
+    }
+
+    const provider = fallback ? new FailoverLLMProvider(terris, fallback) : terris;
+    logProviderMode("llm", { provider: terris.name, mode: terris.mode, model: terris.model, fallbackReason: fallback ? "frontier failover armed" : null });
+    return provider;
   }
 
   if (requested === "openai") {
-    const provider = config.openaiApiKey
-      ? new OpenAIProvider({ apiKey: config.openaiApiKey, model: config.openaiModel, timeoutMs: config.providerTimeoutMs, retries: config.providerRetryCount })
-      : makeMockLLM("OPENAI_API_KEY not configured");
+    const provider = configuredFrontierProvider("openai") || makeMockLLM("OPENAI_API_KEY not configured");
     logProviderMode("llm", { provider: provider.name, mode: provider.mode, model: provider.model, fallbackReason: provider.fallbackReason });
     return provider;
   }
   if (requested === "gemini") {
-    const provider = config.geminiApiKey
-      ? new GeminiProvider({ apiKey: config.geminiApiKey, model: config.geminiModel, timeoutMs: config.providerTimeoutMs, retries: config.providerRetryCount })
-      : makeMockLLM("GEMINI_API_KEY not configured");
+    const provider = configuredFrontierProvider("gemini") || makeMockLLM("GEMINI_API_KEY not configured");
     logProviderMode("llm", { provider: provider.name, mode: provider.mode, model: provider.model, fallbackReason: provider.fallbackReason });
     return provider;
   }
