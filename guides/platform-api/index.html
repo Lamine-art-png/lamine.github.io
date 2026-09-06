@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AGRO-AI Platform API Guide</title>
+  <meta name="description" content="Official practical guide to the AGRO-AI Platform API private beta: projects, service accounts, scoped keys, resources, jobs, webhooks, limits and security." />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="canonical" href="https://agroai-pilot.com/guides/platform-api/" />
+  <meta name="theme-color" content="#123a2b" />
+  <link rel="preconnect" href="https://fonts.cdnfonts.com" />
+  <link href="https://fonts.cdnfonts.com/css/glacial-indifference-2" rel="stylesheet" />
+  <link rel="stylesheet" href="/guides/assets/guides.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/guides/" aria-label="AGRO-AI Guides home">
+      <img src="https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/figma-enterprise-v4/src/imports/agro-ai-logo-1.png" alt="AGRO-AI" />
+      <span class="brand-copy"><strong>AGRO-AI</strong><span>Platform API Guide</span></span>
+    </a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="/guides/">All Guides</a>
+      <a href="/guides/enterprise-portal/">Enterprise Portal Guide</a>
+      <a href="/platform-api/docs/">Developer Docs</a>
+      <a class="cta" href="https://platform.agroai-pilot.com">Developer Console</a>
+    </nav>
+  </div>
+</header>
+
+<div class="docs-layout">
+  <aside class="sidebar" aria-label="Platform API guide navigation">
+    <nav>
+      <h5>Start here</h5>
+      <a href="#overview">What the API is</a>
+      <a href="#state">Current product state</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#auth">Authentication</a>
+      <a href="#projects">Projects & environments</a>
+      <h5>Build</h5>
+      <a href="#resources">Resource model</a>
+      <a href="#fields">Fields & sources</a>
+      <a href="#observations">Observations</a>
+      <a href="#recommendations">Recommendations</a>
+      <a href="#reports">Reports & jobs</a>
+      <a href="#providers">Providers & connectors</a>
+      <h5>Operate safely</h5>
+      <a href="#idempotency">Idempotency</a>
+      <a href="#pagination">Pagination</a>
+      <a href="#errors">Errors & request IDs</a>
+      <a href="#limits">Rate limits & credits</a>
+      <a href="#webhooks">Webhooks</a>
+      <a href="#security">Security</a>
+      <h5>Integration</h5>
+      <a href="#sandbox">Test sandbox</a>
+      <a href="#sdks">SDKs & CLI</a>
+      <a href="#patterns">Integration patterns</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </aside>
+
+  <main class="doc" id="main">
+    <p class="breadcrumbs"><a href="/guides/">AGRO-AI Guides</a> / Platform API</p>
+    <div class="eyebrow">Official practical guide</div>
+    <h1>AGRO-AI Platform API</h1>
+    <p class="lede">A product-grounded guide for engineering teams integrating agricultural data, recommendations, reporting and operational intelligence into their own software.</p>
+
+    <div class="status-row">
+      <span class="pill beta">Private beta</span>
+      <span class="pill good">Versioned /v1 contract</span>
+      <span class="pill">Test and live separated</span>
+    </div>
+
+    <div class="notice warn">
+      <strong>Current state matters.</strong>
+      <p>The repository contains a tested public TEST self-service path, but production public activation is protected by separate legal and operational gates. This guide therefore follows the current private-beta contract and does not imply that public self-service, LIVE projects, production webhooks, provider writes, billing or physical execution are active for every organization.</p>
+    </div>
+
+    <h2 id="overview">What the Platform API is</h2>
+    <p>The Platform API is a separate developer product from the Enterprise Portal. It exposes a curated, organization-scoped REST surface for agricultural product teams that want to work with AGRO-AI resources from their own backend.</p>
+    <p>The current public contract centers on:</p>
+    <ul>
+      <li>fields and source registration;</li>
+      <li>observation ingestion and query;</li>
+      <li>recommendation requests;</li>
+      <li>report generation and asynchronous jobs;</li>
+      <li>provider readiness and synchronization;</li>
+      <li>usage and safe request-log visibility;</li>
+      <li>service accounts, scoped API keys and environment controls;</li>
+      <li>webhook infrastructure where delivery is enabled.</li>
+    </ul>
+    <p>Base path:</p>
+    <pre><code>https://api.agroai-pilot.com/v1/platform</code></pre>
+
+    <h2 id="state">Understand the current product state</h2>
+    <p>Platform API capabilities are deliberately separated so one product flag cannot silently activate unrelated production behavior. The important boundaries are:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Capability</th><th>Meaning</th><th>Current safety model</th></tr></thead>
+        <tbody>
+          <tr><td><strong>TEST project</strong></td><td>Deterministic synthetic environment for development.</td><td>Safe for integration work; no customer provider credentials or physical execution.</td></tr>
+          <tr><td><strong>LIVE project</strong></td><td>Production data/environment access.</td><td>Separately gated; requires approval, eligible commercial state and readiness.</td></tr>
+          <tr><td><strong>Provider access</strong></td><td>Connection to a specific external agricultural provider.</td><td>Separately enrolled and capability-scoped.</td></tr>
+          <tr><td><strong>Webhook delivery</strong></td><td>Outbound event delivery to your endpoint.</td><td>Infrastructure exists, but production delivery has its own activation gate.</td></tr>
+          <tr><td><strong>Physical actions</strong></td><td>Writes or actuation against field equipment.</td><td>Not part of the ordinary beta contract; physical irrigation writes remain disabled unless a separately approved capability exists.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A TEST project is structurally a TEST project. <strong>It is not promoted in place into a LIVE project.</strong> LIVE access uses a separate reviewed path.</p>
+
+    <h2 id="quickstart">Quickstart</h2>
+    <p>For an organization already provisioned for the Platform API, the shortest reliable path is:</p>
+    <ol class="step-list">
+      <li><strong>Sign in to the Developer Console.</strong> Use <a href="https://platform.agroai-pilot.com">platform.agroai-pilot.com</a> with the AGRO-AI account associated with the approved organization.</li>
+      <li><strong>Create a TEST project.</strong> TEST projects use deterministic synthetic data and are intentionally isolated from LIVE access.</li>
+      <li><strong>Create a service account.</strong> Give the machine identity only the scopes and optional resource/provider restrictions it needs.</li>
+      <li><strong>Create a TEST key.</strong> Plaintext API keys are shown once. Store the value in your server-side secret manager immediately.</li>
+      <li><strong>Make an authenticated request.</strong> Start with an identity or read route before building writes.</li>
+    </ol>
+
+    <pre><code>curl https://api.agroai-pilot.com/v1/platform/me \
+  -H "Authorization: Bearer $AGROAI_API_KEY" \
+  -H "X-Request-Id: quickstart-001"</code></pre>
+
+    <p>Then list a safe resource such as fields:</p>
+    <pre><code>curl https://api.agroai-pilot.com/v1/platform/fields \
+  -H "Authorization: Bearer $AGROAI_API_KEY"</code></pre>
+
+    <div class="notice">
+      <strong>Keep API keys out of browser JavaScript.</strong>
+      <p>The authenticated Platform console can use browser-session-mediated TEST tooling, but permanent machine API keys belong in a server-side secret store, not a browser bundle, localStorage or a public environment variable.</p>
+    </div>
+
+    <h2 id="auth">Authentication, service accounts and scopes</h2>
+    <p>Platform API machine access uses Bearer API keys associated with service accounts. Portal browser sessions/JWTs are not interchangeable with Platform API keys.</p>
+    <ul>
+      <li>TEST keys use the <code>agro_test_</code> prefix.</li>
+      <li>LIVE keys use the <code>agro_live_</code> prefix when LIVE access is separately available.</li>
+      <li>Service accounts can be restricted by scope and can also be bounded by workspace, provider, resource and optional CIDR policy.</li>
+      <li>A key can narrow the service account's permissions; it cannot widen them.</li>
+    </ul>
+    <p>Common scope examples in the current contract include <code>fields:read</code>, <code>fields:write</code>, <code>sources:read</code>, <code>observations:write</code>, <code>recommendations:write</code>, <code>reports:read</code>, <code>webhooks:write</code> and <code>usage:read</code>.</p>
+
+    <h3>Key handling checklist</h3>
+    <ul>
+      <li>Store the plaintext key immediately because it is intended to be shown once.</li>
+      <li>Use the minimum scopes required.</li>
+      <li>Use environment-specific keys; do not share one key across unrelated services.</li>
+      <li>Rotate with bounded overlap, then revoke the old key.</li>
+      <li>Revoke or disable a key immediately if exposure is suspected.</li>
+    </ul>
+
+    <h2 id="projects">Projects and environments</h2>
+    <p>Projects are organization-scoped and explicitly typed as TEST or LIVE. Environment separation is a security and commercial boundary, not a label you should infer from the hostname alone.</p>
+    <h3>TEST</h3>
+    <p>TEST is for integration development. The deterministic sandbox can include synthetic organizations, farms, fields, zones, crops, seasons, irrigation systems, observations, anomalies, recommendations, reports, jobs and webhook events. It does not contain customer provider credentials, real charges or physical execution.</p>
+    <h3>LIVE</h3>
+    <p>LIVE requires a separate live-access decision, an eligible plan or contract and production-readiness review. Provider access can have additional enrollment requirements. Do not write code that assumes a TEST project will later receive LIVE privileges.</p>
+
+    <h2 id="resources">Resource model</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Resource</th><th>Purpose</th><th>Typical flow</th></tr></thead>
+        <tbody>
+          <tr><td><code>providers</code></td><td>Discover provider capability/readiness and manage approved synchronization.</td><td>Check catalog → enroll/connect → sync → inspect job/state.</td></tr>
+          <tr><td><code>fields</code></td><td>Represent agricultural fields and safe metadata/boundaries.</td><td>Create/read/list/update metadata/archive.</td></tr>
+          <tr><td><code>sources</code></td><td>Register the systems/files that feed agricultural context.</td><td>Register source → upload/ingest → associate provenance.</td></tr>
+          <tr><td><code>observations</code></td><td>Ingest or query field/operational observations.</td><td>Write batch → job processing → query by field/type/time.</td></tr>
+          <tr><td><code>recommendations</code></td><td>Request advisory model-backed recommendations.</td><td>POST request → poll job → retrieve recommendation/evidence.</td></tr>
+          <tr><td><code>reports</code></td><td>Generate report artifacts from authorized context.</td><td>POST report → poll job → authorized download route.</td></tr>
+          <tr><td><code>jobs</code></td><td>Track asynchronous work.</td><td>Store job ID → poll boundedly → handle terminal state.</td></tr>
+          <tr><td><code>usage</code></td><td>Read metered use/credits where entitled.</td><td>Review usage → enforce your own internal budgets if needed.</td></tr>
+          <tr><td><code>request-logs</code></td><td>Safe request history for debugging/operations.</td><td>Correlate with server request IDs without exposing secrets.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="fields">Fields and sources</h2>
+    <p>Fields can be created and safely updated within project scope. The current contract supports field boundaries as GeoJSON <code>Polygon</code> or <code>MultiPolygon</code> values.</p>
+    <pre><code>curl -X POST https://api.agroai-pilot.com/v1/platform/fields \
+  -H "Authorization: Bearer $AGROAI_API_KEY" \
+  -H "Idempotency-Key: field-create-001" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"North Block","crop":"almond","area_hectares":24.6}'</code></pre>
+
+    <p>Sources describe where data comes from. Direct upload flows use project/organization namespaces and can require expected checksums so the backend can verify that the stored object matches what the client intended to send.</p>
+
+    <h2 id="observations">Observations</h2>
+    <p>Observations are queryable by field, type and time range. The contract is designed to preserve provenance and quality flags so downstream applications can distinguish the source and quality of operational context.</p>
+    <p>For batch ingestion:</p>
+    <ol>
+      <li>validate the payload before sending;</li>
+      <li>use one logical idempotency key for the logical write;</li>
+      <li>store the returned job/request identifiers;</li>
+      <li>wait for the asynchronous result instead of assuming the POST means processing is complete;</li>
+      <li>query the resulting observations and inspect provenance/quality.</li>
+    </ol>
+
+    <h2 id="recommendations">Recommendations</h2>
+    <p>Recommendation computation is asynchronous. The intended pattern is:</p>
+    <div class="workflow">
+      <div><small>1</small><strong>Request</strong></div>
+      <div><small>2</small><strong>Job</strong></div>
+      <div><small>3</small><strong>Retrieve</strong></div>
+      <div><small>4</small><strong>Review evidence</strong></div>
+    </div>
+    <p>Recommendations are advisory. Design your product so a recommendation can be reviewed with its evidence and provenance rather than silently converting a model result into a physical action.</p>
+
+    <h2 id="reports">Reports and jobs</h2>
+    <p>Report generation is also asynchronous. Report metadata is designed not to expose raw object-storage paths; authorized content is returned through the product's download boundary.</p>
+    <p>Your application should treat jobs as first-class objects:</p>
+    <ul>
+      <li>persist the job ID;</li>
+      <li>poll with a bounded interval/backoff;</li>
+      <li>handle success and terminal failure separately;</li>
+      <li>avoid creating duplicate work when retrying;</li>
+      <li>surface the server request ID for support/debugging.</li>
+    </ul>
+
+    <h2 id="providers">Providers and connector jobs</h2>
+    <p>The provider catalog is designed to report truthful capability state instead of implying that every integration is production-ready. Synchronization can be restricted by key scope, organization enrollment, provider and resource policy.</p>
+    <p>Partner/provider integrations may require a separate technical and commercial review, credential-vault readiness and explicit sandbox/read/write/production status. Provider credentials must remain in the credential boundary and must not be embedded in application JSON or logs.</p>
+    <div class="notice warn">
+      <strong>Provider availability is not inferred from a connector name.</strong>
+      <p>Check the provider/catalog readiness returned for your organization and environment. Some provider adapters can exist in code while production activation is still contract- or credential-gated.</p>
+    </div>
+
+    <h2 id="idempotency">Idempotency</h2>
+    <p>Logical writes accept or require an <code>Idempotency-Key</code>. Use a stable key for retries of the same logical operation and a new key for a genuinely new operation.</p>
+    <p>The server contract distinguishes between:</p>
+    <ul>
+      <li>a completed matching request, which can replay the stored response;</li>
+      <li>a concurrent matching operation, which can return an operation-in-progress state;</li>
+      <li>reuse of the same idempotency key with different content, which is a conflict.</li>
+    </ul>
+    <p>This prevents network retries from accidentally creating duplicate fields, observation batches or report/recommendation work.</p>
+
+    <h2 id="pagination">Pagination and filtering</h2>
+    <p>Collection routes use bounded <code>limit</code> values and opaque <code>cursor</code> tokens. A paginated response uses:</p>
+    <pre><code>{
+  "items": [...],
+  "next_cursor": "...",
+  "has_more": true
+}</code></pre>
+    <p>Do not construct cursors manually. Pass the returned <code>next_cursor</code> back to the API until <code>has_more</code> is false.</p>
+
+    <h2 id="errors">Errors and request IDs</h2>
+    <p>Errors use a typed structure with fields such as <code>code</code>, <code>type</code>, <code>message</code> and <code>request_id</code>. Every response receives a server-generated <code>X-Request-Id</code>. Use that server value when contacting AGRO-AI Support.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Status</th><th>Typical meaning</th><th>What to do</th></tr></thead>
+        <tbody>
+          <tr><td>400 / 422</td><td>Invalid request or schema.</td><td>Fix payload/parameters; do not blind-retry.</td></tr>
+          <tr><td>401</td><td>Invalid key or trusted-client-address denial.</td><td>Check key, environment and CIDR/client context.</td></tr>
+          <tr><td>403</td><td>Scope, provider, resource, enrollment or environment denial.</td><td>Do not widen permissions in code; request the correct entitlement.</td></tr>
+          <tr><td>409</td><td>Conflict or operation already in progress.</td><td>Resolve idempotency/state conflict.</td></tr>
+          <tr><td>429</td><td>Rate or credit limit.</td><td>Honor reset/backoff and review usage.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="limits">Rate limits and API credits</h2>
+    <p>Rate-limit responses expose <code>RateLimit-Limit</code>, <code>RateLimit-Remaining</code> and <code>RateLimit-Reset</code>. Build clients that can slow down before a hard limit becomes an outage.</p>
+    <p>The API also has a credit ledger model for metered operations. Platform API commercial plans are a separate billing boundary from Enterprise Portal plans. Do not assume buying one automatically changes the other.</p>
+
+    <h2 id="webhooks">Webhooks</h2>
+    <p>The webhook contract supports versioned events with an event ID and timestamp, HMAC-SHA256 signatures, durable retry behavior, delivery history and redelivery controls. Production webhook delivery is separately gated, so your organization must actually have the capability enabled before depending on delivery.</p>
+    <pre><code>AgroAI-Signature: t=&lt;timestamp&gt;,v1=&lt;hex-hmac&gt;
+AgroAI-Event-Id: &lt;event-id&gt;
+AgroAI-Event-Version: 2026-07-01</code></pre>
+    <p>Receiver requirements:</p>
+    <ul>
+      <li>verify the signature and timestamp;</li>
+      <li>deduplicate by event ID;</li>
+      <li>return quickly and move heavy work to your own queue;</li>
+      <li>handle retries safely;</li>
+      <li>never log the signing secret.</li>
+    </ul>
+
+    <h2 id="security">Security checklist</h2>
+    <ul>
+      <li>Keep API keys and webhook secrets server-side.</li>
+      <li>Use minimum scopes and resource/provider restrictions.</li>
+      <li>Use separate TEST and LIVE credentials.</li>
+      <li>Rotate and revoke credentials deliberately.</li>
+      <li>Validate webhook timestamps and deduplicate event IDs.</li>
+      <li>Use idempotency for writes.</li>
+      <li>Keep server request IDs for operational debugging.</li>
+      <li>Do not pass organization IDs or privileged scope decisions from untrusted browser input and assume they grant authority.</li>
+      <li>Do not expose provider credentials in application JSON, frontend bundles or logs.</li>
+    </ul>
+
+    <h2 id="sandbox">Deterministic TEST sandbox</h2>
+    <p>The TEST environment exists so a developer can build against stable agricultural objects without using customer data. It is intentionally resettable and deterministic.</p>
+    <p>Use TEST for:</p>
+    <ul>
+      <li>schema and client development;</li>
+      <li>pagination/error handling;</li>
+      <li>recommendation/report job orchestration;</li>
+      <li>webhook receiver development using TEST-safe events where available;</li>
+      <li>usage and observability integration;</li>
+      <li>CI and repeatable integration tests.</li>
+    </ul>
+    <p>Do not use TEST as evidence that a LIVE provider, production webhook or physical action is enabled.</p>
+
+    <h2 id="sdks">SDKs and CLI</h2>
+    <p>The repository contains Python and TypeScript SDK foundations with typed errors, request IDs, rate-limit state, safe retries, pagination, uploads, job polling, usage access and webhook verification. Public package-registry availability must not be assumed until the relevant namespace/release path is actually activated.</p>
+    <p>The repository also contains an AGRO-AI CLI and public installer paths designed for the protected public TEST self-service launch. Because that launch has separate production gates, use the installation path advertised by the live Platform API site rather than assuming every repository installer route is currently public.</p>
+
+    <h2 id="patterns">Recommended integration patterns</h2>
+
+    <h3>Add AGRO-AI intelligence to an existing farm application</h3>
+    <ol>
+      <li>Model or map your fields into the Platform field resource.</li>
+      <li>Register the source(s) that provide operational context.</li>
+      <li>Ingest observations with provenance.</li>
+      <li>Request recommendations asynchronously.</li>
+      <li>Show the recommendation with evidence/provenance in your own UI.</li>
+      <li>Keep user approval/execution as a separate application decision.</li>
+    </ol>
+
+    <h3>Use AGRO-AI for reporting</h3>
+    <ol>
+      <li>Keep the field/source/observation context current.</li>
+      <li>Create a report request with an idempotency key.</li>
+      <li>Poll the returned job.</li>
+      <li>Retrieve the authorized report metadata/content only after completion.</li>
+      <li>Store only the identifiers and artifacts your own retention policy requires.</li>
+    </ol>
+
+    <h3>Connect a provider or enterprise system</h3>
+    <ol>
+      <li>Read provider readiness for the organization/environment.</li>
+      <li>Confirm the required enrollment, scope and provider capability.</li>
+      <li>Complete the approved credential/connection flow.</li>
+      <li>Run synchronization through the durable job path.</li>
+      <li>Observe job and request IDs; do not assume connection means a sync has completed.</li>
+    </ol>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <h3>401 after a key worked previously</h3>
+    <p>Check whether the key was rotated, revoked or environment-mismatched. If the key uses CIDR restrictions, confirm the trusted client address reaching AGRO-AI still matches the allowed network.</p>
+
+    <h3>403 on a valid key</h3>
+    <p>A valid key can still lack the required scope, provider enrollment, resource permission or environment entitlement. Do not solve a 403 by blindly generating a broader key.</p>
+
+    <h3>409 on a write</h3>
+    <p>Review the idempotency key and current operation state. A reused key with changed payload is intentionally rejected.</p>
+
+    <h3>429 responses</h3>
+    <p>Honor the rate-limit reset/backoff information and inspect API credit usage. Retrying immediately in a tight loop makes the situation worse.</p>
+
+    <h3>An asynchronous request never becomes successful</h3>
+    <p>Inspect the job's terminal state and server request ID. Do not keep polling indefinitely after a terminal failure. Include those IDs in Support.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <details><summary>Is the Platform API the same thing as the Enterprise Portal?</summary><p>No. They share AGRO-AI account and platform foundations, but the Enterprise Portal is an agricultural operating application and the Platform API is a developer product for integrating AGRO-AI into your own backend/software.</p></details>
+      <details><summary>Can I put an AGRO-AI API key in my web or mobile frontend?</summary><p>No. Permanent machine API keys belong in server-side secret storage. Your frontend should call your own trusted backend, which then calls the Platform API.</p></details>
+      <details><summary>Can a TEST project be converted into LIVE?</summary><p>No. TEST and LIVE are structurally separate. LIVE uses a separate reviewed project/access path.</p></details>
+      <details><summary>Does a provider appearing in the catalog mean it is production-ready for me?</summary><p>No. Provider readiness, enrollment and environment capability are organization-specific. Read the actual provider state returned for your organization.</p></details>
+      <details><summary>Does the API automatically actuate irrigation equipment?</summary><p>No. Recommendations are advisory in the ordinary contract, and physical irrigation writes remain separately gated/disabled unless an explicit approved capability says otherwise.</p></details>
+      <details><summary>Are webhooks always delivered in production?</summary><p>No. The webhook infrastructure and contract exist, but production delivery has its own activation gate. Check your organization's capability before depending on it.</p></details>
+      <details><summary>Why do I need Idempotency-Key?</summary><p>Network retries happen. Idempotency lets you retry the same logical write without accidentally creating duplicate work.</p></details>
+      <details><summary>What request ID should I send Support?</summary><p>Use the server-generated <code>X-Request-Id</code> from the response. It is the safest correlation value for backend tracing.</p></details>
+      <details><summary>Is Platform API billing included in our Enterprise Portal plan?</summary><p>No assumption should be made. The products have separate commercial boundaries and the live account/catalog is authoritative.</p></details>
+    </div>
+
+    <div class="notice" style="margin-top:50px">
+      <strong>Need the exact endpoint contract?</strong>
+      <p>Use the canonical Platform API developer documentation and API reference for request/response schemas. This guide focuses on how to use the product correctly and safely.</p>
+      <div class="callout-actions">
+        <a class="button primary" href="/platform-api/docs/">Developer Documentation</a>
+        <a class="button" href="/platform-api/reference.html">API Reference</a>
+        <a class="button" href="https://platform.agroai-pilot.com">Developer Console</a>
+      </div>
+    </div>
+  </main>
+
+  <nav class="toc" aria-label="On this page">
+    <h6>On this page</h6>
+    <a href="#state">Product state</a>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#auth">Authentication</a>
+    <a href="#resources">Resources</a>
+    <a href="#idempotency">Idempotency</a>
+    <a href="#errors">Errors</a>
+    <a href="#security">Security</a>
+    <a href="#patterns">Patterns</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+</div>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div><strong>AGRO-AI Platform API Guide</strong><div class="small" style="color:#a9beb1;margin-top:5px">Private-beta guidance aligned to the current contract and safety gates.</div></div>
+    <div class="footer-links"><a href="/guides/">All Guides</a><a href="/guides/enterprise-portal/">Enterprise Portal Guide</a><a href="/platform-api/docs/">Developer Docs</a><a href="https://platform.agroai-pilot.com">Developer Console</a></div>
+  </div>
+</footer>
+</body>
+</html>

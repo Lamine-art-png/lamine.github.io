@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AGRO-AI Enterprise Portal Guide</title>
+  <meta name="description" content="Official guide to the AGRO-AI Enterprise Portal: operations, Command Center, Field Intelligence, evidence, Assurance, reports, connectors, intelligence and administration." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://agroai-pilot.com/guides/enterprise-portal/" />
+  <meta name="theme-color" content="#123a2b" />
+  <link rel="preconnect" href="https://fonts.cdnfonts.com" />
+  <link href="https://fonts.cdnfonts.com/css/glacial-indifference-2" rel="stylesheet" />
+  <link rel="stylesheet" href="/guides/assets/guides.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/guides/" aria-label="AGRO-AI Guides home">
+      <img src="https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/figma-enterprise-v4/src/imports/agro-ai-logo-1.png" alt="AGRO-AI" />
+      <span class="brand-copy"><strong>AGRO-AI</strong><span>Enterprise Portal Guide</span></span>
+    </a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="/guides/">All Guides</a>
+      <a href="/guides/platform-api/">Platform API Guide</a>
+      <a href="https://app.agroai-pilot.com">Open Enterprise Portal</a>
+      <a class="cta" href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>
+    </nav>
+  </div>
+</header>
+
+<div class="docs-layout">
+  <aside class="sidebar" aria-label="Enterprise Portal guide navigation">
+    <nav>
+      <h5>Start here</h5>
+      <a href="#overview">What the Portal is</a>
+      <a href="#availability">Availability & plans</a>
+      <a href="#setup">Set up an operation</a>
+      <h5>Operate</h5>
+      <a href="#command-center">Command Center</a>
+      <a href="#field-intelligence">Field Intelligence</a>
+      <a href="#tasks-decisions">Tasks & decisions</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#assurance">Assurance</a>
+      <a href="#reports">Reports</a>
+      <h5>Connect & understand</h5>
+      <a href="#connectors">Connectors</a>
+      <a href="#sources">Sources</a>
+      <a href="#ask">Ask AGRO-AI</a>
+      <a href="#readiness">Readiness & exceptions</a>
+      <h5>Manage</h5>
+      <a href="#team">Team & settings</a>
+      <a href="#account">Account, billing & security</a>
+      <a href="#daily">Recommended daily workflow</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </aside>
+
+  <main class="doc" id="main">
+    <p class="breadcrumbs"><a href="/guides/">AGRO-AI Guides</a> / Enterprise Portal</p>
+    <div class="eyebrow">Official product guide</div>
+    <h1>AGRO-AI Enterprise Portal</h1>
+    <p class="lede">A practical guide for agricultural businesses, growers, farm managers and enterprise teams using the Portal to bring field activity, operational decisions, evidence and connected data into one working environment.</p>
+
+    <div class="status-row">
+      <span class="pill good">Current product workflow</span>
+      <span class="pill">Capability-aware</span>
+      <span class="pill">Updated for the current Portal routes</span>
+    </div>
+
+    <div class="notice">
+      <strong>This guide follows the product that is actually built.</strong>
+      <p>It is grounded in the current Enterprise Portal navigation, entitlement controls, connector catalog and backend-supported workflows. Features that are plan-gated, organization-gated or connector-gated are marked as such. Future ideas are not presented as current product functionality.</p>
+    </div>
+
+    <h2 id="overview">What the Enterprise Portal is</h2>
+    <p>The Enterprise Portal is AGRO-AI's authenticated operating surface for agricultural teams. It is organized around an <strong>organization</strong> and one or more <strong>operations/workspaces</strong>. The selected operation provides the context used across Command Center, field workflows, evidence, intelligence, reports and connectors.</p>
+    <p>The current navigation is grouped around four practical areas:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Area</th><th>Current surfaces</th><th>What they are for</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Operate</strong></td><td>Command Center, Field Queue, Field Intelligence, Tasks, Decisions, Evidence, Assurance, Reports, Connectors</td><td>Run day-to-day work, capture field context, move issues forward, organize proof and connect systems.</td></tr>
+          <tr><td><strong>Intelligence</strong></td><td>Ask AGRO-AI, Readiness, Exceptions</td><td>Interpret the operation, surface gaps and focus attention.</td></tr>
+          <tr><td><strong>Products</strong></td><td>Platform API</td><td>Access the separate developer product from the same account environment.</td></tr>
+          <tr><td><strong>Workspace & account</strong></td><td>Sources, Team, Settings, Profile, Billing, Security, Support</td><td>Manage the operation, people, configuration and account-level controls.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="availability">Availability, plans and permissions</h2>
+    <p>The Portal is not a single identical menu for every account. The application checks server-provided capabilities and organization entitlements before enabling certain features. A feature may therefore appear unlocked, locked, in preview, or unavailable depending on the account.</p>
+    <ul>
+      <li><strong>Field Intelligence</strong> is controlled by the <code>field_intelligence.capture</code> capability.</li>
+      <li><strong>Ask AGRO-AI</strong> is controlled by the <code>intelligence.ask</code> capability.</li>
+      <li><strong>Assurance</strong> requires the relevant Assurance readiness entitlement.</li>
+      <li><strong>PDF report generation</strong> is entitlement-controlled.</li>
+      <li><strong>Team invitations</strong> are entitlement-controlled.</li>
+      <li><strong>Connectors</strong> can have their own required plan and activation state.</li>
+    </ul>
+    <div class="notice warn">
+      <strong>Use the Portal's live access state as the source of truth.</strong>
+      <p>If this guide describes a surface that your organization does not see or that appears locked, do not assume something is broken. Check the plan/entitlement message in the Portal or contact Support.</p>
+    </div>
+
+    <h2 id="setup">Set up and select an operation</h2>
+    <p>Most Portal workflows are scoped to the currently selected operation. Before working with field data, evidence or connectors, make sure the correct operation is active.</p>
+    <ol class="step-list">
+      <li><strong>Sign in to the Enterprise Portal.</strong> Use your AGRO-AI account at <a href="https://app.agroai-pilot.com">app.agroai-pilot.com</a>.</li>
+      <li><strong>Check the operation selector.</strong> The left navigation shows the current operation and the number of operations available under the organization.</li>
+      <li><strong>Create an operation when needed.</strong> Choose <em>New operation</em> and complete the available setup fields. The operation becomes a workspace for field, evidence and connector activity.</li>
+      <li><strong>Switch before taking action.</strong> If your organization manages multiple farms or operating units, confirm the selected operation before uploading evidence, connecting a provider or reviewing priorities.</li>
+    </ol>
+    <p>The workspace selector is intentionally persistent because the backend scopes data to the organization/workspace context. This helps prevent records from being mixed across separate operations.</p>
+
+    <h2 id="command-center">Command Center</h2>
+    <p>Command Center is the main operational view. Its purpose is to reduce the time spent reconstructing the state of the operation from scattered messages, field notes, open work and missing evidence.</p>
+    <p>The current workflow is framed as:</p>
+    <div class="workflow">
+      <div><small>1</small><strong>Capture</strong></div>
+      <div><small>2</small><strong>Understand</strong></div>
+      <div><small>3</small><strong>Decide</strong></div>
+      <div><small>4</small><strong>Act</strong></div>
+    </div>
+    <p>In practice, Command Center brings together the signals that need operational attention: the field queue, open tasks, evidence gaps, report readiness and current priorities. It is meant to answer three questions quickly:</p>
+    <ul>
+      <li><strong>What needs attention now?</strong> Review priority and field-queue items.</li>
+      <li><strong>What work is already in motion?</strong> Review operator tasks and their state.</li>
+      <li><strong>What is still missing before the loop is closed?</strong> Review evidence gaps, follow-through and report readiness.</li>
+    </ul>
+
+    <h3>How to use Command Center well</h3>
+    <ol>
+      <li>Start with the highest-priority item rather than reading every record.</li>
+      <li>Open the related field or task context and confirm what evidence is available.</li>
+      <li>Create or update the task when the issue requires follow-through.</li>
+      <li>Return to Command Center after work is completed to confirm the queue, task and evidence state changed as expected.</li>
+    </ol>
+    <div class="notice">
+      <strong>Command Center is an operating surface, not just a dashboard.</strong>
+      <p>The useful outcome is not seeing more data. It is moving an issue from detection to context, decision, action and documented follow-through.</p>
+    </div>
+
+    <h2 id="field-intelligence">Field Intelligence</h2>
+    <p>Field Intelligence is the field-capture workflow inside the Enterprise Portal. It is designed for situations where the most important operational information is being created by people in the field rather than by a connected machine or database.</p>
+
+    <h3>What you can capture</h3>
+    <p>The current Field Intelligence interface supports structured field observations with combinations of:</p>
+    <ul>
+      <li>typed field notes;</li>
+      <li>audio/voice capture and transcript context where the browser/device supports the capture flow;</li>
+      <li>photo evidence;</li>
+      <li>attached files and field media, including a walk-video input in the current capture flow;</li>
+      <li>field/block and crop context;</li>
+      <li>event type and severity;</li>
+      <li>assignee information;</li>
+      <li>location context when available and permitted.</li>
+    </ul>
+
+    <h3>After an observation is saved</h3>
+    <p>Saved observations can be searched and filtered. The current interface includes filters for severity and sync state, and an observation drawer can show media, transcript, summary, a recommended next action and AGRO-AI correlation context. Where the action is available, an observation can be moved into follow-through by creating a task.</p>
+
+    <h3>Connectivity and sync</h3>
+    <p>The Field Intelligence capture architecture namespaces local queued captures by authenticated organization and user so one account does not read or sync another account's local queue. This is important for field use where connectivity can be inconsistent.</p>
+    <div class="notice warn">
+      <strong>Do not assume every browser provides identical media or location behavior.</strong>
+      <p>Camera, microphone, location and offline behavior depend partly on browser/device permissions. If a capture cannot use one input, save the useful context that is available and confirm the sync state before leaving the workflow.</p>
+    </div>
+
+    <h2 id="tasks-decisions">Field Queue, Tasks and Decisions</h2>
+    <p>The Field Queue and Tasks surfaces are how the Portal separates <em>something was observed</em> from <em>someone is responsible for following through</em>. Decisions/Operations provides the broader decision context for the operation.</p>
+    <ul>
+      <li><strong>Field Queue:</strong> review issues or observations that require attention.</li>
+      <li><strong>Tasks:</strong> track work that has been assigned or is still open.</li>
+      <li><strong>Decisions/Operations:</strong> review operational decision records and the context used to move them forward.</li>
+    </ul>
+    <p>A good operating pattern is to avoid leaving important issues as passive notes. If an observation needs action, create or attach the relevant task, then document the result so the evidence and reporting layers can see the completed loop.</p>
+
+    <h2 id="evidence">Evidence</h2>
+    <p>The Evidence surface is the shared proof layer used by multiple Portal workflows. Evidence can come from field capture, uploads and authorized connectors. The goal is to keep operational claims tied to records rather than relying on memory or disconnected screenshots.</p>
+    <p>When adding evidence:</p>
+    <ol>
+      <li>Use the correct operation/workspace.</li>
+      <li>Keep the source identifiable.</li>
+      <li>Attach the evidence to the relevant operational context when the UI provides that option.</li>
+      <li>Review extraction or parsing results instead of assuming every uploaded file was fully understood.</li>
+      <li>Use Assurance or report workflows to identify what proof is still missing.</li>
+    </ol>
+
+    <h2 id="assurance">Assurance</h2>
+    <p>Assurance is the evidence-readiness and review workflow in the Enterprise Portal. It is built around Assurance Passports, requirements, evidence, human review and traceable readiness rather than a simple compliance badge.</p>
+    <p>The backend and Portal currently support readiness calculations that can include:</p>
+    <ul>
+      <li>a readiness score and status;</li>
+      <li>requirement states;</li>
+      <li>blockers and warnings;</li>
+      <li>pending-review state;</li>
+      <li>human review events and append-only audit history;</li>
+      <li>links to canonical evidence records;</li>
+      <li>proof of an operational sequence such as recommendation → approval → task → execution → verification.</li>
+    </ul>
+    <p>Assurance is intentionally explainable. A readiness result is meant to show <em>why</em> something is ready or incomplete, not only display a number.</p>
+    <div class="notice warn">
+      <strong>Readiness is not certification.</strong>
+      <p>Assurance readiness and proof packages are evidence-management and review tools. They should not be presented as an independent certification unless a separate authorized certification process actually exists.</p>
+    </div>
+
+    <h2 id="reports">Reports</h2>
+    <p>Reports turn operational and evidence context into a format that can be reviewed or shared. Report availability and PDF generation can be controlled by your organization's plan and entitlements.</p>
+    <p>Before generating a report, check:</p>
+    <ul>
+      <li>the correct operation is selected;</li>
+      <li>important tasks and evidence are up to date;</li>
+      <li>the relevant connector syncs have completed;</li>
+      <li>Assurance or readiness gaps that matter to the report have been reviewed.</li>
+    </ul>
+    <p>If report generation is locked, the Portal will show the relevant commercial boundary rather than silently pretending the export is available.</p>
+
+    <h2 id="connectors">Connectors</h2>
+    <p>The Connectors surface is the integration hub. Its job is to let an authorized user connect existing systems or import records without forcing provider-specific complexity into every daily workflow.</p>
+
+    <h3>Current connector categories</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Category</th><th>Examples currently represented in the Portal</th><th>Typical use</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Controllers</strong></td><td>WiseConn, Talgil</td><td>Discover authorized irrigation assets, choose scope and synchronize operational evidence.</td></tr>
+          <tr><td><strong>Files</strong></td><td>Manual file import</td><td>Bring in CSV, JSON, TXT or PDF records and evidence.</td></tr>
+          <tr><td><strong>Accounts</strong></td><td>Gmail, Outlook, Google Drive, Dropbox, Box, Slack, Salesforce, John Deere Operations Center</td><td>Authorize approved operational context, files or account data through supported connection flows.</td></tr>
+          <tr><td><strong>Data providers</strong></td><td>Weather, OpenET, Google Earth Engine</td><td>Add weather, ET/water-use or geospatial context where configured and entitled.</td></tr>
+          <tr><td><strong>Custom APIs</strong></td><td>Data Provider API</td><td>Connect farm, agency, ERP, telemetry or water-accounting systems through a reviewed integration path.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Connection workflow</h3>
+    <p>The current integration design is intentionally simple at the user level: <strong>authorize → choose scope → sync → use the source</strong>. The backend keeps credentials and tenant/provider controls out of normal browser storage.</p>
+    <p>Connector status can include states such as available, authorizing, connected, synced, syncing, rate-limited, degraded or action-required. If a source is connected but stale, use the connector's management controls and check the last sync state.</p>
+
+    <h3>John Deere Operations Center</h3>
+    <p>The current Portal description for John Deere is explicitly read-only for the approved phase. It is designed to synchronize approved farm structure, field operations, equipment reference, agronomic context and organization settings. <strong>Work Plans are kept outside the current phase until separately approved.</strong></p>
+
+    <h3>Connector plan boundaries</h3>
+    <p>The server catalog can define required plans, and the Portal also has safe fallback boundaries. Manual file import can be available at the entry tier; live connectors generally start higher; standard Custom API access is positioned above standard connectors; bespoke integrations can require Enterprise. Always follow the plan requirement shown on the live connector card because backend catalog values can override fallback assumptions.</p>
+
+    <h2 id="sources">Sources</h2>
+    <p>Sources is the place to review data sources already associated with the current operation. After connecting a provider or importing records, use Sources to confirm that the expected source exists before relying on it in evidence, intelligence or reporting.</p>
+    <p>If a connector says it is connected but the expected records are not visible:</p>
+    <ol>
+      <li>confirm the correct operation is selected;</li>
+      <li>check the connector's connection and last-sync state;</li>
+      <li>run or queue a sync where the connector provides that action;</li>
+      <li>review Sources and Evidence again after the sync completes;</li>
+      <li>contact Support with the relevant connection or request context if the problem persists.</li>
+    </ol>
+
+    <h2 id="ask">Ask AGRO-AI</h2>
+    <p>Ask AGRO-AI is the Portal's intelligence interface. Its usefulness depends on the context available to the selected organization and operation. The more complete the underlying field, evidence and connector context is, the more grounded the workflow can be.</p>
+    <p>Good questions are specific about the operation and the decision you are trying to make. For example:</p>
+    <ul>
+      <li>“What needs attention in this operation today?”</li>
+      <li>“Which open items are missing evidence?”</li>
+      <li>“What changed in the field records since the last review?”</li>
+      <li>“Which source is driving this recommendation?”</li>
+      <li>“What should I review before preparing this report?”</li>
+    </ul>
+    <div class="notice">
+      <strong>Use intelligence with the underlying evidence.</strong>
+      <p>AGRO-AI is designed to connect recommendations and operational context to sources and evidence. For material decisions, review the supporting records rather than treating generated text as a substitute for operational judgment.</p>
+    </div>
+
+    <h2 id="readiness">Readiness and Exceptions</h2>
+    <p>Readiness and Exceptions help teams focus on the parts of the operation that are incomplete, blocked or outside the expected state. They are useful after the operation has enough source and evidence context to evaluate.</p>
+    <ul>
+      <li><strong>Readiness:</strong> use it to understand whether important operating information or proof is present.</li>
+      <li><strong>Exceptions:</strong> use it to surface items that need investigation instead of scanning every normal record.</li>
+    </ul>
+
+    <h2 id="team">Team and Settings</h2>
+    <p>The Team surface is for organization/workspace collaboration where the account is entitled to invite users. Settings is for workspace/product configuration exposed to your role.</p>
+    <p>When managing access, give people only the access they need for their role. If the Team surface is locked, the organization may not have the invitation capability on its current plan.</p>
+
+    <h2 id="account">Profile, Billing, Security and Support</h2>
+    <ul>
+      <li><strong>Profile:</strong> review user/account information exposed by the Portal.</li>
+      <li><strong>Billing:</strong> review the organization's current commercial state and supported billing actions. Platform API billing is a separate product boundary from Enterprise Portal billing.</li>
+      <li><strong>Security:</strong> review the account-level security controls available to your role.</li>
+      <li><strong>Support:</strong> use the in-product support surface when something is not behaving as expected.</li>
+    </ul>
+
+    <h2 id="daily">Recommended daily operating workflow</h2>
+    <p>The Portal is most effective when it becomes part of the operating rhythm rather than a place people visit only for reports.</p>
+    <ol class="step-list">
+      <li><strong>Open Command Center.</strong> Review the current priority, field queue, open tasks and evidence gaps.</li>
+      <li><strong>Capture what changed in the field.</strong> Use Field Intelligence for observations, voice/media context and location-aware notes.</li>
+      <li><strong>Turn important observations into follow-through.</strong> Create or update tasks rather than leaving actionable issues as notes.</li>
+      <li><strong>Refresh connected context.</strong> Confirm important connectors and sources are current when the decision depends on them.</li>
+      <li><strong>Review intelligence and exceptions.</strong> Use Ask AGRO-AI, Readiness and Exceptions to focus investigation.</li>
+      <li><strong>Close the evidence loop.</strong> Attach or confirm evidence for completed work and review Assurance where it applies.</li>
+      <li><strong>Generate or review reports.</strong> Use reporting after the operational state and evidence have been updated.</li>
+    </ol>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <h3>A feature is missing or locked</h3>
+    <p>Check the live plan/entitlement message. Several Portal surfaces are capability-controlled. A locked feature is not necessarily an application failure.</p>
+
+    <h3>A connector is connected but data looks stale</h3>
+    <p>Confirm the current operation, connection status and last sync. Use <em>Sync now</em> where available. Some providers can enter rate-limited, degraded or action-required states.</p>
+
+    <h3>A field capture is not syncing</h3>
+    <p>Check the observation's sync state and browser connectivity. Field capture can use a local per-user/per-organization queue. Keep the browser session/account context stable until the capture is synchronized.</p>
+
+    <h3>An upload produced fewer usable records than expected</h3>
+    <p>File ingestion parses supported records but not every document will produce the same structured output. Review the import result and evidence count instead of assuming the entire file was interpreted.</p>
+
+    <h3>A report or export is unavailable</h3>
+    <p>Check whether the report capability is enabled for the organization and whether the underlying evidence/workflow is ready. The Portal may intentionally block a commercial or readiness boundary.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <details><summary>Do we have to replace our existing farm software or hardware?</summary><p>No. The Portal is designed to bring context from existing systems, files and field workflows into one operating environment. Connecting a system does not automatically replace that provider's hardware or software.</p></details>
+      <details><summary>Can we manage more than one operation?</summary><p>Yes, when the organization's plan/entitlements allow multiple workspaces. Use the operation selector before taking actions so records remain in the intended scope.</p></details>
+      <details><summary>Do all users see the same features?</summary><p>No. Visibility depends on organization plan, server-provided capabilities, role and connector/product activation.</p></details>
+      <details><summary>What is the difference between Field Intelligence and a connector?</summary><p>Field Intelligence captures human-created field context such as notes, media, voice/transcript and observations. Connectors bring authorized context from external systems or providers. Both can feed the broader operational workflow.</p></details>
+      <details><summary>What is the difference between Evidence and Assurance?</summary><p>Evidence is the underlying proof/record layer. Assurance evaluates organized evidence against readiness requirements and review workflows, with blockers, warnings and human-review history where configured.</p></details>
+      <details><summary>Does Assurance mean we are certified?</summary><p>No. Assurance readiness is an evidence and review workflow. It is not an independent certification by itself.</p></details>
+      <details><summary>Can AGRO-AI automatically control irrigation equipment?</summary><p>Do not assume physical actuation. The current Platform/API product explicitly keeps physical irrigation writes disabled during the beta, and provider execution requires separate approved capabilities. Follow the live product state for any execution feature.</p></details>
+      <details><summary>What file types can I import through the current Connectors file flow?</summary><p>The current Connector Hub upload control accepts CSV, JSON, TXT and PDF. Other ingestion paths may have different capabilities, so use the accepted types shown in the live interface.</p></details>
+      <details><summary>How do I get help with a connection or workflow?</summary><p>Use Support inside the Enterprise Portal. Include the operation, connector or workflow involved and the visible error/state so the issue can be traced quickly.</p></details>
+    </div>
+
+    <div class="notice" style="margin-top:50px">
+      <strong>Ready to use the Portal?</strong>
+      <p>Open the Enterprise Portal with your existing account. If your organization is evaluating AGRO-AI, book a demo so the setup can be mapped to your actual operation.</p>
+      <div class="callout-actions">
+        <a class="button primary" href="https://app.agroai-pilot.com">Open Enterprise Portal</a>
+        <a class="button" href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>
+        <a class="button" href="https://app.agroai-pilot.com/support">Support</a>
+      </div>
+    </div>
+  </main>
+
+  <nav class="toc" aria-label="On this page">
+    <h6>On this page</h6>
+    <a href="#overview">Overview</a>
+    <a href="#command-center">Command Center</a>
+    <a href="#field-intelligence">Field Intelligence</a>
+    <a href="#assurance">Assurance</a>
+    <a href="#connectors">Connectors</a>
+    <a href="#ask">Ask AGRO-AI</a>
+    <a href="#daily">Daily workflow</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+</div>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div><strong>AGRO-AI Enterprise Portal Guide</strong><div class="small" style="color:#a9beb1;margin-top:5px">Grounded in the current product and capability model.</div></div>
+    <div class="footer-links"><a href="/guides/">All Guides</a><a href="/guides/platform-api/">Platform API Guide</a><a href="https://app.agroai-pilot.com">Enterprise Portal</a><a href="https://agroai-pilot.com/book-a-demo">Book a Demo</a></div>
+  </div>
+</footer>
+</body>
+</html>
