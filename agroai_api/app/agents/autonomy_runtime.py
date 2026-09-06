@@ -38,6 +38,15 @@ from app.services.evidence_reference_validator import (
 RUN_TERMINAL = {"succeeded", "failed", "cancelled"}
 RUN_ACTIVE = {"running", "waiting_approval", "waiting_evidence"}
 ACTION_TERMINAL = {"verified", "failed", "rejected", "cancelled"}
+EXECUTABLE_ACTION_TYPES = {
+    "email_report_to_user",
+    "create_field_task",
+    "record_field_update",
+    "parse_field_message",
+    "request_controller_action",
+    "integration_readiness_check",
+    "collect_missing_evidence",
+}
 PHYSICAL_OR_REGULATED_ACTIONS = {
     "request_controller_action",
     "start_irrigation",
@@ -230,6 +239,8 @@ class AutonomousOperationsRuntime:
         run = self._run(run_id)
         if run.status not in {"running", "waiting_evidence"}:
             raise AutonomyConflict(f"Cannot plan an action while run is {run.status}")
+        if action_type not in EXECUTABLE_ACTION_TYPES:
+            raise AutonomyConflict(f"Unsupported executable action type: {action_type}")
         if run.autonomy_level <= 1:
             raise AutonomyForbidden("A0/A1 procedures may observe or recommend but cannot create executable actions")
         existing = (
@@ -416,18 +427,38 @@ class AutonomousOperationsRuntime:
         if existing:
             return self.run(run.id)
         if status_value == "succeeded":
-            unfinished = (
+            if run.status in {"failed", "cancelled"}:
+                raise AutonomyForbidden(f"A {run.status} workflow cannot be promoted to verified success")
+            actions = (
                 self.db.query(AgentActionProposal)
-                .filter(
-                    AgentActionProposal.run_id == run.id,
-                    AgentActionProposal.status.in_(["proposed", "approval_required", "ready", "executing", "waiting_evidence"]),
-                )
-                .count()
+                .filter(AgentActionProposal.run_id == run.id)
+                .all()
             )
+            if not actions:
+                raise AutonomyForbidden("Workflow cannot succeed without at least one executed and verified action")
+            failed_actions = [
+                row.id for row in actions
+                if row.status in {"failed", "rejected", "cancelled"}
+                or row.execution_status in {"failed", "rejected"}
+            ]
+            if failed_actions:
+                raise AutonomyForbidden("Workflow cannot succeed after an action failed, was rejected, or was cancelled")
+            unfinished = [
+                row.id for row in actions
+                if row.status in {"proposed", "approval_required", "ready", "executing", "waiting_evidence"}
+            ]
             if unfinished:
                 raise AutonomyForbidden("Workflow cannot succeed while actions remain unfinished or unverified")
             if self._unverified_successful_actions(run.id):
                 raise AutonomyForbidden("Workflow cannot succeed until Assurance-grade evidence verifies every executed action")
+            not_verified = [
+                row.id for row in actions
+                if row.status != "verified"
+                or row.execution_status != "succeeded"
+                or row.verification_status != "verified"
+            ]
+            if not_verified:
+                raise AutonomyForbidden("Workflow cannot succeed unless every action has a verified successful outcome")
             run.verified_outcome = True
         else:
             run.verified_outcome = False
@@ -561,8 +592,15 @@ class AutonomousOperationsRuntime:
             )
             .first()
         )
-        if not row or (self.workspace_id and row.workspace_id != self.workspace_id):
+        if not row:
             raise AutonomyForbidden("Workflow run is unavailable in the active workspace")
+        if row.workspace_id != self.workspace_id:
+            if self.workspace_id is None and row.workspace_id is not None:
+                # Omitted workspace scope resolves to the run's immutable scope;
+                # it never means "use the organization's first workspace".
+                self.workspace_id = row.workspace_id
+            else:
+                raise AutonomyForbidden("Workflow run is unavailable in the active workspace")
         return row
 
     def _action(self, run: AgentWorkflowRun, action_id: str) -> AgentActionProposal:
@@ -575,7 +613,7 @@ class AutonomousOperationsRuntime:
             )
             .first()
         )
-        if not row:
+        if not row or row.workspace_id != run.workspace_id:
             raise AutonomyForbidden("Action is unavailable in the active workflow")
         return row
 

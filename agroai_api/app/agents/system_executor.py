@@ -122,8 +122,11 @@ def execute_background_action(
     )
     if not run or not action:
         raise ValueError("Autonomy run/action not found")
-    if workspace_id and run.workspace_id != workspace_id:
+    if workspace_id is not None and run.workspace_id != workspace_id:
         raise ValueError("Autonomy run is outside the active workspace")
+    workspace_id = run.workspace_id
+    if action.workspace_id != run.workspace_id:
+        raise ValueError("Autonomy action workspace does not match its run")
     if action.action_type not in BACKGROUND_SAFE_ACTIONS:
         return {"status": "not_executed", "reason": "background_action_not_permitted", "action_id": action.id}
     if action.requires_human_approval or action.status == "approval_required":

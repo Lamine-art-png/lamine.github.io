@@ -15,6 +15,7 @@ from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.agentic_actions import APPROVAL_REQUIRED, ActionExecuteRequest, post_action_execute
 from app.db.base import get_db
 from app.services.commercial_control import require_feature
+from app.services.entitlements import require_owner_or_admin
 from app.services.quota import commit_reservation, release_reservation, reserve_quota
 
 router = APIRouter(prefix="/autonomy", tags=["autonomous-operations"])
@@ -54,7 +55,15 @@ class RunIn(BaseModel):
 
 class ActionIn(BaseModel):
     workspace_id: str | None = None
-    action_type: str = Field(min_length=1, max_length=100)
+    action_type: Literal[
+        "email_report_to_user",
+        "create_field_task",
+        "record_field_update",
+        "parse_field_message",
+        "request_controller_action",
+        "integration_readiness_check",
+        "collect_missing_evidence",
+    ]
     idempotency_key: str = Field(min_length=1, max_length=180)
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(min_length=1, max_length=2000)
@@ -102,6 +111,20 @@ def _call(fn, *args, **kwargs):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
+def _require_write_role(ctx: AuthContext) -> None:
+    role = str(getattr(ctx.membership, "role", "") or "")
+    if role not in {"owner", "admin", "operator"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "write_role_required", "message": "Your role cannot modify autonomous operations."},
+        )
+
+
+def _require_control_role(ctx: AuthContext) -> None:
+    role = str(getattr(ctx.membership, "role", "") or "")
+    require_owner_or_admin(role)
+
+
 def _human_touch(
     db: Session,
     ctx: AuthContext,
@@ -129,6 +152,7 @@ def _human_touch(
 
 @router.post("/procedures", status_code=status.HTTP_201_CREATED)
 def create_procedure(payload: ProcedureIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_control_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     return _call(
         runtime.create_procedure,
@@ -142,18 +166,21 @@ def create_procedure(payload: ProcedureIn, ctx: AuthContext = Depends(get_auth_c
 
 @router.post("/procedures/{procedure_id}/status")
 def set_procedure_status(procedure_id: str, payload: ProcedureStatusIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_control_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     return _call(runtime.set_procedure_status, procedure_id, payload.status)
 
 
 @router.post("/policies", status_code=status.HTTP_201_CREATED)
 def create_policy(payload: PolicyIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_control_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     return _call(runtime.create_policy, name=payload.name, domain=payload.domain, rules=payload.rules, enabled=payload.enabled)
 
 
 @router.post("/runs", status_code=status.HTTP_201_CREATED)
 def start_run(payload: RunIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_write_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     existing = None
     if ctx.organization:
@@ -181,7 +208,7 @@ def start_run(payload: RunIn, ctx: AuthContext = Depends(get_auth_context), db: 
         _human_touch(
             db,
             ctx,
-            workspace_id=payload.workspace_id,
+            workspace_id=runtime.workspace_id,
             run_id=snapshot["run"]["id"],
             reason="portal_run_start",
         )
@@ -197,6 +224,7 @@ def get_run(run_id: str, workspace_id: str | None = None, ctx: AuthContext = Dep
 
 @router.post("/runs/{run_id}/actions", status_code=status.HTTP_201_CREATED)
 def plan_action(run_id: str, payload: ActionIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_write_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     existing = (
         db.query(AgentActionProposal)
@@ -217,7 +245,7 @@ def plan_action(run_id: str, payload: ActionIn, ctx: AuthContext = Depends(get_a
         _human_touch(
             db,
             ctx,
-            workspace_id=payload.workspace_id,
+            workspace_id=runtime.workspace_id,
             run_id=run_id,
             reason="portal_action_plan",
             details={"action_id": action["id"], "action_type": payload.action_type},
@@ -227,6 +255,7 @@ def plan_action(run_id: str, payload: ActionIn, ctx: AuthContext = Depends(get_a
 
 @router.post("/runs/{run_id}/actions/{action_id}/approve")
 def approve_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_control_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     # Runtime approval itself increments the cumulative human-touch counter.
     return _call(runtime.decide_action, run_id, action_id, approved=True)
@@ -234,6 +263,7 @@ def approve_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
 
 @router.post("/runs/{run_id}/actions/{action_id}/reject")
 def reject_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_control_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     return _call(runtime.decide_action, run_id, action_id, approved=False)
 
@@ -241,6 +271,7 @@ def reject_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthCo
 @router.post("/runs/{run_id}/actions/{action_id}/execute")
 def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Execute through the existing commercial and production-safety controls."""
+    _require_write_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     snapshot = _call(runtime.run, run_id)
     action = next((row for row in snapshot["actions"] if row["id"] == action_id), None)
@@ -251,6 +282,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
     if not ctx.organization:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
 
+    effective_workspace_id = snapshot["run"].get("workspace_id")
     action_type = str(action.get("action_type") or "")
     approval_gated = bool(action.get("requires_human_approval")) or action_type in APPROVAL_REQUIRED
     require_feature(
@@ -263,7 +295,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
         db,
         ctx.organization,
         "agent_run",
-        workspace_id=payload.workspace_id,
+        workspace_id=effective_workspace_id,
         user_id=ctx.user.id,
         request_id=str(uuid.uuid4()),
         metadata={
@@ -277,7 +309,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
     _human_touch(
         db,
         ctx,
-        workspace_id=payload.workspace_id,
+        workspace_id=effective_workspace_id,
         run_id=run_id,
         reason="portal_action_execute",
         details={"action_id": action_id, "action_type": action_type},
@@ -289,7 +321,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
         result = post_action_execute(
             ActionExecuteRequest(
                 action_type=action_type,
-                workspace_id=payload.workspace_id,
+                workspace_id=effective_workspace_id,
                 payload=nested,
                 approval_confirmed=True,
             ),
@@ -311,7 +343,7 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
         return result_snapshot
     except Exception:
         db.rollback()
-        runtime = _runtime(ctx, db, payload.workspace_id)
+        runtime = _runtime(ctx, db, effective_workspace_id)
         try:
             _call(runtime.record_action_result, run_id, action_id, succeeded=False, result={"error": "executor_failed"})
         finally:
@@ -325,11 +357,12 @@ def execute_action(run_id: str, action_id: str, payload: WorkspaceIn, ctx: AuthC
 
 @router.post("/runs/{run_id}/actions/{action_id}/verify")
 def verify_action(run_id: str, action_id: str, payload: EvidenceIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_write_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     _human_touch(
         db,
         ctx,
-        workspace_id=payload.workspace_id,
+        workspace_id=runtime.workspace_id,
         run_id=run_id,
         reason="portal_action_verify",
         details={"action_id": action_id},
@@ -339,13 +372,14 @@ def verify_action(run_id: str, action_id: str, payload: EvidenceIn, ctx: AuthCon
 
 @router.post("/runs/{run_id}/complete")
 def complete_run(run_id: str, payload: CompleteIn, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_write_role(ctx)
     runtime = _runtime(ctx, db, payload.workspace_id)
     existing_outcome = db.query(AgentWorkflowOutcome).filter(AgentWorkflowOutcome.run_id == run_id).first()
     if existing_outcome is None:
         _human_touch(
             db,
             ctx,
-            workspace_id=payload.workspace_id,
+            workspace_id=runtime.workspace_id,
             run_id=run_id,
             reason="portal_run_complete",
             details={"status": payload.status},

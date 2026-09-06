@@ -162,15 +162,14 @@ def create_task(
 
 
 def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) -> dict[str, Any]:
-    job = (
-        ctx.db.query(IngestionJob)
-        .filter(
-            IngestionJob.tenant_id == ctx.organization_id,
-            IngestionJob.id == task_id,
-            IngestionJob.job_type == TASK_JOB_TYPE,
-        )
-        .first()
+    query = ctx.db.query(IngestionJob).filter(
+        IngestionJob.tenant_id == ctx.organization_id,
+        IngestionJob.id == task_id,
+        IngestionJob.job_type == TASK_JOB_TYPE,
     )
+    if ctx.workspace_id:
+        query = query.filter(IngestionJob.workspace_id == ctx.workspace_id)
+    job = query.first()
     if not job:
         generated = next((task for task in _generated_tasks(ctx) if task["id"] == task_id), None)
         if not generated:

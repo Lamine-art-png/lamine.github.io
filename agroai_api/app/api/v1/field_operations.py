@@ -8,9 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.agents.autonomy_runtime import AutonomousOperationsRuntime
+from app.agents.autonomy_runtime import AutonomyConflict, AutonomyForbidden, AutonomousOperationsRuntime
+from app.agents.human_touch import record_human_touch
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
+from app.models.operational_records import IngestionJob
 from app.models.saas import Workspace
 from app.services.field_operating_loop import (
     audit_trail,
@@ -21,6 +23,7 @@ from app.services.field_operating_loop import (
     create_task,
     field_message,
     list_tasks,
+    TASK_JOB_TYPE,
     update_task_status,
 )
 
@@ -45,6 +48,7 @@ class TaskCreateRequest(BaseModel):
 class TaskStatusRequest(BaseModel):
     status: Literal["open", "in_progress", "blocked", "done", "needs_review"]
     workspace_id: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class FieldUpdateRequest(BaseModel):
@@ -163,8 +167,89 @@ def post_task_status(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
+    context = _context(db, ctx, payload.workspace_id)
+    role = str(getattr(ctx.membership, "role", "") or "")
+    if role not in {"owner", "admin", "operator"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "write_role_required", "message": "Your role cannot update field tasks."},
+        )
+
+    job_query = db.query(IngestionJob).filter(
+        IngestionJob.tenant_id == context.organization_id,
+        IngestionJob.id == task_id,
+        IngestionJob.job_type == TASK_JOB_TYPE,
+    )
+    if context.workspace_id:
+        job_query = job_query.filter(IngestionJob.workspace_id == context.workspace_id)
+    job = job_query.first()
+
+    if job and payload.status == "done":
+        source = job.input_json or {}
+        run_id = str(source.get("source_autonomy_run_id") or "")
+        action_id = str(source.get("source_autonomy_action_id") or "")
+        if run_id and action_id:
+            runtime = AutonomousOperationsRuntime(
+                db,
+                organization_id=context.organization_id,
+                workspace_id=job.workspace_id,
+                actor_user_id=ctx.user.id,
+            )
+            snapshot = runtime.run(run_id)
+            action = next((row for row in snapshot["actions"] if row["id"] == action_id), None)
+            if not action:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Autonomy action is unavailable")
+            if action.get("verification_status") != "verified":
+                if not payload.evidence_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "code": "verification_evidence_required",
+                            "message": "Verification evidence is required before this autonomous task can be completed.",
+                        },
+                    )
+                record_human_touch(
+                    db,
+                    organization_id=context.organization_id,
+                    workspace_id=job.workspace_id,
+                    run_id=run_id,
+                    actor_user_id=ctx.user.id,
+                    reason="field_task_verified",
+                    details={"task_id": task_id, "action_id": action_id},
+                )
+                try:
+                    snapshot = runtime.verify_action(
+                        run_id,
+                        action_id,
+                        evidence_ids=payload.evidence_ids,
+                        metadata={"source": "field_ops_task_completion", "task_id": task_id},
+                    )
+                except AutonomyForbidden as exc:
+                    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+                except AutonomyConflict as exc:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+            if snapshot.get("outcome") is None and snapshot["actions"] and all(
+                row.get("status") == "verified"
+                and row.get("execution_status") == "succeeded"
+                and row.get("verification_status") == "verified"
+                for row in snapshot["actions"]
+            ):
+                runtime.complete_run(
+                    run_id,
+                    status_value="succeeded",
+                    summary="Autonomous field workflow completed with canonical verification evidence.",
+                    metrics={"completion_source": "field_task_verified"},
+                )
+            job.output_json = {
+                **(job.output_json or {}),
+                "verification_evidence_ids": payload.evidence_ids,
+                "verified_autonomy_run_id": run_id,
+                "verified_autonomy_action_id": action_id,
+            }
+
     try:
-        task = update_task_status(_context(db, ctx, payload.workspace_id), task_id, payload.status)
+        task = update_task_status(context, task_id, payload.status)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found") from exc
     return {"status": "ok", "task": task}

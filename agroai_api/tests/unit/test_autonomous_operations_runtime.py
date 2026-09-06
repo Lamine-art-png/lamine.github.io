@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agents.autonomy_runtime import AutonomyForbidden, AutonomousOperationsRuntime
+from app.agents.autonomy_runtime import AutonomyConflict, AutonomyForbidden, AutonomousOperationsRuntime
 from app.models.field_intelligence import FieldObservation
 from app.models.saas import Organization, User
 
@@ -190,7 +190,7 @@ def test_policy_snapshot_can_force_approval_for_noncritical_action(db):
     )
     action = runtime.plan_action(
         run["run"]["id"],
-        action_type="prepare_operator_outreach",
+        action_type="create_field_task",
         idempotency_key="purchase-action-001",
         title="Prepare supplier request",
         description="Prepare the purchase workflow.",
@@ -222,5 +222,62 @@ def test_a1_procedure_cannot_create_executable_action(db):
             title="No execution",
             description="This should remain recommendation-only.",
             risk_level="low",
+            payload={},
+        )
+
+
+
+def test_failed_or_actionless_runs_cannot_be_promoted_to_verified_success(db):
+    user, org = _enterprise(db)
+    runtime = AutonomousOperationsRuntime(db, organization_id=org.id, workspace_id=None, actor_user_id=user.id)
+    procedure = runtime.create_procedure(
+        name="Fail closed",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="manual",
+        definition={},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+
+    empty = runtime.start_run(procedure_id=procedure["id"], idempotency_key="empty-run")
+    with pytest.raises(AutonomyForbidden, match="without at least one"):
+        runtime.complete_run(empty["run"]["id"], status_value="succeeded")
+
+    failed = runtime.start_run(procedure_id=procedure["id"], idempotency_key="failed-run")
+    action = runtime.plan_action(
+        failed["run"]["id"],
+        action_type="create_field_task",
+        idempotency_key="failed-action",
+        title="Attempt work",
+        description="This action will fail.",
+        risk_level="low",
+        payload={},
+    )
+    runtime.begin_action(failed["run"]["id"], action["id"])
+    runtime.record_action_result(failed["run"]["id"], action["id"], succeeded=False, result={"error": "boom"})
+    with pytest.raises(AutonomyForbidden, match="cannot be promoted"):
+        runtime.complete_run(failed["run"]["id"], status_value="succeeded")
+
+
+def test_unknown_action_type_is_rejected_before_persistence(db):
+    user, org = _enterprise(db)
+    runtime = AutonomousOperationsRuntime(db, organization_id=org.id, workspace_id=None, actor_user_id=user.id)
+    procedure = runtime.create_procedure(
+        name="Known adapters only",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="manual",
+        definition={},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+    run = runtime.start_run(procedure_id=procedure["id"], idempotency_key="known-adapters")
+    with pytest.raises(AutonomyConflict, match="Unsupported executable action type"):
+        runtime.plan_action(
+            run["run"]["id"],
+            action_type="start_irrigation",
+            idempotency_key="unsupported",
+            title="Do not persist",
+            description="No executable adapter exists for this raw action.",
+            risk_level="critical",
             payload={},
         )

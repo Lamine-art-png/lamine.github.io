@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.agents.field_intelligence_bridge import AUTONOMY_TRIGGER_JOB_TYPE, run_trigger_jobs
 from app.core.config import settings
 from app.db.base import SessionLocal
 from app.models.field_intelligence import FieldWorkerHeartbeat
@@ -33,6 +34,7 @@ _WORKER_INSTANCE_ID = f"fi-worker-{socket.gethostname()[:40]}-{uuid.uuid4().hex[
 
 _FIELD_JOB_TYPES = (
     svc.PROCESS_JOB_TYPE,
+    AUTONOMY_TRIGGER_JOB_TYPE,
     svc.ASSET_DELETE_JOB_TYPE,
     svc.ORPHAN_CLEANUP_JOB_TYPE,
 )
@@ -124,12 +126,15 @@ def drain_once(*, worker_id: str | None = None) -> dict:
         paused = kill_switch_active(db)
         if paused:
             processed = {"skipped": "kill_switch"}
+            autonomy = {"skipped": "kill_switch"}
         else:
             processed = svc.run_field_intelligence_jobs(db, limit=batch, worker_id=worker_id)
+            autonomy = run_trigger_jobs(db, limit=batch, worker_id=worker_id)
         deletions = svc.run_field_intelligence_deletions(db, limit=batch, worker_id=worker_id)
         orphans = svc.run_field_intelligence_orphan_cleanup(db, limit=batch, worker_id=worker_id)
         tick = {
             "processing": processed,
+            "autonomy": autonomy,
             "deletions": deletions,
             "orphan_cleanup": orphans,
             "paused": paused,
@@ -148,23 +153,33 @@ def drain_once(*, worker_id: str | None = None) -> dict:
 def drain_until_empty(db, *, max_rounds: int = 100) -> dict:
     """Process every currently-drainable job (used by tests and admin drains)."""
     total_processed = 0
+    total_autonomy = 0
     total_deleted = 0
     total_cleaned = 0
     for _ in range(max_rounds):
         proc = svc.run_field_intelligence_jobs(db, limit=50)
+        auto = run_trigger_jobs(db, limit=50)
         dele = svc.run_field_intelligence_deletions(db, limit=50)
         orph = svc.run_field_intelligence_orphan_cleanup(db, limit=50)
         total_processed += proc.get("processed", 0)
+        total_autonomy += auto.get("processed", 0)
         total_deleted += dele.get("deleted", 0)
         total_cleaned += orph.get("cleaned", 0)
         if (
             proc.get("processed", 0) == 0
             and proc.get("failed", 0) == 0
+            and auto.get("processed", 0) == 0
+            and auto.get("failed", 0) == 0
             and dele.get("deleted", 0) == 0
             and orph.get("cleaned", 0) == 0
         ):
             break
-    return {"processed": total_processed, "deleted": total_deleted, "cleaned": total_cleaned}
+    return {
+        "processed": total_processed,
+        "autonomy_triggers": total_autonomy,
+        "deleted": total_deleted,
+        "cleaned": total_cleaned,
+    }
 
 
 def reconcile_once() -> dict:
