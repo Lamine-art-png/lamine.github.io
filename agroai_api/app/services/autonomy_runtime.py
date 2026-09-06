@@ -12,11 +12,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.autonomy import AutonomyEvent, AutonomyPolicy, AutonomyProcedure, AutonomyRun, AutonomyStep
 from app.models.operational_records import IngestionJob
-from app.models.saas import Workspace
+from app.models.saas import Organization, Workspace
 
 LEVELS = {"A0": 0, "A1": 1, "A2": 2, "A3": 3, "A4": 4, "A5": 5}
 DEFAULT_LEVEL = "A4"
@@ -161,7 +162,27 @@ def ensure_system_procedures(db: Session) -> None:
         ))
         changed = True
     if changed:
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Multiple API workers may discover an empty catalog concurrently.
+            # Fixed system IDs + uniqueness make this a convergence event, not
+            # a customer-visible failure. Verify the winning transaction wrote
+            # the complete catalog before continuing.
+            db.rollback()
+            expected = {spec["key"] for spec in SYSTEM_PROCEDURES}
+            actual = {
+                row[0]
+                for row in db.query(AutonomyProcedure.procedure_key)
+                .filter(
+                    AutonomyProcedure.organization_id.is_(None),
+                    AutonomyProcedure.version == 1,
+                    AutonomyProcedure.procedure_key.in_(expected),
+                )
+                .all()
+            }
+            if actual != expected:
+                raise
 
 
 def resolve_policy(db: Session, organization_id: str, workspace_id: str | None = None) -> AutonomyPolicy:
@@ -195,6 +216,12 @@ def upsert_policy(db: Session, organization_id: str, *, workspace_id: str | None
                   autonomy_level: str, action_class_caps: dict[str, str] | None = None,
                   risk_caps: dict[str, str] | None = None, constraints: dict[str, Any] | None = None,
                   actor_user_id: str | None = None) -> dict[str, Any]:
+    # Serialize policy mutations per organization. PostgreSQL UNIQUE semantics
+    # allow multiple NULL workspace_id values, so the organization lock is the
+    # authoritative concurrency boundary for the organization-default policy.
+    org = db.query(Organization).filter(Organization.id == organization_id).with_for_update().one_or_none()
+    if org is None:
+        raise KeyError(organization_id)
     if workspace_id:
         _require_workspace(db, organization_id, workspace_id)
     row = db.query(AutonomyPolicy).filter(
@@ -243,6 +270,9 @@ def create_custom_procedure(db: Session, organization_id: str, *, name: str, dom
                             description: str | None = None, procedure_key: str | None = None,
                             outcome_contract: dict[str, Any] | None = None,
                             actor_user_id: str | None = None) -> dict[str, Any]:
+    org = db.query(Organization).filter(Organization.id == organization_id).with_for_update().one_or_none()
+    if org is None:
+        raise KeyError(organization_id)
     if not 1 <= len(steps) <= 32:
         raise ValueError("A procedure must contain between 1 and 32 steps")
     key = re.sub(r"[^a-z0-9]+", "_", (procedure_key or name).lower()).strip("_")
@@ -370,7 +400,25 @@ def start_run(db: Session, organization_id: str, *, procedure_key: str, workspac
         exception_count=0, context_json=context or {}, result_json={},
     )
     db.add(run)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        if trigger_ref:
+            winner = (
+                db.query(AutonomyRun)
+                .filter(
+                    AutonomyRun.organization_id == organization_id,
+                    AutonomyRun.procedure_key == procedure_key,
+                    AutonomyRun.trigger_type == trigger_type,
+                    AutonomyRun.trigger_ref == trigger_ref,
+                )
+                .order_by(AutonomyRun.created_at.desc())
+                .first()
+            )
+            if winner:
+                return serialize_run(db, winner)
+        raise
     for sequence, spec in enumerate(procedure.steps_json or []):
         db.add(AutonomyStep(
             id=_uuid("autstep"), run_id=run.id, organization_id=organization_id, sequence=sequence,
