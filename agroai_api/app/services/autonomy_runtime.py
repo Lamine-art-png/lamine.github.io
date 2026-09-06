@@ -392,6 +392,21 @@ def _advance(db: Session, run: AutonomyRun, policy: AutonomyPolicy, *, actor: st
             return
         effective = _effective_for_step(run, step, policy)
         step.effective_autonomy_level = effective
+        if step.step_type in {"task_dispatch", "external_action"} and LEVELS[effective] < LEVELS["A3"]:
+            step.status = "blocked_policy"
+            step.started_at = step.started_at or datetime.utcnow()
+            run.status = "exception"
+            run.exception_count += 1
+            run.failure_reason = (
+                f"Effective autonomy level {effective} permits preparation/recommendation only; "
+                "execution requires A3 or higher."
+            )
+            _event(db, run, "execution_blocked_by_policy", actor, {
+                "step_id": step.id, "effective_autonomy_level": effective,
+                "required_execution_level": "A3",
+            }, step=step)
+            db.commit()
+            return
         needs_approval = _approval_required(step, effective)
         if step.step_type == "checkpoint":
             _finish_step(db, run, step, actor, {"grounded": True, "context_ref": run.trigger_ref})
@@ -511,6 +526,8 @@ def _finish_step(db: Session, run: AutonomyRun, step: AutonomyStep, actor: str, 
 def approve_step(db: Session, organization_id: str, run_id: str, step_id: str, *, actor_user_id: str) -> dict[str, Any]:
     run, step = _scoped_step(db, organization_id, run_id, step_id)
     if step.status != "waiting_approval":
+        if step.approved_at is not None or step.status in {"waiting_external", "completed"}:
+            return serialize_run(db, run)
         raise ValueError("Step is not waiting for approval")
     step.approved_by = actor_user_id
     step.approved_at = datetime.utcnow()
@@ -538,6 +555,8 @@ def approve_step(db: Session, organization_id: str, run_id: str, step_id: str, *
 def reject_step(db: Session, organization_id: str, run_id: str, step_id: str, *, actor_user_id: str, reason: str | None = None) -> dict[str, Any]:
     run, step = _scoped_step(db, organization_id, run_id, step_id)
     if step.status != "waiting_approval":
+        if step.status == "rejected":
+            return serialize_run(db, run)
         raise ValueError("Step is not waiting for approval")
     step.status = "rejected"
     step.rejected_at = datetime.utcnow()
@@ -555,6 +574,8 @@ def complete_step(db: Session, organization_id: str, run_id: str, step_id: str, 
                   result: dict[str, Any]) -> dict[str, Any]:
     run, step = _scoped_step(db, organization_id, run_id, step_id)
     if step.status not in {"waiting_external", "waiting_verification"}:
+        if step.status == "completed":
+            return serialize_run(db, run)
         raise ValueError("Step is not waiting for external execution or verification")
     if step.status == "waiting_external":
         executed = result.get("executed") is True or str(result.get("execution_status") or "").lower() in {"executed", "completed", "applied"}
