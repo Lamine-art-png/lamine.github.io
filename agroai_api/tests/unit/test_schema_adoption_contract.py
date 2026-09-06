@@ -49,7 +49,8 @@ def test_head_contract_covers_security_assurance_platform_field_launch_and_intel
         "reviewed_at",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
     assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
-    assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])\n    assert {"organization_id", "user_id", "current_step"}.issubset(HEAD_SCHEMA_REQUIREMENTS["onboarding_states"])
+    assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])
+    assert {"organization_id", "user_id", "current_step"}.issubset(HEAD_SCHEMA_REQUIREMENTS["onboarding_states"])
 
     assert {"organization_id", "workspace_id", "entity_type", "rule_pack_ids"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["assurance_passports"]
