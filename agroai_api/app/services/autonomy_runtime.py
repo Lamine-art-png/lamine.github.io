@@ -461,6 +461,11 @@ def _execute_task_dispatch(db: Session, run: AutonomyRun, step: AutonomyStep, ac
             IngestionJob.job_type == "field_ops_task",
         ).first()
         if existing:
+            existing.input_json = {
+                **(existing.input_json or {}),
+                "autonomy_run_id": run.id,
+                "autonomy_step_id": step.id,
+            }
             _finish_step(db, run, step, actor, {"task_id": existing.id, "linked_existing_task": True})
             return
     title = str(context.get("task_title") or context.get("recommended_action") or context.get("summary") or step.name)[:180]
@@ -563,10 +568,24 @@ def complete_step(db: Session, organization_id: str, run_id: str, step_id: str, 
         return serialize_run(db, run)
     verified = result.get("verified") is True or str(result.get("verification_status") or "").lower() in {"verified", "complete", "matched"}
     run.verification_status = "verified" if verified else str(result.get("verification_status") or "not_verified")
-    if not verified:
-        run.outcome_status = str(result.get("outcome_status") or "verification_failed")
-        run.exception_count += 1
-    _finish_step(db, run, step, actor, dict(result))
+    if verified:
+        _finish_step(db, run, step, actor, dict(result))
+        return serialize_run(db, run)
+
+    # A failed verification is an exception, not a successful close. The
+    # operator can resolve the exception with new evidence and a later run.
+    step.status = "completed"
+    step.started_at = step.started_at or datetime.utcnow()
+    step.completed_at = datetime.utcnow()
+    step.output_json = dict(result)
+    step.attempt_count += 1
+    run.current_step_sequence = step.sequence + 1
+    run.status = "exception"
+    run.outcome_status = str(result.get("outcome_status") or "verification_failed")
+    run.exception_count += 1
+    run.failure_reason = str(result.get("reason") or "Outcome verification did not pass")
+    _event(db, run, "verification_failed", actor, dict(result), step=step)
+    db.commit()
     return serialize_run(db, run)
 
 
