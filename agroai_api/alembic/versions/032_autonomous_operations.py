@@ -93,7 +93,7 @@ def upgrade() -> None:
     op.create_table(
         "autonomy_steps",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("step_key", sa.String(length=120), nullable=False),
@@ -128,7 +128,7 @@ def upgrade() -> None:
         "autonomy_events",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("step_id", sa.String(), sa.ForeignKey("autonomy_steps.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("step_id", sa.String(), sa.ForeignKey("autonomy_steps.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("event_type", sa.String(length=80), nullable=False),
         sa.Column("actor", sa.String(length=160), nullable=False, server_default="system"),
