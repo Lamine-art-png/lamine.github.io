@@ -1,6 +1,7 @@
 import http from "http";
 import { config } from "./config.js";
 import { aiOrchestrator } from "./ai/aiOrchestrator.js";
+import { modelRouter } from "./ai/modelRouter.js";
 import { memoryStore } from "./ai/memoryStore.js";
 import { evaluateDecision, scenarios } from "./ai/evaluationHarness.js";
 import { detectIntent } from "./services/voiceIntent.js";
@@ -18,6 +19,7 @@ async function createExpressApp() {
   const { weatherRouter } = await import("./routes/weather.js");
   const { memoryRouter } = await import("./routes/memory.js");
   const { evaluationRouter } = await import("./routes/evaluation.js");
+  const { modelRouterApi } = await import("./routes/model.js");
   const { requestLogger, safeErrorHandler } = await import("./services/logger.js");
   const { rateLimitPlaceholder } = await import("./services/rateLimit.js");
 
@@ -34,6 +36,7 @@ async function createExpressApp() {
   expressApp.use("/v1/weather", weatherRouter);
   expressApp.use("/v1/memory", memoryRouter);
   expressApp.use("/v1/evaluation", evaluationRouter);
+  expressApp.use("/v1/model", modelRouterApi);
   expressApp.use(safeErrorHandler);
   return expressApp;
 }
@@ -64,9 +67,31 @@ function readJson(req) {
   });
 }
 
+function modelStatusPayload() {
+  const provider = modelRouter.llmProvider();
+  return {
+    terrisCore: {
+      enabled: config.terrisCoreEnabled,
+      configured: provider.name === "terris" && provider.mode === "live",
+      baseUrlConfigured: Boolean(config.terrisCoreBaseUrl),
+      requestedProvider: config.llmProvider,
+      activeProvider: provider.name,
+      model: provider.model,
+      mode: provider.mode,
+      fallbackReason: provider.fallbackReason || null,
+    },
+    policy: {
+      deterministicAgronomyFirst: true,
+      preserveTruthLabels: true,
+      requireEvidenceForExecutionAndVerification: true,
+      frontierFallbackAllowed: true,
+    },
+  };
+}
+
 function createFallbackApp() {
   return async function fallbackApp(req, res) {
-    const requestId = `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const requestId = "req-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
     const url = new URL(req.url, "http://localhost");
     console.log(JSON.stringify({ level: "info", requestId, method: req.method, path: url.pathname, runtime: "node-fallback" }));
     if (req.method === "OPTIONS") return sendJson(res, 204, {});
@@ -74,6 +99,9 @@ function createFallbackApp() {
     try {
       if (req.method === "GET" && url.pathname === "/health") {
         return sendJson(res, 200, { ok: true, service: "velia-ai-api", runtime: "node-fallback" });
+      }
+      if (req.method === "GET" && url.pathname === "/v1/model/status") {
+        return sendJson(res, 200, modelStatusPayload());
       }
 
       const body = req.method === "POST" ? await readJson(req) : {};
