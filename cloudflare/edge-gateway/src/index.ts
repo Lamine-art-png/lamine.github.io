@@ -135,7 +135,7 @@ export function upstreamTimeBudgetMs(method: string, pathname: string): number {
   const normalizedMethod = method.toUpperCase();
   const longRunningMutation =
     !["GET", "HEAD"].includes(normalizedMethod) &&
-    /\/(?:brain|intelligence|ai)(?:\/|$)/.test(pathname);
+    /\/(?:brain|intelligence|ai|voice)(?:\/|$)/.test(pathname);
   return longRunningMutation ? 120_000 : 15_000;
 }
 

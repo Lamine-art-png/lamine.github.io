@@ -15,6 +15,7 @@ import {
 } from "../fieldIntelligence/offlineQueue";
 import { FieldMapV2 } from "../fieldIntelligence/FieldMapV2";
 import { MediaViewer } from "../fieldIntelligence/MediaViewer";
+import { VoiceCallPanel } from "../voice/VoiceCallPanel";
 
 const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 const EVENT_TYPES = [
@@ -908,6 +909,15 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
 
   return (
     <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
+      <div className="mb-4">
+        <VoiceCallPanel
+          surface="field_intelligence"
+          workspaceId={workspaceId}
+          fieldName={fieldName.trim() || undefined}
+          crop={crop.trim() || undefined}
+          language={String(language || "auto")}
+        />
+      </div>
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.compose")}</div>

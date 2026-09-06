@@ -528,6 +528,9 @@ app.include_router(intelligence_router, prefix="/v1")
 from app.api.v1.brain import router as brain_router  # noqa: E402
 app.include_router(brain_router, prefix="/v1")
 
+from app.api.v1.voice import router as voice_router  # noqa: E402
+app.include_router(voice_router, prefix="/v1")
+
 from app.api.v1.chat_artifacts import router as chat_artifacts_router  # noqa: E402
 app.include_router(chat_artifacts_router, prefix="/v1")
 
