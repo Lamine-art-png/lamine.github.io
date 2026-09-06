@@ -122,7 +122,16 @@ export default {
       });
     }
 
-    const route = routeFor(new URL(request.url).pathname);
+    const url = new URL(request.url);
+    const trackingKeys = [...url.searchParams.keys()].filter((key) =>
+      key.toLowerCase().startsWith("utm_") || ["gclid", "fbclid"].includes(key.toLowerCase())
+    );
+    if (trackingKeys.length) {
+      for (const key of trackingKeys) url.searchParams.delete(key);
+      return Response.redirect(url.toString(), 302);
+    }
+
+    const route = routeFor(url.pathname);
     if (!route) return notFound();
     return serve(request, env, route);
   },
