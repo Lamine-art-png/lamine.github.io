@@ -176,8 +176,10 @@ def resolve_policy(db: Session, organization_id: str, workspace_id: str | None =
     default = query.filter(AutonomyPolicy.workspace_id.is_(None)).first()
     if default:
         return default
-    default = AutonomyPolicy(
-        id=_uuid("policy"), organization_id=organization_id, workspace_id=None,
+    # The default policy is configuration, not customer data. Return it
+    # transiently so read-only Command Center requests never write to Postgres.
+    return AutonomyPolicy(
+        id=f"policy_default_{organization_id}", organization_id=organization_id, workspace_id=None,
         autonomy_level=DEFAULT_LEVEL, action_class_caps_json=dict(ACTION_CLASS_CAPS),
         risk_caps_json=dict(RISK_CAPS),
         constraints_json={
@@ -187,10 +189,6 @@ def resolve_policy(db: Session, organization_id: str, workspace_id: str | None =
         },
         enabled=True,
     )
-    db.add(default)
-    db.commit()
-    db.refresh(default)
-    return default
 
 
 def upsert_policy(db: Session, organization_id: str, *, workspace_id: str | None,
@@ -306,7 +304,7 @@ def _procedure(db: Session, organization_id: str, procedure_key: str) -> Autonom
             AutonomyProcedure.active.is_(True),
             or_(AutonomyProcedure.organization_id.is_(None), AutonomyProcedure.organization_id == organization_id),
         )
-        .order_by(AutonomyProcedure.organization_id.desc(), AutonomyProcedure.version.desc()).first()
+        .order_by(AutonomyProcedure.organization_id.is_(None).asc(), AutonomyProcedure.version.desc()).first()
     )
     if not row:
         raise KeyError(procedure_key)
