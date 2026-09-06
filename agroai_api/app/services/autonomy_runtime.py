@@ -396,7 +396,9 @@ def start_run(db: Session, organization_id: str, *, procedure_key: str, workspac
         procedure_id=procedure.id, procedure_key=procedure.procedure_key,
         trigger_type=trigger_type, trigger_ref=trigger_ref, status="running",
         requested_autonomy_level=requested, effective_autonomy_level=effective,
-        current_step_sequence=0, eligible_for_autonomy=True, human_decision_count=0,
+        current_step_sequence=0,
+        eligible_for_autonomy=_eligible_for_zero_human_completion(procedure, policy, effective),
+        human_decision_count=0,
         exception_count=0, context_json=context or {}, result_json={},
     )
     db.add(run)
@@ -446,6 +448,35 @@ def _approval_required(step: AutonomyStep, effective: str) -> bool:
     if step.approval_required or step.action_class in MANDATORY_APPROVAL_CLASSES:
         return True
     return LEVELS[effective] < LEVELS[_level(step.minimum_autonomy_level)]
+
+
+def _eligible_for_zero_human_completion(
+    procedure: AutonomyProcedure,
+    policy: AutonomyPolicy,
+    effective_run_level: str,
+) -> bool:
+    """Whether the current policy allows this procedure to finish with no human decision gates."""
+    if LEVELS[_level(effective_run_level)] < LEVELS["A4"]:
+        return False
+    for spec in procedure.steps_json or []:
+        step_type = str(spec.get("type") or "checkpoint")
+        if step_type == "external_action":
+            # V1 external execution is deliberately approval-gated regardless
+            # of model confidence or nominal policy cap.
+            return False
+        if step_type != "task_dispatch":
+            continue
+        action_class = str(spec.get("action_class") or "intelligence")
+        risk = str(spec.get("risk") or "low")
+        if bool(spec.get("approval_required")) or action_class in MANDATORY_APPROVAL_CLASSES:
+            return False
+        class_cap = (policy.action_class_caps_json or {}).get(action_class, ACTION_CLASS_CAPS.get(action_class, "A1"))
+        risk_cap = (policy.risk_caps_json or {}).get(risk, RISK_CAPS.get(risk, "A1"))
+        step_effective = _lower_level(effective_run_level, class_cap, risk_cap)
+        minimum = _level(spec.get("minimum_autonomy_level") or "A4")
+        if LEVELS[step_effective] < LEVELS[minimum]:
+            return False
+    return True
 
 
 def _advance(db: Session, run: AutonomyRun, policy: AutonomyPolicy, *, actor: str) -> None:
@@ -643,7 +674,7 @@ def reject_step(db: Session, organization_id: str, run_id: str, step_id: str, *,
 
 
 def complete_step(db: Session, organization_id: str, run_id: str, step_id: str, *, actor: str,
-                  result: dict[str, Any]) -> dict[str, Any]:
+                  result: dict[str, Any], human_decision: bool = False) -> dict[str, Any]:
     run, step = _scoped_step(db, organization_id, run_id, step_id)
     if step.status not in {"waiting_external", "waiting_verification"}:
         if step.status == "completed":
@@ -657,6 +688,8 @@ def complete_step(db: Session, organization_id: str, run_id: str, step_id: str, 
         payload["physical_or_external_action_executed"] = True
         _finish_step(db, run, step, actor, payload)
         return serialize_run(db, run)
+    if human_decision:
+        run.human_decision_count += 1
     verified = result.get("verified") is True or str(result.get("verification_status") or "").lower() in {"verified", "complete", "matched"}
     run.verification_status = "verified" if verified else str(result.get("verification_status") or "not_verified")
     if verified:
@@ -714,7 +747,11 @@ def autonomy_summary(db: Session, organization_id: str, workspace_id: str | None
             func.count(AutonomyRun.id),
             func.coalesce(func.sum(case((AutonomyRun.eligible_for_autonomy.is_(True), 1), else_=0)), 0),
             func.coalesce(func.sum(case((
-                and_(AutonomyRun.eligible_for_autonomy.is_(True), AutonomyRun.human_decision_count == 0), 1
+                and_(
+                    AutonomyRun.eligible_for_autonomy.is_(True),
+                    AutonomyRun.human_decision_count == 0,
+                    AutonomyRun.verification_status == "verified",
+                ), 1
             ), else_=0)), 0),
             func.coalesce(func.sum(case((AutonomyRun.verification_status == "verified", 1), else_=0)), 0),
         )
@@ -751,7 +788,7 @@ def autonomy_summary(db: Session, organization_id: str, workspace_id: str | None
         "autonomous_completed_30d": int(autonomous_count or 0),
         "autonomous_completion_rate": pct(int(autonomous_count or 0), int(eligible_count or 0)),
         "verified_completion_rate": pct(int(verified_count or 0), int(completed_count or 0)),
-        "metric_definition": "Eligible workflows completed end-to-end with zero human decisions, divided by all eligible completed workflows.",
+        "metric_definition": "Eligible workflows reaching a verified outcome with zero human decisions, divided by all eligible completed workflows.",
         "recent_runs": [
             serialize_run_card(row, current_steps.get((row.id, row.current_step_sequence)))
             for row in recent_rows
