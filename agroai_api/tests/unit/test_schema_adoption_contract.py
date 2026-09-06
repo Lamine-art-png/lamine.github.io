@@ -30,8 +30,8 @@ def test_column_contract_accepts_complete_shape():
         assert schema_contract_gaps(connection, {"example": {"id", "required_value"}}) == {}
 
 
-def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "031_merge_assurance_intelligence"
+def test_head_contract_covers_security_assurance_platform_field_intelligence_and_autonomy():
+    assert HEAD_ALEMBIC_REVISION == "032_autonomous_ops_runtime"
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )
@@ -80,3 +80,21 @@ def test_head_contract_covers_security_assurance_platform_field_launch_and_intel
     assert {
         "lifecycle_id", "sequence", "from_state", "to_state", "event_type", "actor_type", "idempotency_key",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["decision_lifecycle_events"])
+
+    assert {
+        "organization_id", "workspace_id", "domain", "version", "autonomy_level", "trigger_type", "definition_json",
+    }.issubset(HEAD_SCHEMA_REQUIREMENTS["agent_procedures"])
+    assert {"organization_id", "workspace_id", "domain", "rules_json"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["agent_policies"]
+    )
+    assert {
+        "organization_id", "workspace_id", "procedure_id", "autonomy_level", "idempotency_key",
+        "policy_snapshot_json", "human_touch_count", "verified_outcome",
+    }.issubset(HEAD_SCHEMA_REQUIREMENTS["agent_workflow_runs"])
+    assert {
+        "organization_id", "run_id", "action_type", "execution_status", "verification_status", "risk_level",
+    }.issubset(HEAD_SCHEMA_REQUIREMENTS["agent_action_proposals"])
+    assert {"run_id", "action_id", "evidence_type", "evidence_id", "verification_status"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["agent_action_evidence_links"]
+    )
+    assert {"run_id", "status", "metrics_json"}.issubset(HEAD_SCHEMA_REQUIREMENTS["agent_workflow_outcomes"])
