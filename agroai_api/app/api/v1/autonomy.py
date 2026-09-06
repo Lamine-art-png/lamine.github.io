@@ -138,6 +138,7 @@ def create_procedure(
             trigger_types=payload.trigger_types,
             steps=[item.model_dump() for item in payload.steps],
             outcome_contract=payload.outcome_contract,
+            actor_user_id=str(ctx.user.id),
         )
     except ValueError as exc:
         raise _handle(exc) from exc
