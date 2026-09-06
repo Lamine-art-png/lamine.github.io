@@ -1,6 +1,7 @@
 """Deterministic field operating loop for AGRO-AI."""
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -27,6 +28,8 @@ from app.services.operator_cockpit import (
     readiness_summary,
     report_factory,
 )
+
+logger = logging.getLogger(__name__)
 
 TASK_JOB_TYPE = "field_ops_task"
 MESSAGE_JOB_TYPE = "field_ops_message"
@@ -80,6 +83,17 @@ def command_center(ctx: FieldOpsContext) -> dict[str, Any]:
     audit = audit_trail(ctx)
     priority = today_priority(ctx, queue, tasks)
     status = operating_status(queue, tasks, missing)
+    try:
+        # Keep Command Center as the single first-paint aggregate. Autonomy is
+        # added here instead of creating another expensive browser request.
+        from app.services.autonomy_runtime import autonomy_summary
+
+        autonomy = autonomy_summary(ctx.db, ctx.organization_id, ctx.workspace_id)
+    except Exception:
+        # Rolling deploy safety: the legacy operating room remains available
+        # before migration 032 is applied or if autonomy telemetry degrades.
+        logger.exception("Autonomy summary unavailable for Command Center")
+        autonomy = {"status": "unavailable", "reason": "autonomy_runtime_unavailable"}
     return {
         "status": "ok",
         "workspace_id": ctx.workspace_id,
@@ -92,6 +106,7 @@ def command_center(ctx: FieldOpsContext) -> dict[str, Any]:
         "recent_signals": recent,
         "reports_ready": reports,
         "audit_events": audit,
+        "autonomy": autonomy,
     }
 
 
