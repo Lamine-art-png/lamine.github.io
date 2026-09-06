@@ -12,6 +12,11 @@ export function getConfig() {
     openaiApiKey: process.env.OPENAI_API_KEY || "",
     openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
 
+    terrisCoreEnabled: envBool("TERRIS_CORE_ENABLED", "VELIA_CORE_ENABLED", "false"),
+    terrisCoreBaseUrl: env("TERRIS_CORE_BASE_URL", "VELIA_CORE_BASE_URL", "http://127.0.0.1:8008"),
+    terrisCoreApiKey: env("TERRIS_CORE_API_KEY", "VELIA_CORE_API_KEY", ""),
+    terrisCoreModel: env("TERRIS_CORE_MODEL", "VELIA_CORE_MODEL", "terris-core-v0"),
+
     embeddingProvider: (process.env.EMBEDDING_PROVIDER || "mock").toLowerCase(),
     geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004",
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
