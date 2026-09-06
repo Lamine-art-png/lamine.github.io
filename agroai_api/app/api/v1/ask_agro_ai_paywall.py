@@ -116,3 +116,11 @@ async def paid_legacy_ai_chat(
 ):
     _require_paid_ask(db, tenant_id)
     return await ai_stable.chat(payload=payload, tenant_id=tenant_id, db=db)
+
+
+# Voice is mounted here so the same authoritative Ask AGRO-AI commercial boundary
+# owns realtime sessions and tool execution. The voice router performs its own
+# tenant, feature, and Field Intelligence checks as defense in depth.
+from app.api.v1.voice import router as voice_router  # noqa: E402
+
+router.include_router(voice_router)
