@@ -173,3 +173,9 @@ def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_
     except Exception:
         db.rollback()
         raise
+
+
+# Current Enterprise Portal autonomy routes are nested under the existing agent
+# API so there is one canonical execution surface rather than a parallel engine.
+from app.api.v1.autonomy import router as autonomy_router  # noqa: E402
+router.include_router(autonomy_router)
