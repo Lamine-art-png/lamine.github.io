@@ -88,9 +88,9 @@ Operators can approve or reject a gated step, explicitly confirm external execut
 
 ## Autonomous Completion Rate
 
-Autonomous Completion Rate = eligible workflows completed end-to-end with zero human decisions / all eligible completed workflows.
+Autonomous Completion Rate = policy-eligible workflows reaching a verified outcome with zero human decisions / all policy-eligible completed workflows.
 
-A field worker carrying out a dispatched physical task does not automatically count as a human decision. An approval, rejection, or judgment gate does.
+A field worker carrying out a dispatched physical task does not automatically count as a human decision. An approval, rejection, or manual verification judgment does. Workflows that cannot legally or safely finish without an approval under the active policy are excluded from the zero-human-eligible denominator.
 
 ## Teach AGRO-AI foundation
 
