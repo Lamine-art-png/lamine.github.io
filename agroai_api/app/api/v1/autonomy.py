@@ -235,7 +235,7 @@ def complete(
     try:
         return complete_step(
             db, _organization_id(ctx), run_id, step_id,
-            actor=str(ctx.user.id), result=payload.result,
+            actor=str(ctx.user.id), result=payload.result, human_decision=True,
         )
     except (KeyError, ValueError) as exc:
         raise _handle(exc) from exc
