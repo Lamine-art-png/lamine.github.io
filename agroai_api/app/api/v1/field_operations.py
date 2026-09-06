@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.agents.autonomy_runtime import AutonomousOperationsRuntime
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.models.saas import Workspace
@@ -103,7 +104,24 @@ def get_command_center(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
-    return command_center(_context(db, ctx, workspace_id))
+    """Return one authoritative first-paint operating view.
+
+    Autonomy is embedded here rather than fetched by the Portal in a second
+    request. This preserves the single-request Command Center performance
+    contract while making Field Intelligence, Assurance and autonomous work
+    visible from the same control plane.
+    """
+    organization_id = _require_org(ctx)
+    workspace = _workspace(db, organization_id, workspace_id)
+    response = command_center(build_field_ops_context(db, organization_id, workspace))
+    autonomy = AutonomousOperationsRuntime(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace.id if workspace else None,
+        actor_user_id=None,
+    ).command_center()
+    response["autonomy"] = autonomy
+    return response
 
 
 @router.get("/field-ops/tasks")
