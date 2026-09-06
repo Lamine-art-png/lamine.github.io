@@ -176,7 +176,13 @@ def create_task(
     return _task_from_job(job)
 
 
-def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) -> dict[str, Any]:
+def update_task_status(
+    ctx: FieldOpsContext,
+    task_id: str,
+    status_value: str,
+    *,
+    actor: str = "system",
+) -> dict[str, Any]:
     job = (
         ctx.db.query(IngestionJob)
         .filter(
@@ -207,7 +213,31 @@ def update_task_status(ctx: FieldOpsContext, task_id: str, status_value: str) ->
             job.completed_at = datetime.utcnow()
     ctx.db.commit()
     ctx.db.refresh(job)
-    return _task_from_job(job)
+    task = _task_from_job(job)
+
+    if status_value == "done":
+        autonomy_run_id = str((job.input_json or {}).get("autonomy_run_id") or "")
+        autonomy_step_id = str((job.input_json or {}).get("autonomy_step_id") or "")
+        if autonomy_run_id and autonomy_step_id:
+            try:
+                from app.services.autonomy_runtime import complete_task_dispatch
+
+                autonomy_run = complete_task_dispatch(
+                    ctx.db,
+                    ctx.organization_id,
+                    autonomy_run_id,
+                    autonomy_step_id,
+                    task_id=job.id,
+                    actor=actor,
+                )
+                task["autonomy_run_id"] = autonomy_run["id"]
+                task["autonomy_status"] = autonomy_run["status"]
+            except Exception:
+                # Task truth must survive a rolling autonomy migration or a
+                # secondary state-machine failure; reconciliation is replay-safe.
+                logger.exception("Could not advance autonomous workflow from completed field task")
+
+    return task
 
 
 def create_field_update(
