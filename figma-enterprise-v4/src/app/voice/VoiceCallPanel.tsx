@@ -144,6 +144,10 @@ export function VoiceCallPanel({
 
   async function start() {
     if (active) return;
+    if (clientRef.current) {
+      clientRef.current.stop();
+      clientRef.current = null;
+    }
     setError("");
     setUserTranscript("");
     setAssistantTranscript("");
