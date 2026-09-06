@@ -34,7 +34,7 @@ ACTION_CLASS_CAPS = {
 }
 RISK_CAPS = {"low": "A4", "medium": "A4", "high": "A3", "critical": "A2"}
 MANDATORY_APPROVAL_CLASSES = {"financial", "regulated", "physical_control", "destructive"}
-ACTIVE_STATUSES = {"running", "waiting_approval", "waiting_external", "waiting_verification", "exception"}
+ACTIVE_STATUSES = {"running", "waiting_approval", "waiting_execution", "waiting_external", "waiting_verification", "exception"}
 STEP_TYPES = {"checkpoint", "task_dispatch", "external_action", "verification", "close"}
 ACTION_CLASSES = set(ACTION_CLASS_CAPS)
 RISK_LEVELS = set(RISK_CAPS)
@@ -582,8 +582,22 @@ def _execute_task_dispatch(db: Session, run: AutonomyRun, step: AutonomyStep, ac
                 "autonomy_run_id": run.id,
                 "autonomy_step_id": step.id,
             }
-            _finish_step(db, run, step, actor, {"task_id": existing.id, "linked_existing_task": True})
+            if existing.status == "done":
+                _finish_step(db, run, step, actor, {
+                    "task_id": existing.id,
+                    "linked_existing_task": True,
+                    "execution_status": "completed",
+                    "task_already_done": True,
+                })
+                return
+            step.status = "waiting_execution"
+            step.started_at = step.started_at or datetime.utcnow()
+            step.output_json = {"task_id": existing.id, "linked_existing_task": True}
+            run.status = "waiting_execution"
+            _event(db, run, "task_dispatched", actor, step.output_json, step=step)
+            db.commit()
             return
+
     title = str(context.get("task_title") or context.get("recommended_action") or context.get("summary") or step.name)[:180]
     task = IngestionJob(
         id=f"task_{uuid.uuid4().hex[:12]}", tenant_id=run.organization_id, workspace_id=run.workspace_id,
@@ -609,7 +623,48 @@ def _execute_task_dispatch(db: Session, run: AutonomyRun, step: AutonomyStep, ac
     )
     db.add(task)
     db.flush()
-    _finish_step(db, run, step, actor, {"task_id": task.id, "linked_existing_task": False})
+    step.status = "waiting_execution"
+    step.started_at = step.started_at or datetime.utcnow()
+    step.output_json = {"task_id": task.id, "linked_existing_task": False}
+    run.status = "waiting_execution"
+    _event(db, run, "task_dispatched", actor, step.output_json, step=step)
+    db.commit()
+
+
+def complete_task_dispatch(
+    db: Session,
+    organization_id: str,
+    run_id: str,
+    step_id: str,
+    *,
+    task_id: str,
+    actor: str = "system",
+) -> dict[str, Any]:
+    """Advance a dispatched field task only after the accountable task is actually done."""
+    run, step = _scoped_step(db, organization_id, run_id, step_id)
+    if step.step_type != "task_dispatch":
+        raise ValueError("Step is not a task-dispatch step")
+    if step.status == "completed":
+        return serialize_run(db, run)
+    if step.status != "waiting_execution":
+        raise ValueError("Task-dispatch step is not waiting for execution")
+    expected_task_id = str((step.output_json or {}).get("task_id") or "")
+    if expected_task_id and expected_task_id != str(task_id):
+        raise ValueError("Task does not match the autonomous workflow step")
+    task = db.query(IngestionJob).filter(
+        IngestionJob.tenant_id == organization_id,
+        IngestionJob.id == str(task_id),
+        IngestionJob.job_type == "field_ops_task",
+    ).first()
+    if not task or task.status != "done":
+        raise ValueError("Task must be marked done before execution can advance")
+    _finish_step(db, run, step, actor, {
+        **(step.output_json or {}),
+        "task_id": task.id,
+        "execution_status": "completed",
+        "task_completed_at": task.completed_at.isoformat() if task.completed_at else None,
+    })
+    return serialize_run(db, run)
 
 
 def _finish_step(db: Session, run: AutonomyRun, step: AutonomyStep, actor: str, output: dict[str, Any]) -> None:
@@ -780,6 +835,7 @@ def autonomy_summary(db: Session, organization_id: str, workspace_id: str | None
         "policy": serialize_policy(policy),
         "active_workflows": int(sum(status_counts.values())),
         "waiting_approval": int(status_counts.get("waiting_approval", 0)),
+        "waiting_execution": int(status_counts.get("waiting_execution", 0)),
         "waiting_external": int(status_counts.get("waiting_external", 0)),
         "waiting_verification": int(status_counts.get("waiting_verification", 0)),
         "exceptions": int(status_counts.get("exception", 0)),
