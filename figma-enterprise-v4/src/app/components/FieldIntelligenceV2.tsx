@@ -203,24 +203,17 @@ export function FieldIntelligenceV2() {
       {banner && <div role="status" className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#EDF7F1] px-4 py-3 text-[13px] font-medium text-[#1B5E3F]">{banner}</div>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[430px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <VoiceCallPanel
-            surface="field_intelligence"
-            workspaceId={workspaceId}
-            language={effectiveLocale || "auto"}
-          />
-          <SmartComposer
-            t={t}
-            workspaceId={workspaceId}
-            language={effectiveLocale}
-            onSaved={async (message: string) => {
-              setBanner(message);
-              setView("timeline");
-              await refreshLocal();
-              if (navigator.onLine) await doFlush();
-            }}
-          />
-        </div>
+        <SmartComposer
+          t={t}
+          workspaceId={workspaceId}
+          language={effectiveLocale}
+          onSaved={async (message: string) => {
+            setBanner(message);
+            setView("timeline");
+            await refreshLocal();
+            if (navigator.onLine) await doFlush();
+          }}
+        />
 
         <section className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -916,6 +909,15 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
 
   return (
     <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
+      <div className="mb-4">
+        <VoiceCallPanel
+          surface="field_intelligence"
+          workspaceId={workspaceId}
+          fieldName={fieldName.trim() || undefined}
+          crop={crop.trim() || undefined}
+          language={String(language || "auto")}
+        />
+      </div>
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.compose")}</div>
