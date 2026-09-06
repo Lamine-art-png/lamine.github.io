@@ -4,6 +4,7 @@ import { BG, BORDER, MUTED, SURFACE, TEXT } from "../portalUi";
 import { safeText, AnyRecord } from "./intelligenceSupport";
 import { DecisionEvidencePanel } from "./DecisionEvidencePanel";
 import type { useIntelligenceController } from "./useIntelligenceController";
+import { VoiceCallPanel } from "../../voice/VoiceCallPanel";
 
 type Controller = ReturnType<typeof useIntelligenceController>;
 
@@ -41,6 +42,9 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
     emailReportFor,
     runAction,
     send,
+    commitVoiceExchange,
+    currentWorkspaceId,
+    normalizedLocale,
     onKeyDown,
     sendDisabled,
   } = controller;
@@ -156,6 +160,23 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
 
           <footer className="px-3 pb-3 sm:px-6 sm:pb-6" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
             <div className="mx-auto max-w-[900px] rounded-2xl p-3 shadow-[0_18px_60px_rgba(16,35,27,0.08)] sm:p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="mb-3">
+                <VoiceCallPanel
+                  surface="ask_agro_ai"
+                  workspaceId={currentWorkspaceId}
+                  conversationId={activeConversationId || undefined}
+                  language={normalizedLocale || "auto"}
+                  compact
+                  history={messages
+                    .filter((row) => row.role === "user" || row.role === "assistant")
+                    .slice(-12)
+                    .map((row) => ({
+                      role: row.role as "user" | "assistant",
+                      content: safeText(row.content),
+                    }))}
+                  onExchange={commitVoiceExchange}
+                />
+              </div>
               {fileImports.length ? <div className="mb-3 flex flex-wrap gap-2">{fileImports.map((item) => <div key={item.id} className="flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}><span className="max-w-[140px] truncate font-medium sm:max-w-[180px]">{item.filename}</span><span className="truncate" style={{ color: item.status === "failed" ? "#991B1B" : MUTED }}>{item.status === "queued" ? t("intelligence.fileQueued") : item.status === "uploading" ? t("intelligence.fileUploading") : item.status === "imported" ? t("intelligence.fileImported") : t("intelligence.fileFailed")}</span><button type="button" onClick={() => setFileImports((current) => current.filter((row) => row.id !== item.id))} title={t("remove")}><X size={13} /></button></div>)}</div> : null}
               {hasFailed ? <div className="mb-3 text-[12px]" style={{ color: "#991B1B" }}>{t("intelligence.fileFailedBeforeSend")}</div> : null}
 
