@@ -44,6 +44,8 @@ describe("upstream latency budget", () => {
   it("keeps long AI mutations on the explicit long-running budget", () => {
     expect(upstreamTimeBudgetMs("POST", "/v1/intelligence/run")).toBe(120_000);
     expect(upstreamTimeBudgetMs("POST", "/v1/brain/chat")).toBe(120_000);
+    expect(upstreamTimeBudgetMs("POST", "/v1/voice/tools/ask-agro-ai")).toBe(120_000);
+    expect(upstreamTimeBudgetMs("POST", "/v1/voice/realtime/call")).toBe(120_000);
   });
 });
 
