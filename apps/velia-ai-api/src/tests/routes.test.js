@@ -1,44 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PassThrough, Writable } from "node:stream";
+import http from "node:http";
 
 process.env.NODE_ENV = "test";
 const { app } = await import("../server.js");
 
-function invokeApp(method, path, body = null) {
-  return new Promise((resolve, reject) => {
-    const req = new PassThrough();
-    req.method = method;
-    req.url = path;
-    req.headers = { "content-type": "application/json" };
-
-    const chunks = [];
-    const res = new Writable({
-      write(chunk, _encoding, callback) {
-        chunks.push(Buffer.from(chunk));
-        callback();
-      },
-    });
-    res.statusCode = 200;
-    res.headers = {};
-    res.writeHead = (status, headers = {}) => {
-      res.statusCode = status;
-      res.headers = headers;
-    };
-    res.setHeader = (key, value) => {
-      res.headers[key.toLowerCase()] = value;
-    };
-    res.getHeader = (key) => res.headers[key.toLowerCase()];
-    res.end = (chunk) => {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      const text = Buffer.concat(chunks).toString("utf8");
-      resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null });
-    };
-
-    Promise.resolve(app(req, res)).catch(reject);
-    if (body) req.end(JSON.stringify(body));
-    else req.end();
+async function invokeApp(method, path, body = null) {
+  const server = http.createServer(app);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
   });
+
+  try {
+    const address = server.address();
+    const response = await fetch("http://127.0.0.1:" + address.port + path, {
+      method,
+      headers: body ? { "content-type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 }
 
 test("health endpoint", async () => {
@@ -59,7 +44,7 @@ test("decision endpoint returns decision", async () => {
   assert.ok(res.body.decision.provenance);
 });
 
-test("assistant, voice, memory, weather, evaluation endpoints", async () => {
+test("assistant, voice, memory, weather, evaluation, and model status endpoints", async () => {
   const assistant = await invokeApp("POST", "/v1/assistant/query", {
     query: "Why?",
     decision: { confidenceScore: 0.5, confidenceLabel: "moderate", reasons: ["grounded reason"], missingData: [], fieldChecks: [], provenance: { decisionTimestamp: new Date().toISOString(), ragSourcesUsed: [] } },
@@ -97,4 +82,9 @@ test("assistant, voice, memory, weather, evaluation endpoints", async () => {
   });
   assert.equal(evalRes.status, 200);
   assert.ok(evalRes.body.scenarioCount >= 30);
+
+  const modelStatus = await invokeApp("GET", "/v1/model/status");
+  assert.equal(modelStatus.status, 200);
+  assert.equal(modelStatus.body.policy.deterministicAgronomyFirst, true);
+  assert.equal(modelStatus.body.terrisCore.enabled, false);
 });
