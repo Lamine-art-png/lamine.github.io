@@ -423,6 +423,24 @@ export class AepRealtimeVoiceClient {
   }
 }
 
+async function postVoiceTool(path: string, body: Record<string, unknown>) {
+  const token = accessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({})) as any;
+  if (!response.ok) {
+    throw new Error(String(data?.detail?.message || data?.detail || "AGRO-AI voice tool failed."));
+  }
+  return data;
+}
+
 export async function callVoiceTool(
   call: VoiceToolCall,
   options: {
@@ -432,37 +450,47 @@ export async function callVoiceTool(
     history?: VoiceHistoryItem[];
   },
 ) {
-  if (call.name !== "ask_agro_ai") {
-    return { status: "error", error: "unsupported_tool" };
-  }
-  const question = cleanTranscript(call.arguments.question);
-  if (!question) return { status: "error", error: "empty_question" };
+  if (call.name === "ask_agro_ai") {
+    const question = cleanTranscript(call.arguments.question);
+    if (!question) return { status: "error", error: "empty_question" };
 
-  const requestedMode = String(call.arguments.reasoning_mode || "standard");
-  const reasoningMode = ["quick", "standard", "deep"].includes(requestedMode)
-    ? requestedMode
-    : "standard";
+    const requestedMode = String(call.arguments.reasoning_mode || "standard");
+    const reasoningMode = ["quick", "standard", "deep"].includes(requestedMode)
+      ? requestedMode
+      : "standard";
 
-  const token = accessToken();
-  const response = await fetch(`${API_BASE_URL}/v1/voice/tools/ask-agro-ai`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
+    return postVoiceTool("/v1/voice/tools/ask-agro-ai", {
       question,
       workspace_id: options.workspaceId,
       field_id: options.fieldId,
       preferred_language: options.language || "auto",
       reasoning_mode: reasoningMode,
       history: (options.history || []).slice(-12),
-    }),
-  });
-  const body = await response.json().catch(() => ({})) as any;
-  if (!response.ok) {
-    throw new Error(String(body?.detail?.message || body?.detail || "AGRO-AI analysis failed."));
+    });
   }
-  return body;
+
+  if (call.name === "plan_aep_action") {
+    const instruction = cleanTranscript(call.arguments.instruction);
+    if (!instruction) return { status: "error", error: "empty_instruction" };
+    return postVoiceTool("/v1/voice/tools/plan-action", {
+      instruction,
+      workspace_id: options.workspaceId,
+      answer: cleanTranscript(call.arguments.answer_context),
+    });
+  }
+
+  if (call.name === "execute_aep_action") {
+    const actionType = String(call.arguments.action_type || "");
+    const payload = call.arguments.payload && typeof call.arguments.payload === "object"
+      ? call.arguments.payload as Record<string, unknown>
+      : {};
+    if (!actionType) return { status: "error", error: "missing_action_type" };
+    return postVoiceTool("/v1/voice/tools/execute-action", {
+      action_type: actionType,
+      workspace_id: options.workspaceId,
+      payload,
+    });
+  }
+
+  return { status: "error", error: "unsupported_tool" };
 }
