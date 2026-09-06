@@ -19,6 +19,7 @@ def _enterprise(db):
         slug="autonomy-test-farm",
         owner_user_id=user.id,
         plan="enterprise",
+        subscription_status="active",
         verification_status="approved_legacy",
     )
     db.add(org)
