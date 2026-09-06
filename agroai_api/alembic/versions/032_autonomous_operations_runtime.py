@@ -1,6 +1,6 @@
 """Extend the existing agent workflow layer into the autonomous operations runtime.
 
-Revision ID: 032_autonomous_operations_runtime
+Revision ID: 032_autonomous_ops_runtime
 Revises: 031_merge_assurance_intelligence
 Create Date: 2026-09-05
 
@@ -14,7 +14,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "032_autonomous_operations_runtime"
+revision = "032_autonomous_ops_runtime"
 down_revision = "031_merge_assurance_intelligence"
 branch_labels = None
 depends_on = None
@@ -57,7 +57,6 @@ def upgrade() -> None:
     for column in ("organization_id", "workspace_id", "domain", "enabled", "created_at"):
         op.create_index(f"ix_agent_policies_{column}", "agent_policies", [column])
 
-    # Enterprise Portal identity and durable lifecycle fields on the canonical run.
     with op.batch_alter_table("agent_workflow_runs") as batch:
         batch.alter_column("tenant_id", existing_type=sa.String(), nullable=True)
         batch.add_column(sa.Column("organization_id", sa.String(), nullable=True))
