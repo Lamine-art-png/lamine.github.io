@@ -11,6 +11,7 @@ from app.services.autonomy_runtime import (
     approve_step,
     autonomy_summary,
     complete_step,
+    complete_task_dispatch,
     create_custom_procedure,
     list_procedures,
     start_run,
@@ -139,11 +140,19 @@ def test_field_issue_links_existing_task_and_closes_only_after_verification(db):
         },
         actor=user.id,
     )
-    assert run["status"] == "waiting_verification"
+    assert run["status"] == "waiting_execution"
     assert run["human_decision_count"] == 0
     db.refresh(task)
     assert task.input_json["autonomy_run_id"] == run["id"]
 
+    task.status = "done"
+    task.completed_at = datetime.utcnow()
+    db.commit()
+    run = complete_task_dispatch(
+        db, org.id, run["id"], run["current_step"]["id"],
+        task_id=task.id, actor=user.id,
+    )
+    assert run["status"] == "waiting_verification"
     verification = run["current_step"]
     closed = complete_step(
         db,
@@ -215,6 +224,17 @@ def test_manual_verification_is_not_reported_as_zero_human_autonomy(db):
         context={"summary": "Inspect valve"},
         actor=user.id,
     )
+    assert run["status"] == "waiting_execution"
+    task_id = run["current_step"]["output"]["task_id"]
+    task = db.query(IngestionJob).filter(IngestionJob.id == task_id).one()
+    task.status = "done"
+    task.completed_at = datetime.utcnow()
+    db.commit()
+    run = complete_task_dispatch(
+        db, org.id, run["id"], run["current_step"]["id"],
+        task_id=task.id, actor=user.id,
+    )
+    assert run["status"] == "waiting_verification"
     verification = run["current_step"]
     closed = complete_step(
         db, org.id, run["id"], verification["id"], actor=user.id,
@@ -237,6 +257,16 @@ def test_failed_verification_becomes_exception_instead_of_false_success(db):
         trigger_ref="issue-failed-verification",
         context={"summary": "Inspect pump", "task_title": "Inspect pump"},
         actor=user.id,
+    )
+    assert run["status"] == "waiting_execution"
+    task_id = run["current_step"]["output"]["task_id"]
+    task = db.query(IngestionJob).filter(IngestionJob.id == task_id).one()
+    task.status = "done"
+    task.completed_at = datetime.utcnow()
+    db.commit()
+    run = complete_task_dispatch(
+        db, org.id, run["id"], run["current_step"]["id"],
+        task_id=task.id, actor=user.id,
     )
     assert run["status"] == "waiting_verification"
     verification = run["current_step"]
@@ -292,7 +322,7 @@ def test_lower_policy_gates_otherwise_safe_field_dispatch(db):
     assert run["current_step"]["step_type"] == "task_dispatch"
 
     approved = approve_step(db, org.id, run["id"], run["current_step"]["id"], actor_user_id=user.id)
-    assert approved["status"] == "waiting_verification"
+    assert approved["status"] == "waiting_execution"
     assert approved["human_decision_count"] == 1
 
 
