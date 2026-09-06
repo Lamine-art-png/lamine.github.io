@@ -146,7 +146,12 @@ def post_task_status(
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        task = update_task_status(_context(db, ctx, payload.workspace_id), task_id, payload.status)
+        task = update_task_status(
+            _context(db, ctx, payload.workspace_id),
+            task_id,
+            payload.status,
+            actor=str(ctx.user.id),
+        )
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found") from exc
     return {"status": "ok", "task": task}
