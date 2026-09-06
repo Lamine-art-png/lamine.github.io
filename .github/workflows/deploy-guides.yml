@@ -1,0 +1,149 @@
+name: Deploy AGRO-AI Guides Exact Routes
+
+on:
+  push:
+    branches:
+      - "guides/aep-platform-guides"
+    paths:
+      - "guides/**"
+      - "cloudflare/guides-worker/**"
+      - ".github/workflows/deploy-guides.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-guides-production
+  cancel-in-progress: false
+
+env:
+  GUIDES_URL: https://agroai-pilot.com/guides/
+  ENTERPRISE_GUIDE_URL: https://agroai-pilot.com/guides/enterprise-portal/
+  PLATFORM_GUIDE_URL: https://agroai-pilot.com/guides/platform-api/
+  CONFIG: cloudflare/guides-worker/wrangler.toml
+
+jobs:
+  deploy:
+    name: Validate, deploy exact guide routes, and prove continuity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate additive guide package and official brand asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f guides/index.html
+          test -f guides/enterprise-portal/index.html
+          test -f guides/platform-api/index.html
+          test -f guides/assets/guides.css
+          test -f guides/assets/agro-ai-logo.png
+          cmp -s guides/assets/agro-ai-logo.png figma-enterprise-v4/src/imports/agro-ai-logo-1.png
+          grep -F '<title>AGRO-AI Guides | Enterprise Portal & Platform API</title>' guides/index.html >/dev/null
+          grep -F '<title>AGRO-AI Enterprise Portal Guide</title>' guides/enterprise-portal/index.html >/dev/null
+          grep -F '<title>AGRO-AI Platform API Guide</title>' guides/platform-api/index.html >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/guides"' "$CONFIG" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/guides/*"' "$CONFIG" >/dev/null
+          ! grep -F 'pattern = "agroai-pilot.com/*"' "$CONFIG"
+          ! grep -F 'pattern = "agroai-pilot.com/v1/*"' "$CONFIG"
+          ! grep -F 'pattern = "app.agroai-pilot.com' "$CONFIG"
+          ! grep -F 'pattern = "api.agroai-pilot.com' "$CONFIG"
+
+      - name: Snapshot critical production surfaces before guide deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe() {
+            local name="$1" url="$2" code
+            code="$(curl -sS -L -o "/tmp/$name.before" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
+            case "$code" in
+              2*|3*) ;;
+              *) echo "Pre-deploy continuity probe failed: $name -> $code" >&2; exit 1 ;;
+            esac
+            printf '%s=%s\n' "$name" "$code" >> /tmp/before-codes
+          }
+          probe homepage "https://agroai-pilot.com/"
+          probe careers "https://agroai-pilot.com/careers"
+          probe application "https://agroai-pilot.com/apply?role=research"
+          probe demo "https://agroai-pilot.com/book-a-demo"
+          probe platform_marketing "https://agroai-pilot.com/platform-api"
+          probe enterprise_portal "https://app.agroai-pilot.com/"
+          probe api_health "https://api.agroai-pilot.com/v1/health"
+
+      - name: Dry-run exact Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$CONFIG"
+
+      - name: Deploy only /guides exact routes
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.107.0 deploy --config "$CONFIG"
+
+      - name: Verify guides and existing production continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          wait_for() {
+            local name="$1" url="$2" marker="$3"
+            local body headers code ok
+            body="$(mktemp)"
+            headers="$(mktemp)"
+            ok=0
+            for attempt in $(seq 1 30); do
+              code="$(curl -sS -L -D "$headers" -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url?verify=$GITHUB_SHA-$attempt" || true)"
+              if [ "$code" = "200" ] && grep -F "$marker" "$body" >/dev/null && grep -Fi 'x-agroai-guides-surface: guide' "$headers" >/dev/null; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ok" != "1" ]; then
+              echo "Guide verification failed for $name: HTTP $code" >&2
+              head -c 500 "$body" >&2 || true
+              exit 1
+            fi
+            rm -f "$body" "$headers"
+          }
+          wait_for guides "$GUIDES_URL" '<title>AGRO-AI Guides | Enterprise Portal & Platform API</title>'
+          wait_for enterprise "$ENTERPRISE_GUIDE_URL" '<title>AGRO-AI Enterprise Portal Guide</title>'
+          wait_for platform "$PLATFORM_GUIDE_URL" '<title>AGRO-AI Platform API Guide</title>'
+
+          logo="$(mktemp)"
+          curl -fsS -L --connect-timeout 10 --max-time 40 https://agroai-pilot.com/guides/assets/agro-ai-logo.png -o "$logo"
+          cmp -s "$logo" guides/assets/agro-ai-logo.png
+          rm -f "$logo"
+
+          continuity() {
+            local name="$1" url="$2" code
+            code="$(curl -sS -L -o "/tmp/$name.after" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
+            case "$code" in
+              2*|3*) ;;
+              *) echo "Post-deploy continuity probe failed: $name -> $code" >&2; exit 1 ;;
+            esac
+          }
+          continuity homepage "https://agroai-pilot.com/"
+          continuity careers "https://agroai-pilot.com/careers"
+          continuity application "https://agroai-pilot.com/apply?role=research"
+          continuity demo "https://agroai-pilot.com/book-a-demo"
+          continuity platform_marketing "https://agroai-pilot.com/platform-api"
+          continuity enterprise_portal "https://app.agroai-pilot.com/"
+          continuity api_health "https://api.agroai-pilot.com/v1/health"
+
+          grep -F 'AGRO-AI' /tmp/homepage.after >/dev/null
+          grep -Fi 'careers' /tmp/careers.after >/dev/null
+          grep -F 'Application Portal' /tmp/application.after >/dev/null
+          grep -Fi 'demo' /tmp/demo.after >/dev/null
+          grep -F 'AGRO-AI Platform API' /tmp/platform_marketing.after >/dev/null
