@@ -1,6 +1,10 @@
 export function getConfig() {
   const env = (terrisName, legacyName, fallback = "") => process.env[terrisName] ?? process.env[legacyName] ?? fallback;
   const envBool = (terrisName, legacyName, fallback = "false") => env(terrisName, legacyName, fallback) === "true";
+  const envPercent = (terrisName, legacyName, fallback = "100") => {
+    const value = Number(env(terrisName, legacyName, fallback));
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : Number(fallback);
+  };
   return {
     port: Number(process.env.PORT || 4310),
     corsOrigin: process.env.CORS_ORIGIN || "*",
@@ -16,6 +20,8 @@ export function getConfig() {
     terrisCoreBaseUrl: env("TERRIS_CORE_BASE_URL", "VELIA_CORE_BASE_URL", "http://127.0.0.1:8008"),
     terrisCoreApiKey: env("TERRIS_CORE_API_KEY", "VELIA_CORE_API_KEY", ""),
     terrisCoreModel: env("TERRIS_CORE_MODEL", "VELIA_CORE_MODEL", "terris-core-v0"),
+    terrisCoreFallbackProvider: env("TERRIS_CORE_FALLBACK_PROVIDER", "VELIA_CORE_FALLBACK_PROVIDER", "none").toLowerCase(),
+    terrisCoreTrafficPercent: envPercent("TERRIS_CORE_TRAFFIC_PERCENT", "VELIA_CORE_TRAFFIC_PERCENT", "100"),
 
     embeddingProvider: (process.env.EMBEDDING_PROVIDER || "mock").toLowerCase(),
     geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004",
