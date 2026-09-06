@@ -36,6 +36,8 @@ export function Overview() {
   const missing = arr<Row>(center.missing_evidence);
   const reportsReady = arr<Row>(center.reports_ready);
   const audit = arr<Row>(center.audit_events);
+  const autonomy = (center.autonomy || {}) as Row;
+  const autonomyRuns = arr<Row>(autonomy.recent_runs);
   const priority = center.today_priority || {};
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -71,6 +73,27 @@ export function Overview() {
     }
   }
   async function setTaskStatus(taskId: string, status: string) { setBusy(taskId); try { await apiClient.fieldOps.updateTaskStatus(taskId, { status: status as any, workspace_id: workspaceId }); await refreshAll(); } finally { setBusy(""); } }
+  async function autonomyAction(run: Row, action: "approve" | "reject" | "confirm" | "verify" | "fail") {
+    const step = run.current_step as Row | undefined;
+    if (!step?.id || !run.id) return;
+    const key = `autonomy-${run.id}`;
+    setBusy(key);
+    setMessage("");
+    try {
+      if (action === "approve") await apiClient.autonomy.approveStep(String(run.id), String(step.id));
+      if (action === "reject") await apiClient.autonomy.rejectStep(String(run.id), String(step.id), "Rejected in Command Center");
+      if (action === "confirm") await apiClient.autonomy.completeStep(String(run.id), String(step.id), { executed: true, execution_status: "executed", confirmed_from: "command_center" });
+      if (action === "verify") await apiClient.autonomy.completeStep(String(run.id), String(step.id), { verified: true, verification_status: "verified", confirmed_from: "command_center" });
+      if (action === "fail") await apiClient.autonomy.completeStep(String(run.id), String(step.id), { verified: false, verification_status: "not_verified", outcome_status: "verification_failed", reason: "Operator marked outcome not verified" });
+      setMessage("Autonomous workflow updated.");
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update autonomous workflow.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function addUpdate() {
     if (!updateText.trim()) return;
     setBusy("field-update");
@@ -114,6 +137,20 @@ export function Overview() {
           <Metric label="Open tasks" value={String(openTasks)} detail="Track work in progress" />
           <Metric label="Reports ready" value={String(reportsReady.length)} detail="Daily handoff available" />
         </section>
+
+        <Panel title="Autonomous Operations">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-5">
+            <Metric label="Autonomy policy" value={clean(autonomy.policy?.autonomy_level, "A4")} detail="Maximum execution level allowed by policy" />
+            <Metric label="Autonomous completion" value={autonomy.autonomous_completion_rate === null || autonomy.autonomous_completion_rate === undefined ? "Learning" : `${autonomy.autonomous_completion_rate}%`} detail="Eligible workflows · trailing 30 days" />
+            <Metric label="Active workflows" value={String(autonomy.active_workflows ?? 0)} detail="Owned from trigger to outcome" />
+            <Metric label="Waiting approval" value={String(autonomy.waiting_approval ?? 0)} detail="Human decision explicitly required" />
+            <Metric label="Waiting verification" value={String(autonomy.waiting_verification ?? 0)} detail="Execution done; outcome still unverified" />
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {autonomy.status === "unavailable" ? <InlineState title="Autonomy telemetry is temporarily unavailable." detail="Core Command Center operations remain available during migration or recovery." /> : null}
+            {autonomyRuns.length ? autonomyRuns.map((run) => <AutonomyRunCard key={String(run.id)} run={run} busy={busy} onAction={autonomyAction} />) : <InlineState title="No autonomous workflows yet." detail="Field Intelligence observations and Assurance gaps will start durable workflows here." />}
+          </div>
+        </Panel>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:gap-5">
           <Panel title="Field Queue">
@@ -167,6 +204,37 @@ export function Overview() {
         </Panel>
       </main>
     </div>
+  );
+}
+
+function AutonomyRunCard({ run, busy, onAction }: { run: Row; busy: string; onAction: (run: Row, action: "approve" | "reject" | "confirm" | "verify" | "fail") => void }) {
+  const step = (run.current_step || {}) as Row;
+  const key = `autonomy-${run.id}`;
+  return (
+    <article className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap gap-2">
+            <StatusBadge label={clean(run.status, "running")} tone={run.status === "completed" ? "good" : ["exception", "waiting_approval"].includes(String(run.status)) ? "warn" : "neutral"} />
+            <StatusBadge label={clean(run.effective_autonomy_level, "A4")} />
+          </div>
+          <div className="break-words text-[14px] font-semibold" style={{ color: TEXT }}>{titleCase(clean(run.procedure_key, "Workflow"))}</div>
+          <div className="mt-1 break-words text-[12px]" style={{ color: MUTED }}>{step.name ? `Current: ${clean(step.name)}` : clean(run.outcome_status, "Workflow tracking active")}</div>
+          <div className="mt-1 text-[11px]" style={{ color: MUTED }}>Human decisions: {String(run.human_decision_count ?? 0)} · Verification: {clean(run.verification_status, "pending")}</div>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {run.status === "waiting_approval" ? <>
+          <PortalButton onClick={() => onAction(run, "approve")} disabled={busy === key}>Approve</PortalButton>
+          <PortalButton variant="secondary" onClick={() => onAction(run, "reject")} disabled={busy === key}>Reject</PortalButton>
+        </> : null}
+        {run.status === "waiting_external" ? <PortalButton onClick={() => onAction(run, "confirm")} disabled={busy === key}>Confirm executed</PortalButton> : null}
+        {run.status === "waiting_verification" ? <>
+          <PortalButton onClick={() => onAction(run, "verify")} disabled={busy === key}>Verify outcome</PortalButton>
+          <PortalButton variant="secondary" onClick={() => onAction(run, "fail")} disabled={busy === key}>Not verified</PortalButton>
+        </> : null}
+      </div>
+    </article>
   );
 }
 
