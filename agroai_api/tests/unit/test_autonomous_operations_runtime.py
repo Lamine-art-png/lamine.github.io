@@ -445,3 +445,26 @@ def test_completed_field_observation_drives_durable_procedure_to_idempotent_task
         .count()
         == 1
     )
+
+
+
+def test_procedure_configuration_rejects_steps_without_installed_executor(db):
+    user, org = _enterprise(db)
+    runtime = AutonomousOperationsRuntime(db, organization_id=org.id, workspace_id=None, actor_user_id=user.id)
+    with pytest.raises(AutonomyConflict, match="unsupported executable action types"):
+        runtime.create_procedure(
+            name="Unsafe future adapter",
+            domain="water",
+            autonomy_level=5,
+            trigger_type="field_observation",
+            definition={
+                "steps": [
+                    {
+                        "key": "open-valve",
+                        "action_type": "start_irrigation",
+                        "title": "Start irrigation",
+                        "description": "No installed autonomy adapter exists yet.",
+                    }
+                ]
+            },
+        )

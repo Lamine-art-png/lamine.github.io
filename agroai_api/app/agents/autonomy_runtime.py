@@ -95,6 +95,22 @@ class AutonomousOperationsRuntime:
     ) -> dict[str, Any]:
         if not 0 <= autonomy_level <= 5:
             raise AutonomyConflict("autonomy_level must be between A0 and A5")
+        steps = (definition or {}).get("steps")
+        if steps is not None:
+            if not isinstance(steps, list):
+                raise AutonomyConflict("Procedure steps must be a list")
+            unsupported = sorted({
+                str(step.get("action_type") or "")
+                for step in steps
+                if isinstance(step, dict)
+                and str(step.get("action_type") or "")
+                and str(step.get("action_type") or "") not in EXECUTABLE_ACTION_TYPES
+            })
+            malformed = [step for step in steps if not isinstance(step, dict) or not str(step.get("action_type") or "")]
+            if malformed:
+                raise AutonomyConflict("Every Procedure step must declare an executable action_type")
+            if unsupported:
+                raise AutonomyConflict(f"Procedure references unsupported executable action types: {unsupported}")
         latest = (
             self.db.query(func.max(AgentProcedure.version))
             .filter(
