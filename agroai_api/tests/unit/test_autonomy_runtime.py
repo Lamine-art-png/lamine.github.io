@@ -199,7 +199,32 @@ def test_physical_action_requires_approval_execution_confirmation_and_verificati
     )
     assert closed["status"] == "completed"
     assert closed["human_decision_count"] == 1
-    assert autonomy_summary(db, org.id, workspace.id)["autonomous_completion_rate"] == 0.0
+    summary = autonomy_summary(db, org.id, workspace.id)
+    assert summary["eligible_completed_30d"] == 0
+    assert summary["autonomous_completion_rate"] is None
+
+
+def test_manual_verification_is_not_reported_as_zero_human_autonomy(db):
+    user, org, workspace = _scope(db, "manual-verify")
+    run = start_run(
+        db, org.id,
+        procedure_key="field_issue_resolution",
+        workspace_id=workspace.id,
+        trigger_type="field_issue",
+        trigger_ref="issue-manually-verified",
+        context={"summary": "Inspect valve"},
+        actor=user.id,
+    )
+    verification = run["current_step"]
+    closed = complete_step(
+        db, org.id, run["id"], verification["id"], actor=user.id,
+        result={"verified": True, "verification_status": "verified"},
+        human_decision=True,
+    )
+    assert closed["human_decision_count"] == 1
+    summary = autonomy_summary(db, org.id, workspace.id)
+    assert summary["eligible_completed_30d"] == 1
+    assert summary["autonomous_completion_rate"] == 0.0
 
 
 def test_failed_verification_becomes_exception_instead_of_false_success(db):
