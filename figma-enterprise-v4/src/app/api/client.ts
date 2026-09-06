@@ -159,6 +159,7 @@ async function downloadPost(path: string, payload?: unknown): Promise<Blob> {
 
 function get<T>(path: string, token?: string | null) { return request<T>(path, { token }); }
 function post<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "POST", body: payload ? JSON.stringify(payload) : undefined, token }); }
+function put<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "PUT", body: payload ? JSON.stringify(payload) : undefined, token }); }
 function patch<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "PATCH", body: payload ? JSON.stringify(payload) : undefined, token }); }
 function remove<T>(path: string, token?: string | null) { return request<T>(path, { method: "DELETE", token }); }
 function upload<T>(path: string, file: File) { const form = new FormData(); form.append("file", file); return request<T>(path, { method: "POST", body: form }); }
