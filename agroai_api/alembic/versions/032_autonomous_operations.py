@@ -93,7 +93,7 @@ def upgrade() -> None:
     op.create_table(
         "autonomy_steps",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("run_id", sa.String(), sa.ForeignKey("autonomy_runs.id", ondelete="CASCADE"), nullable=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("step_key", sa.String(length=120), nullable=False),
@@ -140,8 +140,30 @@ def upgrade() -> None:
     op.create_index("ix_autonomy_event_run_time", "autonomy_events", ["run_id", "created_at"])
     op.create_index("ix_autonomy_event_scope_time", "autonomy_events", ["organization_id", "created_at"])
 
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            """
+            CREATE OR REPLACE FUNCTION protect_autonomy_events_append_only()
+            RETURNS trigger AS $
+            BEGIN
+                RAISE EXCEPTION 'AGRO-AI autonomy event history is append-only';
+            END;
+            $ LANGUAGE plpgsql;
+            """
+        )
+        op.execute(
+            """
+            CREATE TRIGGER trg_autonomy_events_append_only
+            BEFORE UPDATE OR DELETE ON autonomy_events
+            FOR EACH ROW EXECUTE FUNCTION protect_autonomy_events_append_only();
+            """
+        )
+
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_autonomy_events_append_only ON autonomy_events")
+        op.execute("DROP FUNCTION IF EXISTS protect_autonomy_events_append_only()")
     op.drop_table("autonomy_events")
     op.drop_table("autonomy_steps")
     op.drop_table("autonomy_runs")
