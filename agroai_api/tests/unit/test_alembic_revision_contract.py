@@ -83,6 +83,7 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
             "030_assurance_intelligence_v2",
             "030_intelligence_state_memory",
         ),
+        "032_repair_onboarding_state": "031_merge_assurance_intelligence",
     }
     actual = {}
 
