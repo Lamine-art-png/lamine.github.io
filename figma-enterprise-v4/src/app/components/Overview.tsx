@@ -37,6 +37,11 @@ export function Overview() {
   const reportsReady = arr<Row>(center.reports_ready);
   const audit = arr<Row>(center.audit_events);
   const priority = center.today_priority || {};
+  const autonomy = center.autonomy || {};
+  const pendingApprovals = arr<Row>(autonomy.pending_approvals);
+  const pendingVerification = arr<Row>(autonomy.pending_verification);
+  const procedures = arr<Row>(autonomy.procedures);
+  const recentRuns = arr<Row>(autonomy.recent_runs);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [updateText, setUpdateText] = useState("");
@@ -44,6 +49,10 @@ export function Overview() {
   const [fieldName, setFieldName] = useState("");
   const [block, setBlock] = useState("");
   const [crop, setCrop] = useState("");
+  const [procedureName, setProcedureName] = useState("");
+  const [procedureEventType, setProcedureEventType] = useState("issue");
+  const [procedureSeverity, setProcedureSeverity] = useState("medium");
+  const [procedureAutonomy, setProcedureAutonomy] = useState("4");
   const openTasks = useMemo(() => tasks.filter((task) => task.status !== "done").length, [tasks]);
   const fieldsNeedAttention = useMemo(() => queue.filter((row) => row.priority === "high" || row.status === "needs_attention").length, [queue]);
 
@@ -70,7 +79,107 @@ export function Overview() {
       setBusy("");
     }
   }
-  async function setTaskStatus(taskId: string, status: string) { setBusy(taskId); try { await apiClient.fieldOps.updateTaskStatus(taskId, { status: status as any, workspace_id: workspaceId }); await refreshAll(); } finally { setBusy(""); } }
+  async function setTaskStatus(taskId: string, status: string, evidenceIds: string[] = []) {
+    setBusy(taskId);
+    setMessage("");
+    try {
+      await apiClient.fieldOps.updateTaskStatus(taskId, {
+        status: status as any,
+        workspace_id: workspaceId,
+        evidence_ids: evidenceIds,
+      });
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update task.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function approveAndExecute(action: Row) {
+    const actionId = String(action.id || "");
+    const runId = String(action.run_id || "");
+    if (!actionId || !runId) return;
+    setBusy(actionId);
+    setMessage("");
+    try {
+      const scope = action.workspace_id ? { workspace_id: String(action.workspace_id) } : {};
+      await apiClient.autonomy.approveAction(runId, actionId, scope);
+      await apiClient.autonomy.executeAction(runId, actionId, scope);
+      setMessage("Autonomous action approved and execution recorded.");
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not approve autonomous action.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function rejectAutonomyAction(action: Row) {
+    const actionId = String(action.id || "");
+    const runId = String(action.run_id || "");
+    if (!actionId || !runId) return;
+    setBusy(actionId);
+    setMessage("");
+    try {
+      const scope = action.workspace_id ? { workspace_id: String(action.workspace_id) } : {};
+      await apiClient.autonomy.rejectAction(runId, actionId, scope);
+      setMessage("Autonomous action rejected.");
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not reject autonomous action.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function createFieldProcedure() {
+    if (!procedureName.trim()) return;
+    setBusy("procedure-create");
+    setMessage("");
+    try {
+      const created = await apiClient.autonomy.createProcedure({
+        workspace_id: workspaceId,
+        name: procedureName.trim(),
+        domain: "field_intelligence",
+        autonomy_level: Number(procedureAutonomy),
+        trigger_type: "field_observation",
+        definition: {
+          when: {
+            event_types: [procedureEventType],
+            minimum_severity: procedureSeverity,
+          },
+        },
+      }) as Row;
+      await apiClient.autonomy.setProcedureStatus(String(created.id), {
+        workspace_id: workspaceId,
+        status: "active",
+      });
+      setProcedureName("");
+      setMessage("Procedure created and activated.");
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not create Procedure.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function setProcedureStatus(procedure: Row, nextStatus: "active" | "disabled") {
+    setBusy(String(procedure.id || ""));
+    setMessage("");
+    try {
+      await apiClient.autonomy.setProcedureStatus(String(procedure.id), {
+        workspace_id: procedure.workspace_id || undefined,
+        status: nextStatus,
+      });
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update Procedure.");
+    } finally {
+      setBusy("");
+    }
+  }
   async function addUpdate() {
     if (!updateText.trim()) return;
     setBusy("field-update");
@@ -113,6 +222,105 @@ export function Overview() {
           <Metric label="Fields needing attention" value={String(fieldsNeedAttention)} detail={clean(priority.recommended_action, "Review field queue")} />
           <Metric label="Open tasks" value={String(openTasks)} detail="Track work in progress" />
           <Metric label="Reports ready" value={String(reportsReady.length)} detail="Daily handoff available" />
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr] xl:gap-5">
+          <Panel title="Autonomous Operations">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <MiniMetric label="Autonomous Completion Rate" value={`${Number(autonomy.autonomous_completion_rate || 0).toFixed(1)}%`} />
+              <MiniMetric label="Active workflows" value={String(autonomy.active_runs || 0)} />
+              <MiniMetric label="Verified zero-touch" value={String(autonomy.zero_touch_successes || 0)} />
+              <MiniMetric label="Human-assisted" value={String(autonomy.human_assisted_successes || 0)} />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div>
+                <div className="mb-2 text-[12px] font-semibold" style={{ color: TEXT }}>Waiting for approval</div>
+                <div className="space-y-2">
+                  {pendingApprovals.length ? pendingApprovals.map((action) => (
+                    <AutonomyActionCard
+                      key={String(action.id)}
+                      action={action}
+                      busy={busy}
+                      onApprove={approveAndExecute}
+                      onReject={rejectAutonomyAction}
+                    />
+                  )) : <InlineState title="No approval-gated actions are waiting." />}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-[12px] font-semibold" style={{ color: TEXT }}>Waiting for verification</div>
+                <div className="space-y-2">
+                  {pendingVerification.length ? pendingVerification.slice(0, 6).map((action) => (
+                    <div key={String(action.id)} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge label="Verification required" tone="warn" />
+                        <StatusBadge label={clean(action.risk_level, "low")} />
+                      </div>
+                      <div className="mt-2 break-words text-[13px] font-semibold" style={{ color: TEXT }}>
+                        {clean((action.payload || {}).title || action.action_type)}
+                      </div>
+                      <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{clean(action.procedure_name || action.source_type)}</div>
+                    </div>
+                  )) : <InlineState title="No executed actions are waiting for proof." />}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-2 text-[12px] font-semibold" style={{ color: TEXT }}>Recent autonomous work</div>
+              <div className="space-y-2">
+                {recentRuns.length ? recentRuns.slice(0, 5).map((run) => (
+                  <div key={String(run.id)} className="flex flex-col gap-2 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                    <div className="min-w-0">
+                      <div className="break-words text-[12px] font-semibold" style={{ color: TEXT }}>{clean((run.result || {}).procedure_name || run.workflow_type)}</div>
+                      <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{clean(run.source_type)} · {clean(run.current_step)}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge label={clean(run.status)} tone={tone(String(run.status || ""))} />
+                      <StatusBadge label={`A${Number(run.autonomy_level || 0)}`} />
+                    </div>
+                  </div>
+                )) : <InlineState title="No autonomous workflows yet." />}
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Procedures">
+            <div className="mb-4 rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+              <div className="text-[13px] font-semibold" style={{ color: TEXT }}>Teach AGRO-AI</div>
+              <p className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>Field Intelligence procedures watch completed observations and dispatch safe work under policy.</p>
+              <div className="mt-3 space-y-3">
+                <Input label="Procedure name" value={procedureName} onChange={setProcedureName} />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Select label="Event type" value={procedureEventType} onChange={setProcedureEventType} options={["issue", "observation", "irrigation_event", "meter_reading", "equipment", "pest_disease", "compliance_note", "operator_note"]} />
+                  <Select label="Minimum severity" value={procedureSeverity} onChange={setProcedureSeverity} options={["low", "medium", "high", "critical"]} />
+                  <Select label="Autonomy level" value={procedureAutonomy} onChange={setProcedureAutonomy} options={["2", "3", "4"]} />
+                </div>
+                <PortalButton onClick={createFieldProcedure} disabled={!procedureName.trim() || busy === "procedure-create"}>
+                  {busy === "procedure-create" ? "Creating…" : "Create & activate"}
+                </PortalButton>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {procedures.length ? procedures.map((procedure) => (
+                <div key={String(procedure.id)} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="break-words text-[13px] font-semibold" style={{ color: TEXT }}>{clean(procedure.name)}</div>
+                      <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{titleCase(clean(procedure.domain, ""))} · A{Number(procedure.autonomy_level || 0)} · v{Number(procedure.version || 1)}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge label={clean(procedure.status)} tone={procedure.status === "active" ? "good" : "neutral"} />
+                      {procedure.status === "active"
+                        ? <PortalButton variant="secondary" onClick={() => setProcedureStatus(procedure, "disabled")} disabled={busy === procedure.id}>Disable</PortalButton>
+                        : <PortalButton variant="secondary" onClick={() => setProcedureStatus(procedure, "active")} disabled={busy === procedure.id}>Activate</PortalButton>}
+                    </div>
+                  </div>
+                </div>
+              )) : <InlineState title="No procedures configured yet." />}
+            </div>
+          </Panel>
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:gap-5">
@@ -189,17 +397,106 @@ function QueueCard({ item, busy, onTask }: { item: Row; busy: string; onTask: (i
   );
 }
 
-function TaskCard({ task, busy, onStatus }: { task: Row; busy: string; onStatus: (id: string, status: string) => void }) {
+function TaskCard({ task, busy, onStatus }: { task: Row; busy: string; onStatus: (id: string, status: string, evidenceIds?: string[]) => void }) {
+  const [proofOpen, setProofOpen] = useState(false);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [proofOptions, setProofOptions] = useState<Row[]>([]);
+  const [proofId, setProofId] = useState("");
+  const [proofError, setProofError] = useState("");
+
+  async function completeTask() {
+    if (!task.requires_verification) {
+      onStatus(String(task.id), "done");
+      return;
+    }
+    if (!proofOpen) {
+      setProofOpen(true);
+      setProofLoading(true);
+      setProofError("");
+      try {
+        const response = await apiClient.evidence.list() as Row;
+        const accepted = new Set(["verified", "accepted", "validated", "complete", "good", "ok", "usable", "live"]);
+        const rows = arr<Row>(response.evidence).filter((row) => {
+          const sameWorkspace = !task.workspace_id || String(row.workspace_id || "") === String(task.workspace_id);
+          return sameWorkspace && accepted.has(String(row.quality_status || "").toLowerCase());
+        });
+        setProofOptions(rows);
+        if (rows[0]?.id) setProofId(String(rows[0].id));
+      } catch (error) {
+        setProofError(error instanceof Error ? error.message : "Could not load evidence.");
+      } finally {
+        setProofLoading(false);
+      }
+      return;
+    }
+    if (proofId) onStatus(String(task.id), "done", [proofId]);
+  }
+
   return (
     <article className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-      <div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge label={clean(task.priority, "medium")} tone={task.priority === "high" ? "warn" : "neutral"} /><StatusBadge label={clean(task.status, "open")} tone={tone(String(task.status || "open"))} /></div>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <StatusBadge label={clean(task.priority, "medium")} tone={task.priority === "high" ? "warn" : "neutral"} />
+        <StatusBadge label={clean(task.status, "open")} tone={tone(String(task.status || "open"))} />
+        {task.requires_verification ? <StatusBadge label="Verification required" tone="warn" /> : null}
+      </div>
       <div className="break-words text-[14px] font-semibold" style={{ color: TEXT }}>{clean(task.title)}</div>
       <div className="mt-1 break-words text-[12px] leading-relaxed" style={{ color: MUTED }}>{clean(task.why)}</div>
       <List items={lines(task.instructions)} />
       <Chips items={lines(task.evidence_required || task.missing_evidence)} empty="No required evidence listed." />
-      <div className="mt-3 flex flex-wrap gap-2">{[["open", "Reopen"], ["in_progress", "Start"], ["done", "Done"]].map(([status, label]) => <PortalButton key={status} variant="secondary" onClick={() => onStatus(String(task.id), status)} disabled={busy === task.id}>{label}</PortalButton>)}</div>
+      {proofOpen && task.requires_verification ? (
+        <div className="mt-3 rounded-xl p-3" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <label className="text-[12px]" style={{ color: MUTED }}>Verification evidence
+            <select
+              aria-label="Verification evidence"
+              value={proofId}
+              onChange={(event) => setProofId(event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg px-3 text-[13px] outline-none"
+              style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}
+            >
+              <option value="">Select evidence</option>
+              {proofOptions.map((row) => <option key={String(row.id)} value={String(row.id)}>{clean(row.title || row.summary || row.id)}</option>)}
+            </select>
+          </label>
+          {proofLoading ? <div className="mt-2 text-[11px]" style={{ color: MUTED }}>Load evidence</div> : null}
+          {!proofLoading && !proofOptions.length ? (
+            <div className="mt-2">
+              <div className="text-[11px]" style={{ color: MUTED }}>No eligible evidence is available in this workspace.</div>
+              <PortalButton variant="secondary" onClick={() => window.location.assign("/evidence")}>Upload evidence</PortalButton>
+            </div>
+          ) : null}
+          {proofError ? <div className="mt-2 text-[11px]" style={{ color: MUTED }}>{proofError}</div> : null}
+        </div>
+      ) : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <PortalButton variant="secondary" onClick={() => onStatus(String(task.id), "open")} disabled={busy === task.id}>Reopen</PortalButton>
+        <PortalButton variant="secondary" onClick={() => onStatus(String(task.id), "in_progress")} disabled={busy === task.id}>Start</PortalButton>
+        <PortalButton variant="secondary" onClick={completeTask} disabled={busy === task.id || (proofOpen && task.requires_verification && !proofId)}>
+          {proofOpen && task.requires_verification ? "Verify & complete" : "Done"}
+        </PortalButton>
+      </div>
     </article>
   );
+}
+
+function AutonomyActionCard({ action, busy, onApprove, onReject }: { action: Row; busy: string; onApprove: (action: Row) => void; onReject: (action: Row) => void }) {
+  return (
+    <div className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge label="Waiting for approval" tone="warn" />
+        <StatusBadge label={clean(action.risk_level, "medium")} />
+      </div>
+      <div className="mt-2 break-words text-[13px] font-semibold" style={{ color: TEXT }}>{clean((action.payload || {}).title || action.action_type)}</div>
+      <div className="mt-1 break-words text-[11px]" style={{ color: MUTED }}>{clean((action.payload || {}).description || action.procedure_name)}</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <PortalButton onClick={() => onApprove(action)} disabled={busy === action.id}>Approve & execute</PortalButton>
+        <PortalButton variant="secondary" onClick={() => onReject(action)} disabled={busy === action.id}>Reject</PortalButton>
+      </div>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div><div className="mt-1 text-[20px] font-semibold" style={{ color: TEXT }}>{value}</div></div>;
 }
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {

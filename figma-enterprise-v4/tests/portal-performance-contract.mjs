@@ -37,6 +37,8 @@ assert.match(auth, /1500/);
 assert.match(overview, /apiClient\.fieldOps\.commandCenter\(workspaceId\)/);
 assert.doesNotMatch(overview, /apiClient\.fieldOps\.tasks\(workspaceId\)/);
 assert.doesNotMatch(overview, /apiClient\.fieldOps\.auditTrail\(workspaceId\)/);
+assert.match(overview, /const autonomy = center\.autonomy \|\| \{\}/);
+assert.doesNotMatch(overview, /apiClient\.autonomy\.commandCenter/);
 
 // The expensive intelligence brief is demand-loaded only when the Brain drawer
 // is open. It must never be an unconditional global page-load request.

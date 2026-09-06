@@ -282,7 +282,7 @@ export type IntelligenceRunPayload = { task: "chat" | "field_diagnosis" | "excep
 export type WorkbenchRunPayload = { workspace_id?: string; field_id?: string; mode?: "daily" | "field" | "compliance" | "irrigation" };
 export type ReportFactoryPayload = { report_type: "water_use_summary" | "compliance_packet" | "exception_report" | "executive_brief" | "grower_recommendation"; workspace_id?: string; field_id?: string; audience?: "operator" | "owner" | "agency" | "lender" | "investor" | "grower"; preferred_language?: string };
 export type FieldOpsTaskPayload = { title: string; field?: string; block?: string; assigned_to?: string; priority?: "high" | "medium" | "low"; why: string; instructions?: string[]; evidence_required?: string[]; source_exception_id?: string; source_decision_id?: string; created_from?: "exception" | "decision" | "missing_evidence" | "manual" | "field_update"; workspace_id?: string };
-export type FieldOpsTaskStatusPayload = { status: "open" | "in_progress" | "blocked" | "done" | "needs_review"; workspace_id?: string };
+export type FieldOpsTaskStatusPayload = { status: "open" | "in_progress" | "blocked" | "done" | "needs_review"; workspace_id?: string; evidence_ids?: string[] };
 export type FieldUpdatePayload = { field_id?: string; field_name?: string; block?: string; crop?: string; update_text: string; event_type: "observation" | "meter_reading" | "irrigation_event" | "issue" | "photo_note" | "operator_note" | "compliance_note"; occurred_at?: string; water_gallons?: number; flow_gpm?: number; duration_minutes?: number; attachments?: Record<string, unknown>[]; workspace_id?: string };
 export type FieldMessagePayload = { message: string; sender_role: "operator" | "manager" | "agency" | "advisor"; channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams"; field_hint?: string; workspace_id?: string };
 export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
@@ -440,6 +440,19 @@ export const apiClient = {
   reports: { list: () => get("/v1/reports"), generate: (payload?: unknown) => post("/v1/reports/generate", payload), export: (payload?: unknown) => post("/v1/reports/export", payload) },
   artifacts: { list: () => get("/v1/artifacts"), get: (artifactId: string) => get(`/v1/artifacts/${encodeURIComponent(artifactId)}`), download: (artifactId: string) => download(`/v1/artifacts/${encodeURIComponent(artifactId)}/download`) },
   agents: { list: () => get("/v1/agents/runs"), run: (payload?: unknown) => post("/v1/agents/run", payload), status: (runId: string) => get(`/v1/agents/runs/${encodeURIComponent(runId)}`) },
+  autonomy: {
+    createProcedure: (payload: unknown) => post("/v1/agents/autonomy/procedures", payload),
+    setProcedureStatus: (procedureId: string, payload: unknown) => post(`/v1/agents/autonomy/procedures/${encodeURIComponent(procedureId)}/status`, payload),
+    createPolicy: (payload: unknown) => post("/v1/agents/autonomy/policies", payload),
+    startRun: (payload: unknown) => post("/v1/agents/autonomy/runs", payload),
+    run: (runId: string, workspaceId?: string) => get(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    planAction: (runId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/actions`, payload),
+    approveAction: (runId: string, actionId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/actions/${encodeURIComponent(actionId)}/approve`, payload),
+    rejectAction: (runId: string, actionId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/actions/${encodeURIComponent(actionId)}/reject`, payload),
+    executeAction: (runId: string, actionId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/actions/${encodeURIComponent(actionId)}/execute`, payload),
+    verifyAction: (runId: string, actionId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/actions/${encodeURIComponent(actionId)}/verify`, payload),
+    completeRun: (runId: string, payload: unknown) => post(`/v1/agents/autonomy/runs/${encodeURIComponent(runId)}/complete`, payload),
+  },
   ai: { status: () => get("/v1/ai/status"), chat: (payload: AiRequestPayload) => post("/v1/ai/chat", payload), irrigationRecommendation: (payload: AiRequestPayload) => post("/v1/ai/irrigation-recommendation", payload), assuranceReview: (payload: AiRequestPayload) => post("/v1/ai/assurance-review", payload), reportDraft: (payload: AiRequestPayload) => post("/v1/ai/report-draft", payload), integrationDiagnosis: (payload: AiRequestPayload) => post("/v1/ai/integration-diagnosis", payload) },
   intelligence: { brief: () => get("/v1/intelligence/brief"), brainRun: (payload: IntelligenceRunPayload) => post("/v1/intelligence/brain/run", payload), run: (payload: IntelligenceRunPayload) => post("/v1/intelligence/run", payload), ask: (payload: IntelligenceAskPayload) => post("/v1/intelligence/run", { task: "chat", question: payload.question, workspace_id: payload.workspace_id, preferred_language: payload.preferred_language }), action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload) },
   readiness: { summary: (workspaceId?: string) => get(`/v1/readiness/summary${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
