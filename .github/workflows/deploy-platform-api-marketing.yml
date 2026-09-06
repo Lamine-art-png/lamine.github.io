@@ -208,7 +208,7 @@ jobs:
   deploy-guides-from-same-repo-pr:
     name: Deploy only AGRO-AI /guides exact routes
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 12
     env:
       GUIDES_CONFIG: cloudflare/guides-worker/wrangler.toml
