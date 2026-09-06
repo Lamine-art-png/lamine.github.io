@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from app.agents.autonomy_runtime import AutonomyConflict, AutonomyForbidden, AutonomousOperationsRuntime
+from app.agents.field_intelligence_bridge import enqueue_completed_observation, run_trigger_jobs
+from app.agents.models import AgentWorkflowRun
 from app.models.field_intelligence import FieldObservation
+from app.models.operational_records import IngestionJob
 from app.models.saas import Organization, User, Workspace
 
 
@@ -358,3 +361,86 @@ def test_autonomy_rejects_non_idempotent_freeform_adapter_even_when_agentic_surf
             risk_level="low",
             payload={},
         )
+
+
+
+def test_completed_field_observation_drives_durable_procedure_to_idempotent_task(db):
+    user, org = _enterprise(db)
+    workspace = Workspace(id="ws-fi-autonomy-e2e", organization_id=org.id, name="Field Ops", mode="live")
+    db.add(workspace)
+    db.commit()
+
+    runtime = AutonomousOperationsRuntime(
+        db,
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        actor_user_id=user.id,
+    )
+    procedure = runtime.create_procedure(
+        name="Dispatch high-severity field issues",
+        domain="field_intelligence",
+        autonomy_level=4,
+        trigger_type="field_observation",
+        definition={"when": {"event_types": ["issue"], "minimum_severity": "high"}},
+    )
+    runtime.set_procedure_status(procedure["id"], "active")
+
+    observation = FieldObservation(
+        tenant_id=org.id,
+        workspace_id=workspace.id,
+        field_name="North 12",
+        block_name="Block A",
+        event_type="issue",
+        severity="high",
+        status="completed",
+        summary="Leak detected at west valve.",
+        recommended_action="Inspect and repair the west valve.",
+        confidence=0.97,
+        structured_json={},
+        uncertain_fields_json=[],
+        correlation_json={},
+        provenance_json={"source": "field_intelligence"},
+        task_ids_json=[],
+        evidence_ids_json=[],
+        audit_json=[],
+    )
+    db.add(observation)
+    db.flush()
+    trigger = enqueue_completed_observation(db, observation)
+    db.commit()
+    assert trigger is not None
+
+    first = run_trigger_jobs(db, limit=10, worker_id="autonomy-test-worker")
+    assert first["processed"] == 1
+    run = (
+        db.query(AgentWorkflowRun)
+        .filter(
+            AgentWorkflowRun.organization_id == org.id,
+            AgentWorkflowRun.source_id == observation.id,
+        )
+        .one()
+    )
+    assert run.status == "waiting_evidence"
+    task = (
+        db.query(IngestionJob)
+        .filter(
+            IngestionJob.tenant_id == org.id,
+            IngestionJob.job_type == "field_ops_task",
+        )
+        .one()
+    )
+    assert (task.input_json or {}).get("source_autonomy_run_id") == run.id
+    assert (task.input_json or {}).get("source_autonomy_action_id")
+
+    # Replay cannot create a second workflow or duplicate field task.
+    replay = enqueue_completed_observation(db, observation)
+    db.commit()
+    assert replay is not None
+    run_trigger_jobs(db, limit=10, worker_id="autonomy-test-worker-2")
+    assert db.query(AgentWorkflowRun).filter(AgentWorkflowRun.organization_id == org.id).count() == 1
+    assert (
+        db.query(IngestionJob)
+        .filter(IngestionJob.tenant_id == org.id, IngestionJob.job_type == "field_ops_task")
+        .count()
+        == 1
+    )

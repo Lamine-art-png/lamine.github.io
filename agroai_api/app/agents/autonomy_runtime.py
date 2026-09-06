@@ -509,7 +509,8 @@ class AutonomousOperationsRuntime:
         zero_touch = [row for row in successful if int(row.human_touch_count or 0) == 0]
         assisted = [row for row in successful if int(row.human_touch_count or 0) > 0]
         active = [row for row in runs if row.status in RUN_ACTIVE]
-        denominator = len(successful)
+        terminal = [row for row in runs if row.status in RUN_TERMINAL]
+        denominator = len(terminal)
         run_by_id = {row.id: row for row in runs}
         run_ids = list(run_by_id)
         pending_actions = (
@@ -548,9 +549,11 @@ class AutonomousOperationsRuntime:
             "active_runs": len(active),
             "waiting_approval": sum(1 for row in active if row.status == "waiting_approval"),
             "waiting_evidence": sum(1 for row in active if row.status == "waiting_evidence"),
+            "terminal_runs": len(terminal),
             "verified_successes": len(successful),
             "zero_touch_successes": len(zero_touch),
             "human_assisted_successes": len(assisted),
+            "verified_completion_rate": round((len(successful) / denominator * 100.0), 2) if denominator else 0.0,
             "autonomous_completion_rate": round((len(zero_touch) / denominator * 100.0), 2) if denominator else 0.0,
             "pending_approvals": [
                 command_action(row) for row in pending_actions if row.status == "approval_required"
