@@ -174,6 +174,28 @@ def test_failed_verification_becomes_exception_instead_of_false_success(db):
     assert failed["completed_at"] is None
 
 
+def test_a2_policy_cannot_be_upgraded_into_execution_by_clicking_approve(db):
+    user, org, workspace = _scope(db, "a2")
+    upsert_policy(
+        db,
+        org.id,
+        workspace_id=workspace.id,
+        autonomy_level="A2",
+        actor_user_id=user.id,
+    )
+    run = start_run(
+        db, org.id,
+        procedure_key="field_issue_resolution",
+        workspace_id=workspace.id,
+        trigger_type="manual",
+        context={"summary": "Prepare Block C follow-up"},
+        actor=user.id,
+    )
+    assert run["status"] == "exception"
+    assert run["current_step"]["status"] == "blocked_policy"
+    assert "requires A3 or higher" in run["failure_reason"]
+
+
 def test_lower_policy_gates_otherwise_safe_field_dispatch(db):
     user, org, workspace = _scope(db)
     upsert_policy(
