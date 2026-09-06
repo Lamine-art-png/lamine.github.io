@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, "..");
+const voice = fs.readFileSync(path.join(root, "src/app/components/voice/VoiceAssistantDock.tsx"), "utf8");
+const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelligence.tsx"), "utf8");
+const uploadToast = fs.readFileSync(path.join(root, "src/app/components/UploadStatusToast.tsx"), "utf8");
+
+assert.match(voice, /new RTCPeerConnection\(\)/);
+assert.match(voice, /createDataChannel\("oai-events"\)/);
+assert.match(voice, /\/v1\/voice\/realtime-call/);
+assert.match(voice, /conversation\.item\.input_audio_transcription\.completed/);
+assert.match(voice, /response\.function_call_arguments\.done/);
+assert.match(voice, /execute_aep_action/);
+assert.match(voice, /Confirm AEP action/);
+assert.match(voice, /cancelled_by_user/);
+assert.match(voice, /echoCancellation: true/);
+assert.match(voice, /noiseSuppression: true/);
+assert.match(voice, /autoGainControl: true/);
+assert.match(voice, /option value="wo">Wolof/);
+assert.match(voice, /option value="deep">Deep/);
+
+assert.match(intelligence, /<VoiceAssistantDock/);
+assert.match(intelligence, /surface="ask"/);
+assert.match(intelligence, /await controller\.send\(userText\)/);
+
+assert.match(uploadToast, /location\.pathname === "\/field-intelligence"/);
+assert.match(uploadToast, /<VoiceAssistantDock surface="field"/);
+
+console.log("AEP realtime voice contract OK");
