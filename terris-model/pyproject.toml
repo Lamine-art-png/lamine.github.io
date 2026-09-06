@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terris-core"
+version = "0.1.0"
+description = "AGRO-AI Terris Core post-training, evaluation, and serving platform"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.8,<3",
+  "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+train = [
+  "torch>=2.4",
+  "transformers>=4.51,<5",
+  "datasets>=3.2,<5",
+  "peft>=0.14,<1",
+  "accelerate>=1.2,<2",
+  "safetensors>=0.4,<1",
+]
+serve = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "torch>=2.4",
+  "transformers>=4.51,<5",
+  "peft>=0.14,<1",
+  "accelerate>=1.2,<2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
