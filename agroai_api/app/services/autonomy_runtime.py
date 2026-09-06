@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.autonomy import AutonomyEvent, AutonomyPolicy, AutonomyProcedure, AutonomyRun, AutonomyStep
@@ -603,33 +603,66 @@ def get_run(db: Session, organization_id: str, run_id: str) -> dict[str, Any]:
 
 
 def autonomy_summary(db: Session, organization_id: str, workspace_id: str | None = None) -> dict[str, Any]:
+    """Return bounded Command Center telemetry without N+1 workflow reads."""
     policy = resolve_policy(db, organization_id, workspace_id)
-    query = db.query(AutonomyRun).filter(AutonomyRun.organization_id == organization_id)
+    scope = [AutonomyRun.organization_id == organization_id]
     if workspace_id:
-        query = query.filter(AutonomyRun.workspace_id == workspace_id)
-    active = query.filter(AutonomyRun.status.in_(ACTIVE_STATUSES)).all()
+        scope.append(AutonomyRun.workspace_id == workspace_id)
+
+    status_counts = dict(
+        db.query(AutonomyRun.status, func.count(AutonomyRun.id))
+        .filter(*scope, AutonomyRun.status.in_(tuple(ACTIVE_STATUSES)))
+        .group_by(AutonomyRun.status)
+        .all()
+    )
     cutoff = datetime.utcnow() - timedelta(days=30)
-    completed = query.filter(AutonomyRun.status == "completed", AutonomyRun.completed_at >= cutoff).all()
-    eligible = [row for row in completed if row.eligible_for_autonomy]
-    autonomous = [row for row in eligible if row.human_decision_count == 0]
-    verified = [row for row in completed if row.verification_status == "verified"]
+    completed_count, eligible_count, autonomous_count, verified_count = (
+        db.query(
+            func.count(AutonomyRun.id),
+            func.coalesce(func.sum(case((AutonomyRun.eligible_for_autonomy.is_(True), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((
+                and_(AutonomyRun.eligible_for_autonomy.is_(True), AutonomyRun.human_decision_count == 0), 1
+            ), else_=0)), 0),
+            func.coalesce(func.sum(case((AutonomyRun.verification_status == "verified", 1), else_=0)), 0),
+        )
+        .filter(*scope, AutonomyRun.status == "completed", AutonomyRun.completed_at >= cutoff)
+        .one()
+    )
+
+    recent_rows = (
+        db.query(AutonomyRun)
+        .filter(*scope)
+        .order_by(AutonomyRun.updated_at.desc())
+        .limit(8)
+        .all()
+    )
+    run_ids = [row.id for row in recent_rows]
+    current_steps: dict[tuple[str, int], AutonomyStep] = {}
+    if run_ids:
+        for step in db.query(AutonomyStep).filter(AutonomyStep.run_id.in_(run_ids)).all():
+            current_steps[(step.run_id, step.sequence)] = step
+
     def pct(n: int, d: int) -> float | None:
-        return round((n / d) * 100.0, 1) if d else None
+        return round((int(n or 0) / int(d)) * 100.0, 1) if d else None
+
     return {
         "status": "ok",
         "policy": serialize_policy(policy),
-        "active_workflows": len(active),
-        "waiting_approval": len([row for row in active if row.status == "waiting_approval"]),
-        "waiting_external": len([row for row in active if row.status == "waiting_external"]),
-        "waiting_verification": len([row for row in active if row.status == "waiting_verification"]),
-        "exceptions": len([row for row in active if row.status == "exception"]),
-        "completed_30d": len(completed),
-        "eligible_completed_30d": len(eligible),
-        "autonomous_completed_30d": len(autonomous),
-        "autonomous_completion_rate": pct(len(autonomous), len(eligible)),
-        "verified_completion_rate": pct(len(verified), len(completed)),
+        "active_workflows": int(sum(status_counts.values())),
+        "waiting_approval": int(status_counts.get("waiting_approval", 0)),
+        "waiting_external": int(status_counts.get("waiting_external", 0)),
+        "waiting_verification": int(status_counts.get("waiting_verification", 0)),
+        "exceptions": int(status_counts.get("exception", 0)),
+        "completed_30d": int(completed_count or 0),
+        "eligible_completed_30d": int(eligible_count or 0),
+        "autonomous_completed_30d": int(autonomous_count or 0),
+        "autonomous_completion_rate": pct(int(autonomous_count or 0), int(eligible_count or 0)),
+        "verified_completion_rate": pct(int(verified_count or 0), int(completed_count or 0)),
         "metric_definition": "Eligible workflows completed end-to-end with zero human decisions, divided by all eligible completed workflows.",
-        "recent_runs": [serialize_run(db, row, include_events=False) for row in query.order_by(AutonomyRun.updated_at.desc()).limit(8).all()],
+        "recent_runs": [
+            serialize_run_card(row, current_steps.get((row.id, row.current_step_sequence)))
+            for row in recent_rows
+        ],
     }
 
 
@@ -675,6 +708,20 @@ def serialize_procedure(row: AutonomyProcedure) -> dict[str, Any]:
         "domain": row.domain, "description": row.description, "source": row.source,
         "trigger_types": row.trigger_types_json or [], "steps": row.steps_json or [],
         "outcome_contract": row.outcome_contract_json or {},
+    }
+
+
+def serialize_run_card(row: AutonomyRun, current: AutonomyStep | None) -> dict[str, Any]:
+    return {
+        "id": row.id, "workspace_id": row.workspace_id, "procedure_key": row.procedure_key,
+        "trigger_type": row.trigger_type, "trigger_ref": row.trigger_ref, "status": row.status,
+        "effective_autonomy_level": row.effective_autonomy_level,
+        "human_decision_count": row.human_decision_count, "exception_count": row.exception_count,
+        "outcome_status": row.outcome_status, "verification_status": row.verification_status,
+        "failure_reason": row.failure_reason,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "current_step": serialize_step(current),
     }
 
 
