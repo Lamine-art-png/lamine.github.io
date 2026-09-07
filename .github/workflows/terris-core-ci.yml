@@ -33,14 +33,27 @@ jobs:
         run: python -m compileall -q terris-model/src terris-model/tests
       - name: Run data governance tests
         run: python -m unittest discover -s terris-model/tests -p 'test_*.py'
-      - name: Validate seed training data
+      - name: Prepare governed seed data
         run: |
-          python -m terris_core.data.prepare --input terris-model/datasets/seed/terris_core_seed.jsonl --output /tmp/terris_core_v0_train.jsonl --manifest /tmp/terris_core_v0_manifest.json
-          python -m terris_core.data.snapshot --dataset /tmp/terris_core_v0_train.jsonl --manifest /tmp/terris_core_v0_manifest.json --output /tmp/terris_core_v0_snapshot.json
-          python -m terris_core.data.synthetic --count 25 --seed 42 --output /tmp/terris_core_synthetic.jsonl
+          python -m terris_core.data.prepare \
+            --input terris-model/datasets/seed/terris_core_seed.jsonl \
+            --output /tmp/terris_core_v0_train.jsonl \
+            --manifest /tmp/terris_core_v0_manifest.json
           test -s /tmp/terris_core_v0_train.jsonl
           test -s /tmp/terris_core_v0_manifest.json
+      - name: Freeze dataset snapshot
+        run: |
+          python -m terris_core.data.snapshot \
+            --dataset /tmp/terris_core_v0_train.jsonl \
+            --manifest /tmp/terris_core_v0_manifest.json \
+            --output /tmp/terris_core_v0_snapshot.json
           test -s /tmp/terris_core_v0_snapshot.json
+      - name: Generate governed synthetic scenarios
+        run: |
+          python -m terris_core.data.synthetic \
+            --count 25 \
+            --seed 42 \
+            --output /tmp/terris_core_synthetic.jsonl
           test -s /tmp/terris_core_synthetic.jsonl
 
   terris-runtime:
