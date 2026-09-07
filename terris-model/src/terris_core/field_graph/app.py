@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from terris_core.field_graph.store import FieldGraphStore
 
@@ -17,7 +17,7 @@ class EventRequest(BaseModel):
     source: str
     observed_at: str | None = None
     payload: dict[str, Any]
-    provenance: dict[str, Any] = {}
+    provenance: dict[str, Any] = Field(default_factory=dict)
     training_consent: bool = False
     event_id: str | None = None
     idempotency_key: str | None = None

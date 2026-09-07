@@ -6,6 +6,8 @@ import random
 import uuid
 from pathlib import Path
 
+from terris_core.data.schema import TrainingRecord
+
 TRUTH_LABELS = ["measured", "reported", "calculated", "estimated", "ai_inferred", "unknown"]
 
 
@@ -20,41 +22,39 @@ def build_examples(count: int, seed: int) -> list[dict]:
         soil = rng.choice(["loam", "clay", "sandy loam", "unknown"])
         weather_age = rng.choice([1, 4, 18, 36])
         label = rng.choice(TRUTH_LABELS)
-        has_flow = rng.choice([True, False])
-        context = {
-            "crop": crop,
-            "soil": soil,
-            "weather_age_hours": weather_age,
-            "soil_moisture_truth": label,
-            "flow_measurement_available": has_flow,
-        }
+        truth_context = [
+            {"key": "crop", "value": crop, "truth_label": "reported", "source": "synthetic scenario"},
+            {"key": "soil", "value": soil, "truth_label": "reported" if soil != "unknown" else "unknown", "source": "synthetic scenario"},
+            {"key": "weather_age_hours", "value": weather_age, "truth_label": "calculated", "source": "synthetic scenario"},
+            {"key": "soil_moisture", "value": None, "truth_label": label, "source": "synthetic scenario"},
+        ]
         expected = "Use deterministic irrigation and weather tools before giving a numeric schedule. "
         if weather_age >= 24 or soil == "unknown" or label == "unknown":
             expected += "State the missing or stale information and lower confidence."
         else:
             expected += "Preserve the supplied truth labels and explain the result without inventing execution or verification."
-        examples.append({
+        row = {
             "id": "synthetic-" + uuid.UUID(int=rng.getrandbits(128)).hex,
             "domain": "water",
             "task_type": "reasoning",
             "language": language,
             "split": "train",
             "messages": [
-                {"role": "user", "content": f"Assess irrigation readiness for this {crop} field using this structured context: {json.dumps(context, sort_keys=True)}"},
+                {"role": "user", "content": f"Assess irrigation readiness for this {crop} field using the supplied field facts."},
                 {"role": "assistant", "content": expected},
             ],
-            "truth_context": context,
+            "truth_context": truth_context,
             "expected_tools": ["calculate_water_balance", "get_weather"],
             "safety_tags": ["no_fabricated_measurement", "numeric_tool_first", "uncertainty"],
             "provenance": {
-                "source": "agro-ai synthetic scenario generator",
+                "source_name": "AGRO-AI deterministic synthetic scenario generator",
                 "rights": "agro_ai_owned",
-                "license": "proprietary",
                 "customer_data": False,
-                "training_permission": True,
-                "generation_version": "synthetic-v1",
+                "training_allowed": True,
+                "notes": "synthetic-v1; must be expert-reviewed before high-stakes release",
             },
-        })
+        }
+        examples.append(TrainingRecord.model_validate(row).model_dump(mode="json"))
     return examples
 
 
