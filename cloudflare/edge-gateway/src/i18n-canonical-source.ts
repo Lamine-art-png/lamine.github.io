@@ -10,6 +10,7 @@ import literalCatalog8 from "../../../shared/ui-literals.en.8.json";
 import literalCatalog9 from "../../../shared/ui-literals.en.9.json";
 import literalCatalog10 from "../../../shared/ui-literals.en.10.json";
 import literalCatalog11 from "../../../shared/ui-literals.en.11.json";
+import literalCatalog12 from "../../../shared/ui-literals.en.12.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
@@ -36,6 +37,7 @@ const CANONICAL_SOURCE: Record<string, string> = Object.assign(
   literalCatalog9,
   literalCatalog10,
   literalCatalog11,
+  literalCatalog12,
   dynamicCopyCatalog,
   dynamicCopyExtraCatalog,
   dynamicFieldIntelligenceCatalog,
