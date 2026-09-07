@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/terris-core-model-platform-v1
+      - feat/terris-core-end-to-end-v1
     paths:
       - 'terris-model/**'
       - 'apps/velia-ai-api/**'
@@ -23,21 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install Terris Core lightweight dependencies
         run: python -m pip install -e ./terris-model
-
       - name: Compile Python
         run: python -m compileall -q terris-model/src terris-model/tests
-
       - name: Run data governance tests
         run: python -m unittest discover -s terris-model/tests -p 'test_*.py'
-
-      - name: Validate seed training data
+      - name: Prepare governed seed data
         run: |
           python -m terris_core.data.prepare \
             --input terris-model/datasets/seed/terris_core_seed.jsonl \
@@ -45,6 +41,20 @@ jobs:
             --manifest /tmp/terris_core_v0_manifest.json
           test -s /tmp/terris_core_v0_train.jsonl
           test -s /tmp/terris_core_v0_manifest.json
+      - name: Freeze dataset snapshot
+        run: |
+          python -m terris_core.data.snapshot \
+            --dataset /tmp/terris_core_v0_train.jsonl \
+            --manifest /tmp/terris_core_v0_manifest.json \
+            --output /tmp/terris_core_v0_snapshot.json
+          test -s /tmp/terris_core_v0_snapshot.json
+      - name: Generate governed synthetic scenarios
+        run: |
+          python -m terris_core.data.synthetic \
+            --count 25 \
+            --seed 42 \
+            --output /tmp/terris_core_synthetic.jsonl
+          test -s /tmp/terris_core_synthetic.jsonl
 
   terris-runtime:
     runs-on: ubuntu-latest
@@ -53,13 +63,10 @@ jobs:
         working-directory: apps/velia-ai-api
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
       - name: Install runtime dependencies
         run: npm install --no-audit --no-fund
-
       - name: Run Terris runtime tests
         run: npm test

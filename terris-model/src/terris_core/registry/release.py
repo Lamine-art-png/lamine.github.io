@@ -18,13 +18,7 @@ def sha256_file(path: Path) -> str:
 def collect_files(root: Path) -> list[dict]:
     rows = []
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rows.append(
-            {
-                "path": str(path.relative_to(root)),
-                "bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
-            }
-        )
+        rows.append({"path": str(path.relative_to(root)), "bytes": path.stat().st_size, "sha256": sha256_file(path)})
     return rows
 
 
@@ -32,7 +26,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Create an immutable Terris Core release manifest.")
     parser.add_argument("--model-dir", required=True, type=Path)
     parser.add_argument("--data-manifest", required=True, type=Path)
+    parser.add_argument("--dataset-snapshot", type=Path)
     parser.add_argument("--eval-report", required=True, type=Path)
+    parser.add_argument("--base-eval-report", type=Path)
     parser.add_argument("--training-config", required=True, type=Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", required=True, type=Path)
@@ -46,30 +42,33 @@ def main() -> None:
     if summary.get("critical_pass_rate") != 1:
         raise ValueError("Release blocked: every critical Terris benchmark case must pass.")
 
+    comparison = None
+    if args.base_eval_report:
+        base = json.loads(args.base_eval_report.read_text(encoding="utf-8")).get("summary", {})
+        candidate_rate = float(summary.get("pass_rate", 0))
+        base_rate = float(base.get("pass_rate", 0))
+        if candidate_rate <= base_rate:
+            raise ValueError(f"Release blocked: candidate pass rate {candidate_rate:.3f} does not beat base {base_rate:.3f}.")
+        comparison = {"candidate_pass_rate": candidate_rate, "base_pass_rate": base_rate, "delta": candidate_rate - base_rate}
+
     payload = {
-        "schema_version": "terris-model-release-v1",
+        "schema_version": "terris-model-release-v2",
         "version": args.version,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "model_files": collect_files(args.model_dir),
-        "data_manifest": {
-            "path": str(args.data_manifest),
-            "sha256": sha256_file(args.data_manifest),
-        },
-        "eval_report": {
-            "path": str(args.eval_report),
-            "sha256": sha256_file(args.eval_report),
-            "summary": summary,
-        },
-        "training_config": {
-            "path": str(args.training_config),
-            "sha256": sha256_file(args.training_config),
-        },
+        "data_manifest": {"path": str(args.data_manifest), "sha256": sha256_file(args.data_manifest)},
+        "eval_report": {"path": str(args.eval_report), "sha256": sha256_file(args.eval_report), "summary": summary},
+        "training_config": {"path": str(args.training_config), "sha256": sha256_file(args.training_config)},
+        "base_comparison": comparison,
         "promotion": {
             "critical_eval_gate_passed": True,
+            "beats_base_gate_passed": comparison is not None,
             "production_approved": False,
-            "note": "Production approval is a separate human release decision.",
+            "note": "Production approval remains a separate human release decision.",
         },
     }
+    if args.dataset_snapshot:
+        payload["dataset_snapshot"] = {"path": str(args.dataset_snapshot), "sha256": sha256_file(args.dataset_snapshot)}
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
