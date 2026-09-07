@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "terris-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "AGRO-AI Terris Core post-training, evaluation, and serving platform"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,6 +21,7 @@ train = [
   "accelerate>=1.2,<2",
   "safetensors>=0.4,<1",
   "bitsandbytes>=0.45,<1; platform_system == 'Linux'",
+  "trl>=0.16,<1",
 ]
 serve = [
   "fastapi>=0.115,<1",
