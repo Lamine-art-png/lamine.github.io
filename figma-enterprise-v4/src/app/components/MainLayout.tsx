@@ -38,6 +38,7 @@ import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
 import { ProductTour, replayProductTour } from "./ProductTour";
 import { UploadStatusToast } from "./UploadStatusToast";
+import { VoiceAssistantDock } from "./voice/VoiceAssistantDock";
 
 const sidebarPreferenceKey = "agroai_sidebar_collapsed_v1";
 
@@ -290,6 +291,9 @@ export function MainLayout() {
         </div>
       ) : null}
 
+      {location.pathname !== "/intelligence" && location.pathname !== "/field-intelligence" && canAskAgroAi ? (
+        <VoiceAssistantDock surface="ask" />
+      ) : null}
       <UploadStatusToast />
       <ProductTour />
     </div>
