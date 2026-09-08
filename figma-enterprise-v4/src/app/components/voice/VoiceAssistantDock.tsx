@@ -78,8 +78,6 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const fallbackRecorderRef = useRef<MediaRecorder | null>(null);
   const fallbackChunksRef = useRef<Blob[]>([]);
   const fallbackTimerRef = useRef<number | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const recognitionTranscriptRef = useRef("");
 
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -198,14 +196,6 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     dcRef.current = null;
     try { pcRef.current?.close(); } catch { /* noop */ }
     pcRef.current = null;
-    try {
-      if (recognitionRef.current) {
-        recognitionRef.current.onend = null;
-        recognitionRef.current.abort?.();
-      }
-    } catch { /* noop */ }
-    recognitionRef.current = null;
-    recognitionTranscriptRef.current = "";
     try {
       if (fallbackRecorderRef.current) {
         fallbackRecorderRef.current.onstop = null;
@@ -386,10 +376,6 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const stopFallbackRecording = useCallback(() => {
     if (fallbackTimerRef.current) window.clearTimeout(fallbackTimerRef.current);
     fallbackTimerRef.current = null;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop?.(); } catch { /* noop */ }
-      return;
-    }
     const recorder = fallbackRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
     try { recorder.stop(); } catch { setFallbackRecording(false); setState("idle"); }
@@ -399,47 +385,6 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     if (fallbackRecording || state === "thinking" || state === "speaking") return;
     setError("");
     try {
-      const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (Recognition) {
-        const recognition = new Recognition();
-        recognitionRef.current = recognition;
-        recognitionTranscriptRef.current = "";
-        recognition.lang = language === "auto" ? (normalizedLocale || navigator.language || "en-US") : language;
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.maxAlternatives = 1;
-        recognition.onresult = (event: any) => {
-          let finalText = recognitionTranscriptRef.current;
-          let interimText = "";
-          for (let index = event.resultIndex; index < event.results.length; index += 1) {
-            const text = String(event.results[index]?.[0]?.transcript || "");
-            if (event.results[index].isFinal) finalText = `${finalText} ${text}`.trim();
-            else interimText += text;
-          }
-          recognitionTranscriptRef.current = finalText;
-          setInterim([finalText, interimText].filter(Boolean).join(" ").trim());
-        };
-        recognition.onerror = (event: any) => {
-          const code = String(event?.error || "");
-          if (!["aborted", "no-speech"].includes(code)) setError(`Speech recognition failed: ${code || "unknown error"}`);
-        };
-        recognition.onend = () => {
-          recognitionRef.current = null;
-          const transcript = recognitionTranscriptRef.current.trim();
-          recognitionTranscriptRef.current = "";
-          setFallbackRecording(false);
-          setInterim("");
-          if (transcript) void runFallbackTextTurn(transcript);
-          else setState("idle");
-        };
-        recognition.start();
-        setFallbackRecording(true);
-        setState("listening");
-        fallbackTimerRef.current = window.setTimeout(() => {
-          try { recognition.stop(); } catch { /* noop */ }
-        }, 60_000);
-        return;
-      }
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("Voice recording is not supported in this browser");
       }
@@ -473,7 +418,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       setError(err instanceof Error ? err.message : "Could not access the microphone");
       setState("error");
     }
-  }, [fallbackRecording, language, normalizedLocale, runFallbackTextTurn, runFallbackTurn, state, stopFallbackRecording]);
+  }, [fallbackRecording, runFallbackTurn, state, stopFallbackRecording]);
 
   useEffect(() => {
     const openVoice = (event: Event) => {
