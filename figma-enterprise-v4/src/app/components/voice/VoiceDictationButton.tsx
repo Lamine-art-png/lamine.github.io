@@ -55,6 +55,7 @@ export function VoiceDictationButton({ disabled = false, onTranscript, className
       const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
       form.append("file", new File([blob], `ask-agro-ai-dictation-${Date.now()}.${extension}`, { type: mimeType || "audio/webm" }));
       if (normalizedLocale) form.append("language", normalizedLocale);
+      form.append("surface", "ask");
       const headers = new Headers();
       const token = accessToken();
       if (token) headers.set("Authorization", `Bearer ${token}`);
