@@ -176,11 +176,10 @@ export function Intelligence() {
     <IntelligenceView controller={controller} />
     <VoiceAssistantDock
       surface="ask"
-      onExchange={async (userText) => {
-        // Keep voice and text on one Ask AGRO-AI thread. The canonical text
-        // controller persists the spoken user turn and an evidence-grounded
-        // response into the current conversation history.
-        await controller.send(userText);
+      onExchange={async (userText, assistantText) => {
+        // Voice and text share one conversation. Persist the already-completed
+        // spoken exchange without running a second model turn.
+        await controller.ingestVoiceExchange(userText, assistantText);
       }}
     />
   </>;
