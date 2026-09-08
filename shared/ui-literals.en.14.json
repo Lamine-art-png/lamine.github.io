@@ -1,5 +1,7 @@
 {
   "literal.001931fe8bddcc9b": "Live voice",
   "literal.32b4fc18d77d33da": "Conversational voice is active in resilient mode. Tap the microphone, speak, then tap stop; AGRO-AI will answer aloud. Premium realtime activates automatically when the realtime provider is configured.",
-  "literal.4c77087a8e6d6301": "Start live voice conversation"
+  "literal.4c77087a8e6d6301": "Start live voice conversation",
+  "literal.c65140bff73d663f": "ask_agro_ai",
+  "literal.cd9236abbe602e4e": "new Promise"
 }
