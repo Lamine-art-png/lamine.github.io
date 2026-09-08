@@ -129,6 +129,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     try {
       const output = await apiPost("/v1/voice/tool", {
         name: tool.name,
+        surface,
         arguments: tool.arguments,
         workspace_id: workspaceId,
         language: language === "auto" ? normalizedLocale || "auto" : language,
@@ -138,7 +139,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Tool failed" });
     }
-  }, [finishTool, language, normalizedLocale, workspaceId]);
+  }, [finishTool, language, normalizedLocale, surface, workspaceId]);
 
   const handleEvent = useCallback((raw: string) => {
     let event: any;
@@ -322,6 +323,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         .map((row) => ({ role: row.role, content: row.content }));
       const result = await apiPost("/v1/voice/tool", {
         name: "ask_agro_ai",
+        surface,
         arguments: { question: userText, reasoning_mode: reasoning },
         workspace_id: workspaceId,
         language: requestedLanguage,
@@ -341,7 +343,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       setFallbackRecording(false);
       setInterim("");
     }
-  }, [appendRow, language, normalizedLocale, onExchange, reasoning, speakFallback, workspaceId]);
+  }, [appendRow, language, normalizedLocale, onExchange, reasoning, speakFallback, surface, workspaceId]);
 
   const runFallbackTurn = useCallback(async (blob: Blob, mimeType: string) => {
     setState("thinking");
@@ -352,6 +354,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       form.append("file", new File([blob], `agro-ai-voice-turn-${Date.now()}.${extension}`, { type: mimeType || "audio/webm" }));
       const requestedLanguage = language === "auto" ? (normalizedLocale || "auto") : language;
       if (requestedLanguage && requestedLanguage !== "auto") form.append("language", requestedLanguage);
+      form.append("surface", surface);
       const headers = new Headers();
       const access = token();
       if (access) headers.set("Authorization", `Bearer ${access}`);
@@ -371,7 +374,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       streamRef.current = null;
       setFallbackRecording(false);
     }
-  }, [language, normalizedLocale, runFallbackTextTurn]);
+  }, [language, normalizedLocale, runFallbackTextTurn, surface]);
 
   const stopFallbackRecording = useCallback(() => {
     if (fallbackTimerRef.current) window.clearTimeout(fallbackTimerRef.current);
