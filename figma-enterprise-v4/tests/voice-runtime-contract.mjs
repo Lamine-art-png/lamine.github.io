@@ -7,6 +7,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const voice = fs.readFileSync(path.join(root, "src/app/components/voice/VoiceAssistantDock.tsx"), "utf8");
 const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelligence.tsx"), "utf8");
+const intelligenceView = fs.readFileSync(path.join(root, "src/app/components/intelligence/IntelligenceView.tsx"), "utf8");
+const dictation = fs.readFileSync(path.join(root, "src/app/components/voice/VoiceDictationButton.tsx"), "utf8");
 const uploadToast = fs.readFileSync(path.join(root, "src/app/components/UploadStatusToast.tsx"), "utf8");
 
 assert.match(voice, /new RTCPeerConnection\(\)/);
@@ -22,10 +24,22 @@ assert.match(voice, /noiseSuppression: true/);
 assert.match(voice, /autoGainControl: true/);
 assert.match(voice, /option value="wo">Wolof/);
 assert.match(voice, /option value="deep">Deep/);
+assert.match(voice, /\/v1\/voice\/health/);
+assert.match(voice, /transport.*fallback/);
+assert.match(voice, /\/v1\/voice\/transcribe/);
+assert.match(voice, /speechSynthesis/);
+assert.match(voice, /agroai:voice-open/);
+
+assert.match(dictation, /MediaRecorder/);
+assert.match(dictation, /\/v1\/voice\/transcribe/);
+assert.match(dictation, /onTranscript/);
+assert.match(intelligenceView, /<VoiceDictationButton/);
+assert.match(intelligenceView, /Start live voice conversation/);
+assert.match(intelligenceView, /openAgroAiVoice\("ask"\)/);
 
 assert.match(intelligence, /<VoiceAssistantDock/);
 assert.match(intelligence, /surface="ask"/);
-assert.match(intelligence, /await controller\.send\(userText\)/);
+assert.match(intelligence, /await controller\.ingestVoiceExchange\(userText, assistantText\)/);
 
 assert.match(uploadToast, /location\.pathname === "\/field-intelligence"/);
 assert.match(uploadToast, /<VoiceAssistantDock surface="field"/);
