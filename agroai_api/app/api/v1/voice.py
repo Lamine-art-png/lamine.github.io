@@ -60,6 +60,7 @@ class VoiceCallRequest(BaseModel):
 
 class VoiceToolRequest(BaseModel):
     name: Literal["ask_agro_ai", "plan_aep_action", "execute_aep_action"]
+    surface: Literal["ask", "field"] = "ask"
     arguments: dict[str, Any] = Field(default_factory=dict)
     workspace_id: str | None = None
     language: str = "auto"
@@ -211,10 +212,11 @@ _VOICE_AUDIO_TYPES = {
 async def transcribe_voice_turn(
     file: UploadFile = File(...),
     language: str | None = Form(default=None, max_length=32),
+    surface: Literal["ask", "field"] = Form(default="ask"),
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _require_voice_access(ctx, db, surface="ask")
+    _require_voice_access(ctx, db, surface=surface)
     content_type = str(file.content_type or "").lower().split(";")[0].strip()
     if content_type not in _VOICE_AUDIO_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported voice audio type")
@@ -321,7 +323,7 @@ async def run_voice_tool(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _require_voice_access(ctx, db, surface="ask")
+    _require_voice_access(ctx, db, surface=request.surface)
     tenant_id = str(ctx.organization.id)
 
     if request.name == "ask_agro_ai":
