@@ -26,6 +26,16 @@ function token() { return window.localStorage.getItem("agroai_access_token") || 
 function uid(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function cleanText(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); }
 
+async function apiGet(path: string): Promise<any> {
+  const headers = new Headers();
+  const access = token();
+  if (access) headers.set("Authorization", `Bearer ${access}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(data?.detail || data?.message || `Voice request failed (${response.status})`));
+  return data;
+}
+
 async function apiPost(path: string, body: unknown): Promise<any> {
   const headers = new Headers({ "Content-Type": "application/json" });
   const access = token();
@@ -55,6 +65,8 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const [voice, setVoice] = useState(() => localStorage.getItem(VOICE_KEY) || "marin");
   const [language, setLanguage] = useState(() => localStorage.getItem(LANGUAGE_KEY) || "auto");
   const [reasoning, setReasoning] = useState(() => localStorage.getItem(REASONING_KEY) || "standard");
+  const [transport, setTransport] = useState<"realtime" | "fallback">("realtime");
+  const [fallbackRecording, setFallbackRecording] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -63,6 +75,9 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const rowsRef = useRef<VoiceRow[]>([]);
   const pendingUserRef = useRef("");
   const mountedRef = useRef(true);
+  const fallbackRecorderRef = useRef<MediaRecorder | null>(null);
+  const fallbackChunksRef = useRef<Blob[]>([]);
+  const fallbackTimerRef = useRef<number | null>(null);
 
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -79,8 +94,9 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     if (state === "degraded") return "Connection unstable";
     if (state === "error") return "Voice unavailable";
     if (state === "listening") return muted ? "Muted" : "Listening";
+    if (transport === "fallback" && state === "idle") return "Voice ready";
     return surface === "field" ? "Live AGRO-AI" : "Voice";
-  }, [state, muted, surface]);
+  }, [state, muted, surface, transport]);
 
   const appendRow = useCallback((role: VoiceRow["role"], content: string) => {
     const clean = cleanText(content);
@@ -180,9 +196,18 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     dcRef.current = null;
     try { pcRef.current?.close(); } catch { /* noop */ }
     pcRef.current = null;
+    try {
+      if (fallbackRecorderRef.current && fallbackRecorderRef.current.state !== "inactive") fallbackRecorderRef.current.stop();
+    } catch { /* noop */ }
+    fallbackRecorderRef.current = null;
+    fallbackChunksRef.current = [];
+    if (fallbackTimerRef.current) window.clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.srcObject = null; }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setFallbackRecording(false);
     setMuted(false); setPendingExecution(null); setInterim(""); setState("idle");
   }, []);
 
@@ -192,6 +217,13 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     if (state !== "idle" && state !== "error" && state !== "degraded") return;
     setError(""); setOpen(true); setState("connecting");
     try {
+      const health = await apiGet("/v1/voice/health");
+      if (!health?.realtime_enabled) {
+        setTransport("fallback");
+        setState("idle");
+        return;
+      }
+      setTransport("realtime");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
@@ -250,6 +282,129 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       setState("error");
     }
   }, [handleEvent, language, reasoning, state, surface, voice, workspaceId]);
+
+  const speakFallback = useCallback((text: string) => new Promise<void>((resolve) => {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      resolve();
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const requestedLanguage = language === "auto" ? (normalizedLocale || "en") : language;
+    utterance.lang = requestedLanguage;
+    const voices = window.speechSynthesis.getVoices();
+    const languagePrefix = requestedLanguage.toLowerCase().split("-")[0];
+    const matching = voices.find((candidate) => candidate.lang.toLowerCase().startsWith(languagePrefix));
+    if (matching) utterance.voice = matching;
+    utterance.rate = 1.0;
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  }), [language, normalizedLocale]);
+
+  const runFallbackTurn = useCallback(async (blob: Blob, mimeType: string) => {
+    setState("thinking");
+    setError("");
+    try {
+      const form = new FormData();
+      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+      form.append("file", new File([blob], `agro-ai-voice-turn-${Date.now()}.${extension}`, { type: mimeType || "audio/webm" }));
+      const requestedLanguage = language === "auto" ? (normalizedLocale || "auto") : language;
+      if (requestedLanguage && requestedLanguage !== "auto") form.append("language", requestedLanguage);
+      const headers = new Headers();
+      const access = token();
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const transcriptionResponse = await fetch(`${API_BASE_URL}/v1/voice/transcribe`, {
+        method: "POST", headers, body: form,
+      });
+      const transcription = await transcriptionResponse.json().catch(() => ({}));
+      if (!transcriptionResponse.ok) throw new Error(String(transcription?.detail || "Voice transcription failed"));
+      const userText = cleanText(transcription?.transcript);
+      if (!userText) throw new Error("No speech was detected");
+      appendRow("user", userText);
+
+      const history = [...rowsRef.current, { id: uid("user"), role: "user" as const, content: userText, createdAt: Date.now() }]
+        .slice(-12)
+        .map((row) => ({ role: row.role, content: row.content }));
+      const result = await apiPost("/v1/voice/tool", {
+        name: "ask_agro_ai",
+        arguments: { question: userText, reasoning_mode: reasoning },
+        workspace_id: workspaceId,
+        language: requestedLanguage,
+        history,
+      });
+      const assistantText = cleanText(result?.answer || result?.summary);
+      if (!assistantText) throw new Error("AGRO-AI did not return a spoken answer");
+      appendRow("assistant", assistantText);
+      if (onExchange) await onExchange(userText, assistantText);
+      setState("speaking");
+      await speakFallback(assistantText);
+      setState("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Voice conversation failed");
+      setState("error");
+    } finally {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setFallbackRecording(false);
+    }
+  }, [appendRow, language, normalizedLocale, onExchange, reasoning, speakFallback, workspaceId]);
+
+  const stopFallbackRecording = useCallback(() => {
+    if (fallbackTimerRef.current) window.clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
+    const recorder = fallbackRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    try { recorder.stop(); } catch { setFallbackRecording(false); setState("idle"); }
+  }, []);
+
+  const startFallbackRecording = useCallback(async () => {
+    if (fallbackRecording || state === "thinking" || state === "speaking") return;
+    setError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        throw new Error("Voice recording is not supported in this browser");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      streamRef.current = stream;
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+        .find((kind) => MediaRecorder.isTypeSupported(kind));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      fallbackRecorderRef.current = recorder;
+      fallbackChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) fallbackChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(fallbackChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        fallbackRecorderRef.current = null;
+        fallbackChunksRef.current = [];
+        if (!blob.size) { setFallbackRecording(false); setState("idle"); return; }
+        void runFallbackTurn(blob, blob.type || "audio/webm");
+      };
+      recorder.start(500);
+      setFallbackRecording(true);
+      setState("listening");
+      fallbackTimerRef.current = window.setTimeout(stopFallbackRecording, 60_000);
+    } catch (err) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setFallbackRecording(false);
+      setError(err instanceof Error ? err.message : "Could not access the microphone");
+      setState("error");
+    }
+  }, [fallbackRecording, runFallbackTurn, state, stopFallbackRecording]);
+
+  useEffect(() => {
+    const openVoice = (event: Event) => {
+      const requested = (event as CustomEvent<{ surface?: Surface }>).detail?.surface;
+      if (requested && requested !== surface) return;
+      setOpen(true);
+      void connect();
+    };
+    window.addEventListener("agroai:voice-open", openVoice);
+    return () => window.removeEventListener("agroai:voice-open", openVoice);
+  }, [connect, surface]);
 
   const toggleMute = useCallback(() => {
     const track = streamRef.current?.getAudioTracks()[0];
@@ -366,13 +521,27 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
           </div>
         )}
 
+        {transport === "fallback" && !error && <div className="border-t border-[#D7E3DA] bg-[#F3F8F5] px-4 py-2 text-[11px] leading-4 text-[#536158]">Conversational voice is active in resilient mode. Tap the microphone, speak, then tap stop; AGRO-AI will answer aloud. Premium realtime activates automatically when the realtime provider is configured.</div>}
         {error && <div className="border-t border-[#E6C6C1] bg-[#FFF2EF] px-4 py-2 text-[11px] text-[#A33C2F]">{error}</div>}
         {state === "degraded" && surface === "field" && <div className="border-t border-[#E2D6BC] bg-[#FFF8E8] px-4 py-2 text-[11px] text-[#6B562B]">Connection is unstable. Use Field Capture if you need guaranteed offline recording; existing capture sync remains available.</div>}
 
         <div className="flex items-center justify-between border-t border-[#D6DDD0] bg-white px-3 py-3">
           <div className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[#65736A]"><ShieldCheck className="h-3.5 w-3.5 text-[#2D6A4F]" /> Tenant-scoped · approvals enforced</div>
           <div className="flex gap-2">
-            {(state === "idle" || state === "error" || state === "degraded") ? (
+            {transport === "fallback" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fallbackRecording ? stopFallbackRecording() : void startFallbackRecording()}
+                  disabled={state === "thinking" || state === "speaking"}
+                  className={`inline-flex min-h-[38px] items-center gap-2 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50 ${fallbackRecording ? "bg-[#B33D30]" : "bg-[#10231B]"}`}
+                >
+                  {fallbackRecording ? <PhoneOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {fallbackRecording ? "Stop" : state === "thinking" ? "Thinking" : state === "speaking" ? "Speaking" : "Speak"}
+                </button>
+                <button type="button" onClick={disconnect} className="flex h-9 w-9 items-center justify-center rounded-full border border-[#D6DDD0] bg-white text-[#10231B]" aria-label="End voice session"><X className="h-4 w-4" /></button>
+              </>
+            ) : (state === "idle" || state === "error" || state === "degraded") ? (
               <button type="button" onClick={() => void connect()} className="inline-flex min-h-[38px] items-center gap-2 rounded-full bg-[#10231B] px-4 text-[12px] font-semibold text-white"><Mic className="h-4 w-4" /> Start</button>
             ) : <>
               <button type="button" onClick={toggleMute} className="flex h-9 w-9 items-center justify-center rounded-full border border-[#D6DDD0] bg-white text-[#10231B]" aria-label={muted ? "Unmute" : "Mute"}>{muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}</button>
