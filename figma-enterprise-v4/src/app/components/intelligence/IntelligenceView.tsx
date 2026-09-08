@@ -1,9 +1,10 @@
-import { Download, FileText, Mail, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
+import { AudioLines, Download, FileText, Mail, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
 import { LanguageSelector } from "../LanguageSelector";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "../portalUi";
 import { safeText, AnyRecord } from "./intelligenceSupport";
 import { DecisionEvidencePanel } from "./DecisionEvidencePanel";
 import type { useIntelligenceController } from "./useIntelligenceController";
+import { openAgroAiVoice, VoiceDictationButton } from "../voice/VoiceDictationButton";
 
 type Controller = ReturnType<typeof useIntelligenceController>;
 
@@ -166,6 +167,20 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="hidden flex-shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium sm:inline-flex" style={{ border: `1px solid ${BORDER}`, color: TEXT }}><UploadCloud size={15} /> {t("intelligence.importFiles")}</button>
                 <input ref={fileInputRef} type="file" multiple className="hidden" accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.geojson,.kml,.zip" onChange={(event) => onFilesSelected(event.target.files)} />
                 <textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={onKeyDown} rows={2} placeholder={t("intelligence.placeholder")} className="min-h-[48px] min-w-0 flex-1 resize-none rounded-lg px-3 py-3 text-[16px] outline-none sm:px-4 sm:text-[14px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+                <VoiceDictationButton
+                  disabled={loading}
+                  onTranscript={(transcript) => setQuestion((current: string) => [current.trim(), transcript.trim()].filter(Boolean).join(" "))}
+                />
+                <button
+                  type="button"
+                  onClick={() => openAgroAiVoice("ask")}
+                  className="inline-flex h-[48px] flex-shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-[12px] font-semibold"
+                  style={{ background: "#EEF8E8", borderColor: "#BFD8C9", color: "#16533C" }}
+                  title="Start live voice conversation"
+                  aria-label="Start live voice conversation"
+                >
+                  <AudioLines size={18} /><span className="hidden xl:inline">Live voice</span>
+                </button>
                 <button type="button" disabled={sendDisabled} onClick={() => send()} className="inline-flex h-[48px] w-[48px] flex-shrink-0 items-center justify-center rounded-lg disabled:opacity-50 sm:w-[52px]" style={{ background: "#0D2B1E", color: "white" }} title={t("send")}><Send size={18} /></button>
               </div>
               <div className="mt-3 hidden text-[11px] sm:block" style={{ color: MUTED }}>{t("intelligence.enterHint")}</div>

@@ -11,15 +11,18 @@ import os
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1 import agents, ai_stable
 from app.api.v1.brain import BrainRunRequest
+from app.core.config import settings
 from app.db.base import get_db
 from app.services.commercial_control import require_feature
+from app.services.field_transcription import transcribe_audio
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -57,6 +60,7 @@ class VoiceCallRequest(BaseModel):
 
 class VoiceToolRequest(BaseModel):
     name: Literal["ask_agro_ai", "plan_aep_action", "execute_aep_action"]
+    surface: Literal["ask", "field"] = "ask"
     arguments: dict[str, Any] = Field(default_factory=dict)
     workspace_id: str | None = None
     language: str = "auto"
@@ -67,6 +71,10 @@ class VoiceHealthResponse(BaseModel):
     status: str
     model: str
     enabled: bool
+    realtime_enabled: bool
+    dictation_enabled: bool
+    conversation_fallback_enabled: bool
+    realtime_provider: str
 
 
 def _require_voice_access(ctx: AuthContext, db: Session, *, surface: str) -> None:
@@ -79,6 +87,26 @@ def _require_voice_access(ctx: AuthContext, db: Session, *, surface: str) -> Non
 
 def _model() -> str:
     return (os.getenv("AGROAI_REALTIME_MODEL") or "gpt-realtime-2.1").strip()
+
+
+def _realtime_api_key() -> str:
+    dedicated = (os.getenv("AGROAI_REALTIME_API_KEY") or "").strip()
+    if dedicated:
+        return dedicated
+    standard = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if standard:
+        return standard
+    provider = str(getattr(settings, "AI_PROVIDER", "") or "").strip().lower()
+    base = str(getattr(settings, "AI_BASE_URL", "") or "").strip().lower()
+    if provider in {"openai", "openai-compatible", "openai_compatible"} and (
+        not base or "api.openai.com" in base
+    ):
+        return str(getattr(settings, "AI_API_KEY", "") or "").strip()
+    return ""
+
+
+def _realtime_provider() -> str:
+    return "openai" if _realtime_api_key() else "unconfigured"
 
 
 def _reasoning_effort(mode: str) -> str:
@@ -161,7 +189,60 @@ def _tools() -> list[dict[str, Any]]:
 @router.get("/health", response_model=VoiceHealthResponse)
 def voice_health(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> VoiceHealthResponse:
     _require_voice_access(ctx, db, surface="ask")
-    return VoiceHealthResponse(status="ok", model=_model(), enabled=bool(os.getenv("OPENAI_API_KEY")))
+    realtime_enabled = bool(_realtime_api_key())
+    return VoiceHealthResponse(
+        status="ok",
+        model=_model(),
+        enabled=realtime_enabled,
+        realtime_enabled=realtime_enabled,
+        dictation_enabled=True,
+        conversation_fallback_enabled=True,
+        realtime_provider=_realtime_provider(),
+    )
+
+
+_VOICE_TRANSCRIPTION_MAX_BYTES = 12 * 1024 * 1024
+_VOICE_AUDIO_TYPES = {
+    "audio/webm", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav",
+    "audio/ogg", "audio/aac", "audio/flac", "video/webm", "video/mp4",
+}
+
+
+@router.post("/transcribe")
+async def transcribe_voice_turn(
+    file: UploadFile = File(...),
+    language: str | None = Form(default=None, max_length=32),
+    surface: Literal["ask", "field"] = Form(default="ask"),
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _require_voice_access(ctx, db, surface=surface)
+    content_type = str(file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in _VOICE_AUDIO_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported voice audio type")
+    payload = await file.read(_VOICE_TRANSCRIPTION_MAX_BYTES + 1)
+    await file.close()
+    if not payload or len(payload) > _VOICE_TRANSCRIPTION_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Voice audio exceeds size limit")
+    result = await run_in_threadpool(
+        transcribe_audio,
+        audio=payload,
+        content_type=content_type,
+        language=(language or "").strip() or None,
+        note_text=None,
+    )
+    if not result.succeeded or not str(result.transcript or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail=result.error or "Voice transcription is temporarily unavailable",
+        )
+    return {
+        "status": "ok",
+        "transcript": str(result.transcript).strip(),
+        "language": result.language or (language or None),
+        "provider": result.provider,
+        "model": result.model,
+    }
 
 
 @router.post("/realtime-call")
@@ -171,7 +252,7 @@ async def create_realtime_call(
     db: Session = Depends(get_db),
 ) -> Response:
     _require_voice_access(ctx, db, surface=payload.surface)
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    api_key = _realtime_api_key()
     if not api_key:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Realtime voice is not configured")
 
@@ -242,7 +323,7 @@ async def run_voice_tool(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _require_voice_access(ctx, db, surface="ask")
+    _require_voice_access(ctx, db, surface=request.surface)
     tenant_id = str(ctx.organization.id)
 
     if request.name == "ask_agro_ai":

@@ -347,6 +347,31 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     } finally { setLoading(false); }
   }
 
+  async function ingestVoiceExchange(userText: string, assistantText: string) {
+    const cleanUser = safeText(userText).trim();
+    const cleanAssistant = safeText(assistantText).trim();
+    if (!cleanUser || !cleanAssistant) return;
+    const conversationId = await createConversationIfNeeded(cleanUser);
+    const userMessage = { id: `voice-user-${Date.now()}`, role: "user", content: cleanUser, input_mode: "voice" };
+    const assistantMessage = {
+      id: `voice-assistant-${Date.now()}`,
+      role: "assistant",
+      content: cleanAssistant,
+      question: cleanUser,
+      input_mode: "voice",
+      model_status: "voice",
+    };
+    const nextRows = [...messages, userMessage, assistantMessage];
+    setMessages(nextRows);
+    await persistExchange(
+      conversationId,
+      cleanUser,
+      cleanAssistant,
+      { question: cleanUser, input_mode: "voice", model_status: "voice" },
+      nextRows,
+    );
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -387,6 +412,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     emailReportFor,
     runAction,
     send,
+    ingestVoiceExchange,
     onKeyDown,
     sendDisabled: loading || hasUploading || hasFailed || (!question.trim() && !fileImports.length),
   };
