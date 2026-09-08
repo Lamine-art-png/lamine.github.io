@@ -35,20 +35,10 @@ export function VoiceDictationButton({ disabled = false, onTranscript, className
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const recognitionTranscriptRef = useRef("");
 
   const cleanup = useCallback(() => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = null;
-    try {
-      if (recognitionRef.current) {
-        recognitionRef.current.onend = null;
-        recognitionRef.current.abort?.();
-      }
-    } catch { /* noop */ }
-    recognitionRef.current = null;
-    recognitionTranscriptRef.current = "";
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
@@ -89,10 +79,6 @@ export function VoiceDictationButton({ disabled = false, onTranscript, className
   const stop = useCallback(() => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = null;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop?.(); } catch { cleanup(); setPhase("idle"); }
-      return;
-    }
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
     try { recorder.stop(); } catch { cleanup(); setPhase("idle"); }
@@ -106,44 +92,6 @@ export function VoiceDictationButton({ disabled = false, onTranscript, className
     }
     setError("");
     try {
-      const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (Recognition) {
-        const recognition = new Recognition();
-        recognitionRef.current = recognition;
-        recognitionTranscriptRef.current = "";
-        recognition.lang = normalizedLocale || navigator.language || "en-US";
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.maxAlternatives = 1;
-        recognition.onresult = (event: any) => {
-          let finalText = recognitionTranscriptRef.current;
-          for (let index = event.resultIndex; index < event.results.length; index += 1) {
-            const text = String(event.results[index]?.[0]?.transcript || "");
-            if (event.results[index].isFinal) finalText = `${finalText} ${text}`.trim();
-          }
-          recognitionTranscriptRef.current = finalText;
-        };
-        recognition.onerror = (event: any) => {
-          const code = String(event?.error || "");
-          if (!["aborted", "no-speech"].includes(code)) {
-            setError(`Speech recognition failed: ${code || "unknown error"}`);
-            setPhase("error");
-          }
-        };
-        recognition.onend = () => {
-          recognitionRef.current = null;
-          const transcript = recognitionTranscriptRef.current.trim();
-          recognitionTranscriptRef.current = "";
-          if (transcript) onTranscript(transcript);
-          setPhase("idle");
-        };
-        recognition.start();
-        setPhase("recording");
-        timerRef.current = window.setTimeout(() => {
-          try { recognition.stop(); } catch { /* noop */ }
-        }, 45_000);
-        return;
-      }
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("Voice recording is not supported in this browser");
       }
@@ -176,7 +124,7 @@ export function VoiceDictationButton({ disabled = false, onTranscript, className
       setPhase("error");
       window.setTimeout(() => setPhase("idle"), 2600);
     }
-  }, [cleanup, disabled, normalizedLocale, onTranscript, phase, stop, transcribe]);
+  }, [cleanup, disabled, phase, stop, transcribe]);
 
   const title = phase === "recording"
     ? "Stop dictation"
