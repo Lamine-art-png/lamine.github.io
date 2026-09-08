@@ -449,6 +449,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     try {
       const output = await apiPost("/v1/voice/tool", {
         name: "execute_aep_action",
+        surface,
         arguments: tool.arguments,
         workspace_id: workspaceId,
         language: language === "auto" ? normalizedLocale || "auto" : language,
@@ -458,7 +459,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Execution failed" });
     }
-  }, [finishTool, language, normalizedLocale, pendingExecution, workspaceId]);
+  }, [finishTool, language, normalizedLocale, pendingExecution, surface, workspaceId]);
 
   const cancelExecution = useCallback(async () => {
     const tool = pendingExecution;
