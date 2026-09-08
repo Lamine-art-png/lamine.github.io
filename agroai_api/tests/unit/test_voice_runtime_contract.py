@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.api.v1.voice import VoiceCallRequest, _instructions, _reasoning_effort, _realtime_api_key, _tools
+from app.api.v1.voice import VoiceCallRequest, VoiceToolRequest, _instructions, _reasoning_effort, _realtime_api_key, _tools
 
 
 def test_voice_session_defaults_to_current_realtime_reasoning_model_contract():
@@ -53,3 +53,10 @@ def test_realtime_api_key_accepts_standard_openai_secret(monkeypatch):
     monkeypatch.delenv("AGROAI_REALTIME_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "standard")
     assert _realtime_api_key() == "standard"
+
+
+def test_voice_tool_surface_is_explicit_and_defaults_to_ask():
+    request = VoiceToolRequest(name="ask_agro_ai", arguments={"question": "status"})
+    assert request.surface == "ask"
+    field_request = VoiceToolRequest(name="ask_agro_ai", surface="field", arguments={"question": "status"})
+    assert field_request.surface == "field"
