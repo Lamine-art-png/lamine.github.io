@@ -382,6 +382,8 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         const blob = new Blob(fallbackChunksRef.current, { type: recorder.mimeType || "audio/webm" });
         fallbackRecorderRef.current = null;
         fallbackChunksRef.current = [];
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
         if (!blob.size) { setFallbackRecording(false); setState("idle"); return; }
         void runFallbackTurn(blob, blob.type || "audio/webm");
       };
