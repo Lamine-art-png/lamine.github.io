@@ -197,7 +197,10 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     try { pcRef.current?.close(); } catch { /* noop */ }
     pcRef.current = null;
     try {
-      if (fallbackRecorderRef.current && fallbackRecorderRef.current.state !== "inactive") fallbackRecorderRef.current.stop();
+      if (fallbackRecorderRef.current) {
+        fallbackRecorderRef.current.onstop = null;
+        if (fallbackRecorderRef.current.state !== "inactive") fallbackRecorderRef.current.stop();
+      }
     } catch { /* noop */ }
     fallbackRecorderRef.current = null;
     fallbackChunksRef.current = [];
