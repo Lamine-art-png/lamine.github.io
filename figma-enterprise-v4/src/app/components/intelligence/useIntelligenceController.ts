@@ -330,7 +330,39 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       const newlyImported = await ensureQueuedUploads();
       const evidence = [...importedBeforeSend, ...newlyImported].map(uploadMetadata);
       const history = priorRows.filter((row) => row.role === "user" || row.role === "assistant").slice(-12).map((row) => ({ role: row.role, content: safeText(row.content).slice(0, 2200) }));
-      const request = { task: isReportIntent(clean) ? "report_factory" as const : "chat" as const, question: clean, workspace_id: currentWorkspace?.id, audience: "operator", history, uploaded_evidence: evidence, preferred_language: normalizedLocale } as AnyRecord;
+
+      const preActionResults = new Map<string, AnyRecord>();
+      let sourceRefreshNote = "";
+      const sourceRefreshRequested = /\b(sync|refresh|pull|fetch|latest\s+data|update\s+sources?)\b/i.test(clean);
+      if (sourceRefreshRequested) {
+        try {
+          const preActions = await deps.planActions({
+            instruction: clean,
+            workspace_id: currentWorkspace?.id,
+            answer: "",
+            uploaded_evidence: evidence,
+            audience: "operator",
+          });
+          const syncAction = preActions.find((item) => item.action_type === "sync_connected_sources" && item.auto_execute && !item.approval_required);
+          if (syncAction) {
+            const result = await deps.executeAction({
+              action_type: syncAction.action_type,
+              workspace_id: currentWorkspace?.id,
+              payload: { ...(syncAction.payload || {}), wait_for_completion: true, wait_seconds: 18 },
+              approval_confirmed: false,
+            });
+            preActionResults.set(syncAction.action_type, result);
+            sourceRefreshNote = safeText(result?.sync?.message);
+          }
+        } catch (syncError) {
+          sourceRefreshNote = syncError instanceof Error ? syncError.message : "Connected-source refresh did not complete.";
+        }
+      }
+
+      const groundedQuestion = sourceRefreshNote
+        ? `${clean}\n\nAGRO-AI trusted runtime source-refresh status: ${sourceRefreshNote}`
+        : clean;
+      const request = { task: isReportIntent(clean) ? "report_factory" as const : "chat" as const, question: groundedQuestion, workspace_id: currentWorkspace?.id, audience: "operator", history, uploaded_evidence: evidence, preferred_language: normalizedLocale } as AnyRecord;
       const response = await deps.runIntelligence(request);
       if (isLanguageGenerationFailed(response)) {
         setMessages(withUser);
@@ -356,6 +388,12 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         answer: assistantText,
         uploaded_evidence: evidence,
         audience: "operator",
+      });
+      actions = actions.map((action) => {
+        const preResult = preActionResults.get(String(action.action_type || ""));
+        return preResult
+          ? { ...action, execution_result: preResult, status: preResult.status || action.status, auto_execute: false }
+          : action;
       });
 
       const completedTitles: string[] = [];
