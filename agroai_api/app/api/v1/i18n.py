@@ -173,6 +173,8 @@ def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dic
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"invalid translated value for {key}")
         normalized = value.strip()
+        if normalized.lower() == "[object object]":
+            raise ValueError(f"serialization artifact in translated value for {key}")
         try:
             source_signature = _placeholder_signature(source_value)
             translated_signature = _placeholder_signature(normalized)
