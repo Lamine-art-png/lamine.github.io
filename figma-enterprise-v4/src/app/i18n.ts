@@ -445,13 +445,22 @@ export function isRtlLocale(locale: string) {
   return option?.dir === "rtl" || ["ar", "fa", "ur"].includes(normalized.split("-")[0]);
 }
 
+function renderableTranslation(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim();
+  return Boolean(normalized) && normalized.toLowerCase() !== "[object object]";
+}
+
 export function t(key: string, locale = getStoredLocale()): string {
   const normalized = normalizeLocale(locale);
   const catalog = TRANSLATIONS[normalized] || TRANSLATIONS.en;
-  const value = catalog[key];
-  if (value !== undefined) return value;
-  if (normalized !== "en" && import.meta.env?.DEV) console.error(`[i18n] Missing ${key} for ${normalized}`);
-  return TRANSLATIONS.en[key] || key;
+  const value = (catalog as Record<string, unknown>)[key];
+  if (renderableTranslation(value)) return value;
+  if (normalized !== "en" && import.meta.env?.DEV) {
+    console.error(`[i18n] Missing or invalid ${key} for ${normalized}`, value);
+  }
+  const fallback = (TRANSLATIONS.en as Record<string, unknown>)[key];
+  return renderableTranslation(fallback) ? fallback : key;
 }
 
 export function formatTranslation(template: string, values: Record<string, string | number | undefined>) {
