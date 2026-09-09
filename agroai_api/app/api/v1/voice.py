@@ -285,13 +285,19 @@ async def create_realtime_call(
         "tracing": "auto",
         "max_output_tokens": 4096,
     }
-    body = {"sdp": payload.sdp, "session": session}
     timeout = httpx.Timeout(20.0, connect=8.0)
+    multipart = [
+        ("sdp", (None, payload.sdp.encode("utf-8"), "application/sdp")),
+        ("session", (None, json.dumps(session).encode("utf-8"), "application/json")),
+    ]
     async with httpx.AsyncClient(timeout=timeout) as client:
         upstream = await client.post(
             f"{_OPENAI_BASE}/realtime/calls",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/sdp",
+            },
+            files=multipart,
         )
     if upstream.status_code >= 400:
         detail = upstream.text[:800] or "Realtime provider rejected the session"
