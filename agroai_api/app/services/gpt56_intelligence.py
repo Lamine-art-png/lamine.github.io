@@ -228,9 +228,18 @@ class GPT56Run:
     reasoning_effort: str
 
 
+def _openai_quality_key() -> str:
+    return str(
+        os.getenv("AGROAI_INTELLIGENCE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("AGROAI_REALTIME_API_KEY")
+        or ""
+    ).strip()
+
+
 def enabled() -> bool:
     raw = str(os.getenv("AGROAI_GPT56_ENABLED", "true")).strip().lower()
-    return raw not in {"0", "false", "no", "off"} and bool(str(os.getenv("OPENAI_API_KEY") or "").strip())
+    return raw not in {"0", "false", "no", "off"} and bool(_openai_quality_key())
 
 
 def select_model(profile: str, question: str) -> tuple[str, str]:
@@ -452,7 +461,7 @@ async def run_gpt56_grounded_intelligence(
     if not enabled():
         return None
 
-    key = str(os.getenv("OPENAI_API_KEY") or "").strip()
+    key = _openai_quality_key()
     base = str(os.getenv("AGROAI_OPENAI_BASE_URL") or _OPENAI_DEFAULT_BASE).strip().rstrip("/")
     model, effort = select_model(profile, question)
     if packet.conflicts and effort != "high":
