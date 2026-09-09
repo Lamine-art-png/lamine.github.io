@@ -295,7 +295,13 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     const actionId = String(action.id || `${message.id}-${action.action_type}`);
     setActionBusyId(actionId); setError("");
     try {
-      const result = await deps.executeAction({ action_type: action.action_type, workspace_id: currentWorkspace?.id, payload: action.payload || {}, approval_confirmed: Boolean(action.approval_required) });
+      const result = await deps.executeAction({
+        action_type: action.action_type,
+        workspace_id: currentWorkspace?.id,
+        payload: action.payload || {},
+        approval_confirmed: Boolean(action.approval_required),
+        plan_token: action.plan_token,
+      });
       const next = messages.map((row) => String(row.id) === String(message.id) ? {
         ...row,
         agentic_actions: (row.agentic_actions || []).map((item: AnyRecord) => String(item.id) === actionId ? { ...item, execution_result: result, status: result.status || item.status } : item),
@@ -342,6 +348,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
             answer: "",
             uploaded_evidence: evidence,
             audience: "operator",
+            history,
           });
           const syncAction = preActions.find((item) => item.action_type === "sync_connected_sources" && item.auto_execute && !item.approval_required);
           if (syncAction) {
@@ -350,6 +357,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
               workspace_id: currentWorkspace?.id,
               payload: { ...(syncAction.payload || {}), wait_for_completion: true, wait_seconds: 18 },
               approval_confirmed: false,
+              plan_token: syncAction.plan_token,
             });
             preActionResults.set(syncAction.action_type, result);
             sourceRefreshNote = safeText(result?.sync?.message);
@@ -388,6 +396,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         answer: assistantText,
         uploaded_evidence: evidence,
         audience: "operator",
+        history,
       });
       actions = actions.map((action) => {
         const preResult = preActionResults.get(String(action.action_type || ""));
@@ -406,6 +415,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
             workspace_id: executionWorkspaceId,
             payload: action.payload || {},
             approval_confirmed: false,
+            plan_token: action.plan_token,
           });
           action.execution_result = result;
           action.status = result.status || "executed";
