@@ -3,10 +3,24 @@ name: Production I18n Matrix
 on:
   push:
     branches: [main]
+    paths:
+      - "shared/supported-locales.json"
+      - "agroai_api/app/api/v1/i18n.py"
+      - "agroai_api/app/services/hosted_ui_translation.py"
+      - "agroai_api/app/services/local_ui_translation.py"
+      - "agroai_api/app/services/model_router.py"
+      - "agroai_api/scripts/verify_production_i18n_matrix.py"
+      - "agroai_api/scripts/verify_production_i18n_matrix_v2.py"
+      - "cloudflare/edge-gateway/**"
+      - "wrangler.toml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: agroai-production-i18n-matrix
+  cancel-in-progress: true
 
 jobs:
   verify-every-ui-locale:
