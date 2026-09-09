@@ -74,11 +74,16 @@ def _docx_bytes(*, title: str, question: str, answer: str, evidence: list[dict[s
     section.right_margin = Inches(0.78)
 
     header = section.header.paragraphs[0]
-    header.text = "AGRO-AI"
     header.style = doc.styles["Normal"]
-    header.runs[0].bold = True
-    header.runs[0].font.size = Pt(10)
-    header.runs[0].font.color.rgb = RGBColor(13, 43, 30)
+    try:
+        logo_run = header.add_run()
+        logo_run.add_picture(io.BytesIO(base64.b64decode(BRAND_LOGO_PNG_BASE64)), width=Inches(0.34))
+        brand_run = header.add_run("  AGRO-AI")
+    except Exception:
+        brand_run = header.add_run("AGRO-AI")
+    brand_run.bold = True
+    brand_run.font.size = Pt(10)
+    brand_run.font.color.rgb = RGBColor(13, 43, 30)
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -156,11 +161,18 @@ def _pptx_bytes(*, title: str, question: str, answer: str, evidence: list[dict[s
         run.font.color.rgb = color
         return box
 
+    logo_bytes = base64.b64decode(BRAND_LOGO_PNG_BASE64)
+
     def brand(slide, dark=False):
+        try:
+            slide.shapes.add_picture(io.BytesIO(logo_bytes), Inches(0.65), Inches(0.18), height=Inches(0.42))
+            text_left = Inches(1.15)
+        except Exception:
+            text_left = Inches(0.65)
         add_text(
             slide,
             "AGRO-AI",
-            Inches(0.65), Inches(0.28), Inches(2.0), Inches(0.35),
+            text_left, Inches(0.28), Inches(2.0), Inches(0.35),
             size=10, bold=True, color=white if dark else green,
         )
         line = slide.shapes.add_shape(1, Inches(0.65), Inches(7.05), Inches(1.0), Inches(0.055))
