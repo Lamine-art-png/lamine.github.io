@@ -4,13 +4,15 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.agents.orchestrator import AgentOrchestrator
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
+from app.models.operational_records import GeneratedArtifact
+from app.services.agentic_artifacts import read_workspace_artifact_bytes
 from app.services.api_key_service import APIKeyService
 from app.services.brain_commercial_runtime import install_brain_commercial_runtime
 from app.services.commercial_control import require_feature
@@ -113,6 +115,40 @@ def triage_assurance_passport(passport_id: str, context: AgentContext = Depends(
 @router.post("/workbench/sessions/{session_id}/triage", status_code=201)
 def triage_workbench_session(session_id: str, context: AgentContext = Depends(_context)) -> dict[str, Any]:
     return context.orchestrator.triage_workbench_session(session_id, actor="agent")
+
+
+@router.get("/artifacts/{artifact_id}/download")
+def download_agentic_artifact(
+    artifact_id: str,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> Response:
+    if not ctx.organization:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    row = (
+        db.query(GeneratedArtifact)
+        .filter(
+            GeneratedArtifact.id == artifact_id,
+            GeneratedArtifact.tenant_id == ctx.organization.id,
+            GeneratedArtifact.artifact_type.like("agentic_%"),
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+    try:
+        content = read_workspace_artifact_bytes(row)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Artifact content is temporarily unavailable") from exc
+    filename = str(row.filename or "agro-ai-artifact").replace('"', "")
+    return Response(
+        content=content,
+        media_type=row.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.post("/actions/plan")
