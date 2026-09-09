@@ -28,6 +28,7 @@ from app.services.email_delivery import delivery_status, send_email
 from app.services.entitlements import assert_can_create_workspace, require_owner_or_admin
 from app.services.field_operating_loop import build_field_ops_context, create_field_update, create_task, field_message
 from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS, queue_provider_sync
+from app.services.agentic_plan_tokens import sign_action_plan, verify_action_plan
 
 router = APIRouter(prefix="/agentic", tags=["agentic-actions"])
 
@@ -95,6 +96,7 @@ class ActionPlanRequest(BaseModel):
     answer: str | None = None
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
     audience: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ActionExecuteRequest(BaseModel):
@@ -102,6 +104,7 @@ class ActionExecuteRequest(BaseModel):
     workspace_id: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     approval_confirmed: bool = False
+    plan_token: str | None = None
 
 
 def _require_org(ctx: AuthContext) -> str:
@@ -162,6 +165,20 @@ def _clean_extracted(value: str | None, limit: int = 120) -> str | None:
         return None
     cleaned = re.sub(r"\s+", " ", value).strip(" \t\n\r.,;:'\"")
     return cleaned[:limit] or None
+
+
+def _recent_operation_instruction(history: list[dict[str, Any]] | None) -> str:
+    for item in reversed(history or []):
+        if str(item.get("role") or "").lower() != "user":
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        normalized = _normalize(content)
+        if any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in OPERATION_CREATE_PATTERNS):
+            if _operation_name(content):
+                return content
+    return ""
 
 
 def _operation_name(text: str) -> str | None:
@@ -282,14 +299,25 @@ def _action_card(
     }
 
 
-def plan_actions(instruction: str, *, workspace_id: str | None, answer: str | None, uploaded_evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def plan_actions(
+    instruction: str,
+    *,
+    workspace_id: str | None,
+    answer: str | None,
+    uploaded_evidence: list[dict[str, Any]],
+    history: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     normalized = _normalize(instruction)
     actions: list[dict[str, Any]] = []
     field_hint = _field_hint(instruction)
 
     # Operations / workspaces -------------------------------------------------
     if any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in OPERATION_CREATE_PATTERNS):
-        name = _operation_name(instruction)
+        prior_operation_instruction = _recent_operation_instruction(history)
+        source_for_missing = prior_operation_instruction if prior_operation_instruction else instruction
+        name = _operation_name(instruction) or _operation_name(source_for_missing)
+        region = _operation_region(instruction) or _operation_region(source_for_missing)
+        crop = _operation_crop(instruction) or _operation_crop(source_for_missing)
         if name:
             actions.append(_action_card(
                 action_type="create_operation",
@@ -300,8 +328,8 @@ def plan_actions(instruction: str, *, workspace_id: str | None, answer: str | No
                 auto_execute=True,
                 payload={
                     "name": name,
-                    "crop": _operation_crop(instruction),
-                    "region": _operation_region(instruction),
+                    "crop": crop,
+                    "region": region,
                     "mode": "live" if re.search(r"\blive\b", normalized) else "evaluation",
                 },
             ))
@@ -513,12 +541,21 @@ def post_action_plan(
 ) -> dict[str, Any]:
     _require_org(ctx)
     workspace = _workspace(db, ctx.organization.id, payload.workspace_id) if ctx.organization else None
+    resolved_workspace_id = workspace.id if workspace else payload.workspace_id
     actions = plan_actions(
         payload.instruction,
-        workspace_id=workspace.id if workspace else payload.workspace_id,
+        workspace_id=resolved_workspace_id,
         answer=payload.answer,
         uploaded_evidence=payload.uploaded_evidence,
+        history=payload.history,
     )
+    for action in actions:
+        action["plan_token"] = sign_action_plan(
+            organization_id=ctx.organization.id,
+            user_id=ctx.user.id,
+            workspace_id=resolved_workspace_id,
+            action=action,
+        )
     return {
         "status": "ok",
         "workspace_id": workspace.id if workspace else payload.workspace_id,
@@ -550,8 +587,22 @@ def post_action_execute(
     organization_id = _require_org(ctx)
     action_type = payload.action_type
     data = payload.payload or {}
+    execution_workspace_id = payload.workspace_id
 
-    if action_type in APPROVAL_REQUIRED and not payload.approval_confirmed:
+    if payload.plan_token:
+        signed = verify_action_plan(
+            payload.plan_token,
+            organization_id=organization_id,
+            user_id=ctx.user.id,
+        )
+        action_type = str(signed["action_type"])
+        data = signed.get("payload") or {}
+        execution_workspace_id = signed.get("workspace_id")
+        signed_requires_approval = bool(signed.get("approval_required"))
+    else:
+        signed_requires_approval = action_type in APPROVAL_REQUIRED
+
+    if (action_type in APPROVAL_REQUIRED or signed_requires_approval) and not payload.approval_confirmed:
         return {
             "status": "approval_required",
             "action_type": action_type,
@@ -606,7 +657,7 @@ def post_action_execute(
         if not ctx.membership:
             raise HTTPException(status_code=403, detail="Organization membership required")
         require_owner_or_admin(ctx.membership.role)
-        workspace = _workspace(db, organization_id, payload.workspace_id)
+        workspace = _workspace(db, organization_id, execution_workspace_id)
         if not workspace:
             raise HTTPException(status_code=404, detail="Workspace not found")
         changed: dict[str, Any] = {}
@@ -636,11 +687,11 @@ def post_action_execute(
         return {"status": "executed", "action_type": action_type, "updated_workspace": _created_workspace_payload(workspace), "changed": changed}
 
     if action_type == "generate_workspace_artifact":
-        workspace = _workspace(db, organization_id, payload.workspace_id)
+        workspace = _workspace(db, organization_id, execution_workspace_id)
         artifact = create_workspace_artifact(
             db,
             tenant_id=organization_id,
-            workspace_id=workspace.id if workspace else payload.workspace_id,
+            workspace_id=workspace.id if workspace else execution_workspace_id,
             format_name=str(data.get("format") or "pdf"),
             title=str(data.get("title") or "AGRO-AI Workspace Artifact"),
             question=str(data.get("question") or "AGRO-AI artifact request"),
@@ -702,8 +753,8 @@ def post_action_execute(
 
     if action_type == "sync_connected_sources":
         query = db.query(ConnectorConnection).filter(ConnectorConnection.tenant_id == organization_id)
-        if payload.workspace_id:
-            query = query.filter(ConnectorConnection.workspace_id == payload.workspace_id)
+        if execution_workspace_id:
+            query = query.filter(ConnectorConnection.workspace_id == execution_workspace_id)
         connections = query.order_by(ConnectorConnection.created_at.asc()).all()
         queued: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
@@ -768,7 +819,7 @@ def post_action_execute(
 
     # The remaining actions operate on the field loop and therefore resolve
     # field context only after non-field actions have been handled.
-    fctx = _field_context(db, ctx, payload.workspace_id)
+    fctx = _field_context(db, ctx, execution_workspace_id)
 
     if action_type == "create_field_task":
         task = create_task(
