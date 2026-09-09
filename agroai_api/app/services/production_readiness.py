@@ -228,6 +228,20 @@ def _require_field_intelligence_contract(
     }:
         endpoint_value = _setting(settings, "FIELD_TRANSCRIPTION_ENDPOINT")
         api_key_value = _setting(settings, "FIELD_TRANSCRIPTION_API_KEY")
+        if provider in {"openai_whisper", "whisper"}:
+            endpoint_value = endpoint_value or "https://api.openai.com/v1/audio/transcriptions"
+            api_key_value = (
+                api_key_value
+                or (os.getenv("AGROAI_REALTIME_API_KEY") or "").strip()
+                or (os.getenv("OPENAI_API_KEY") or "").strip()
+            )
+            if not api_key_value:
+                provider_name = _setting(settings, "AI_PROVIDER").lower()
+                provider_base = _setting(settings, "AI_BASE_URL").lower()
+                if provider_name in {"openai", "openai-compatible", "openai_compatible"} and (
+                    not provider_base or "api.openai.com" in provider_base
+                ):
+                    api_key_value = _setting(settings, "AI_API_KEY")
         if edge_transcription:
             endpoint_value = _setting(settings, "API_URL").rstrip("/") + "/v1/internal/edge/field-transcription"
             api_key_value = _setting(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN")
