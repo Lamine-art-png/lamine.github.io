@@ -339,38 +339,57 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
 
       const preActionResults = new Map<string, AnyRecord>();
       let sourceRefreshNote = "";
-      const sourceRefreshRequested = /\b(sync|refresh|pull|fetch|latest\s+data|update\s+sources?)\b/i.test(clean);
-      if (sourceRefreshRequested) {
-        try {
-          const preActions = await deps.planActions({
-            instruction: clean,
-            workspace_id: currentWorkspace?.id,
-            answer: "",
-            uploaded_evidence: evidence,
-            audience: "operator",
-            history,
+      let analysisWorkspaceId = currentWorkspace?.id;
+      const actionFirstTypes = new Set(["create_operation", "update_operation", "sync_connected_sources"]);
+      try {
+        const preActions = await deps.planActions({
+          instruction: clean,
+          workspace_id: currentWorkspace?.id,
+          answer: "",
+          uploaded_evidence: evidence,
+          audience: "operator",
+          history,
+        });
+        for (const action of preActions) {
+          if (!actionFirstTypes.has(String(action.action_type || ""))) continue;
+          if (!action?.auto_execute || action?.approval_required || String(action?.status || "") !== "ready") continue;
+          const payload = action.action_type === "sync_connected_sources"
+            ? { ...(action.payload || {}), wait_for_completion: true, wait_seconds: 18 }
+            : action.payload || {};
+          const result = await deps.executeAction({
+            action_type: action.action_type,
+            workspace_id: analysisWorkspaceId,
+            payload,
+            approval_confirmed: false,
+            plan_token: action.plan_token,
           });
-          const syncAction = preActions.find((item) => item.action_type === "sync_connected_sources" && item.auto_execute && !item.approval_required);
-          if (syncAction) {
-            const result = await deps.executeAction({
-              action_type: syncAction.action_type,
-              workspace_id: currentWorkspace?.id,
-              payload: { ...(syncAction.payload || {}), wait_for_completion: true, wait_seconds: 18 },
-              approval_confirmed: false,
-              plan_token: syncAction.plan_token,
-            });
-            preActionResults.set(syncAction.action_type, result);
+          preActionResults.set(String(action.action_type), result);
+          const changedWorkspace = result?.created_workspace || result?.updated_workspace;
+          if (changedWorkspace?.id) {
+            analysisWorkspaceId = changedWorkspace.id;
+            window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+              detail: { workspace_id: changedWorkspace.id, action_type: action.action_type },
+            }));
+          }
+          if (action.action_type === "sync_connected_sources") {
             sourceRefreshNote = safeText(result?.sync?.message);
           }
-        } catch (syncError) {
-          sourceRefreshNote = syncError instanceof Error ? syncError.message : "Connected-source refresh did not complete.";
         }
+      } catch (preActionError) {
+        sourceRefreshNote = preActionError instanceof Error ? preActionError.message : "";
       }
 
-      const groundedQuestion = sourceRefreshNote
-        ? `${clean}\n\nAGRO-AI trusted runtime source-refresh status: ${sourceRefreshNote}`
+      const actionResultNotes = Array.from(preActionResults.entries()).map(([actionType, result]) => {
+        const workspace = result?.created_workspace || result?.updated_workspace;
+        if (workspace?.name) return `${actionType}: completed for "${safeText(workspace.name)}"${workspace.region ? ` in ${safeText(workspace.region)}` : ""}.`;
+        if (result?.sync?.message) return `${actionType}: ${safeText(result.sync.message)}`;
+        return `${actionType}: ${safeText(result?.status || "completed")}`;
+      });
+      const runtimeNotes = [sourceRefreshNote, ...actionResultNotes].filter(Boolean).join("\n");
+      const groundedQuestion = runtimeNotes
+        ? `${clean}\n\nAGRO-AI trusted runtime work completed before analysis:\n${runtimeNotes}`
         : clean;
-      const request = { task: isReportIntent(clean) ? "report_factory" as const : "chat" as const, question: groundedQuestion, workspace_id: currentWorkspace?.id, audience: "operator", history, uploaded_evidence: evidence, preferred_language: normalizedLocale } as AnyRecord;
+      const request = { task: isReportIntent(clean) ? "report_factory" as const : "chat" as const, question: groundedQuestion, workspace_id: analysisWorkspaceId, audience: "operator", history, uploaded_evidence: evidence, preferred_language: normalizedLocale } as AnyRecord;
       const response = await deps.runIntelligence(request);
       if (isLanguageGenerationFailed(response)) {
         setMessages(withUser);
@@ -392,7 +411,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       const artifact = isReportIntent(clean) ? { kind: "pdf", title: buildReportTitle(clean), question: clean, answer: assistantText, uploaded_evidence: evidence } : null;
       let actions: AnyRecord[] = await deps.planActions({
         instruction: clean,
-        workspace_id: currentWorkspace?.id,
+        workspace_id: analysisWorkspaceId,
         answer: assistantText,
         uploaded_evidence: evidence,
         audience: "operator",
@@ -407,7 +426,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       });
 
       const completedTitles: string[] = [];
-      let executionWorkspaceId = currentWorkspace?.id;
+      let executionWorkspaceId = analysisWorkspaceId;
       for (const action of actions) {
         if (!action?.auto_execute || action?.approval_required || String(action?.status || "") !== "ready") continue;
         try {
