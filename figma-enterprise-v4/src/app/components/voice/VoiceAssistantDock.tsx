@@ -471,6 +471,42 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       });
       const assistantText = cleanText(result?.answer || result?.summary);
       if (!assistantText) throw new Error("AGRO-AI did not return a spoken answer");
+
+      try {
+        const plan = await apiPost("/v1/voice/tool", {
+          name: "plan_aep_action",
+          surface,
+          arguments: { instruction: userText, answer_context: assistantText },
+          workspace_id: workspaceId,
+          language: requestedLanguage,
+          history,
+        });
+        const planned = Array.isArray(plan?.actions) ? plan.actions : [];
+        let executionWorkspaceId = workspaceId;
+        for (const action of planned) {
+          if (!action?.auto_execute || action?.approval_required || String(action?.status || "") !== "ready") continue;
+          const output = await apiPost("/v1/voice/tool", {
+            name: "execute_aep_action",
+            surface,
+            arguments: {
+              action_type: action.action_type,
+              payload: action.payload || {},
+              approval_required: false,
+              approval_confirmed: false,
+              summary: action.title || action.description || action.action_type,
+            },
+            workspace_id: executionWorkspaceId,
+            language: requestedLanguage,
+            history,
+          });
+          captureActionOutput(output, action.action_type);
+          const changedWorkspace = output?.created_workspace || output?.updated_workspace;
+          if (changedWorkspace?.id) executionWorkspaceId = changedWorkspace.id;
+        }
+      } catch {
+        // The spoken answer remains available even if optional safe action execution fails.
+      }
+
       appendRow("assistant", assistantText);
       if (onExchange) await onExchange(userText, assistantText);
       setState("speaking");
@@ -483,7 +519,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       setFallbackRecording(false);
       setInterim("");
     }
-  }, [appendRow, language, normalizedLocale, onExchange, reasoning, speakFallback, surface, workspaceId]);
+  }, [appendRow, captureActionOutput, language, normalizedLocale, onExchange, reasoning, speakFallback, surface, workspaceId]);
 
   const runFallbackTurn = useCallback(async (blob: Blob, mimeType: string) => {
     setState("thinking");
