@@ -58,3 +58,40 @@ def test_email_draft_is_internal_and_does_not_send():
     )
     assert action["approval_required"] is False
     assert action["auto_execute"] is True
+
+
+def test_operation_parser_preserves_exact_name_and_region():
+    actions = plan_actions(
+        "Hi, can you create a new operation called Sunrise Almond Ranch in Fresno, California?",
+        workspace_id="ws-1",
+        answer="",
+        uploaded_evidence=[],
+        history=[],
+    )
+    action = _by_type(actions, "create_operation")
+    assert action["payload"]["name"] == "Sunrise Almond Ranch"
+    assert action["payload"]["region"] == "Fresno, California"
+
+
+def test_operation_follow_up_reuses_recent_explicit_user_context():
+    history = [
+        {
+            "role": "user",
+            "content": "Create a new operation called Sunrise Almond Ranch in Fresno, California.",
+        },
+        {
+            "role": "assistant",
+            "content": "The previous attempt did not preserve the requested fields.",
+        },
+    ]
+    actions = plan_actions(
+        "Yeah, create a very new operation, a clean one.",
+        workspace_id="ws-1",
+        answer="",
+        uploaded_evidence=[],
+        history=history,
+    )
+    action = _by_type(actions, "create_operation")
+    assert action["status"] == "ready"
+    assert action["payload"]["name"] == "Sunrise Almond Ranch"
+    assert action["payload"]["region"] == "Fresno, California"
