@@ -97,6 +97,7 @@ class ActionPlanRequest(BaseModel):
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
     audience: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
+    analysis_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class ActionExecuteRequest(BaseModel):
@@ -306,6 +307,7 @@ def plan_actions(
     answer: str | None,
     uploaded_evidence: list[dict[str, Any]],
     history: list[dict[str, Any]] | None = None,
+    analysis_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     normalized = _normalize(instruction)
     actions: list[dict[str, Any]] = []
@@ -377,6 +379,7 @@ def plan_actions(
                 "question": instruction,
                 "answer": answer or "",
                 "uploaded_evidence": uploaded_evidence,
+                "analysis_context": analysis_context or {},
             },
         ))
 
@@ -548,6 +551,7 @@ def post_action_plan(
         answer=payload.answer,
         uploaded_evidence=payload.uploaded_evidence,
         history=payload.history,
+        analysis_context=payload.analysis_context,
     )
     for action in actions:
         action["plan_token"] = sign_action_plan(
@@ -697,6 +701,7 @@ def post_action_execute(
             question=str(data.get("question") or "AGRO-AI artifact request"),
             answer=str(data.get("answer") or ""),
             uploaded_evidence=list(data.get("uploaded_evidence") or []),
+            analysis_context=data.get("analysis_context") if isinstance(data.get("analysis_context"), dict) else {},
         )
         return {"status": "executed", "action_type": action_type, "artifact": artifact}
 
