@@ -397,6 +397,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         uploaded_evidence: evidence,
         audience: "operator",
         history,
+        analysis_context: response?.result && typeof response.result === "object" ? response.result : {},
       });
       actions = actions.map((action) => {
         const preResult = preActionResults.get(String(action.action_type || ""));
