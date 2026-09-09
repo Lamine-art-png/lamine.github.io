@@ -22,7 +22,7 @@ from app.api.v1.brain import BrainRunRequest
 from app.core.config import settings
 from app.db.base import get_db
 from app.services.commercial_control import require_feature
-from app.services.field_transcription import transcribe_audio
+from app.services.field_transcription import get_transcription_provider, transcribe_audio
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -190,13 +190,14 @@ def _tools() -> list[dict[str, Any]]:
 def voice_health(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> VoiceHealthResponse:
     _require_voice_access(ctx, db, surface="ask")
     realtime_enabled = bool(_realtime_api_key())
+    dictation_enabled = bool(get_transcription_provider().available())
     return VoiceHealthResponse(
         status="ok",
         model=_model(),
-        enabled=realtime_enabled,
+        enabled=realtime_enabled or dictation_enabled,
         realtime_enabled=realtime_enabled,
-        dictation_enabled=True,
-        conversation_fallback_enabled=True,
+        dictation_enabled=dictation_enabled,
+        conversation_fallback_enabled=dictation_enabled,
         realtime_provider=_realtime_provider(),
     )
 
