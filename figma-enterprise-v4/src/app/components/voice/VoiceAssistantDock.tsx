@@ -490,7 +490,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
             surface,
             arguments: {
               action_type: action.action_type,
-              payload: action.payload || {},
+              plan_token: action.plan_token,
               approval_required: false,
               approval_confirmed: false,
               summary: action.title || action.description || action.action_type,
