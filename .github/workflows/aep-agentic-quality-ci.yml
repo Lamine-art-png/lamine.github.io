@@ -12,6 +12,7 @@ on:
       - "agroai_api/app/services/agentic_plan_tokens.py"
       - "agroai_api/app/services/gpt56_intelligence.py"
       - "agroai_api/tests/unit/test_agentic_*"
+      - "agroai_api/tests/unit/test_voice_runtime_contract.py"
       - "figma-enterprise-v4/src/app/components/intelligence/**"
       - "figma-enterprise-v4/src/app/components/voice/**"
       - "figma-enterprise-v4/tests/agentic-artifact-preview-contract.mjs"
