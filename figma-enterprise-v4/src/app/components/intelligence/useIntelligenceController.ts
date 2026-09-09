@@ -24,6 +24,7 @@ import {
 export type IntelligenceDependencies = {
   createReportPdf: (payload: AnyRecord) => Promise<Blob>;
   emailReportPdf: (payload: AnyRecord) => Promise<AnyRecord>;
+  downloadAgentArtifact: (artifact: AnyRecord) => Promise<Blob>;
   listConversations: (workspaceId?: string) => Promise<AnyRecord>;
   createConversation: (payload: AnyRecord) => Promise<AnyRecord>;
   getConversation: (conversationId: string) => Promise<AnyRecord>;
@@ -49,6 +50,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
   const [reportBusyId, setReportBusyId] = useState("");
   const [reportEmailBusyId, setReportEmailBusyId] = useState("");
   const [actionBusyId, setActionBusyId] = useState("");
+  const [artifactBusyId, setArtifactBusyId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [failedPrompt, setFailedPrompt] = useState("");
@@ -266,6 +268,29 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       setError(err instanceof Error ? err.message : t("intelligence.pdfEmailFailed"));
     } finally { setReportEmailBusyId(""); }
   }
+  async function downloadGeneratedArtifact(action: AnyRecord) {
+    const artifact = action?.execution_result?.artifact;
+    if (!artifact?.download_url) return;
+    const id = String(artifact.id || artifact.filename || Date.now());
+    setArtifactBusyId(id);
+    setError("");
+    try {
+      const blob = await deps.downloadAgentArtifact(artifact);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = String(artifact.filename || "agro-ai-artifact");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("intelligence.actionExecuteFailed"));
+    } finally {
+      setArtifactBusyId("");
+    }
+  }
+
   async function runAction(message: AnyRecord, action: AnyRecord) {
     const actionId = String(action.id || `${message.id}-${action.action_type}`);
     setActionBusyId(actionId); setError("");
@@ -423,6 +448,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     reportBusyId,
     reportEmailBusyId,
     actionBusyId,
+    artifactBusyId,
     notice,
     error,
     failedPrompt,
@@ -441,6 +467,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
     downloadReportFor,
     emailReportFor,
     runAction,
+    downloadGeneratedArtifact,
     send,
     ingestVoiceExchange,
     onKeyDown,
