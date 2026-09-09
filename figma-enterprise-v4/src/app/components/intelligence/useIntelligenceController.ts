@@ -16,7 +16,6 @@ import {
   readLocalThreads,
   reportFilename,
   safeText,
-  shouldAutoEmailReport,
   titleFromPrompt,
   uploadMetadata,
   writeLocalThreads,
@@ -277,8 +276,14 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         agentic_actions: (row.agentic_actions || []).map((item: AnyRecord) => String(item.id) === actionId ? { ...item, execution_result: result, status: result.status || item.status } : item),
       } : row);
       remember(next);
-      const created = result.created_task || result.created_approval_task;
-      setNotice(formatTranslation(t("intelligence.actionCompleted"), { title: created?.title || safeText(result.action_type || action.action_type) }));
+      const created = result.created_task || result.created_approval_task || result.created_workspace || result.updated_workspace;
+      const changedWorkspace = result.created_workspace || result.updated_workspace;
+      if (changedWorkspace?.id) {
+        window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+          detail: { workspace_id: changedWorkspace.id, action_type: action.action_type },
+        }));
+      }
+      setNotice(formatTranslation(t("intelligence.actionCompleted"), { title: created?.title || created?.name || safeText(result.action_type || action.action_type) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : t("intelligence.actionExecuteFailed"));
     } finally { setActionBusyId(""); }
@@ -320,19 +325,44 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
         return;
       }
       const artifact = isReportIntent(clean) ? { kind: "pdf", title: buildReportTitle(clean), question: clean, answer: assistantText, uploaded_evidence: evidence } : null;
-      let actions: AnyRecord[] = [];
-      if (/\b(task|checklist|follow[- ]?up|email|send|approval|action)\b/i.test(clean)) {
-        actions = await deps.planActions({ instruction: clean, workspace_id: currentWorkspace?.id, answer: assistantText, uploaded_evidence: evidence, audience: "operator" });
-      }
-      if (artifact && shouldAutoEmailReport(clean)) {
-        const emailAction = actions.find((item) => item.action_type === "email_report_to_user" && !item.approval_required);
-        if (emailAction) {
-          try {
-            const result = await deps.executeAction({ action_type: emailAction.action_type, workspace_id: currentWorkspace?.id, payload: { ...emailAction.payload, ...artifact }, approval_confirmed: false });
-            actions = actions.map((item) => item.id === emailAction.id ? { ...item, execution_result: result, status: result.status || "executed" } : item);
-            if (result.status === "executed") setNotice(formatTranslation(t("intelligence.reportEmailed"), { recipient: result.recipient || t("intelligence.accountEmail") }));
-          } catch { /* Manual report actions remain available. */ }
+      let actions: AnyRecord[] = await deps.planActions({
+        instruction: clean,
+        workspace_id: currentWorkspace?.id,
+        answer: assistantText,
+        uploaded_evidence: evidence,
+        audience: "operator",
+      });
+
+      const completedTitles: string[] = [];
+      for (const action of actions) {
+        if (!action?.auto_execute || action?.approval_required || String(action?.status || "") !== "ready") continue;
+        try {
+          const result = await deps.executeAction({
+            action_type: action.action_type,
+            workspace_id: currentWorkspace?.id,
+            payload: action.payload || {},
+            approval_confirmed: false,
+          });
+          action.execution_result = result;
+          action.status = result.status || "executed";
+          if (result.status === "executed") {
+            completedTitles.push(safeText(action.title || action.action_type));
+            const changedWorkspace = result.created_workspace || result.updated_workspace;
+            if (changedWorkspace?.id) {
+              window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+                detail: { workspace_id: changedWorkspace.id, action_type: action.action_type },
+              }));
+            }
+          }
+        } catch (executionError) {
+          action.execution_error = executionError instanceof Error ? executionError.message : t("intelligence.actionExecuteFailed");
         }
+      }
+      actions = [...actions];
+      if (completedTitles.length) {
+        setNotice(completedTitles.length === 1
+          ? `${completedTitles[0]} completed.`
+          : `${completedTitles.length} requested actions completed.`);
       }
       const assistantMessage = { id: `assistant-${Date.now()}`, role: "assistant", content: assistantText, question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, decision_details: decisionDetails, model_status: modelStatus };
       const nextRows = [...withUser, assistantMessage];
