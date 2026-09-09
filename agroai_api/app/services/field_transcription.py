@@ -8,6 +8,7 @@ transcript for failed or absent audio.
 from __future__ import annotations
 
 import base64
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -172,6 +173,42 @@ def _provider_timeout() -> float:
         return 60.0
 
 
+_OPENAI_TRANSCRIPTION_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
+
+
+def _openai_transcription_api_key() -> str:
+    explicit = str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
+    if explicit:
+        return explicit
+    dedicated = (os.getenv("AGROAI_REALTIME_API_KEY") or "").strip()
+    if dedicated:
+        return dedicated
+    standard = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if standard:
+        return standard
+    provider = str(getattr(settings, "AI_PROVIDER", "") or "").strip().lower()
+    base = str(getattr(settings, "AI_BASE_URL", "") or "").strip().lower()
+    if provider in {"openai", "openai-compatible", "openai_compatible"} and (
+        not base or "api.openai.com" in base
+    ):
+        return str(getattr(settings, "AI_API_KEY", "") or "").strip()
+    return ""
+
+
+def _openai_transcription_endpoint() -> str:
+    return (
+        str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
+        or _OPENAI_TRANSCRIPTION_ENDPOINT
+    )
+
+
+def _openai_transcription_model() -> str:
+    return (
+        str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip()
+        or "gpt-transcribe"
+    )
+
+
 def _input_bound_error(provider_name: str, audio: bytes | None, language: str | None) -> TranscriptionResult | None:
     """Terminal (non-retryable) rejection for provider input beyond the bound."""
     limit = int(getattr(settings, "FIELD_TRANSCRIPTION_MAX_BYTES", 26214400) or 26214400)
@@ -203,10 +240,7 @@ class OpenAIWhisperTranscriptionProvider:
     }
 
     def available(self) -> bool:
-        return bool(
-            str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
-            and str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
-        )
+        return bool(_openai_transcription_endpoint() and _openai_transcription_api_key())
 
     def transcribe_bytes(self, *, audio, content_type, language) -> TranscriptionResult:
         started = time.monotonic()
@@ -218,9 +252,9 @@ class OpenAIWhisperTranscriptionProvider:
         bound = _input_bound_error(self.name, audio, language)
         if bound is not None:
             return bound
-        endpoint = str(settings.FIELD_TRANSCRIPTION_ENDPOINT).strip()
-        api_key = str(settings.FIELD_TRANSCRIPTION_API_KEY).strip()
-        model = str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip() or "whisper-1"
+        endpoint = _openai_transcription_endpoint()
+        api_key = _openai_transcription_api_key()
+        model = _openai_transcription_model()
         extension = self._EXTENSIONS.get((content_type or "").split(";")[0].strip().lower(), "webm")
         try:
             import httpx
