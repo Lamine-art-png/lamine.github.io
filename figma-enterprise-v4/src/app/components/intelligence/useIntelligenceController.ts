@@ -397,12 +397,13 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       });
 
       const completedTitles: string[] = [];
+      let executionWorkspaceId = currentWorkspace?.id;
       for (const action of actions) {
         if (!action?.auto_execute || action?.approval_required || String(action?.status || "") !== "ready") continue;
         try {
           const result = await deps.executeAction({
             action_type: action.action_type,
-            workspace_id: currentWorkspace?.id,
+            workspace_id: executionWorkspaceId,
             payload: action.payload || {},
             approval_confirmed: false,
           });
@@ -412,6 +413,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
             completedTitles.push(safeText(action.title || action.action_type));
             const changedWorkspace = result.created_workspace || result.updated_workspace;
             if (changedWorkspace?.id) {
+              executionWorkspaceId = changedWorkspace.id;
               window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
                 detail: { workspace_id: changedWorkspace.id, action_type: action.action_type },
               }));
