@@ -10,6 +10,7 @@ const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelli
 const intelligenceView = fs.readFileSync(path.join(root, "src/app/components/intelligence/IntelligenceView.tsx"), "utf8");
 const dictation = fs.readFileSync(path.join(root, "src/app/components/voice/VoiceDictationButton.tsx"), "utf8");
 const uploadToast = fs.readFileSync(path.join(root, "src/app/components/UploadStatusToast.tsx"), "utf8");
+const controller = fs.readFileSync(path.join(root, "src/app/components/intelligence/useIntelligenceController.ts"), "utf8");
 const field = fs.readFileSync(path.join(root, "src/app/components/FieldIntelligenceV2.tsx"), "utf8");
 
 assert.match(voice, /new RTCPeerConnection\(\)/);
@@ -62,3 +63,11 @@ assert.match(field, /await queueCapture\(\)/);
 assert.match(field, /selected_observation/);
 
 console.log("AEP realtime voice contract OK");
+
+assert.match(controller, /action\?\.auto_execute/);
+assert.match(controller, /approval_confirmed: false/);
+assert.match(controller, /agroai:workspace-agent-change/);
+assert.match(intelligenceView, /generatedArtifact\?\.download_url/);
+assert.match(intelligenceView, /downloadGeneratedArtifact/);
+assert.match(voice, /tool\.arguments\.approval_required === true/);
+assert.match(voice, /approval_confirmed: true/);
