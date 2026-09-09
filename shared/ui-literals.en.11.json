@@ -5,6 +5,6 @@
   "literal.329d86bf970010c4": "AGRO-AI realtime",
   "literal.43343d8531482c7f": "void | Promise",
   "literal.4c0bda50311a2dc3": "AGRO-AI realtime voice",
-  "literal.51b4242870a8a5bb": "execute_aep_action",
-  "literal.83ff45dbc736dcbe": "Close voice"
+  "literal.83ff45dbc736dcbe": "Close voice",
+  "literal.c65140bff73d663f": "ask_agro_ai"
 }
