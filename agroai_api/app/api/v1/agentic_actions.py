@@ -7,6 +7,7 @@ and compliance-impacting mutations behind explicit human confirmation.
 from __future__ import annotations
 
 import re
+import time
 import uuid
 from datetime import datetime
 from html import escape
@@ -20,7 +21,7 @@ from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.chat_artifacts import ReportEmailRequest, build_report_pdf_bytes
 from app.api.v1.saas import _adopt_legacy_operation_records, _clean_workspace_name
 from app.db.base import get_db
-from app.models.operational_records import ConnectorConnection
+from app.models.operational_records import ConnectorConnection, IngestionJob
 from app.models.saas import Organization, UsageEvent, Workspace
 from app.services.agentic_artifacts import create_workspace_artifact
 from app.services.email_delivery import delivery_status, send_email
@@ -719,13 +720,49 @@ def post_action_execute(
             except ValueError as exc:
                 skipped.append({"connection_id": connection.id, "provider": connection.provider, "reason": str(exc)})
         db.commit()
+        terminal = {"completed", "completed_with_warnings", "failed", "dead_letter"}
+        job_statuses: dict[str, str] = {}
+        wait_requested = bool(data.get("wait_for_completion"))
+        if wait_requested and queued:
+            deadline = time.monotonic() + min(max(float(data.get("wait_seconds") or 18.0), 1.0), 25.0)
+            job_ids = [str(item["job_id"]) for item in queued if item.get("job_id")]
+            while time.monotonic() < deadline:
+                db.expire_all()
+                rows = db.query(IngestionJob).filter(
+                    IngestionJob.tenant_id == organization_id,
+                    IngestionJob.id.in_(job_ids),
+                ).all()
+                job_statuses = {str(row.id): str(row.status or "unknown") for row in rows}
+                if job_statuses and all(status_value in terminal for status_value in job_statuses.values()):
+                    break
+                time.sleep(0.45)
+        elif queued:
+            job_statuses = {str(item["job_id"]): "queued" for item in queued if item.get("job_id")}
+
+        successful = {"completed", "completed_with_warnings"}
+        fresh_data_ready = bool(job_statuses) and all(value in successful for value in job_statuses.values())
+        still_running = [job_id for job_id, value in job_statuses.items() if value not in terminal]
+        failed_jobs = [job_id for job_id, value in job_statuses.items() if value in {"failed", "dead_letter"}]
+        if fresh_data_ready:
+            message = "Connected-source refresh completed. A new intelligence pass may now use the refreshed workspace records."
+        elif still_running:
+            message = "Connected-source refresh is still running. AGRO-AI must not describe the current analysis as based on fully refreshed data."
+        elif failed_jobs:
+            message = "One or more connected-source refresh jobs failed. AGRO-AI must surface the failed refresh before relying on stale records."
+        else:
+            message = "No refreshable configured connector completed. AGRO-AI should use only the evidence already available in the workspace."
+
         return {
             "status": "executed",
             "action_type": action_type,
             "sync": {
                 "queued": queued,
                 "skipped": skipped,
-                "message": "Latest-source refresh jobs are queued. AGRO-AI should not claim new data is available until those jobs complete.",
+                "job_statuses": job_statuses,
+                "fresh_data_ready": fresh_data_ready,
+                "still_running": still_running,
+                "failed_jobs": failed_jobs,
+                "message": message,
             },
         }
 
