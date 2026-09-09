@@ -206,6 +206,7 @@ export function FieldIntelligenceV2() {
           t={t}
           workspaceId={workspaceId}
           language={effectiveLocale}
+          selectedObservation={selected}
           onSaved={async (message: string) => {
             setBanner(message);
             setView("timeline");
@@ -276,7 +277,7 @@ function Capability({ icon, title, detail }: { icon: ReactNode; title: string; d
   </div>;
 }
 
-function SmartComposer({ t, workspaceId, language, onSaved }: any) {
+function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved }: any) {
   const [note, setNote] = useState("");
   const [fieldName, setFieldName] = useState("");
   const [blockName, setBlockName] = useState("");
@@ -334,6 +335,66 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
   const liveVisionSessionRef = useRef(0);
   const liveTranscriptRef = useRef("");
   const liveVisionContextRef = useRef({ workspaceId: workspaceId as string | undefined, fieldName: "", crop: "", note: "", language: String(language || "en") });
+
+
+  const emitFieldAgentContext = useCallback(() => {
+    const selectedContext = selectedObservation ? {
+      id: selectedObservation.id,
+      field_name: selectedObservation.field_name || null,
+      block_name: selectedObservation.block_name || null,
+      crop: selectedObservation.crop || null,
+      event_type: selectedObservation.event_type || null,
+      severity: selectedObservation.severity || null,
+      status: selectedObservation.status || null,
+      summary: selectedObservation.summary || null,
+      transcript: selectedObservation.corrected_transcript || selectedObservation.transcript || null,
+      recommended_action: selectedObservation.recommended_action || null,
+    } : null;
+    window.dispatchEvent(new CustomEvent("agroai:field-context", {
+      detail: {
+        workspace_id: workspaceId || null,
+        online: navigator.onLine,
+        draft: {
+          note_text: note,
+          field_name: fieldName,
+          block_name: blockName,
+          crop,
+          event_type: eventType,
+          severity,
+          assignee,
+          location: location ? { latitude: location.lat, longitude: location.lon, accuracy_m: location.acc } : null,
+          live_transcript: liveTranscript,
+          interim_transcript: interimTranscript,
+          live_vision: liveVision ? {
+            summary: liveVision.summary || null,
+            visible_facts: Array.isArray(liveVision.visible_facts) ? liveVision.visible_facts.slice(0, 8) : [],
+            hypotheses: Array.isArray(liveVision.hypotheses) ? liveVision.hypotheses.slice(0, 6) : [],
+            recommended_follow_up: liveVision.recommended_follow_up || null,
+          } : null,
+          attachment_count: attachments.length,
+          has_audio: Boolean(audioFile),
+          has_video: Boolean(walkVideoFile),
+          recording,
+          video_recording: videoRecording,
+        },
+        selected_observation: selectedContext,
+      },
+    }));
+  }, [
+    assignee, attachments.length, audioFile, blockName, crop, eventType, fieldName,
+    interimTranscript, liveTranscript, liveVision, location, note, recording,
+    selectedObservation, severity, videoRecording, walkVideoFile, workspaceId,
+  ]);
+
+  useEffect(() => {
+    emitFieldAgentContext();
+  }, [emitFieldAgentContext]);
+
+  useEffect(() => {
+    const onContextRequest = () => emitFieldAgentContext();
+    window.addEventListener("agroai:field-context-request", onContextRequest);
+    return () => window.removeEventListener("agroai:field-context-request", onContextRequest);
+  }, [emitFieldAgentContext]);
 
   const imagePreviews = useMemo(() => attachments.filter((file) => file.type.startsWith("image/"))
     .map((file) => ({ file, url: URL.createObjectURL(file) })), [attachments]);
@@ -877,6 +938,89 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
     reset();
     await onSaved(t("fieldIntel.saved"));
   }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, language, liveTranscript, location, note, onSaved, reset, severity, t, walkVideoFile, workspaceId]);
+
+  useEffect(() => {
+    const onFieldAgentAction = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail?.type || typeof detail.resolve !== "function" || typeof detail.reject !== "function") return;
+      const payload = detail.payload || {};
+
+      if (detail.type === "update_draft") {
+        try {
+          if (typeof payload.note_text === "string") {
+            const text = payload.note_text.trim();
+            if (payload.note_mode === "append") {
+              setNote((current) => [current.trim(), text].filter(Boolean).join(current.trim() ? "\n" : ""));
+            } else {
+              setNote(text);
+            }
+          }
+          if (typeof payload.field_name === "string") setFieldName(payload.field_name.trim().slice(0, 200));
+          if (typeof payload.block_name === "string") setBlockName(payload.block_name.trim().slice(0, 200));
+          if (typeof payload.crop === "string") setCrop(payload.crop.trim().slice(0, 200));
+          if (typeof payload.assignee === "string") setAssignee(payload.assignee.trim().slice(0, 200));
+          if (typeof payload.event_type === "string" && (EVENT_TYPES as readonly string[]).includes(payload.event_type)) setEventType(payload.event_type);
+          if (typeof payload.severity === "string" && (SEVERITIES as readonly string[]).includes(payload.severity)) setSeverity(payload.severity);
+          detail.resolve({ status: "updated", durable: false, message: "Field draft updated visibly." });
+        } catch (error) {
+          detail.reject(error);
+        }
+        return;
+      }
+
+      if (detail.type === "capture_location") {
+        if (!navigator.geolocation) {
+          detail.reject(new Error("Location is not supported on this device"));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const fix = { lat: position.coords.latitude, lon: position.coords.longitude, acc: position.coords.accuracy };
+            setLocation(fix);
+            setLocError(null);
+            detail.resolve({
+              status: "captured",
+              durable: false,
+              location: { latitude: fix.lat, longitude: fix.lon, accuracy_m: fix.acc },
+            });
+          },
+          () => {
+            setLocError(t("fieldIntel.locationDenied"));
+            detail.reject(new Error("Location permission was denied"));
+          },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 },
+        );
+        return;
+      }
+
+      if (detail.type === "save_observation") {
+        void (async () => {
+          try {
+            if (recording) await stopRecording();
+            if (videoRecording) await stopWalkVideo();
+            if (!note.trim() && !liveTranscript.trim() && !audioFile && !walkVideoFile && attachments.length === 0) {
+              throw new Error("There is no field observation to save yet");
+            }
+            await queueCapture();
+            detail.resolve({
+              status: "queued",
+              durable: true,
+              offline_safe: true,
+              message: navigator.onLine ? "Field observation queued and syncing." : "Field observation stored offline and queued for sync.",
+            });
+          } catch (error) {
+            detail.reject(error);
+          }
+        })();
+      }
+    };
+
+    window.addEventListener("agroai:field-agent-action", onFieldAgentAction);
+    return () => window.removeEventListener("agroai:field-agent-action", onFieldAgentAction);
+  }, [
+    attachments.length, audioFile, liveTranscript, note, queueCapture, recording,
+    stopRecording, stopWalkVideo, t, videoRecording, walkVideoFile,
+  ]);
 
   if (reviewing) {
     return (
