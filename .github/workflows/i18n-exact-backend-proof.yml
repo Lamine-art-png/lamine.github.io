@@ -7,7 +7,6 @@ on:
       - "agroai_api/app/services/hosted_ui_translation.py"
       - "agroai_api/app/services/local_ui_translation.py"
       - "agroai_api/app/services/model_router.py"
-      - ".github/workflows/i18n-exact-backend-proof.yml"
   workflow_dispatch:
 
 permissions:
