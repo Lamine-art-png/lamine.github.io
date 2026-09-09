@@ -34,6 +34,35 @@ def test_voice_tools_plan_before_execute_and_keep_execution_explicit():
     assert set(execute["parameters"]["required"]) == {"action_type", "payload", "summary"}
 
 
+
+def test_field_voice_exposes_agentic_capture_tools_only_on_field_surface():
+    ask_names = [tool["name"] for tool in _tools("ask")]
+    field_names = [tool["name"] for tool in _tools("field")]
+    assert ask_names == ["ask_agro_ai", "plan_aep_action", "execute_aep_action"]
+    assert field_names[:3] == ask_names
+    assert field_names[3:] == [
+        "get_field_context",
+        "update_field_draft",
+        "capture_field_location",
+        "save_field_observation",
+        "create_field_task",
+    ]
+    save_tool = next(tool for tool in _tools("field") if tool["name"] == "save_field_observation")
+    task_tool = next(tool for tool in _tools("field") if tool["name"] == "create_field_task")
+    assert "visible confirmation" in save_tool["description"]
+    assert "confirmation" in task_tool["description"].lower()
+
+
+def test_field_task_voice_request_is_surface_scoped():
+    request = VoiceToolRequest(
+        name="create_field_task",
+        surface="field",
+        arguments={"observation_id": "obs-1", "summary": "Create a follow-up task"},
+    )
+    assert request.surface == "field"
+    assert request.arguments["observation_id"] == "obs-1"
+
+
 def test_voice_rejects_unknown_voice():
     try:
         VoiceCallRequest(sdp="v=0\r\na=group:BUNDLE 0 1\r\n", voice="invented-voice")
