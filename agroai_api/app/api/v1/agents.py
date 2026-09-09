@@ -171,7 +171,18 @@ def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
 
     request = ActionExecuteRequest(**payload)
-    approval_gated = request.action_type in APPROVAL_REQUIRED
+    effective_action_type = request.action_type
+    effective_workspace_id = request.workspace_id
+    if request.plan_token:
+        from app.services.agentic_plan_tokens import verify_action_plan
+        signed = verify_action_plan(
+            request.plan_token,
+            organization_id=ctx.organization.id,
+            user_id=ctx.user.id,
+        )
+        effective_action_type = str(signed["action_type"])
+        effective_workspace_id = signed.get("workspace_id")
+    approval_gated = effective_action_type in APPROVAL_REQUIRED
     require_feature(
         db,
         ctx.organization,
@@ -188,10 +199,10 @@ def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_
         db,
         ctx.organization,
         "agent_run",
-        workspace_id=request.workspace_id,
+        workspace_id=effective_workspace_id,
         user_id=ctx.user.id,
         request_id=str((request.payload or {}).get("request_id") or uuid.uuid4()),
-        metadata={"action_type": request.action_type, "approval_gated": approval_gated},
+        metadata={"action_type": effective_action_type, "approval_gated": approval_gated},
     )
     try:
         result = post_action_execute(request, ctx=ctx, db=db)
@@ -200,7 +211,7 @@ def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_
                 db,
                 reservation,
                 event_type="agent_run",
-                metadata={"result_status": result.get("status"), "action_type": request.action_type},
+                metadata={"result_status": result.get("status"), "action_type": effective_action_type},
             )
         else:
             release_reservation(db, reservation, reason=f"result:{result.get('status') or 'unknown'}")
