@@ -245,7 +245,9 @@ def enabled() -> bool:
 def select_model(profile: str, question: str) -> tuple[str, str]:
     text = (question or "").lower()
     high_impact = any(term in text for term in _HIGH_IMPACT_TERMS)
-    if profile in {"deep", "report"} or high_impact:
+    if profile == "report":
+        return str(os.getenv("AGROAI_GPT56_SOL_MODEL") or "gpt-5.6-sol"), "xhigh"
+    if profile == "deep" or high_impact:
         return str(os.getenv("AGROAI_GPT56_SOL_MODEL") or "gpt-5.6-sol"), "high"
     if profile == "fast":
         return str(os.getenv("AGROAI_GPT56_LUNA_MODEL") or "gpt-5.6-luna"), "low"
