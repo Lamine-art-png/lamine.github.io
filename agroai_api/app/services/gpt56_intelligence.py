@@ -251,7 +251,7 @@ def select_model(profile: str, question: str) -> tuple[str, str]:
         return str(os.getenv("AGROAI_GPT56_SOL_MODEL") or "gpt-5.6-sol"), "high"
     if profile == "fast":
         return str(os.getenv("AGROAI_GPT56_LUNA_MODEL") or "gpt-5.6-luna"), "low"
-    return str(os.getenv("AGROAI_GPT56_TERRA_MODEL") or "gpt-5.6-terra"), "medium"
+    return str(os.getenv("AGROAI_GPT56_SOL_MODEL") or "gpt-5.6-sol"), "medium"
 
 
 def _response_text(body: dict[str, Any]) -> str:
