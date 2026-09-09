@@ -71,3 +71,10 @@ assert.match(intelligenceView, /generatedArtifact\?\.download_url/);
 assert.match(intelligenceView, /downloadGeneratedArtifact/);
 assert.match(voice, /tool\.arguments\.approval_required === true/);
 assert.match(voice, /approval_confirmed: true/);
+
+assert.match(voice, /generatedArtifacts/);
+assert.match(voice, /downloadVoiceArtifact/);
+assert.match(voice, /voiceDrafts/);
+assert.match(voice, /name: "plan_aep_action"/);
+assert.match(voice, /action\?\.auto_execute/);
+assert.match(voice, /captureActionOutput/);
