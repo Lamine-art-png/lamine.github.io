@@ -194,10 +194,12 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       }
       return;
     }
-    if (
-      tool.name === "execute_aep_action"
-      || (surface === "field" && ["save_field_observation", "create_field_task"].includes(tool.name))
-    ) {
+    if (surface === "field" && tool.name === "save_field_observation") {
+      setPendingExecution(tool);
+      setState("thinking");
+      return;
+    }
+    if (tool.name === "execute_aep_action" && tool.arguments.approval_required === true) {
       setPendingExecution(tool);
       setState("thinking");
       return;
@@ -213,6 +215,17 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         language: language === "auto" ? normalizedLocale || "auto" : language,
         history,
       });
+      if (tool.name === "execute_aep_action" && output?.status === "approval_required") {
+        setPendingExecution(tool);
+        setState("thinking");
+        return;
+      }
+      const changedWorkspace = output?.created_workspace || output?.updated_workspace;
+      if (changedWorkspace?.id) {
+        window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+          detail: { workspace_id: changedWorkspace.id, action_type: tool.arguments.action_type },
+        }));
+      }
       await finishTool(tool, output);
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Tool failed" });
@@ -533,11 +546,19 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       const output = await apiPost("/v1/voice/tool", {
         name: tool.name === "create_field_task" ? "create_field_task" : "execute_aep_action",
         surface,
-        arguments: tool.arguments,
+        arguments: tool.name === "execute_aep_action"
+          ? { ...tool.arguments, approval_confirmed: true }
+          : tool.arguments,
         workspace_id: workspaceId,
         language: language === "auto" ? normalizedLocale || "auto" : language,
         history: rowsRef.current.slice(-12).map((row) => ({ role: row.role, content: row.content })),
       });
+      const changedWorkspace = output?.created_workspace || output?.updated_workspace;
+      if (changedWorkspace?.id) {
+        window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+          detail: { workspace_id: changedWorkspace.id, action_type: tool.arguments.action_type },
+        }));
+      }
       await finishTool(tool, output);
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Execution failed" });
