@@ -24,6 +24,7 @@ function selectedReasoningMode() {
 
 function withIndependentResponseLanguage(request: AnyRecord): AnyRecord {
   const stored = window.localStorage.getItem(RESPONSE_LANGUAGE_STORAGE_KEY)?.trim();
+  const requested = String(request.preferred_language || "").trim();
   const reasoningMode = selectedReasoningMode();
   const task = request.task === "chat"
     ? reasoningMode === "quick"
@@ -32,11 +33,19 @@ function withIndependentResponseLanguage(request: AnyRecord): AnyRecord {
         ? "deep_analysis"
         : "chat"
     : request.task;
+  // A non-English portal locale is an explicit customer language choice and
+  // must reach Ask AGRO-AI. English remains auto-detect so a Portuguese question
+  // still receives a Portuguese answer even when the surrounding UI is English.
+  const responseLanguage = stored && stored !== "auto"
+    ? stored
+    : requested && requested !== "en"
+      ? requested
+      : "auto";
   return {
     ...request,
     task,
     reasoning_mode: reasoningMode,
-    preferred_language: stored || "auto",
+    preferred_language: responseLanguage,
   };
 }
 
