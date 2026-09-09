@@ -132,7 +132,7 @@ export function isLanguageGenerationFailed(response: AnyRecord) {
 }
 export function isReportIntent(text: string) {
   const normalized = text.toLowerCase();
-  return ["report", "pdf", "document", "packet", "brief", "memo", "analysis", "export"].some((term) => normalized.includes(term));
+  return ["report", "pdf", "document", "packet", "brief", "memo", "analysis", "export", "presentation", "powerpoint", "ppt", "deck", "slides"].some((term) => normalized.includes(term));
 }
 export function shouldAutoEmailReport(text: string) {
   const normalized = text.toLowerCase();
