@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Loader2, Mic, MicOff, PhoneOff, Settings2, ShieldCheck, Volume2, X } from "lucide-react";
+import { Check, ChevronDown, Download, Loader2, Mic, MicOff, PhoneOff, Settings2, ShieldCheck, Volume2, X } from "lucide-react";
 import { API_BASE_URL } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
 import { useLocale } from "../../hooks/useLocale";
@@ -74,6 +74,9 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const [reasoning, setReasoning] = useState(() => localStorage.getItem(REASONING_KEY) || "standard");
   const [transport, setTransport] = useState<"realtime" | "fallback">("realtime");
   const [fallbackRecording, setFallbackRecording] = useState(false);
+  const [generatedArtifacts, setGeneratedArtifacts] = useState<any[]>([]);
+  const [voiceDrafts, setVoiceDrafts] = useState<any[]>([]);
+  const [artifactBusyId, setArtifactBusyId] = useState("");
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -155,6 +158,57 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     dc.send(JSON.stringify(payload));
   }, []);
 
+  const captureActionOutput = useCallback((output: any, actionType?: string) => {
+    const artifact = output?.artifact;
+    if (artifact?.id || artifact?.download_url) {
+      setGeneratedArtifacts((current) => [
+        ...current.filter((item) => String(item.id || item.download_url) !== String(artifact.id || artifact.download_url)),
+        artifact,
+      ].slice(-6));
+    }
+    const draft = output?.draft;
+    if (draft?.subject || draft?.body) {
+      setVoiceDrafts((current) => [
+        ...current,
+        { ...draft, id: uid("draft") },
+      ].slice(-4));
+    }
+    const changedWorkspace = output?.created_workspace || output?.updated_workspace;
+    if (changedWorkspace?.id) {
+      window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
+        detail: { workspace_id: changedWorkspace.id, action_type: actionType || output?.action_type },
+      }));
+    }
+  }, []);
+
+  const downloadVoiceArtifact = useCallback(async (artifact: any) => {
+    const downloadPath = String(artifact?.download_url || "").trim();
+    if (!downloadPath) return;
+    const id = String(artifact?.id || artifact?.filename || Date.now());
+    setArtifactBusyId(id);
+    setError("");
+    try {
+      const headers = new Headers();
+      const access = token();
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE_URL}${downloadPath}`, { headers });
+      if (!response.ok) throw new Error(await response.text().catch(() => ""));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = String(artifact?.filename || "agro-ai-artifact");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Artifact download failed");
+    } finally {
+      setArtifactBusyId("");
+    }
+  }, []);
+
   const finishTool = useCallback(async (tool: ToolEnvelope, output: unknown) => {
     sendEvent({
       type: "conversation.item.create",
@@ -220,17 +274,12 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         setState("thinking");
         return;
       }
-      const changedWorkspace = output?.created_workspace || output?.updated_workspace;
-      if (changedWorkspace?.id) {
-        window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
-          detail: { workspace_id: changedWorkspace.id, action_type: tool.arguments.action_type },
-        }));
-      }
+      captureActionOutput(output, tool.arguments.action_type);
       await finishTool(tool, output);
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Tool failed" });
     }
-  }, [finishTool, language, normalizedLocale, requestFieldAction, surface, workspaceId]);
+  }, [captureActionOutput, finishTool, language, normalizedLocale, requestFieldAction, surface, workspaceId]);
 
   const handleEvent = useCallback((raw: string) => {
     let event: any;
@@ -553,17 +602,12 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         language: language === "auto" ? normalizedLocale || "auto" : language,
         history: rowsRef.current.slice(-12).map((row) => ({ role: row.role, content: row.content })),
       });
-      const changedWorkspace = output?.created_workspace || output?.updated_workspace;
-      if (changedWorkspace?.id) {
-        window.dispatchEvent(new CustomEvent("agroai:workspace-agent-change", {
-          detail: { workspace_id: changedWorkspace.id, action_type: tool.arguments.action_type },
-        }));
-      }
+      captureActionOutput(output, tool.arguments.action_type);
       await finishTool(tool, output);
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Execution failed" });
     }
-  }, [finishTool, language, normalizedLocale, pendingExecution, requestFieldAction, surface, workspaceId]);
+  }, [captureActionOutput, finishTool, language, normalizedLocale, pendingExecution, requestFieldAction, surface, workspaceId]);
 
   const cancelExecution = useCallback(async () => {
     const tool = pendingExecution;
@@ -635,6 +679,26 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
               <div className={`rounded-xl px-3 py-2 text-[12px] leading-5 ${row.role === "user" ? "bg-[#10231B] text-white" : "border border-[#D6DDD0] bg-white text-[#263A30]"}`}>{row.content}</div>
             </div>)}
             {interim && <div className="rounded-xl border border-dashed border-[#AFC7B9] bg-[#F3F8F5] px-3 py-2 text-[12px] leading-5 text-[#536158]">{interim}</div>}
+            {generatedArtifacts.map((artifact) => (
+              <button
+                key={String(artifact.id || artifact.download_url)}
+                type="button"
+                onClick={() => void downloadVoiceArtifact(artifact)}
+                disabled={artifactBusyId === String(artifact.id || artifact.filename)}
+                className="flex w-full items-center gap-2 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-3 py-2 text-left text-[12px] font-semibold text-[#16533C] disabled:opacity-60"
+                aria-label={cleanText(artifact.filename)}
+              >
+                <Download className="h-4 w-4 shrink-0" />
+                <span className="truncate">{cleanText(artifact.filename || artifact.title)}</span>
+              </button>
+            ))}
+            {voiceDrafts.map((draft) => (
+              <div key={draft.id} className="rounded-xl border border-[#D6DDD0] bg-white px-3 py-2">
+                {draft.to_email ? <div className="break-words text-[10px] text-[#819087]">{cleanText(draft.to_email)}</div> : null}
+                <div className="mt-1 break-words text-[12px] font-semibold text-[#10231B]">{cleanText(draft.subject)}</div>
+                <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-[#536158]">{cleanText(draft.body)}</div>
+              </div>
+            ))}
           </div>
         </div>
 
