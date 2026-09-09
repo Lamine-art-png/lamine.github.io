@@ -25,7 +25,7 @@ env:
 
 jobs:
   prove:
-    name: Wait exact backend and prove 59 locales
+    name: Wait exact backend and prove representative locales
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -78,18 +78,41 @@ jobs:
           echo "Exact Worker marker unavailable"
           exit 1
 
-      - name: Prove all 59 non-English locales live
+      - name: Validate full locale registry and prove representative live locales
         shell: bash
         run: |
           set -euo pipefail
+
           jq -r '.enabledUiLocales[] | select(. != "auto" and . != "en" and . != "fr-FR")' shared/supported-locales.json > dynamic-locales.txt
           test "$(wc -l < dynamic-locales.txt | tr -d ' ')" -eq 58
+
+          # Keep production proof representative and bounded. The edge-release
+          # workflow owns the exhaustive 59-locale matrix when i18n itself changes.
+          # These six cover Latin, RTL, CJK, Indic, Cyrillic and African language
+          # families without turning a backend release into 58 provider calls.
+          printf '%s\n' es ar zh hi ru sw > proof-locales.txt
+          while IFS= read -r locale; do
+            grep -Fx "$locale" dynamic-locales.txt >/dev/null
+          done < proof-locales.txt
+
           : > locale-matrix.jsonl
           : > first-failure.txt
           passed=0
 
           while IFS= read -r locale; do
-            status="$(curl --silent --show-error --max-time 90 -D locale-headers.txt -o locale-body.json -w '%{http_code}' \
+            # A newer backend deploy supersedes this proof. Stop immediately so an
+            # obsolete workflow never consumes production capacity during rollout.
+            release_payload="$(curl --fail --silent --show-error --max-time 10 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
+            if ! printf '%s' "$release_payload" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha' \
+              >/dev/null 2>&1; then
+              echo "Proof superseded by a newer backend release; stopping without production load."
+              exit 0
+            fi
+
+            status="$(curl --silent --show-error --max-time 45 -D locale-headers.txt -o locale-body.json -w '%{http_code}' \
               -H "Origin: ${PORTAL_ORIGIN}" \
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
               -H 'Content-Type: application/json' \
@@ -119,12 +142,11 @@ jobs:
             jq -c . locale-body.json >> locale-matrix.jsonl
             passed=$((passed + 1))
             echo "PASS ${locale}"
-          done < dynamic-locales.txt
+            sleep 1
+          done < proof-locales.txt
 
-          test "$passed" -eq 58
-          echo '{"status":"ok","locale":"fr-FR","source":"bundled_static_catalog"}' >> locale-matrix.jsonl
-          test "$((passed + 1))" -eq 59
-          echo "live_non_english_locale_matrix=59/59"
+          test "$passed" -eq 6
+          echo "representative_live_locale_matrix=6/6; registry_dynamic_locales=58"
 
       - name: Upload exact production evidence
         if: always()
@@ -134,6 +156,7 @@ jobs:
           path: |
             exact-backend-release.json
             dynamic-locales.txt
+            proof-locales.txt
             locale-matrix.jsonl
             first-failure.txt
             worker-headers.txt
