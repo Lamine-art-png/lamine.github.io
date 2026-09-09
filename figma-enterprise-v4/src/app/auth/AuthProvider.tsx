@@ -258,6 +258,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return refreshInFlight.current;
   }, [clearSession]);
 
+  useEffect(() => {
+    const onAgentWorkspaceChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspace_id?: string }>).detail;
+      const workspaceId = String(detail?.workspace_id || "").trim();
+      if (workspaceId) storeWorkspaceId(currentOrganization?.id, workspaceId);
+      void refreshMe();
+    };
+    window.addEventListener("agroai:workspace-agent-change", onAgentWorkspaceChange);
+    return () => window.removeEventListener("agroai:workspace-agent-change", onAgentWorkspaceChange);
+  }, [currentOrganization?.id, refreshMe]);
+
   const selectWorkspace = useCallback((workspaceId: string) => {
     setCurrentWorkspace((previous) => {
       const selected = workspaces.find((workspace) => workspace.id === workspaceId);
