@@ -32,6 +32,13 @@ const REASONING_KEY = "agroai_voice_reasoning_v1";
 function token() { return window.localStorage.getItem("agroai_access_token") || ""; }
 function uid(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function cleanText(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); }
+function resolvedVoiceLanguage(selection: string, portalLocale: string | undefined) {
+  if (selection !== "auto") return selection;
+  const normalized = cleanText(portalLocale);
+  // Respect an explicit non-English portal language. Keep English in auto mode
+  // so a Portuguese speaker can switch languages naturally without touching settings.
+  return normalized && normalized.toLowerCase() !== "en" ? normalized : "auto";
+}
 
 async function apiGet(path: string): Promise<any> {
   const headers = new Headers();
@@ -266,7 +273,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
         surface,
         arguments: tool.arguments,
         workspace_id: workspaceId,
-        language: language === "auto" ? normalizedLocale || "auto" : language,
+        language: resolvedVoiceLanguage(language, normalizedLocale),
         history,
       });
       if (tool.name === "execute_aep_action" && output?.status === "approval_required") {
@@ -405,7 +412,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
           workspace_id: workspaceId,
           surface,
           voice,
-          language: language === "auto" ? "auto" : language,
+          language: resolvedVoiceLanguage(language, normalizedLocale),
           reasoning_mode: reasoning,
         }),
       });
@@ -425,17 +432,17 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       setError(err instanceof Error ? err.message : "Could not start realtime voice");
       setState("error");
     }
-  }, [handleEvent, language, reasoning, state, surface, voice, workspaceId]);
+  }, [handleEvent, language, normalizedLocale, reasoning, state, surface, voice, workspaceId]);
 
-  const speakFallback = useCallback((text: string) => new Promise<void>((resolve) => {
+  const speakFallback = useCallback((text: string, responseLanguage?: string) => new Promise<void>((resolve) => {
     if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
       resolve();
       return;
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    const requestedLanguage = language === "auto" ? (normalizedLocale || "en") : language;
-    utterance.lang = requestedLanguage;
+    const requestedLanguage = cleanText(responseLanguage) || resolvedVoiceLanguage(language, normalizedLocale);
+    utterance.lang = requestedLanguage === "auto" ? "en" : requestedLanguage;
     const voices = window.speechSynthesis.getVoices();
     const languagePrefix = requestedLanguage.toLowerCase().split("-")[0];
     const matching = voices.find((candidate) => candidate.lang.toLowerCase().startsWith(languagePrefix));
@@ -457,7 +464,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     setError("");
     try {
       appendRow("user", userText);
-      const requestedLanguage = language === "auto" ? (normalizedLocale || "auto") : language;
+      const requestedLanguage = resolvedVoiceLanguage(language, normalizedLocale);
       const history = [...rowsRef.current, { id: uid("user"), role: "user" as const, content: userText, createdAt: Date.now() }]
         .slice(-12)
         .map((row) => ({ role: row.role, content: row.content }));
@@ -510,7 +517,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       appendRow("assistant", assistantText);
       if (onExchange) await onExchange(userText, assistantText);
       setState("speaking");
-      await speakFallback(assistantText);
+      await speakFallback(assistantText, cleanText(result?.response_language) || undefined);
       setState("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Voice conversation failed");
@@ -528,7 +535,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
       const form = new FormData();
       const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
       form.append("file", new File([blob], `agro-ai-voice-turn-${Date.now()}.${extension}`, { type: mimeType || "audio/webm" }));
-      const requestedLanguage = language === "auto" ? (normalizedLocale || "auto") : language;
+      const requestedLanguage = resolvedVoiceLanguage(language, normalizedLocale);
       if (requestedLanguage && requestedLanguage !== "auto") form.append("language", requestedLanguage);
       form.append("surface", surface);
       const headers = new Headers();
@@ -635,7 +642,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
           ? { ...tool.arguments, approval_confirmed: true }
           : tool.arguments,
         workspace_id: workspaceId,
-        language: language === "auto" ? normalizedLocale || "auto" : language,
+        language: resolvedVoiceLanguage(language, normalizedLocale),
         history: rowsRef.current.slice(-12).map((row) => ({ role: row.role, content: row.content })),
       });
       captureActionOutput(output, tool.arguments.action_type);
