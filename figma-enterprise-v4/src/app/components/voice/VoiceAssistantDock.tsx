@@ -8,6 +8,13 @@ type Surface = "ask" | "field";
 type VoiceState = "idle" | "connecting" | "listening" | "thinking" | "speaking" | "degraded" | "error";
 type VoiceRow = { id: string; role: "user" | "assistant"; content: string; createdAt: number };
 type ToolEnvelope = { callId: string; name: string; arguments: Record<string, any> };
+type FieldAgentContext = Record<string, any>;
+type FieldAgentActionDetail = {
+  type: string;
+  payload?: Record<string, any>;
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+};
 
 type Props = {
   surface: Surface;
@@ -78,6 +85,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   const fallbackRecorderRef = useRef<MediaRecorder | null>(null);
   const fallbackChunksRef = useRef<Blob[]>([]);
   const fallbackTimerRef = useRef<number | null>(null);
+  const fieldContextRef = useRef<FieldAgentContext>({});
 
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -86,6 +94,43 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     localStorage.setItem(LANGUAGE_KEY, language);
     localStorage.setItem(REASONING_KEY, reasoning);
   }, [voice, language, reasoning]);
+
+
+  useEffect(() => {
+    if (surface !== "field") return;
+    const onFieldContext = (event: Event) => {
+      const detail = (event as CustomEvent<FieldAgentContext>).detail;
+      if (detail && typeof detail === "object") fieldContextRef.current = detail;
+    };
+    window.addEventListener("agroai:field-context", onFieldContext);
+    window.dispatchEvent(new CustomEvent("agroai:field-context-request"));
+    return () => window.removeEventListener("agroai:field-context", onFieldContext);
+  }, [surface]);
+
+  const requestFieldAction = useCallback((type: string, payload: Record<string, any> = {}) => (
+    new Promise<unknown>((resolve, reject) => {
+      let settled = false;
+      const timer = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("Field Intelligence did not accept the voice action"));
+      }, 12_000);
+      const finish = (value: unknown, error?: unknown) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(value);
+      };
+      const detail: FieldAgentActionDetail = {
+        type,
+        payload,
+        resolve: (value) => finish(value),
+        reject: (reason) => finish(undefined, reason || new Error("Field action failed")),
+      };
+      window.dispatchEvent(new CustomEvent("agroai:field-agent-action", { detail }));
+    })
+  ), []);
 
   const label = useMemo(() => {
     if (state === "connecting") return "Connecting";
@@ -119,7 +164,40 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   }, [sendEvent]);
 
   const runTool = useCallback(async (tool: ToolEnvelope) => {
-    if (tool.name === "execute_aep_action") {
+    if (surface === "field" && tool.name === "get_field_context") {
+      setState("thinking");
+      await finishTool(tool, {
+        status: "ok",
+        context: fieldContextRef.current,
+        durable: false,
+        source: "field_intelligence_browser",
+      });
+      return;
+    }
+    if (surface === "field" && tool.name === "update_field_draft") {
+      setState("thinking");
+      try {
+        const output = await requestFieldAction("update_draft", tool.arguments);
+        await finishTool(tool, output);
+      } catch (err) {
+        await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Field draft update failed" });
+      }
+      return;
+    }
+    if (surface === "field" && tool.name === "capture_field_location") {
+      setState("thinking");
+      try {
+        const output = await requestFieldAction("capture_location", tool.arguments);
+        await finishTool(tool, output);
+      } catch (err) {
+        await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Location capture failed" });
+      }
+      return;
+    }
+    if (
+      tool.name === "execute_aep_action"
+      || (surface === "field" && ["save_field_observation", "create_field_task"].includes(tool.name))
+    ) {
       setPendingExecution(tool);
       setState("thinking");
       return;
@@ -139,7 +217,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Tool failed" });
     }
-  }, [finishTool, language, normalizedLocale, surface, workspaceId]);
+  }, [finishTool, language, normalizedLocale, requestFieldAction, surface, workspaceId]);
 
   const handleEvent = useCallback((raw: string) => {
     let event: any;
@@ -447,8 +525,13 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     if (!tool) return;
     setPendingExecution(null); setState("thinking");
     try {
+      if (surface === "field" && tool.name === "save_field_observation") {
+        const output = await requestFieldAction("save_observation", tool.arguments);
+        await finishTool(tool, output);
+        return;
+      }
       const output = await apiPost("/v1/voice/tool", {
-        name: "execute_aep_action",
+        name: tool.name === "create_field_task" ? "create_field_task" : "execute_aep_action",
         surface,
         arguments: tool.arguments,
         workspace_id: workspaceId,
@@ -459,7 +542,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
     } catch (err) {
       await finishTool(tool, { status: "error", message: err instanceof Error ? err.message : "Execution failed" });
     }
-  }, [finishTool, language, normalizedLocale, pendingExecution, surface, workspaceId]);
+  }, [finishTool, language, normalizedLocale, pendingExecution, requestFieldAction, surface, workspaceId]);
 
   const cancelExecution = useCallback(async () => {
     const tool = pendingExecution;
@@ -539,8 +622,8 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
             <div className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#805C13]" />
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-semibold text-[#5A4314]">Confirm AEP action</div>
-                <div className="mt-1 text-[11px] leading-4 text-[#766236]">{cleanText(pendingExecution.arguments.summary) || cleanText(pendingExecution.arguments.action_type)}</div>
+                <div className="text-[12px] font-semibold text-[#5A4314]">{surface === "field" ? "Confirm field action" : "Confirm AEP action"}</div>
+                <div className="mt-1 text-[11px] leading-4 text-[#766236]">{cleanText(pendingExecution.arguments.summary) || cleanText(pendingExecution.arguments.title) || cleanText(pendingExecution.arguments.action_type) || pendingExecution.name.replaceAll("_", " ")}</div>
                 <div className="mt-2 flex gap-2">
                   <button type="button" onClick={() => void confirmExecution()} className="inline-flex items-center gap-1 rounded-lg bg-[#10231B] px-3 py-1.5 text-[11px] font-semibold text-white"><Check className="h-3.5 w-3.5" /> Confirm</button>
                   <button type="button" onClick={() => void cancelExecution()} className="rounded-lg border border-[#D6C69F] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#5A4314]">Cancel</button>
