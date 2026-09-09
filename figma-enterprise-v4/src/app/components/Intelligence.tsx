@@ -58,6 +58,19 @@ async function createReportPdf(payload: AnyRecord): Promise<Blob> {
   return response.blob();
 }
 
+async function downloadAgentArtifactFile(artifact: AnyRecord): Promise<Blob> {
+  const downloadPath = String(artifact?.download_url || "").trim();
+  if (!downloadPath) throw new Error("Artifact download is unavailable");
+  const token = window.localStorage.getItem("agroai_access_token");
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${downloadPath}`, { headers });
+  if (!response.ok) {
+    throw new Error((await response.text().catch(() => "")) || `Artifact download failed with status ${response.status}`);
+  }
+  return response.blob();
+}
+
 async function emailReportPdf(payload: AnyRecord): Promise<AnyRecord> {
   const token = window.localStorage.getItem("agroai_access_token");
   const headers = new Headers({ "Content-Type": "application/json" });
@@ -83,6 +96,7 @@ async function emailReportPdf(payload: AnyRecord): Promise<AnyRecord> {
 const intelligenceDependencies: IntelligenceDependencies = {
   createReportPdf,
   emailReportPdf,
+  downloadAgentArtifact: downloadAgentArtifactFile,
   async listConversations(workspaceId?: string) {
     const suffix = workspaceId
       ? `?workspace_id=${encodeURIComponent(workspaceId)}`
