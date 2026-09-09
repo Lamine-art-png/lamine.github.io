@@ -10,6 +10,7 @@ const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelli
 const intelligenceView = fs.readFileSync(path.join(root, "src/app/components/intelligence/IntelligenceView.tsx"), "utf8");
 const dictation = fs.readFileSync(path.join(root, "src/app/components/voice/VoiceDictationButton.tsx"), "utf8");
 const uploadToast = fs.readFileSync(path.join(root, "src/app/components/UploadStatusToast.tsx"), "utf8");
+const field = fs.readFileSync(path.join(root, "src/app/components/FieldIntelligenceV2.tsx"), "utf8");
 
 assert.match(voice, /new RTCPeerConnection\(\)/);
 assert.match(voice, /createDataChannel\("oai-events"\)/);
@@ -43,5 +44,21 @@ assert.match(intelligence, /await controller\.ingestVoiceExchange\(userText, ass
 
 assert.match(uploadToast, /location\.pathname === "\/field-intelligence"/);
 assert.match(uploadToast, /<VoiceAssistantDock surface="field"/);
+
+assert.match(voice, /get_field_context/);
+assert.match(voice, /update_field_draft/);
+assert.match(voice, /capture_field_location/);
+assert.match(voice, /save_field_observation/);
+assert.match(voice, /create_field_task/);
+assert.match(voice, /agroai:field-agent-action/);
+assert.match(voice, /agroai:field-context/);
+assert.match(field, /agroai:field-context/);
+assert.match(field, /agroai:field-context-request/);
+assert.match(field, /agroai:field-agent-action/);
+assert.match(field, /detail\.type === "update_draft"/);
+assert.match(field, /detail\.type === "capture_location"/);
+assert.match(field, /detail\.type === "save_observation"/);
+assert.match(field, /await queueCapture\(\)/);
+assert.match(field, /selected_observation/);
 
 console.log("AEP realtime voice contract OK");
