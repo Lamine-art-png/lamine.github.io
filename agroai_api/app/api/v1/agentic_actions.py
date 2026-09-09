@@ -213,8 +213,8 @@ def _operation_crop(text: str) -> str | None:
 def _operation_region(text: str) -> str | None:
     patterns = [
         r"\bregion\s*(?:is|=|:)?\s*([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.!?;]|$)",
-        r"\blocated\s+in\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.;]|$)",
-        r"\bin\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.;]|$)",
+        r"\blocated\s+in\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.!?;]|$)",
+        r"\bin\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.!?;]|$)",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
