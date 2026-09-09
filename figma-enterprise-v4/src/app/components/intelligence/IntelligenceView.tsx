@@ -23,6 +23,7 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
     reportBusyId,
     reportEmailBusyId,
     actionBusyId,
+    artifactBusyId,
     notice,
     error,
     failedPrompt,
@@ -41,6 +42,7 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
     downloadReportFor,
     emailReportFor,
     runAction,
+    downloadGeneratedArtifact,
     send,
     onKeyDown,
     sendDisabled,
@@ -133,13 +135,45 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
                           <div className="mt-4 space-y-2 whitespace-normal">
                             {actions.map((action: AnyRecord) => {
                               const actionId = String(action.id || `${message.id}-${action.action_type}`);
-                              const executed = action.execution_result || ["executed", "approval_recorded"].includes(String(action.status));
+                              const result = action.execution_result || {};
+                              const resultStatus = String(result.status || action.status || "");
+                              const executed = ["executed", "approval_recorded", "created"].includes(resultStatus);
+                              const blocked = resultStatus === "blocked";
+                              const generatedArtifact = result.artifact;
+                              const draft = result.draft;
+                              const sync = result.sync;
+                              const changedWorkspace = result.created_workspace || result.updated_workspace;
+                              const createdTask = result.created_task || result.created_approval_task || result.task;
                               return (
                                 <div key={actionId} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
                                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0"><div className="break-words text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(action.title || action.action_type)}</div><div className="mt-1 break-words text-[12px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.description)}</div><div className="mt-2 text-[11px] font-semibold" style={{ color: action.approval_required ? "#92400E" : "#0D2B1E" }}>{riskLabel(action)}</div></div>
-                                    <button type="button" onClick={() => runAction(message, action)} disabled={executed || actionBusyId === actionId} className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>{executed ? t("done") : actionBusyId === actionId ? t("working") : action.approval_required ? t("intelligence.createApproval") : t("intelligence.doIt")}</button>
+                                    <button type="button" onClick={() => runAction(message, action)} disabled={executed || blocked || actionBusyId === actionId} className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>{executed ? t("done") : actionBusyId === actionId ? t("working") : action.approval_required ? t("intelligence.createApproval") : t("intelligence.doIt")}</button>
                                   </div>
+                                  {generatedArtifact?.download_url ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadGeneratedArtifact(action)}
+                                      disabled={artifactBusyId === String(generatedArtifact.id || generatedArtifact.filename)}
+                                      className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60"
+                                      style={{ background: "#0D2B1E", color: "white" }}
+                                      aria-label={safeText(generatedArtifact.filename)}
+                                    >
+                                      <Download size={14} />
+                                      <span className="truncate">{safeText(generatedArtifact.filename)}</span>
+                                    </button>
+                                  ) : null}
+                                  {draft ? (
+                                    <div className="mt-3 rounded-lg p-3" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+                                      {draft.to_email ? <div className="break-words text-[11px]" style={{ color: MUTED }}>{safeText(draft.to_email)}</div> : null}
+                                      <div className="mt-1 break-words text-[12px] font-semibold" style={{ color: TEXT }}>{safeText(draft.subject)}</div>
+                                      <div className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-5" style={{ color: TEXT }}>{safeText(draft.body)}</div>
+                                    </div>
+                                  ) : null}
+                                  {sync?.message ? <div className="mt-3 break-words text-[11px] leading-5" style={{ color: MUTED }}>{safeText(sync.message)}</div> : null}
+                                  {changedWorkspace?.name ? <div className="mt-3 break-words text-[12px] font-semibold" style={{ color: "#0D2B1E" }}>{safeText(changedWorkspace.name)}</div> : null}
+                                  {createdTask?.title ? <div className="mt-3 break-words text-[12px] font-semibold" style={{ color: "#0D2B1E" }}>{safeText(createdTask.title)}</div> : null}
+                                  {action.execution_error ? <div className="mt-3 break-words text-[11px]" style={{ color: "#991B1B" }}>{safeText(action.execution_error)}</div> : null}
                                 </div>
                               );
                             })}
