@@ -200,7 +200,7 @@ def _operation_name(text: str) -> str | None:
 
 def _operation_crop(text: str) -> str | None:
     patterns = [
-        r"\bcrop\s*(?:is|=|:)?\s*([a-zA-Z][a-zA-Z0-9 &/-]{1,80}?)(?=\s+(?:in|region|located|mode)\b|[,.;]|$)",
+        r"\bcrop\s*(?:is|=|:)?\s*([a-zA-Z][a-zA-Z0-9 &/-]{1,80}?)(?=\s+(?:in|region|located|mode)\b|[,.!?;]|$)",
         r"\bfor\s+([a-zA-Z][a-zA-Z0-9 &/-]{1,80}?)(?=\s+(?:in|region|located|mode)\b|[,.;]|$)",
     ]
     for pattern in patterns:
@@ -212,7 +212,7 @@ def _operation_crop(text: str) -> str | None:
 
 def _operation_region(text: str) -> str | None:
     patterns = [
-        r"\bregion\s*(?:is|=|:)?\s*([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.;]|$)",
+        r"\bregion\s*(?:is|=|:)?\s*([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.!?;]|$)",
         r"\blocated\s+in\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.;]|$)",
         r"\bin\s+([a-zA-Z0-9][a-zA-Z0-9 ,._/-]{1,120}?)(?=\s+(?:with|for|crop|mode)\b|[.;]|$)",
     ]
