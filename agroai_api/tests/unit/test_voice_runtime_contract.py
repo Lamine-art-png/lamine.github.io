@@ -31,7 +31,7 @@ def test_voice_tools_plan_before_execute_and_keep_execution_explicit():
     assert names == ["ask_agro_ai", "plan_aep_action", "execute_aep_action"]
     execute = tools[-1]
     assert "visible human confirmation" in execute["description"]
-    assert set(execute["parameters"]["required"]) == {"action_type", "payload", "summary"}
+    assert set(execute["parameters"]["required"]) == {"action_type", "payload", "approval_required", "summary"}
 
 
 
@@ -89,3 +89,10 @@ def test_voice_tool_surface_is_explicit_and_defaults_to_ask():
     assert request.surface == "ask"
     field_request = VoiceToolRequest(name="ask_agro_ai", surface="field", arguments={"question": "status"})
     assert field_request.surface == "field"
+
+
+def test_voice_instructions_allow_safe_actions_but_keep_external_approval():
+    payload = VoiceCallRequest(sdp="v=0\r\na=group:BUNDLE 0 1\r\n", surface="ask")
+    instructions = _instructions(payload)
+    assert "Safe internal workspace actions may execute immediately" in instructions
+    assert "External communications and physical/control actions require visible human confirmation" in instructions
