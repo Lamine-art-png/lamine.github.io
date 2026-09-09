@@ -31,7 +31,8 @@ def test_voice_tools_plan_before_execute_and_keep_execution_explicit():
     assert names == ["ask_agro_ai", "plan_aep_action", "execute_aep_action"]
     execute = tools[-1]
     assert "visible human confirmation" in execute["description"]
-    assert set(execute["parameters"]["required"]) == {"action_type", "payload", "approval_required", "summary"}
+    assert "Do not reconstruct or rewrite the payload" in execute["description"]
+    assert set(execute["parameters"]["required"]) == {"action_type", "plan_token", "approval_required", "summary"}
 
 
 
