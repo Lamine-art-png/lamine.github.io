@@ -1,0 +1,62 @@
+name: AEP Agentic Quality CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agroai_api/app/api/v1/agentic_actions.py"
+      - "agroai_api/app/api/v1/agents.py"
+      - "agroai_api/app/api/v1/voice.py"
+      - "agroai_api/app/services/agentic_artifacts.py"
+      - "agroai_api/app/services/artifact_intelligence.py"
+      - "agroai_api/app/services/agentic_plan_tokens.py"
+      - "agroai_api/app/services/gpt56_intelligence.py"
+      - "agroai_api/tests/unit/test_agentic_*"
+      - "figma-enterprise-v4/src/app/components/intelligence/**"
+      - "figma-enterprise-v4/src/app/components/voice/**"
+      - "figma-enterprise-v4/tests/agentic-artifact-preview-contract.mjs"
+      - ".github/workflows/aep-agentic-quality-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  backend-agentic-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - run: pip install -q -r requirements.txt pytest
+      - name: Compile agentic runtime
+        run: python -m compileall -q app
+      - name: Run agentic quality contracts
+        run: >
+          pytest -q
+          tests/unit/test_agentic_operating_layer.py
+          tests/unit/test_agentic_plan_tokens.py
+          tests/unit/test_agentic_quality_runtime.py
+          tests/unit/test_agentic_artifacts.py
+          tests/unit/test_voice_runtime_contract.py
+
+  portal-agentic-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci
+      - run: node tests/agentic-artifact-preview-contract.mjs
+      - run: node tests/voice-runtime-contract.mjs
+      - run: python3 scripts/check_ui_literal_inventory.py --check
+      - run: npm run build
