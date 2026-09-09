@@ -21,7 +21,9 @@ export function validCatalog(source: Record<string, string>, candidate: unknown)
   if (sourceKeys.length !== translatedKeys.length || sourceKeys.some((key, index) => key !== translatedKeys[index])) return false;
   return sourceKeys.every((key) => {
     const value = translated[key];
-    return typeof value === "string" && value.trim().length > 0 &&
+    return typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.trim().toLowerCase() !== "[object object]" &&
       JSON.stringify(placeholderSignature(value)) === JSON.stringify(placeholderSignature(source[key]));
   });
 }
