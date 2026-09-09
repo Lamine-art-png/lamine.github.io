@@ -1,4 +1,5 @@
-import { AudioLines, Download, FileText, Mail, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
+import { useState } from "react";
+import { AudioLines, Download, Eye, FileText, Mail, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
 import { LanguageSelector } from "../LanguageSelector";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "../portalUi";
 import { safeText, AnyRecord } from "./intelligenceSupport";
@@ -9,6 +10,7 @@ import { openAgroAiVoice, VoiceDictationButton } from "../voice/VoiceDictationBu
 type Controller = ReturnType<typeof useIntelligenceController>;
 
 export function IntelligenceView({ controller }: { controller: Controller }) {
+  const [artifactPreview, setArtifactPreview] = useState<AnyRecord | null>(null);
   const {
     t,
     messages,
@@ -150,18 +152,37 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
                                     <div className="min-w-0"><div className="break-words text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(action.title || action.action_type)}</div><div className="mt-1 break-words text-[12px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.description)}</div><div className="mt-2 text-[11px] font-semibold" style={{ color: action.approval_required ? "#92400E" : "#0D2B1E" }}>{riskLabel(action)}</div></div>
                                     <button type="button" onClick={() => runAction(message, action)} disabled={executed || blocked || actionBusyId === actionId} className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>{executed ? t("done") : actionBusyId === actionId ? t("working") : action.approval_required ? t("intelligence.createApproval") : t("intelligence.doIt")}</button>
                                   </div>
+                                  {generatedArtifact?.preview ? (
+                                    <ArtifactPreviewInline
+                                      artifact={generatedArtifact}
+                                      onOpen={() => setArtifactPreview(generatedArtifact)}
+                                    />
+                                  ) : null}
                                   {generatedArtifact?.download_url ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadGeneratedArtifact(action)}
-                                      disabled={artifactBusyId === String(generatedArtifact.id || generatedArtifact.filename)}
-                                      className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60"
-                                      style={{ background: "#0D2B1E", color: "white" }}
-                                      aria-label={safeText(generatedArtifact.filename)}
-                                    >
-                                      <Download size={14} />
-                                      <span className="truncate">{safeText(generatedArtifact.filename)}</span>
-                                    </button>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      {generatedArtifact?.preview ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setArtifactPreview(generatedArtifact)}
+                                          className="inline-flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold"
+                                          style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT }}
+                                        >
+                                          <Eye size={14} />
+                                          <span>{t("intelligence.previewArtifact")}</span>
+                                        </button>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadGeneratedArtifact(action)}
+                                        disabled={artifactBusyId === String(generatedArtifact.id || generatedArtifact.filename)}
+                                        className="inline-flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60"
+                                        style={{ background: "#0D2B1E", color: "white" }}
+                                        aria-label={safeText(generatedArtifact.filename)}
+                                      >
+                                        <Download size={14} />
+                                        <span className="truncate">{safeText(generatedArtifact.filename)}</span>
+                                      </button>
+                                    </div>
                                   ) : null}
                                   {draft ? (
                                     <div className="mt-3 rounded-lg p-3" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -222,6 +243,159 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
           </footer>
         </section>
       </main>
+      {artifactPreview ? (
+        <ArtifactPreviewModal
+          artifact={artifactPreview}
+          closeLabel={t("close")}
+          onClose={() => setArtifactPreview(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ArtifactPreviewInline({ artifact, onOpen }: { artifact: AnyRecord; onOpen: () => void }) {
+  const preview = artifact?.preview || {};
+  const format = String(preview.format || "");
+  const slides = Array.isArray(preview.slides) ? preview.slides : [];
+  const sections = Array.isArray(preview.sections) ? preview.sections : [];
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mt-3 block w-full overflow-hidden rounded-xl text-left"
+      style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
+    >
+      <div className="flex items-center justify-between gap-3 px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <div className="min-w-0">
+          <div className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{safeText(preview.title || artifact.title || artifact.filename)}</div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-[0.12em]" style={{ color: MUTED }}>{format === "pptx" ? `${slides.length} slides` : `${sections.length} sections`}</div>
+        </div>
+        <Eye size={15} style={{ color: "#0D2B1E" }} />
+      </div>
+      {format === "pptx" ? (
+        <div className="flex gap-2 overflow-hidden p-3">
+          {slides.slice(0, 3).map((slide: AnyRecord, index: number) => (
+            <SlidePreview key={index} slide={slide} compact />
+          ))}
+        </div>
+      ) : (
+        <div className="p-3">
+          <DocumentPreview preview={preview} compact />
+        </div>
+      )}
+    </button>
+  );
+}
+
+function ArtifactPreviewModal({ artifact, onClose, closeLabel }: { artifact: AnyRecord; onClose: () => void; closeLabel: string }) {
+  const preview = artifact?.preview || {};
+  const format = String(preview.format || "");
+  const slides = Array.isArray(preview.slides) ? preview.slides : [];
+  return (
+    <div className="fixed inset-0 z-[140] bg-black/55 p-3 sm:p-6" role="dialog" aria-modal="true">
+      <div className="mx-auto flex h-full max-w-[1180px] flex-col overflow-hidden rounded-2xl shadow-2xl" style={{ background: "#F5F5F0" }}>
+        <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-5" style={{ background: "#0D2B1E" }}>
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold text-white">{safeText(preview.title || artifact.title || artifact.filename)}</div>
+            {preview.subtitle ? <div className="mt-1 truncate text-[11px] text-white/60">{safeText(preview.subtitle)}</div> : null}
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/80 hover:bg-white/10" aria-label={closeLabel}><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {format === "pptx" ? (
+            <div className="mx-auto grid max-w-[1040px] gap-5">
+              {slides.map((slide: AnyRecord, index: number) => (
+                <div key={index}>
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTED }}>{String(index + 1).padStart(2, "0")}</div>
+                  <SlidePreview slide={slide} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mx-auto max-w-[820px]">
+              <DocumentPreview preview={preview} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlidePreview({ slide, compact = false }: { slide: AnyRecord; compact?: boolean }) {
+  const layout = String(slide?.layout || "thesis");
+  const dark = ["title", "actions", "closing"].includes(layout);
+  const bullets = Array.isArray(slide?.bullets) ? slide.bullets : [];
+  const left = Array.isArray(slide?.left_points) ? slide.left_points : [];
+  const right = Array.isArray(slide?.right_points) ? slide.right_points : [];
+  const metrics = Array.isArray(slide?.metrics) ? slide.metrics : [];
+  return (
+    <div
+      className={compact ? "relative aspect-video w-[190px] flex-none overflow-hidden rounded-lg p-3" : "relative aspect-video w-full overflow-hidden rounded-xl p-6 sm:p-8"}
+      style={{ background: dark ? "#0D2B1E" : "#F7F7F2", border: dark ? "1px solid #183C2C" : `1px solid ${BORDER}`, color: dark ? "white" : TEXT }}
+    >
+      <div className={compact ? "text-[5px] font-semibold uppercase tracking-[0.14em]" : "text-[9px] font-semibold uppercase tracking-[0.16em]"} style={{ color: dark ? "#C2E84F" : "#2F6A4B" }}>{safeText(slide?.eyebrow)}</div>
+      <div className={compact ? "mt-1 line-clamp-2 text-[9px] font-semibold leading-[1.15]" : "mt-3 max-w-[92%] text-[24px] font-semibold leading-[1.08] sm:text-[30px]"}>{safeText(slide?.title)}</div>
+      {slide?.headline ? <div className={compact ? "mt-1 line-clamp-2 text-[7px] font-semibold opacity-90" : "mt-5 max-w-[78%] text-[18px] font-semibold leading-tight sm:text-[24px]"}>{safeText(slide.headline)}</div> : null}
+      {!compact && layout === "two_column" ? (
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <PreviewColumn title={slide?.left_title} points={left} dark={dark} />
+          <PreviewColumn title={slide?.right_title} points={right} dark={dark} />
+        </div>
+      ) : null}
+      {!compact && layout === "metrics" && metrics.length ? (
+        <div className="mt-6 grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(metrics.length, 4)}, minmax(0, 1fr))` }}>
+          {metrics.slice(0, 4).map((metric: AnyRecord, index: number) => (
+            <div key={index} className="rounded-xl p-4" style={{ background: "white", border: `1px solid ${BORDER}` }}>
+              <div className="text-[24px] font-semibold" style={{ color: "#0D2B1E" }}>{safeText(metric.value)}</div>
+              <div className="mt-2 text-[11px] font-semibold" style={{ color: TEXT }}>{safeText(metric.label)}</div>
+              <div className="mt-2 text-[10px] leading-4" style={{ color: MUTED }}>{safeText(metric.context)}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {!compact && !["two_column", "metrics"].includes(layout) && bullets.length ? (
+        <div className="mt-5 grid gap-2">
+          {bullets.slice(0, 5).map((bullet: string, index: number) => (
+            <div key={index} className="flex gap-3 text-[12px] leading-5 sm:text-[13px]">
+              <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full" style={{ background: "#C2E84F" }} />
+              <span className="line-clamp-2">{safeText(bullet)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {slide?.callout && !compact ? <div className="absolute bottom-6 right-7 max-w-[38%] text-right text-[11px] font-semibold" style={{ color: dark ? "#C2E84F" : "#2F6A4B" }}>{safeText(slide.callout)}</div> : null}
+      <div className="absolute bottom-2 left-3 h-[2px] w-7 rounded-full" style={{ background: "#C2E84F" }} />
+    </div>
+  );
+}
+
+function PreviewColumn({ title, points, dark }: { title: unknown; points: unknown[]; dark: boolean }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: dark ? "rgba(255,255,255,0.08)" : "white", border: dark ? "1px solid rgba(255,255,255,0.12)" : `1px solid ${BORDER}` }}>
+      <div className="text-[12px] font-semibold">{safeText(title)}</div>
+      <div className="mt-3 space-y-2">
+        {points.slice(0, 4).map((point, index) => <div key={index} className="text-[11px] leading-4 opacity-80">{safeText(point)}</div>)}
+      </div>
+    </div>
+  );
+}
+
+function DocumentPreview({ preview, compact = false }: { preview: AnyRecord; compact?: boolean }) {
+  const sections = Array.isArray(preview?.sections) ? preview.sections : [];
+  return (
+    <div className={compact ? "rounded-lg bg-white p-3" : "rounded-xl bg-white p-6 shadow-sm sm:p-10"} style={{ border: `1px solid ${BORDER}` }}>
+      <div className={compact ? "text-[10px] font-semibold" : "text-[28px] font-semibold"} style={{ color: "#0D2B1E" }}>{safeText(preview?.title)}</div>
+      {preview?.executive_summary ? <div className={compact ? "mt-2 line-clamp-3 text-[8px] leading-3" : "mt-5 text-[14px] font-medium leading-6"} style={{ color: compact ? MUTED : TEXT }}>{safeText(preview.executive_summary)}</div> : null}
+      {!compact ? sections.map((section: AnyRecord, index: number) => (
+        <section key={index} className="mt-8">
+          <h3 className="text-[16px] font-semibold" style={{ color: "#0D2B1E" }}>{safeText(section.heading)}</h3>
+          {section.summary ? <p className="mt-2 text-[13px] font-medium leading-6" style={{ color: TEXT }}>{safeText(section.summary)}</p> : null}
+          {(section.paragraphs || []).slice(0, 5).map((paragraph: string, pIndex: number) => <p key={pIndex} className="mt-3 text-[12px] leading-6" style={{ color: MUTED }}>{safeText(paragraph)}</p>)}
+          {(section.bullets || []).slice(0, 6).map((bullet: string, bIndex: number) => <div key={bIndex} className="mt-2 flex gap-2 text-[12px] leading-5" style={{ color: TEXT }}><span>•</span><span>{safeText(bullet)}</span></div>)}
+        </section>
+      )) : null}
     </div>
   );
 }
