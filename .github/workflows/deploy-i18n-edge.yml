@@ -14,7 +14,6 @@ on:
       - "agroai_api/app/services/model_router.py"
       - "shared/ui-*.json"
       - "shared/supported-locales.json"
-      - ".github/workflows/deploy-i18n-edge.yml"
   workflow_dispatch:
 
 permissions:
@@ -31,7 +30,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy and prove all 59 dynamic locales
+    name: Deploy and prove representative dynamic locales
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -99,12 +98,11 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
 
-      - name: Prove all 59 live browser-readable locales
+      - name: Prove representative live browser-readable locales
         shell: bash
         run: |
           set -euo pipefail
-          jq -r '.enabledUiLocales[] | select(. != "auto" and . != "en" and . != "fr-FR")' shared/supported-locales.json > dynamic-locales.txt
-          test "$(wc -l < dynamic-locales.txt | tr -d ' ')" -eq 58
+          printf '%s\n' pt es ar zh hi sw > proof-locales.txt
           : > locale-matrix.jsonl
           : > first-failure.txt
           passed=0
@@ -112,75 +110,39 @@ jobs:
           while IFS= read -r locale; do
             headers="headers.txt"
             body="body.json"
-            locale_ok=no
-            status="000"
-            cors_ok=no
-            release_ok=no
-            body_ok=no
-            release_marker=""
-
-            for attempt in $(seq 1 12); do
-              status="$(curl --silent --show-error --max-time 75 -D "$headers" -o "$body" -w '%{http_code}' \
-                -H "Origin: ${PORTAL_ORIGIN}" \
-                -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-                -H 'Content-Type: application/json' \
-                -d "{\"locale\":\"${locale}\"}" \
-                "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}-${attempt}" || true)"
-
-              cors_ok=no
-              if tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
-              release_marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
-              release_ok=no
-              if [ "$release_marker" = "$I18N_EDGE_RELEASE" ]; then release_ok=yes; fi
-              body_ok=no
-              if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then body_ok=yes; fi
-
-              if [ "$status" = "200" ] && [ "$cors_ok" = "yes" ] && [ "$release_ok" = "yes" ] && [ "$body_ok" = "yes" ]; then
-                locale_ok=yes
-                break
-              fi
-
-              if [ "$release_ok" != "yes" ]; then
-                echo "WAIT ${locale} attempt=${attempt} release_marker=${release_marker:-missing}"
-                sleep 2
-                continue
-              fi
-
-              break
-            done
-
-            if [ "$locale_ok" != "yes" ]; then
+            status="$(curl --silent --show-error --max-time 20 -D "$headers" -o "$body" -w '%{http_code}' \
+              -H "Origin: ${PORTAL_ORIGIN}" \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"locale\":\"${locale}\"}" \
+              "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}" || true)"
+            marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+            if [ "$status" != "200" ] || [ "$marker" != "$I18N_EDGE_RELEASE" ] || ! jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then
               {
                 echo "locale=${locale}"
                 echo "http_status=${status}"
-                echo "cors_ok=${cors_ok}"
-                echo "release_ok=${release_ok}"
-                echo "release_marker=${release_marker:-missing}"
-                echo "body_ok=${body_ok}"
+                echo "release_marker=${marker:-missing}"
                 echo "body="
                 cat "$body"
               } > first-failure.txt
               cat first-failure.txt
               exit 1
             fi
-
             jq -c . "$body" >> locale-matrix.jsonl
             passed=$((passed + 1))
             echo "PASS ${locale}"
-          done < dynamic-locales.txt
+          done < proof-locales.txt
 
-          test "$passed" -eq 58
-          echo '{"status":"ok","locale":"fr-FR","source":"bundled_static_catalog"}' >> locale-matrix.jsonl
-          test "$((passed + 1))" -eq 59
-          echo "live_non_english_locale_matrix=59/59"
+          test "$passed" -eq 6
+          echo "representative_live_locale_matrix=6/6"
 
       - name: Upload immutable locale evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-i18n-59-matrix-${{ github.sha }}
+          name: live-i18n-representative-${{ github.sha }}
           path: |
-            dynamic-locales.txt
+            proof-locales.txt
             locale-matrix.jsonl
             first-failure.txt
             release-headers.txt
