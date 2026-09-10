@@ -4,13 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "cloudflare/edge-gateway/src/i18n-*.ts"
-      - "figma-enterprise-v4/src/app/dynamicLocaleCatalog.ts"
-      - "figma-enterprise-v4/src/app/hooks/useLocale.ts"
-      - "shared/supported-locales.json"
-      - "scripts/i18n-prewarm-critical.mjs"
-      - "scripts/i18n-production-matrix.mjs"
-      - "wrangler.toml"
       - ".github/workflows/i18n-production-locale-matrix.yml"
   workflow_dispatch:
 
@@ -23,6 +16,7 @@ concurrency:
 
 jobs:
   deploy-production-edge:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -41,6 +35,7 @@ jobs:
         run: npx wrangler deploy --config ../../wrangler.toml
 
   production-locale-matrix:
+    if: github.event_name == 'workflow_dispatch'
     needs: deploy-production-edge
     runs-on: ubuntu-latest
     timeout-minutes: 25
