@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from app.core.config import settings
-from app.services.resilient_intelligence import _run_edge, _run_openrouter
+from app.services.resilient_intelligence import _run_edge, _run_openai, _run_openrouter, run_resilient_intelligence
 
 
 def _base(monkeypatch):
@@ -142,3 +142,85 @@ def test_hosted_402_does_not_block_later_free_candidate(monkeypatch):
 
     assert result == ("free after 402", "provider/another-free:free")
     assert fake.models == ["z-ai/glm-5.2", "provider/another-free:free"]
+
+
+
+def test_openai_recovery_lane_uses_responses_api(monkeypatch):
+    _base(monkeypatch)
+    monkeypatch.setenv("AGROAI_INTELLIGENCE_API_KEY", "openai-test-key")
+    monkeypatch.setenv("AGROAI_RECOVERY_MODEL", "gpt-5.6-luna")
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"output_text": "Você deve revisar primeiro as áreas com alertas ativos."}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.url = ""
+            self.payload = {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, **kwargs):
+            self.url = url
+            self.payload = kwargs["json"]
+            return FakeResponse()
+
+    fake = FakeClient()
+    monkeypatch.setattr(
+        "app.services.resilient_intelligence.httpx.AsyncClient",
+        lambda *args, **kwargs: fake,
+    )
+
+    result = asyncio.run(
+        _run_openai(
+            messages=[{"role": "user", "content": "MANDATORY RESPONSE LANGUAGE: Portuguese (pt)."}],
+            profile="reasoning",
+        )
+    )
+
+    assert result == ("Você deve revisar primeiro as áreas com alertas ativos.", "gpt-5.6-luna")
+    assert fake.url == "https://api.openai.com/v1/responses"
+
+
+def test_resilient_runtime_accepts_portuguese_from_independent_openai_lane(monkeypatch):
+    _base(monkeypatch)
+
+    async def no_edge(**kwargs):
+        return None
+
+    async def no_hosted(**kwargs):
+        return None
+
+    async def portuguese_openai(**kwargs):
+        return ("Você deve revisar primeiro as áreas com alertas ativos e dados recentes.", "gpt-5.6-luna")
+
+    monkeypatch.setattr("app.services.resilient_intelligence._run_edge", no_edge)
+    monkeypatch.setattr("app.services.resilient_intelligence._run_openrouter", no_hosted)
+    monkeypatch.setattr("app.services.resilient_intelligence._run_openai", portuguese_openai)
+    monkeypatch.setattr("app.services.live_intelligence.LiveIntelligence.ollama_model", lambda self: None)
+
+    result = asyncio.run(
+        run_resilient_intelligence(
+            task="chat",
+            question="Quais áreas da fazenda precisam de mais atenção hoje?",
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Preferred portal language code: pt\nMANDATORY RESPONSE LANGUAGE: Portuguese (pt).",
+                }
+            ],
+            preferred_language="pt",
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.provider == "openai"
+    assert result.response_language == "pt"
+    assert "Você" in result.content

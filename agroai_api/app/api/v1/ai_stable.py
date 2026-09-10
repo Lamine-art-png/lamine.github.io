@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -231,19 +232,58 @@ async def resilient_intelligence_run(
         db.commit()
         return _grounding_failure_response(payload, bundle, task_profile)
 
+    recovery_task = asyncio.create_task(
+        run_resilient_intelligence(
+            task=payload.task,
+            question=payload.question,
+            messages=messages,
+            preferred_language=payload.preferred_language,
+        )
+    )
+    gpt56_task = asyncio.create_task(
+        run_gpt56_grounded_intelligence(
+            question=payload.question,
+            task=payload.task,
+            profile=task_profile,
+            packet=packet,
+            conversation_messages=payload.history,
+            preferred_language=payload.preferred_language,
+        )
+    )
+
     try:
-        try:
-            gpt56 = await run_gpt56_grounded_intelligence(
-                question=payload.question,
-                task=payload.task,
-                profile=task_profile,
-                packet=packet,
-                conversation_messages=payload.history,
-                preferred_language=payload.preferred_language,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("gpt56_grounded inference_failed error=%s", exc.__class__.__name__)
-            gpt56 = None
+        gpt56 = None
+        result = None
+        done, _pending = await asyncio.wait(
+            {gpt56_task, recovery_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if recovery_task in done:
+            try:
+                early_recovery = recovery_task.result()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("resilient_recovery inference_failed error=%s", exc.__class__.__name__)
+                early_recovery = None
+            if (
+                early_recovery is not None
+                and early_recovery.status == "ok"
+                and early_recovery.content.strip()
+                and language_matches_target(early_recovery.content, early_recovery.response_language)
+            ):
+                result = early_recovery
+                if not gpt56_task.done():
+                    gpt56_task.cancel()
+                    await asyncio.gather(gpt56_task, return_exceptions=True)
+
+        if result is None:
+            try:
+                gpt56 = await gpt56_task
+            except asyncio.CancelledError:
+                gpt56 = None
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("gpt56_grounded inference_failed error=%s", exc.__class__.__name__)
+                gpt56 = None
 
         if gpt56 is not None:
             gpt56.decision = postvalidate_decision(gpt56.decision, packet, question=payload.question)
@@ -301,6 +341,9 @@ async def resilient_intelligence_run(
                             "field_state_revision_id": memory_refs.field_state_revision_id,
                         }
                     )
+                if not recovery_task.done():
+                    recovery_task.cancel()
+                    await asyncio.gather(recovery_task, return_exceptions=True)
                 commit_reservation(db, reservation, event_type="ai_run", metadata=usage_metadata)
                 db.commit()
                 return {
@@ -320,12 +363,26 @@ async def resilient_intelligence_run(
                 }
             logger.warning("gpt56_grounded language_mismatch falling_back=true")
 
-        result = await run_resilient_intelligence(
-            task=payload.task,
-            question=payload.question,
-            messages=messages,
-            preferred_language=payload.preferred_language,
-        )
+        if result is None:
+            try:
+                result = await recovery_task
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("resilient_recovery inference_failed error=%s", exc.__class__.__name__)
+                result = None
+
+        if result is None:
+            from app.services.live_intelligence import LiveResult
+            language = resolve_language(payload.preferred_language, payload.question)
+            result = LiveResult(
+                "unavailable",
+                "",
+                "resilient_runtime",
+                None,
+                language.response_code,
+                task_profile,
+                "All recovery lanes failed.",
+            )
+
         commit_reservation(
             db,
             reservation,
@@ -341,6 +398,10 @@ async def resilient_intelligence_run(
         )
         db.commit()
     except Exception:
+        for task in (recovery_task, gpt56_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(recovery_task, gpt56_task, return_exceptions=True)
         db.rollback()
         raise
 

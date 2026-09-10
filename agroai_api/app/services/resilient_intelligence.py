@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_EDGE_BASE = "https://local-ai.agroai-pilot.com"
 _DEFAULT_EDGE_MODEL = "@cf/zai-org/glm-4.7-flash"
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+_OPENAI_BASE = "https://api.openai.com/v1"
 
 
 def _dedupe(values: Iterable[str | None]) -> list[str]:
@@ -35,6 +36,15 @@ def _is_free_model(model: str) -> bool:
 
 def _openrouter_key() -> str:
     return str(os.getenv("OPENROUTER_API_KEY") or settings.AI_API_KEY or "").strip()
+
+
+def _openai_key() -> str:
+    return str(
+        os.getenv("AGROAI_INTELLIGENCE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("AGROAI_REALTIME_API_KEY")
+        or ""
+    ).strip()
 
 
 def _openrouter_models(profile: str) -> list[str]:
@@ -148,6 +158,79 @@ async def _run_openrouter(
     return None
 
 
+def _responses_text(body: dict) -> str:
+    direct = body.get("output_text")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    chunks: list[str] = []
+    for item in body.get("output") or []:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        for content in item.get("content") or []:
+            if not isinstance(content, dict):
+                continue
+            value = content.get("text")
+            if content.get("type") in {"output_text", "text"} and isinstance(value, str) and value.strip():
+                chunks.append(value.strip())
+    return "\n".join(chunks).strip()
+
+
+async def _run_openai(
+    *,
+    messages: list[dict[str, str]],
+    profile: str,
+) -> tuple[str, str] | None:
+    """Independent low-latency recovery lane for customer Ask traffic.
+
+    This lane is intentionally separate from UI translation and OpenRouter so
+    localization generation load cannot starve Ask AGRO-AI.
+    """
+    key = _openai_key()
+    if not key:
+        return None
+    model = str(
+        os.getenv("AGROAI_RECOVERY_MODEL")
+        or os.getenv("AGROAI_GPT56_LUNA_MODEL")
+        or "gpt-5.6-luna"
+    ).strip()
+    max_tokens = 2200 if profile in {"deep", "report"} else 1500 if profile == "reasoning" else 800
+    payload = {
+        "model": model,
+        "store": False,
+        "instructions": (
+            "You are AGRO-AI's resilient customer-answer lane. Answer the exact "
+            "current question using only supplied workspace context. Follow the "
+            "MANDATORY RESPONSE LANGUAGE instruction in the input exactly. Never "
+            "invent telemetry, acreage, water use, compliance status, or actions. "
+            "Return only the customer-facing answer, with no provider/debug text."
+        ),
+        "input": [
+            {"role": "assistant" if item.get("role") == "assistant" else "user", "content": str(item.get("content") or "")[:5000]}
+            for item in messages[-10:]
+            if str(item.get("content") or "").strip()
+        ],
+        "max_output_tokens": max_tokens,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=24.0) as client:
+            response = await client.post(
+                f"{_OPENAI_BASE}/responses",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("ai_resilience openai_transport error=%s", exc.__class__.__name__)
+        return None
+    if response.status_code >= 400:
+        logger.warning("ai_resilience openai_http_error status=%s model=%s", response.status_code, model)
+        return None
+    try:
+        answer = _responses_text(response.json())
+    except (ValueError, KeyError, TypeError):
+        return None
+    return (answer, model) if answer else None
+
+
 async def _run_edge(
     *,
     messages: list[dict[str, str]],
@@ -225,7 +308,15 @@ async def run_resilient_intelligence(
         result = await _run_openrouter(messages=messages, profile=profile)
         return (result[0], result[1], "openrouter") if result else None
 
-    tasks = [asyncio.create_task(edge_lane()), asyncio.create_task(hosted_lane())]
+    async def openai_lane() -> tuple[str, str, str] | None:
+        result = await _run_openai(messages=messages, profile=profile)
+        return (result[0], result[1], "openai") if result else None
+
+    tasks = [
+        asyncio.create_task(edge_lane()),
+        asyncio.create_task(hosted_lane()),
+        asyncio.create_task(openai_lane()),
+    ]
     try:
         for completed in asyncio.as_completed(tasks):
             lane = await completed
@@ -254,9 +345,10 @@ async def run_resilient_intelligence(
                 return LiveResult("ok", answer, "ollama", model, language.response_code, profile)
 
     logger.error(
-        "ai_resilience exhausted edge_configured=%s hosted_key_present=%s local_configured=%s",
+        "ai_resilience exhausted edge_configured=%s hosted_key_present=%s openai_key_present=%s local_configured=%s",
         True,
         bool(_openrouter_key()),
+        bool(_openai_key()),
         bool(local_model),
     )
     return LiveResult(
