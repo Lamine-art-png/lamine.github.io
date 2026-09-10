@@ -6,20 +6,15 @@ import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v7:";
 const CACHE_VERSION = 7;
-const RETRY_COOLDOWN_MS = 800;
-// Chunk bounds align with the backend contract: the API accepts up to 2000
-// keys per request and itself chunks provider calls at 48 keys, so 48-key
-// browser chunks add zero extra provider load while quartering request count
-// (the browser locale contract asserts <= 48 keys per request).
-const REQUEST_CHUNK_MAX_KEYS = 48;
-const REQUEST_CHUNK_MAX_CHARS = 6_400;
-// Three parallel chunk requests: the Field Intelligence launch grew the core
-// catalog (~70 keys) ahead of the literal chunks, so hydration needs more
-// throughput to keep every locale's full literals arriving promptly. Chunk
-// size/char bounds are unchanged, so per-request provider load is identical.
-const REQUEST_PARALLELISM = 3;
-const MAX_HYDRATION_PASSES = 4;
-const MAX_CHUNK_ATTEMPTS = 2;
+const RETRY_COOLDOWN_MS = 5_000;
+// Keep browser translation units small enough for the edge fast path to finish
+// inside one bounded provider request in the common case. Translation hydration
+// must never create a request herd against the customer API.
+const REQUEST_CHUNK_MAX_KEYS = 36;
+const REQUEST_CHUNK_MAX_CHARS = 1_600;
+const REQUEST_PARALLELISM = 2;
+const MAX_HYDRATION_PASSES = 2;
+const MAX_CHUNK_ATTEMPTS = 1;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
