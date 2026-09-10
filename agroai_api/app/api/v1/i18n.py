@@ -31,13 +31,18 @@ _MAX_KEYS = 2_000
 _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 200_000
 _CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
-_TRANSLATION_CHUNK_SIZE = 48
-_MAX_CHUNK_ATTEMPTS = 2
-_MAX_PARALLEL_MODEL_CALLS = 6
+_TRANSLATION_CHUNK_SIZE = 36
+_MAX_CHUNK_ATTEMPTS = 1
+_MAX_PARALLEL_MODEL_CALLS = 2
+_BACKEND_TRANSLATION_TIMEOUT_SECONDS = 8.0
 _CANARY_KEYS = ("language", "settings", "save", "support")
 _CANARY_MIN_CHANGED_VALUES = 2
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_LOCKS: dict[str, asyncio.Lock] = {}
+# The public edge owns live UI localization. This gate only protects direct
+# backend callers and prevents translation provider latency from exhausting the
+# single customer API process.
+_TRANSLATION_REQUEST_GATE = asyncio.Semaphore(1)
 
 
 class CatalogRequest(BaseModel):
@@ -218,7 +223,7 @@ async def _translate_chunk_once(router: ModelRouter, semaphore: asyncio.Semaphor
         {"role": "user", "content": source_json},
     ]
     async with semaphore:
-        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=30, max_model_attempts=4)
+        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=4_000, timeout_seconds=5, max_model_attempts=1)
     if result.status != "ok" or not result.content.strip():
         raise ValueError(f"translation model unavailable: {result.provider}/{result.model}: {result.error or 'no content'}")
     translated = _validate_translated_catalog(chunk, _decode_json_object(result.content))
@@ -263,6 +268,17 @@ async def _translate_catalog(canonical: str, language: str, source: dict[str, st
     return _validate_translated_catalog(source, catalog), providers, models, len(chunks)
 
 
+async def _translate_catalog_bounded(canonical: str, language: str, source: dict[str, str]) -> tuple[dict[str, str], set[str], set[str], int]:
+    async def _run() -> tuple[dict[str, str], set[str], set[str], int]:
+        async with _TRANSLATION_REQUEST_GATE:
+            return await _translate_catalog(canonical, language, source)
+
+    try:
+        return await asyncio.wait_for(_run(), timeout=_BACKEND_TRANSLATION_TIMEOUT_SECONDS)
+    except TimeoutError as exc:
+        raise RuntimeError("backend_ui_translation_timeout") from exc
+
+
 def _require_internal_canary_token(authorization: str | None) -> None:
     expected = str(getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "") or "").strip()
     supplied = ""
@@ -299,7 +315,7 @@ async def translate_ui_canary(payload: CanaryRequest, authorization: str | None 
     language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
     language = family_name(language_code)
     try:
-        translated, providers, models, chunk_count = await _translate_catalog(canonical, language, source)
+        translated, providers, models, chunk_count = await _translate_catalog_bounded(canonical, language, source)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_canary_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
 
@@ -346,7 +362,7 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
         language = family_name(language_code)
         try:
-            translated, providers, models, chunk_count = await _translate_catalog(canonical, language, source)
+            translated, providers, models, chunk_count = await _translate_catalog_bounded(canonical, language, source)
         except Exception as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
         _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
