@@ -94,11 +94,20 @@ function placeholderParity(candidate: string, source: string) {
   return sourceSignature.every((token, index) => token === candidateSignature[index]);
 }
 
+function usableTranslationValue(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  // Never allow serialization artifacts to poison the runtime catalog/cache.
+  // This is the exact failure mode that renders navigation as "[object Object]".
+  return normalized.toLowerCase() !== "[object object]";
+}
+
 function catalogCoversSource(candidate: Record<string, string> | undefined, source: Record<string, string>) {
   if (!candidate) return false;
   return Object.entries(source).every(([key, sourceValue]) => {
     const value = candidate[key];
-    return typeof value === "string" && value.trim().length > 0 && placeholderParity(value.trim(), sourceValue);
+    return usableTranslationValue(value) && placeholderParity(value.trim(), sourceValue);
   });
 }
 
@@ -107,7 +116,7 @@ function validCatalog(candidate: unknown, source: Record<string, string>): candi
   const catalog = candidate as Record<string, unknown>;
   if (!exactKeyParity(catalog as Record<string, string>, source)) return false;
   return Object.entries(catalog).every(([key, value]) => {
-    if (typeof value !== "string" || value.trim().length === 0) return false;
+    if (!usableTranslationValue(value)) return false;
     return placeholderParity(value.trim(), source[key]);
   });
 }
@@ -177,7 +186,7 @@ function cachedReusable(locale: string, source: Record<string, string>): Record<
       for (const [sourceKey, sourceValue] of Object.entries(source)) {
         if (cachedSource[sourceKey] !== sourceValue) continue;
         const translated = cachedCatalog[sourceKey];
-        if (typeof translated !== "string" || !translated.trim() || !placeholderParity(translated.trim(), sourceValue)) continue;
+        if (!usableTranslationValue(translated) || !placeholderParity(translated.trim(), sourceValue)) continue;
         merged[sourceKey] = translated.trim();
       }
     }
@@ -276,7 +285,7 @@ function reusableCatalog(locale: string, source: Record<string, string>): Record
   const reusable = cachedReusable(locale, source);
   for (const [key, sourceValue] of Object.entries(source)) {
     const value = current[key];
-    if (typeof value === "string" && value.trim().length > 0 && placeholderParity(value.trim(), sourceValue)) {
+    if (usableTranslationValue(value) && placeholderParity(value.trim(), sourceValue)) {
       reusable[key] = value.trim();
     }
   }

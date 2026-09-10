@@ -82,6 +82,11 @@ assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail cl
 assert(dynamicCatalog.includes("sourceFingerprint"), "dynamic catalogs must invalidate stale source copy");
 assert(dynamicCatalog.includes("INFLIGHT"), "dynamic catalogs must deduplicate concurrent hydration");
 assert(dynamicCatalog.includes("notifyLocaleRuntime"), "catalog installation must notify every mounted locale consumer");
+assert(dynamicCatalog.includes('normalized.toLowerCase() !== "[object object]"'), "dynamic locale catalogs must reject serialized object sentinel values");
+assert(i18n.includes('normalized.toLowerCase() !== "[object object]"'), "final translation rendering must reject serialized object sentinel values");
+assert(i18n.includes("const pt: Record<string, string>"), "Brazil demo-critical Portuguese copy must remain bundled");
+assert(i18n.includes('"intelligence.title": "Pergunte ao AGRO-AI"'), "Portuguese Ask AGRO-AI surface must remain deterministic");
+assert(i18n.includes('"languageRegion": "Idioma e região"'), "Portuguese language settings baseline must remain deterministic");
 assert(dynamicCatalog.includes("hasCompleteLocaleCatalog"), "partial bundled catalogs must hydrate to full portal coverage");
 assert(dynamicCatalog.includes("fullEnglishUiSource"), "dynamic translation source must include static portal literals");
 assert(dynamicCatalog.includes("REQUEST_CHUNK_MAX_CHARS"), "translation chunks must be bounded by character budget");

@@ -83,7 +83,10 @@ function requestTimeoutMs(path: string, method?: string): number {
   const normalizedMethod = String(method || "GET").toUpperCase();
   const longRunningMutation =
     !["GET", "HEAD"].includes(normalizedMethod) &&
-    /\/v1\/(?:brain|intelligence|ai)(?:\/|$)/.test(path);
+    (
+      /\/v1\/(?:brain|intelligence|ai)(?:\/|$)/.test(path) ||
+      /\/v1\/runtime\/intelligence-run(?:\/|$|\?)/.test(path)
+    );
   return longRunningMutation ? LONG_RUNNING_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
