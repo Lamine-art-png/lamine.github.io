@@ -1,0 +1,13 @@
+HTTP/2 200 
+date: Thu, 10 Sep 2026 05:33:19 GMT
+content-type: application/json; charset=utf-8
+content-length: 98
+cache-control: no-store
+x-agroai-faep-intake: active
+x-content-type-options: nosniff
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=n4Gh0Z8sZ5vYR7NmouLX7jkLf0mhAY9gU4nMQNc4Dly9axd5kd5LNaowAqxMhkN6HYkOKL0GJTbYVvGKsPhC6z4raFNafRtxp3ZDF5Yl0XUX9kyYT13rY%2BEV8i84llR1vdTC"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+server: cloudflare
+cf-ray: a38c0ea58a6c1257-ORD
+alt-svc: h3=":443"; ma=86400
+

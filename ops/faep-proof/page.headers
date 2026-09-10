@@ -1,0 +1,18 @@
+HTTP/2 103 
+link: <https://app.agroai-pilot.com>; rel=preconnect
+
+HTTP/2 200 
+date: Thu, 10 Sep 2026 05:33:19 GMT
+content-type: text/html; charset=utf-8
+x-content-type-options: nosniff
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=9usNopt3iIRq51j1W9hEA4YaU1yNuzYhTZXf4au6rXQhMAzWOGs77aL0yLShXIjLs5zNtpCv2otzqhf978XGZ%2BI9jgGfpCVNL02eLO6hMwLxVodsPgeU9LDSQ9obpk9gS62b"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+access-control-allow-origin: *
+cache-control: public, max-age=0, must-revalidate
+referrer-policy: strict-origin-when-cross-origin
+link: <https://app.agroai-pilot.com>; rel="preconnect"
+server: cloudflare
+cf-cache-status: DYNAMIC
+cf-ray: a38c0ea4f85e2339-ORD
+alt-svc: h3=":443"; ma=86400
+
