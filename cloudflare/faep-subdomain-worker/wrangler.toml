@@ -1,0 +1,8 @@
+name = "agroai-faep-subdomain"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+workers_dev = false
+
+routes = [
+  { pattern = "faep.agroai-pilot.com", custom_domain = true }
+]
