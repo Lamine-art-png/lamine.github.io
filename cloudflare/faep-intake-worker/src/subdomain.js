@@ -2,6 +2,7 @@ import faepWorker from "./index.js";
 
 const MARKETING_ORIGIN = "https://agroai-pilot.com";
 
+// Dedicated, no-index Portuguese intake experience for the Sistema FAEP delegation.
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
