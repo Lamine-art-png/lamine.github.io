@@ -33,8 +33,12 @@ function token() { return window.localStorage.getItem("agroai_access_token") || 
 function uid(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function cleanText(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); }
 function resolvedVoiceLanguage(selection: string, portalLocale: string | undefined) {
-  if (selection !== "auto") return selection;
-  const normalized = cleanText(portalLocale);
+  const explicit = selection !== "auto" ? cleanText(selection) : "";
+  const normalized = explicit || cleanText(portalLocale);
+  // The Portuguese portal target is Brazil-facing; use a Brazilian locale for
+  // speech recognition/TTS while keeping the UI locale itself canonical as "pt".
+  if (normalized.toLowerCase() === "pt") return "pt-BR";
+  if (explicit) return explicit;
   // Respect an explicit non-English portal language. Keep English in auto mode
   // so a Portuguese speaker can switch languages naturally without touching settings.
   return normalized && normalized.toLowerCase() !== "en" ? normalized : "auto";
