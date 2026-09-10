@@ -12,6 +12,7 @@ const dictation = fs.readFileSync(path.join(root, "src/app/components/voice/Voic
 const uploadToast = fs.readFileSync(path.join(root, "src/app/components/UploadStatusToast.tsx"), "utf8");
 const controller = fs.readFileSync(path.join(root, "src/app/components/intelligence/useIntelligenceController.ts"), "utf8");
 const field = fs.readFileSync(path.join(root, "src/app/components/FieldIntelligenceV2.tsx"), "utf8");
+const apiClient = fs.readFileSync(path.join(root, "src/app/api/client.ts"), "utf8");
 
 assert.match(voice, /new RTCPeerConnection\(\)/);
 assert.match(voice, /createDataChannel\("oai-events"\)/);
@@ -31,6 +32,11 @@ assert.match(voice, /transport.*fallback/);
 assert.match(voice, /\/v1\/voice\/transcribe/);
 assert.match(voice, /speechSynthesis/);
 assert.match(voice, /agroai:voice-open/);
+assert.match(voice, /resolvedVoiceLanguage/);
+assert.match(voice, /response_language/);
+assert.match(apiClient, /\/v1\\\/runtime\\\/intelligence-run/);
+assert.match(intelligence, /preferred_language: responseLanguage/);
+assert.match(intelligence, /requested && requested !== "en"/);
 
 assert.match(dictation, /MediaRecorder/);
 assert.match(dictation, /\/v1\/voice\/transcribe/);
