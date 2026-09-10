@@ -33,6 +33,7 @@ assert.match(voice, /\/v1\/voice\/transcribe/);
 assert.match(voice, /speechSynthesis/);
 assert.match(voice, /agroai:voice-open/);
 assert.match(voice, /resolvedVoiceLanguage/);
+assert.match(voice, /pt-BR/);
 assert.match(voice, /response_language/);
 assert.match(apiClient, /\/v1\\\/runtime\\\/intelligence-run/);
 assert.match(intelligence, /preferred_language: responseLanguage/);
