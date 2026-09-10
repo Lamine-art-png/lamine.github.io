@@ -57,6 +57,11 @@ def _json_catalog_content(body: Any) -> str:
     parsed = json.loads(raw)
     if not isinstance(parsed, dict) or not parsed:
         raise ValueError("response was not a non-empty JSON object")
+    for key, value in parsed.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"response contained a non-string catalog value for {key}")
+        if value.strip().lower() == "[object object]":
+            raise ValueError(f"response contained a serialization artifact for {key}")
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
 
