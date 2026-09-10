@@ -196,51 +196,76 @@ class ModelRouter:
 
     async def run(self, *, task: str, messages: list[dict[str, str]], temperature: float = 0.2, response_format: dict[str, Any] | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> tuple[AIGatewayResult, ModelSelection]:
         selection = self.select(task)
-        if task == "ui_translation" and response_format is not None and self.mode() == "ollama":
-            hosted_configured = bool((os.getenv("OPENROUTER_API_KEY") or settings.AI_API_KEY or "").strip())
-            hosted_result: AIGatewayResult | None = None
+        if task == "ui_translation" and response_format is not None:
+            # UI localization is production infrastructure, not a side-effect of
+            # whichever inference provider currently powers Ask AGRO-AI.
+            failures: list[str] = []
 
-            if hosted_configured:
-                hosted_result = await run_hosted_ui_translation(
+            if self.edge_base and self.edge_model:
+                edge_result = await run_local_ui_translation(
+                    base_url=self.edge_base,
+                    model=self.edge_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     timeout_seconds=timeout_seconds,
                 )
-                if hosted_result.status == "ok":
-                    hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
-                    return hosted_result, hosted_selection
+                if edge_result.status == "ok":
+                    return edge_result, ModelSelection(task=task, profile="fast", model=edge_result.model or self.edge_model)
+                failures.append(f"edge: {edge_result.error or 'unavailable'}")
 
-            local_result = await run_local_ui_translation(
-                base_url=self.gateway.base_url,
-                model=selection.model or "",
+            hosted_result = await run_hosted_ui_translation(
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout_seconds=timeout_seconds,
             )
-            if local_result.status == "ok":
-                return local_result, selection
+            if hosted_result.status == "ok":
+                return hosted_result, ModelSelection(task=task, profile="fast", model=hosted_result.model)
+            failures.append(f"hosted: {hosted_result.error or 'unavailable'}")
 
-            if hosted_result is None:
-                hosted_result = await run_hosted_ui_translation(
+            local_model = self.local_model or (
+                (settings.AI_MODEL or "").strip()
+                if self.mode() == "ollama" and "/" not in (settings.AI_MODEL or "")
+                else ""
+            )
+            if self.local_base and local_model and self.local_base.rstrip("/") != self.edge_base.rstrip("/"):
+                local_result = await run_local_ui_translation(
+                    base_url=self.local_base,
+                    model=local_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     timeout_seconds=timeout_seconds,
                 )
-                if hosted_result.status == "ok":
-                    hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
-                    return hosted_result, hosted_selection
+                if local_result.status == "ok":
+                    return local_result, ModelSelection(task=task, profile="fast", model=local_result.model or local_model)
+                failures.append(f"local: {local_result.error or 'unavailable'}")
 
-            local_error = local_result.error or "Ollama-compatible UI translation unavailable"
-            hosted_error = hosted_result.error or "hosted UI translation unavailable"
+            if self.mode() != "offline":
+                gateway_kwargs: dict[str, Any] = {
+                    "temperature": temperature,
+                    "response_format": response_format,
+                }
+                if selection.model:
+                    gateway_kwargs["model_override"] = selection.model
+                if max_tokens is not None:
+                    gateway_kwargs["max_tokens"] = max_tokens
+                if timeout_seconds is not None:
+                    gateway_kwargs["timeout_seconds"] = timeout_seconds
+                if max_model_attempts is not None:
+                    gateway_kwargs["max_model_attempts"] = max_model_attempts
+                gateway_result = await self.gateway.chat(messages, **gateway_kwargs)
+                if gateway_result.status == "ok":
+                    return gateway_result, selection
+                failures.append(f"primary: {gateway_result.error or 'unavailable'}")
+
             return AIGatewayResult(
                 status="unavailable",
                 content="",
-                provider="openrouter+ollama-compatible" if hosted_configured else "ollama-compatible+openrouter",
+                provider="translation-cascade",
                 model=selection.model,
-                error=f"Hosted translation failed: {hosted_error} | Ollama-compatible fallback failed: {local_error}",
+                error="UI translation cascade exhausted: " + " | ".join(failures)[:3500],
             ), selection
         if response_format is None:
             question = _extract_question(messages)

@@ -32,6 +32,14 @@ const REASONING_KEY = "agroai_voice_reasoning_v1";
 function token() { return window.localStorage.getItem("agroai_access_token") || ""; }
 function uid(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function cleanText(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); }
+function safeVoiceTransportError(value: unknown, status: number) {
+  const text = cleanText(value);
+  if (!text || /<!doctype html|<html|cloudflare|bad gateway|service unavailable/i.test(text)) {
+    return `Voice request failed (${status})`;
+  }
+  return text;
+}
+
 function resolvedVoiceLanguage(selection: string, portalLocale: string | undefined) {
   const explicit = selection !== "auto" ? cleanText(selection) : "";
   const normalized = explicit || cleanText(portalLocale);
@@ -62,8 +70,8 @@ async function apiPost(path: string, body: unknown): Promise<any> {
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json().catch(() => ({})) : await response.text();
   if (!response.ok) {
-    const message = typeof data === "string" ? data : data?.detail || data?.message || `Voice request failed (${response.status})`;
-    throw new Error(String(message));
+    const message = typeof data === "string" ? data : data?.detail || data?.message;
+    throw new Error(safeVoiceTransportError(message, response.status));
   }
   return data;
 }

@@ -210,6 +210,44 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   }
 }
 
+export function purgeInvalidLocaleCatalogCache(locale: string) {
+  const effectiveLocale = normalizeLocale(locale);
+  if (effectiveLocale === "en") return;
+  try {
+    const prefix = `${CACHE_PREFIX}${effectiveLocale}:`;
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        localStorage.removeItem(key);
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(raw) as CacheEnvelope;
+        const source = parsed.source;
+        const sourceIsStringRecord = Boolean(
+          source &&
+          typeof source === "object" &&
+          !Array.isArray(source) &&
+          Object.values(source as Record<string, unknown>).every((value) => typeof value === "string"),
+        );
+        if (
+          parsed.version !== CACHE_VERSION ||
+          !sourceIsStringRecord ||
+          !validCatalog(parsed.catalog, source as Record<string, string>)
+        ) {
+          localStorage.removeItem(key);
+        }
+      } catch {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Cache sanitation must never block the portal.
+  }
+}
+
 export function hasCompleteLocaleCatalog(locale: string): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const catalog = TRANSLATIONS[effectiveLocale];

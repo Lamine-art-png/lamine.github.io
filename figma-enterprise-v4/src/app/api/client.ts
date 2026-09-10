@@ -52,11 +52,27 @@ function dispatchUploadState(detail: Record<string, unknown>) {
   window.dispatchEvent(new CustomEvent(uploadStateEvent, { detail }));
 }
 
+function looksLikeInfrastructureHtml(value: string) {
+  const text = value.trim().toLowerCase();
+  return text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<title>502") ||
+    text.includes("<title>503") ||
+    (text.includes("cloudflare") && text.includes("</html>"));
+}
+
 async function parseResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
   if (response.status === 204) return null;
   if (contentType.includes("application/json")) return response.json();
   const text = await response.text();
+  if (contentType.includes("text/html") || looksLikeInfrastructureHtml(text)) {
+    return {
+      message: "AGRO-AI service temporarily unavailable.",
+      code: "upstream_unavailable",
+      upstream_status: response.status,
+    };
+  }
   return text ? { message: text } : null;
 }
 

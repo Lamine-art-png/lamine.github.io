@@ -6,11 +6,16 @@ import { useLocale } from "../hooks/useLocale";
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   const { selectedLocale, activateLocale, t, catalogLoading, catalogError } = useLocale();
 
-  function changeLanguage(nextLocale: string) {
-    const canonical = activateLocale(nextLocale);
-    void apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
-      // Preference sync is best effort. The activated local switch remains authoritative for this session.
-    });
+  async function changeLanguage(nextLocale: string) {
+    try {
+      const canonical = await activateLocale(nextLocale);
+      void apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
+        // Preference sync is best effort. The activated local switch remains authoritative for this session.
+      });
+    } catch {
+      // Atomic activation keeps the previous locale selected when translation
+      // infrastructure cannot prove a valid critical catalog.
+    }
   }
 
   const labelColor = dark ? "rgba(255,255,255,0.58)" : "#65736A";
@@ -36,6 +41,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
           title={catalogError || t("language")}
           aria-label={t("language")}
           aria-busy={catalogLoading}
+          disabled={catalogLoading}
         >
           {GLOBAL_UI_LOCALES.map((item) => (
             <option key={item.code} value={item.code} dir={item.dir}>

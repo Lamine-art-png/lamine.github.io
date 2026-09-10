@@ -24,6 +24,7 @@ from app.db.base import get_db
 from app.services.commercial_control import require_feature
 from app.services import field_intelligence as field_svc
 from app.services.field_transcription import get_transcription_provider, transcribe_audio
+from app.services.language_registry import family_name, language_root
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -117,17 +118,13 @@ def _reasoning_effort(mode: str) -> str:
 def _instructions(payload: VoiceCallRequest) -> str:
     surface = "Field Intelligence" if payload.surface == "field" else "Ask AGRO-AI"
     language_code = (payload.language or "auto").strip()
-    language = {
-        "pt": "Brazilian Portuguese",
-        "pt-br": "Brazilian Portuguese",
-        "fr": "French",
-        "fr-fr": "French",
-        "es": "Spanish",
-        "wo": "Wolof",
-        "en": "English",
-    }.get(language_code.lower(), language_code)
-    if language_code.lower() == "auto":
+    normalized_language = language_code.lower().replace("_", "-")
+    if normalized_language == "auto":
         language = "the user's language automatically"
+    elif normalized_language == "pt-br":
+        language = "Brazilian Portuguese"
+    else:
+        language = family_name(language_root(language_code))
     return (
         "You are AGRO-AI, the realtime voice interface to the AGRO-AI Enterprise Portal. "
         f"You are operating inside {surface}. Respond in {language}; if the user changes language, follow them naturally. "

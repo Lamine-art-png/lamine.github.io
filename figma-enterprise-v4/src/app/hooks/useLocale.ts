@@ -5,6 +5,7 @@ import {
   hasCoreLocaleCatalog,
   hasCriticalLocaleCatalog,
   primeLocaleCatalogFromCache,
+  purgeInvalidLocaleCatalogCache,
 } from "../dynamicLocaleCatalog";
 import {
   applyLocale,
@@ -26,6 +27,7 @@ function delay(ms: number) {
 }
 
 function primeKnownLocale(locale: string) {
+  purgeInvalidLocaleCatalogCache(locale);
   primeLocaleCatalogFromCache(locale, "critical");
   primeLocaleCatalogFromCache(locale, "core");
   primeLocaleCatalogFromCache(locale, "full");
@@ -154,12 +156,41 @@ export function useLocale() {
     return activated;
   };
 
-  const activateLocale = (nextLocale: string) => {
+  const activateLocale = async (nextLocale: string) => {
     explicitLocaleActivated = true;
     const canonical = canonicalizeSelectedLocale(nextLocale);
+    const current = getStoredLocale();
+    setCatalogError(null);
+
+    if (canonical === current) {
+      primeKnownLocale(canonical);
+      return current;
+    }
+
     primeKnownLocale(canonical);
+    const targetLocale = normalizeLocale(canonical);
+    if (targetLocale !== "en" && !hasCriticalLocaleCatalog(canonical)) {
+      setCatalogLoading(true);
+      try {
+        await ensureLocaleCatalog(canonical, "critical");
+        if (!hasCriticalLocaleCatalog(canonical)) {
+          throw new Error(`Critical UI translation incomplete for ${canonical}`);
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "UI translation unavailable";
+        console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, { locale: canonical, phase: "activation", error: message });
+        primeKnownLocale(current);
+        setSelectedLocaleState(current);
+        setCatalogError(message);
+        setCatalogLoading(false);
+        notifyLocaleRuntime();
+        throw cause instanceof Error ? cause : new Error(message);
+      }
+    }
+
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);
+    setCatalogLoading(false);
     setCatalogError(null);
     notifyLocaleRuntime();
     return activated;

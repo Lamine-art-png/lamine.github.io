@@ -21,6 +21,15 @@ import {
   writeLocalThreads,
 } from "./intelligenceSupport";
 
+function localizedRequestError(error: unknown, fallback: string) {
+  const candidate = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
+  const code = String(candidate.code || "");
+  if (["upstream_unavailable", "network_unavailable", "request_timeout"].includes(code)) return fallback;
+  const message = typeof candidate.message === "string" ? candidate.message.trim() : "";
+  if (!message || /<!doctype html|<html|cloudflare|bad gateway|service unavailable/i.test(message)) return fallback;
+  return message;
+}
+
 export type IntelligenceDependencies = {
   createReportPdf: (payload: AnyRecord) => Promise<Blob>;
   emailReportPdf: (payload: AnyRecord) => Promise<AnyRecord>;
@@ -468,7 +477,7 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
       setMessages(withUser);
       if (conversationId.startsWith("local-") || historyStatus !== "server") persistLocalThread(conversationId, withUser, titleFromPrompt(clean, t("intelligence.newChat")));
       setFailedPrompt(clean);
-      setError(err instanceof Error ? err.message : t("intelligence.retryState"));
+      setError(localizedRequestError(err, t("intelligence.retryState")));
     } finally { setLoading(false); }
   }
 

@@ -60,6 +60,21 @@ def _json_catalog_content(body: Any) -> str:
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
 
+
+def _openrouter_key() -> str:
+    """Return only a credential that is actually configured for OpenRouter."""
+    explicit = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+    if explicit:
+        return explicit
+    provider = (settings.AI_PROVIDER or "").strip().lower()
+    base_url = (settings.AI_BASE_URL or "").strip().lower()
+    # Legacy hybrid installs use AI_PROVIDER=ollama while AI_API_KEY is the
+    # remote OpenRouter failover credential; preserve that intentional contract.
+    if provider in {"openrouter", "openrouter.ai", "ollama"} or "openrouter.ai" in base_url:
+        return (settings.AI_API_KEY or "").strip()
+    return ""
+
+
 def _candidate_models() -> list[str]:
     configured = [
         (os.getenv("UI_TRANSLATION_MODEL") or "").strip(),
@@ -81,7 +96,7 @@ async def run_hosted_ui_translation(
     max_tokens: int | None = None,
     timeout_seconds: int | None = None,
 ) -> AIGatewayResult:
-    key = (os.getenv("OPENROUTER_API_KEY") or settings.AI_API_KEY or "").strip()
+    key = _openrouter_key()
     if not key:
         return AIGatewayResult(
             status="unavailable",
