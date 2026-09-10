@@ -116,7 +116,18 @@ def _reasoning_effort(mode: str) -> str:
 
 def _instructions(payload: VoiceCallRequest) -> str:
     surface = "Field Intelligence" if payload.surface == "field" else "Ask AGRO-AI"
-    language = payload.language if payload.language != "auto" else "the user's language automatically"
+    language_code = (payload.language or "auto").strip()
+    language = {
+        "pt": "Brazilian Portuguese",
+        "pt-br": "Brazilian Portuguese",
+        "fr": "French",
+        "fr-fr": "French",
+        "es": "Spanish",
+        "wo": "Wolof",
+        "en": "English",
+    }.get(language_code.lower(), language_code)
+    if language_code.lower() == "auto":
+        language = "the user's language automatically"
     return (
         "You are AGRO-AI, the realtime voice interface to the AGRO-AI Enterprise Portal. "
         f"You are operating inside {surface}. Respond in {language}; if the user changes language, follow them naturally. "
