@@ -45,14 +45,16 @@ jobs:
         run: |
           set -euo pipefail
           ready=0
+          mkdir -p proof
           for attempt in $(seq 1 30); do
-            page_code="$(curl -sS -L --max-time 20 -D page.headers -o page.html -w '%{http_code}' 'https://agroai-pilot.com/faep?verify=1' || true)"
-            api_code="$(curl -sS --max-time 20 -D api.headers -o api.json -w '%{http_code}' 'https://agroai-pilot.com/api/faep' || true)"
+            page_code="$(curl -sS -L --max-time 20 -D proof/page.headers -o proof/page.html -w '%{http_code}' 'https://agroai-pilot.com/faep?verify=1' || true)"
+            api_code="$(curl -sS --max-time 20 -D proof/api.headers -o proof/api.json -w '%{http_code}' 'https://agroai-pilot.com/api/faep' || true)"
+            printf 'page_code=%s\napi_code=%s\n' "$page_code" "$api_code" > proof/status.txt
             if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
-               grep -Fi 'x-agroai-faep-intake: active' page.headers >/dev/null && \
-               grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' page.html >/dev/null && \
-               grep -Fi 'x-agroai-faep-intake: active' api.headers >/dev/null && \
-               grep -F 'contact@agroai-pilot.com' api.json >/dev/null; then
+               grep -Fi 'x-agroai-faep-intake: active' proof/page.headers >/dev/null && \
+               grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' proof/page.html >/dev/null && \
+               grep -Fi 'x-agroai-faep-intake: active' proof/api.headers >/dev/null && \
+               grep -F 'contact@agroai-pilot.com' proof/api.json >/dev/null; then
               ready=1
               break
             fi
@@ -60,11 +62,20 @@ jobs:
           done
           if [ "$ready" != "1" ]; then
             echo '=== FAEP page headers ==='
-            cat page.headers || true
+            cat proof/page.headers || true
             echo '=== FAEP API headers ==='
-            cat api.headers || true
+            cat proof/api.headers || true
             echo '=== FAEP API body ==='
-            cat api.json || true
+            cat proof/api.json || true
             exit 1
           fi
           echo 'FAEP intake page and endpoint are live.'
+
+      - name: Upload FAEP verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faep-intake-production-proof-${{ github.sha }}
+          path: proof
+          if-no-files-found: ignore
+          retention-days: 7
