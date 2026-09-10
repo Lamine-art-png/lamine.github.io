@@ -36,12 +36,14 @@ jobs:
           grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' cloudflare/faep-intake-worker/src/index.js >/dev/null
           grep -F 'contact@agroai-pilot.com' cloudflare/faep-intake-worker/src/index.js >/dev/null
           grep -F 'https://api.agroai-pilot.com/v1/sales/contact' cloudflare/faep-intake-worker/src/index.js >/dev/null
+          grep -F 'https://agroai-pilot.com/images/agroai-logo-dark-green.png' cloudflare/faep-intake-worker/src/subdomain.js >/dev/null
+          grep -F '/brand/agroai-logo-dark-green-v20260910.png' cloudflare/faep-intake-worker/src/subdomain.js >/dev/null
 
       - name: Deploy FAEP intake
         shell: bash
         run: npx --yes wrangler@4.107.0 deploy --config cloudflare/faep-intake-worker/wrangler.toml
 
-      - name: Verify live Portuguese page and intake endpoint
+      - name: Verify live Portuguese page, logo and intake endpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -49,11 +51,16 @@ jobs:
           for attempt in $(seq 1 30); do
             page_code="$(curl -sS -L --max-time 20 -D page.headers -o page.html -w '%{http_code}' 'https://faep.agroai-pilot.com/' || true)"
             api_code="$(curl -sS --max-time 20 -D api.headers -o api.json -w '%{http_code}' 'https://faep.agroai-pilot.com/api/faep' || true)"
-            if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
+            logo_code="$(curl -sS -L --max-time 20 -D logo.headers -o faep-logo.png -w '%{http_code}' 'https://faep.agroai-pilot.com/brand/agroai-logo-dark-green-v20260910.png?v=20260910-1' || true)"
+            if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && [ "$logo_code" = "200" ] && \
                grep -Fi 'x-agroai-faep-intake: active' page.headers >/dev/null && \
+               grep -Fi 'x-agroai-logo-version: dark-green-20260910-1' page.headers >/dev/null && \
                grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' page.html >/dev/null && \
+               grep -F '/brand/agroai-logo-dark-green-v20260910.png?v=20260910-1' page.html >/dev/null && \
+               grep -Fi 'x-agroai-logo-source: website-dark-green' logo.headers >/dev/null && \
                grep -Fi 'x-agroai-faep-intake: active' api.headers >/dev/null && \
-               grep -F 'contact@agroai-pilot.com' api.json >/dev/null; then
+               grep -F 'contact@agroai-pilot.com' api.json >/dev/null && \
+               [ "$(wc -c < faep-logo.png)" -gt 1000 ]; then
               ready=1
               break
             fi
@@ -62,13 +69,25 @@ jobs:
           if [ "$ready" != "1" ]; then
             echo '=== FAEP page headers ==='
             cat page.headers || true
+            echo '=== FAEP logo headers ==='
+            cat logo.headers || true
             echo '=== FAEP API headers ==='
             cat api.headers || true
             echo '=== FAEP API body ==='
             cat api.json || true
             exit 1
           fi
-          echo 'FAEP intake page and endpoint are live.'
+          echo 'FAEP intake page, dark-green logo endpoint and API are live.'
+          sha256sum faep-logo.png
+          file faep-logo.png || true
+
+      - name: Upload verified live logo for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: faep-live-logo-${{ github.run_id }}
+          path: faep-logo.png
+          if-no-files-found: error
+          retention-days: 1
 
       - name: One-time email delivery test
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[faep-email-test]') }}
