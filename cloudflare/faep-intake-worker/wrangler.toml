@@ -1,0 +1,11 @@
+name = "agroai-faep-intake"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+workers_dev = false
+
+routes = [
+  { pattern = "agroai-pilot.com/faep", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/faep/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/faep", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/faep/*", zone_name = "agroai-pilot.com" }
+]
