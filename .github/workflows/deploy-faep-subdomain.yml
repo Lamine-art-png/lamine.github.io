@@ -1,0 +1,70 @@
+name: Deploy FAEP Subdomain
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/faep-subdomain-worker/**"
+      - "cloudflare/faep-intake-worker/src/index.js"
+      - ".github/workflows/deploy-faep-subdomain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: faep-subdomain-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/faep-subdomain-worker/src/index.js
+          node --check cloudflare/faep-intake-worker/src/index.js
+          grep -F 'faep.agroai-pilot.com' cloudflare/faep-subdomain-worker/wrangler.toml >/dev/null
+          grep -F 'custom_domain = true' cloudflare/faep-subdomain-worker/wrangler.toml >/dev/null
+          grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' cloudflare/faep-intake-worker/src/index.js >/dev/null
+
+      - name: Deploy FAEP custom domain
+        shell: bash
+        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/faep-subdomain-worker/wrangler.toml
+
+      - name: Verify live form and endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            page_code="$(curl -sS -L --max-time 20 -D page.headers -o page.html -w '%{http_code}' 'https://faep.agroai-pilot.com/' || true)"
+            api_code="$(curl -sS --max-time 20 -D api.headers -o api.json -w '%{http_code}' 'https://faep.agroai-pilot.com/api/faep' || true)"
+            if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
+               grep -Fi 'x-agroai-faep-intake: active' page.headers >/dev/null && \
+               grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' page.html >/dev/null && \
+               grep -Fi 'x-agroai-faep-intake: active' api.headers >/dev/null && \
+               grep -F 'contact@agroai-pilot.com' api.json >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$ready" != "1" ]; then
+            echo '=== page headers ==='
+            cat page.headers || true
+            echo '=== api headers ==='
+            cat api.headers || true
+            echo '=== api body ==='
+            cat api.json || true
+            exit 1
+          fi
+          echo 'FAEP subdomain is live.'
