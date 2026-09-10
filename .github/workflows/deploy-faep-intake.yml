@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: faep-intake-production
@@ -41,15 +41,16 @@ jobs:
         run: npx --yes wrangler@4.107.0 deploy --config cloudflare/faep-intake-worker/wrangler.toml
 
       - name: Verify live Portuguese page and intake endpoint
+        id: verify
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           ready=0
           mkdir -p proof
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 12); do
             page_code="$(curl -sS -L --max-time 20 -D proof/page.headers -o proof/page.html -w '%{http_code}' 'https://agroai-pilot.com/faep?verify=1' || true)"
             api_code="$(curl -sS --max-time 20 -D proof/api.headers -o proof/api.json -w '%{http_code}' 'https://agroai-pilot.com/api/faep' || true)"
-            printf 'page_code=%s\napi_code=%s\n' "$page_code" "$api_code" > proof/status.txt
+            printf 'attempt=%s\npage_code=%s\napi_code=%s\n' "$attempt" "$page_code" "$api_code" > proof/status.txt
             if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
                grep -Fi 'x-agroai-faep-intake: active' proof/page.headers >/dev/null && \
                grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' proof/page.html >/dev/null && \
@@ -60,16 +61,14 @@ jobs:
             fi
             sleep 3
           done
-          if [ "$ready" != "1" ]; then
-            echo '=== FAEP page headers ==='
-            cat proof/page.headers || true
-            echo '=== FAEP API headers ==='
-            cat proof/api.headers || true
-            echo '=== FAEP API body ==='
-            cat proof/api.json || true
-            exit 1
+          printf 'ready=%s\n' "$ready" >> proof/status.txt
+          if [ -f proof/page.html ]; then head -c 5000 proof/page.html > proof/page-preview.html; fi
+          if [ "$ready" = "1" ]; then
+            echo 'FAEP intake page and endpoint are live.'
+            exit 0
           fi
-          echo 'FAEP intake page and endpoint are live.'
+          echo 'FAEP live verification did not match expected route.'
+          exit 1
 
       - name: Upload FAEP verification evidence
         if: always()
@@ -79,3 +78,22 @@ jobs:
           path: proof
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Persist compact verification proof for debugging
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/faep-proof
+          cp proof/status.txt ops/faep-proof/status.txt 2>/dev/null || true
+          cp proof/page.headers ops/faep-proof/page.headers 2>/dev/null || true
+          cp proof/api.headers ops/faep-proof/api.headers 2>/dev/null || true
+          cp proof/api.json ops/faep-proof/api.json 2>/dev/null || true
+          cp proof/page-preview.html ops/faep-proof/page-preview.html 2>/dev/null || true
+          printf 'source_sha=%s\nrun_id=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > ops/faep-proof/run.txt
+          git config user.name 'AGRO-AI Deploy Bot'
+          git config user.email 'deploy-bot@agroai-pilot.com'
+          git add ops/faep-proof
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Record FAEP live verification proof [skip ci]'
+          git push origin HEAD:main
