@@ -1,6 +1,27 @@
 import faepWorker from "./index.js";
 
-const MARKETING_ORIGIN = "https://agroai-pilot.com";
+const OFFICIAL_LOGO_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/attached_assets/Copy%20of%20AGRO-AI%20(1)_1763408301972.png";
+
+async function serveOfficialLogo(request) {
+  const upstream = await fetch(OFFICIAL_LOGO_URL, { redirect: "follow" });
+
+  if (!upstream.ok) {
+    return new Response("Logo unavailable", {
+      status: 502,
+      headers: { "cache-control": "no-store" },
+    });
+  }
+
+  const headers = new Headers(upstream.headers);
+  headers.set("content-type", "image/png");
+  headers.set("cache-control", "public, max-age=86400, s-maxage=86400");
+  headers.set("x-content-type-options", "nosniff");
+
+  return new Response(request.method === "HEAD" ? null : upstream.body, {
+    status: 200,
+    headers,
+  });
+}
 
 // Dedicated, no-index Portuguese intake experience for the Sistema FAEP delegation.
 export default {
@@ -13,16 +34,10 @@ export default {
       request = new Request(url.toString(), request);
     }
 
-    // Reuse the canonical AGRO-AI logo asset already served by the marketing site.
+    // Serve the exact official AGRO-AI logo from the canonical repository asset.
+    // This avoids depending on the marketing site's asset routing from the FAEP subdomain.
     if (url.pathname.startsWith("/attached_assets/")) {
-      const assetUrl = new URL(url.pathname + url.search, MARKETING_ORIGIN);
-      const headers = new Headers(request.headers);
-      headers.delete("host");
-      return fetch(new Request(assetUrl, {
-        method: request.method,
-        headers,
-        redirect: "follow",
-      }));
+      return serveOfficialLogo(request);
     }
 
     return faepWorker.fetch(request, env, ctx);
