@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: faep-intake-production
@@ -25,75 +25,61 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate source and exact route ownership
+      - name: Validate FAEP source and custom domain
         shell: bash
         run: |
           set -euo pipefail
           node --check cloudflare/faep-intake-worker/src/index.js
-          grep -F 'agroai-pilot.com/faep"' cloudflare/faep-intake-worker/wrangler.toml >/dev/null
-          grep -F 'agroai-pilot.com/api/faep"' cloudflare/faep-intake-worker/wrangler.toml >/dev/null
+          node --check cloudflare/faep-intake-worker/src/subdomain.js
+          grep -F 'faep.agroai-pilot.com' cloudflare/faep-intake-worker/wrangler.toml >/dev/null
+          grep -F 'custom_domain = true' cloudflare/faep-intake-worker/wrangler.toml >/dev/null
           grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' cloudflare/faep-intake-worker/src/index.js >/dev/null
           grep -F 'contact@agroai-pilot.com' cloudflare/faep-intake-worker/src/index.js >/dev/null
           grep -F 'https://api.agroai-pilot.com/v1/sales/contact' cloudflare/faep-intake-worker/src/index.js >/dev/null
 
-      - name: Deploy dedicated FAEP intake
+      - name: Deploy FAEP intake
         shell: bash
         run: npx --yes wrangler@4.107.0 deploy --config cloudflare/faep-intake-worker/wrangler.toml
 
       - name: Verify live Portuguese page and intake endpoint
-        id: verify
-        shell: bash
-        run: |
-          set -uo pipefail
-          ready=0
-          mkdir -p proof
-          for attempt in $(seq 1 12); do
-            page_code="$(curl -sS -L --max-time 20 -D proof/page.headers -o proof/page.html -w '%{http_code}' 'https://agroai-pilot.com/faep?verify=1' || true)"
-            api_code="$(curl -sS --max-time 20 -D proof/api.headers -o proof/api.json -w '%{http_code}' 'https://agroai-pilot.com/api/faep' || true)"
-            printf 'attempt=%s\npage_code=%s\napi_code=%s\n' "$attempt" "$page_code" "$api_code" > proof/status.txt
-            if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
-               grep -Fi 'x-agroai-faep-intake: active' proof/page.headers >/dev/null && \
-               grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' proof/page.html >/dev/null && \
-               grep -Fi 'x-agroai-faep-intake: active' proof/api.headers >/dev/null && \
-               grep -F 'contact@agroai-pilot.com' proof/api.json >/dev/null; then
-              ready=1
-              break
-            fi
-            sleep 3
-          done
-          printf 'ready=%s\n' "$ready" >> proof/status.txt
-          if [ -f proof/page.html ]; then head -c 5000 proof/page.html > proof/page-preview.html; fi
-          if [ "$ready" = "1" ]; then
-            echo 'FAEP intake page and endpoint are live.'
-            exit 0
-          fi
-          echo 'FAEP live verification did not match expected route.'
-          exit 1
-
-      - name: Upload FAEP verification evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: faep-intake-production-proof-${{ github.sha }}
-          path: proof
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Persist compact verification proof for debugging
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ops/faep-proof
-          cp proof/status.txt ops/faep-proof/status.txt 2>/dev/null || true
-          cp proof/page.headers ops/faep-proof/page.headers 2>/dev/null || true
-          cp proof/api.headers ops/faep-proof/api.headers 2>/dev/null || true
-          cp proof/api.json ops/faep-proof/api.json 2>/dev/null || true
-          cp proof/page-preview.html ops/faep-proof/page-preview.html 2>/dev/null || true
-          printf 'source_sha=%s\nrun_id=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > ops/faep-proof/run.txt
-          git config user.name 'AGRO-AI Deploy Bot'
-          git config user.email 'deploy-bot@agroai-pilot.com'
-          git add ops/faep-proof
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Record FAEP live verification proof [skip ci]'
-          git push origin HEAD:main
+          ready=0
+          for attempt in $(seq 1 30); do
+            page_code="$(curl -sS -L --max-time 20 -D page.headers -o page.html -w '%{http_code}' 'https://faep.agroai-pilot.com/' || true)"
+            api_code="$(curl -sS --max-time 20 -D api.headers -o api.json -w '%{http_code}' 'https://faep.agroai-pilot.com/api/faep' || true)"
+            if [ "$page_code" = "200" ] && [ "$api_code" = "200" ] && \
+               grep -Fi 'x-agroai-faep-intake: active' page.headers >/dev/null && \
+               grep -F 'Onde a AGRO-AI pode ajudar na sua operação?' page.html >/dev/null && \
+               grep -Fi 'x-agroai-faep-intake: active' api.headers >/dev/null && \
+               grep -F 'contact@agroai-pilot.com' api.json >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$ready" != "1" ]; then
+            echo '=== FAEP page headers ==='
+            cat page.headers || true
+            echo '=== FAEP API headers ==='
+            cat api.headers || true
+            echo '=== FAEP API body ==='
+            cat api.json || true
+            exit 1
+          fi
+          echo 'FAEP intake page and endpoint are live.'
+
+      - name: One-time email delivery test
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[faep-email-test]') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 30 -D post.headers -o post.json -w '%{http_code}' \
+            -X POST 'https://faep.agroai-pilot.com/api/faep' \
+            -H 'content-type: application/json' \
+            --data-binary '{"nome":"TESTE TÉCNICO FAEP - ChatGPT","whatsapp":"(41) 99999-9999","atividade":"Soja, milho, trigo e outros grãos","area":"201–500 hectares","problema":"Teste técnico de entrega do formulário FAEP. Pode desconsiderar esta mensagem.","interesse":"Minha fazenda","consentimento":"Autorizado","website":""}')"
+          test "$code" = "201"
+          grep -Fi 'x-agroai-notification: delivered' post.headers >/dev/null
+          grep -F '"ok":true' post.json >/dev/null
+          echo 'FAEP email delivery test confirmed.'
