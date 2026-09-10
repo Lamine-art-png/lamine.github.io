@@ -44,8 +44,7 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 const PUBLIC_FASTPATH_MAX_KEYS = 40;
 const WORKERS_AI_CIRCUIT_MS = 10 * 60 * 1_000;
-const I18N_EDGE_GENERATION_TIMEOUT_MS = 12_000;
-const I18N_UPSTREAM_TIMEOUT_MS = 30_000;
+const I18N_EDGE_GENERATION_TIMEOUT_MS = 8_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
 let workersAiBlockedUntil = 0;
 
@@ -55,14 +54,6 @@ function jsonResponse(payload: unknown, reference?: Response, status = 200): Res
   headers.set("cache-control", "no-store");
   headers.delete("content-length");
   return new Response(JSON.stringify(payload), { status, headers });
-}
-
-function markUpstreamFallback(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set("cache-control", "no-store");
-  headers.set("x-agroai-i18n-fallback", "upstream-backend");
-  headers.delete("content-length");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function diagnosticText(value: unknown): string {
@@ -148,51 +139,6 @@ async function writeEdgeCachedTranslation(
     await cache.put(key, response);
   } catch (error) {
     console.warn("edge_i18n_cache_write_failed", { locale, error: String(error) });
-  }
-}
-
-function validatedI18nUpstreamOrigin(raw: string, incoming: URL): URL {
-  if (!raw?.trim()) throw new Error("UPSTREAM_API_ORIGIN is not configured");
-  const upstream = new URL(raw.trim());
-  if (upstream.protocol !== "https:" || upstream.username || upstream.password || upstream.search || upstream.hash) {
-    throw new Error("UPSTREAM_API_ORIGIN is invalid");
-  }
-  if (upstream.host.toLowerCase() === incoming.host.toLowerCase()) {
-    throw new Error("UPSTREAM_API_ORIGIN cannot point back to the edge gateway");
-  }
-  upstream.pathname = upstream.pathname.replace(/\/$/, "");
-  return upstream;
-}
-
-async function directI18nUpstreamFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
-  const incoming = new URL(request.url);
-  const upstream = validatedI18nUpstreamOrigin(env.UPSTREAM_API_ORIGIN, incoming);
-  const target = new URL(upstream.toString());
-  target.pathname = `${upstream.pathname}${incoming.pathname}`.replace(/\/+/g, "/");
-  target.search = incoming.search;
-
-  const headers = new Headers(request.headers);
-  for (const header of [
-    "host", "cf-connecting-ip", "cf-ray", "cf-visitor", "x-forwarded-for", "x-forwarded-host", "x-real-ip",
-    "x-agroai-internal-token", "x-agroai-edge",
-  ]) headers.delete(header);
-  headers.set("x-agroai-edge", "cloudflare-edge-v1");
-  headers.set("x-forwarded-host", incoming.host);
-  headers.set("x-forwarded-proto", "https");
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort("i18n_upstream_timeout"), I18N_UPSTREAM_TIMEOUT_MS);
-  try {
-    const upstreamRequest = new Request(target.toString(), {
-      method: request.method,
-      headers,
-      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
-      redirect: "manual",
-      signal: controller.signal,
-    });
-    return await fetch(upstreamRequest);
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -343,34 +289,23 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
       models: translated.models,
     });
   } catch (error) {
+    // Translation is an edge concern. Never spill provider failures into the
+    // customer API process: a slow locale must not consume or restart Render.
     console.error("edge_i18n_generation_failed", { locale: locale.code, error: String(error) });
-    try {
-      let upstream: Response;
-      try {
-        upstream = await directI18nUpstreamFetch(fallback.clone(), env);
-      } catch (directError) {
-        console.warn("direct_i18n_upstream_failed", { locale: locale.code, error: String(directError) });
-        upstream = await baseFetch(fallback, env);
-      }
-      if (isCanary && !upstream.ok) {
-        const upstreamBody = await upstream.clone().text().catch(() => "");
-        return jsonResponse({
-          status: "error",
-          error: "ui_canary_generation_unavailable",
-          locale: locale.code,
-          edge_error: diagnosticText(error),
-          upstream_status: upstream.status,
-          upstream_body: upstreamBody.slice(0, 2000),
-        }, upstream, upstream.status);
-      }
-      return markUpstreamFallback(upstream);
-    } catch (upstreamError) {
-      console.error("upstream_i18n_fallback_failed", {
+    if (isCanary) {
+      return jsonResponse({
+        status: "error",
+        error: "ui_canary_generation_unavailable",
         locale: locale.code,
-        edgeError: String(error),
-        upstreamError: String(upstreamError),
-      });
-      return jsonResponse({ status: "error", error: "ui_catalog_generation_unavailable", locale: locale.code }, undefined, 503);
+        edge_error: diagnosticText(error),
+        retryable: true,
+      }, undefined, 503);
     }
+    return jsonResponse({
+      status: "error",
+      error: "ui_catalog_generation_unavailable",
+      locale: locale.code,
+      retryable: true,
+    }, undefined, 503);
   }
 }
