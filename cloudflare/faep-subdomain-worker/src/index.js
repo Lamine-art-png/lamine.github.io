@@ -1,6 +1,6 @@
 import faepWorker from "../../faep-intake-worker/src/index.js";
 
-const MARKETING_ORIGIN = "https://agroai-pilot.com";
+const OFFICIAL_AGROAI_LOGO = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/customer-portal/assets/agro-ai-logo.png";
 
 export default {
   async fetch(request, env, ctx) {
@@ -12,12 +12,13 @@ export default {
       request = new Request(url.toString(), request);
     }
 
-    // The FAEP page uses the existing canonical AGRO-AI website logo asset.
+    // Always serve the current official dark-green AGRO-AI logo on the FAEP form.
+    // The embedded FAEP HTML still requests the legacy asset path, so intercept it
+    // here and return the canonical brand asset instead of the retired logo.
     if (url.pathname.startsWith("/attached_assets/")) {
-      const assetUrl = new URL(url.pathname + url.search, MARKETING_ORIGIN);
       const headers = new Headers(request.headers);
       headers.delete("host");
-      return fetch(new Request(assetUrl, {
+      return fetch(new Request(OFFICIAL_AGROAI_LOGO, {
         method: request.method,
         headers,
         redirect: "follow",
