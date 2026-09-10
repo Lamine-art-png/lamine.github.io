@@ -1,6 +1,6 @@
 import faepWorker from "./index.js";
 
-const OFFICIAL_LOGO_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/attached_assets/Copy%20of%20AGRO-AI%20(1)_1763408301972.png";
+const OFFICIAL_LOGO_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/customer-portal/assets/agro-ai-logo.png";
 
 async function serveOfficialLogo(request) {
   const upstream = await fetch(OFFICIAL_LOGO_URL, { redirect: "follow" });
@@ -34,7 +34,7 @@ export default {
       request = new Request(url.toString(), request);
     }
 
-    // Serve the exact official AGRO-AI logo from the canonical repository asset.
+    // Serve the current official dark-green AGRO-AI logo from the canonical repository asset.
     // This avoids depending on the marketing site's asset routing from the FAEP subdomain.
     if (url.pathname.startsWith("/attached_assets/")) {
       return serveOfficialLogo(request);
