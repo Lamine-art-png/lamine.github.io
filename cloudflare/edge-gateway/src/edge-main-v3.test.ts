@@ -65,19 +65,22 @@ describe("edge-main-v3 i18n entrypoint", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe("https://app.agroai-pilot.com");
   });
 
-  it("uses the backend translator only after both edge translation paths fail", async () => {
+  it("keeps translation failure isolated from the backend API", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("simulated_public_translation_failure"); }));
-    const upstream = async () => new Response(JSON.stringify({
+    const upstream = vi.fn(async () => new Response(JSON.stringify({
       status: "ok",
       locale: "am",
-      catalog: { settings: "ቅንብሮች", save: "አስቀምጥ" },
-    }), { status: 200, headers: { "content-type": "application/json" } });
+      catalog: { settings: "backend-should-not-run", save: "backend-should-not-run" },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
 
     const response = await handleI18nFastpath(requestFor("am"), env(new FailingAi()), upstream);
-    const body = (await response.json()) as { status?: string; catalog?: Record<string, string> };
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-agroai-i18n-fallback")).toBe("upstream-backend");
-    expect(body.status).toBe("ok");
-    expect(body.catalog?.settings).toBe("ቅንብሮች");
+    const body = (await response.json()) as { status?: string; error?: string; locale?: string; retryable?: boolean };
+    expect(response.status).toBe(503);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(response.headers.get("x-agroai-i18n-fallback")).toBeNull();
+    expect(body.status).toBe("error");
+    expect(body.error).toBe("ui_catalog_generation_unavailable");
+    expect(body.locale).toBe("am");
+    expect(body.retryable).toBe(true);
   });
 });
