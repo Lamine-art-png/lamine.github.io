@@ -1,26 +1,6 @@
 name: Production I18n Matrix
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "shared/supported-locales.json"
-      - "agroai_api/app/api/v1/i18n.py"
-      - "agroai_api/app/services/hosted_ui_translation.py"
-      - "agroai_api/app/services/local_ui_translation.py"
-      - "agroai_api/app/services/model_router.py"
-      - "agroai_api/app/services/i18n_translation_resilience.py"
-      - "agroai_api/app/services/language.py"
-      - "agroai_api/app/api/v1/voice.py"
-      - "figma-enterprise-v4/src/app/api/client.ts"
-      - "figma-enterprise-v4/src/app/dynamicLocaleCatalog.ts"
-      - "figma-enterprise-v4/src/app/hooks/useLocale.ts"
-      - "figma-enterprise-v4/src/app/components/LanguageSelector.tsx"
-      - "figma-enterprise-v4/src/app/components/voice/VoiceAssistantDock.tsx"
-      - "agroai_api/scripts/verify_production_i18n_matrix.py"
-      - "agroai_api/scripts/verify_production_i18n_matrix_v2.py"
-      - "cloudflare/edge-gateway/**"
-      - "wrangler.toml"
   workflow_dispatch:
 
 permissions:
