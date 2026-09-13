@@ -7,15 +7,16 @@ from starlette.routing import BaseRoute
 
 
 def _include_commercial_intelligence(router: Any) -> None:
-    """Attach the paid Intelligence API at the final composition boundary.
-
-    ``main.py`` already calls this module after all first-party routers are
-    registered. Keeping the commercial surface here avoids a second app factory
-    while preserving the existing production route-materialization contract.
-    """
+    """Attach the hardened paid Intelligence API at the final composition boundary."""
     if getattr(router, "_agroai_commercial_intelligence_included", False):
         return
-    from app.api.v1.commercial_intelligence import router as commercial_intelligence_router
+
+    # Import hardening modules before the router. They patch the commercial
+    # endpoint globals in-place, preserving one public route set while enforcing
+    # post-compute charging, workspace isolation, tax-safe reconciliation and
+    # enrollment key limits.
+    from app.api.v1 import commercial_intelligence_key_guard as _key_guard  # noqa: F401
+    from app.api.v1.commercial_intelligence_hardened import router as commercial_intelligence_router
 
     router.include_router(commercial_intelligence_router, prefix="/v1")
     setattr(router, "_agroai_commercial_intelligence_included", True)
