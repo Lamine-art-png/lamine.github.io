@@ -6,6 +6,26 @@ from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 
 
+def _mount_product_routes(router: Any) -> None:
+    """Attach product modules that intentionally live outside the legacy main.py list.
+
+    Market Intelligence is composed here before FastAPI's deferred includes are
+    materialized.  This keeps the large legacy application factory stable while
+    preserving one explicit, testable composition point for new product modules.
+    """
+    try:
+        from app.api.v1.market_intelligence import router as market_intelligence_router
+    except Exception:
+        # Import errors must remain visible when the application later touches
+        # the module; do not make basic router compatibility itself a boot trap.
+        return
+    marker = "_agroai_market_intelligence_mounted"
+    if getattr(router, marker, False):
+        return
+    router.include_router(market_intelligence_router, prefix="/v1")
+    setattr(router, marker, True)
+
+
 def materialize_included_routes(router: Any) -> None:
     """Expand FastAPI deferred router includes for current route contracts.
 
@@ -14,6 +34,7 @@ def materialize_included_routes(router: Any) -> None:
     includes as private ``_IncludedRouter`` wrappers, so materialize them after
     all local composition hooks have run.
     """
+    _mount_product_routes(router)
     try:
         from fastapi.routing import _IncludedRouter
     except Exception:  # pragma: no cover - older FastAPI already flattens.
@@ -67,7 +88,6 @@ def _route_from_context(context: Any) -> BaseRoute:
         response_class=context.response_class,
         dependency_overrides_provider=context.dependency_overrides_provider,
         callbacks=context.callbacks,
-        openapi_extra=context.openapi_extra,
         generate_unique_id_function=context.generate_unique_id_function,
         strict_content_type=context.strict_content_type,
     )
