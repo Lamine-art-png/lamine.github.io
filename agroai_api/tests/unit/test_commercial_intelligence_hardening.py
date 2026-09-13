@@ -4,11 +4,14 @@ import inspect
 
 from app.api.v1 import commercial_intelligence as legacy
 from app.api.v1 import commercial_intelligence_hardened as hardened
+from app.api.v1 import commercial_intelligence_input_guard as input_guard
 from app.api.v1 import commercial_intelligence_key_guard as key_guard
 
 
 def test_hardened_composition_replaces_money_moving_runtime() -> None:
-    assert legacy._execute_paid_intelligence is hardened._execute_paid_intelligence
+    # Final call chain is credential guard -> hardened commercial executor.
+    assert input_guard._original_execute_paid_intelligence is hardened._execute_paid_intelligence
+    assert legacy._execute_paid_intelligence is input_guard._guarded_execute_paid_intelligence
     assert legacy._context is hardened._validate_and_build_context
     assert legacy._sync_pending_topups is hardened._sync_pending_topups
     assert legacy.create_platform_key is key_guard._bounded_create_platform_key
@@ -45,8 +48,9 @@ def test_stale_run_recovery_cannot_leave_legacy_debit_posted() -> None:
     assert 'kind="intelligence_refund"' in refund_source
 
 
-def test_bootstrap_key_creation_reuses_governing_limit() -> None:
+def test_bootstrap_key_creation_is_bounded() -> None:
     source = inspect.getsource(key_guard._bounded_create_platform_key)
     assert "require_active_enrollment" in source
     assert 'resource_name="keys"' in source
     assert "current_count=active_count" in source
+    assert "COMMERCIAL_ADVISORY_KEY_LIMIT" in source
