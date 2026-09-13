@@ -27,10 +27,13 @@ def _bounded_create_platform_key(
     organization = db.get(Organization, project.organization_id)
     if organization is None:
         raise ValueError("organization unavailable")
+    # The commercial advisory surface intentionally grants a restricted LIVE
+    # project even when the developer's ordinary self-service enrollment is
+    # TEST-only. Use the governing enrollment solely for its server-authoritative
+    # credential count; do not reinterpret it as a physical/provider LIVE grant.
     enrollment = require_active_enrollment(
         db,
         organization,
-        environment=project.environment,
         operation="intelligence_key_create",
     )
     active_count = (
