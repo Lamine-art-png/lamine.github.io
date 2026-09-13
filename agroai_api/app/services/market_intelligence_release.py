@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -17,12 +18,30 @@ def _csv(value: str | None) -> set[str]:
     return {item.strip() for item in str(value or "").split(",") if item.strip()}
 
 
+def _configured(name: str, default: str = "") -> str:
+    """Read typed settings when present, otherwise an explicit environment value.
+
+    Market Intelligence ships without forcing the large legacy Settings model
+    to change. Deployment still receives normal environment-controlled rollout
+    behavior and tests can exercise it deterministically.
+    """
+    value = getattr(settings, name, None)
+    if value not in (None, ""):
+        return str(value)
+    return str(os.getenv(name, default) or default)
+
+
+def demo_fixtures_enabled() -> bool:
+    value = _configured("MARKET_INTELLIGENCE_DEMO_FIXTURES_ENABLED", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _internal_emails() -> set[str]:
     return {item.lower() for item in (_csv(getattr(settings, "PLATFORM_ADMIN_EMAILS", "")) | _csv(getattr(settings, "INTERNAL_FULL_ACCESS_EMAILS", "")))}
 
 
 def configured_release_state() -> str:
-    raw = str(getattr(settings, "MARKET_INTELLIGENCE_RELEASE_STATE", "") or "").strip().lower()
+    raw = _configured("MARKET_INTELLIGENCE_RELEASE_STATE", "").strip().lower()
     if raw in RELEASE_STATES:
         return raw
     if raw:
@@ -74,12 +93,12 @@ def organization_cohort(db: Session, organization: Organization | None) -> str:
     if organization is None:
         return "none"
     org_id = str(organization.id)
-    if org_id in _csv(getattr(settings, "MARKET_INTELLIGENCE_INTERNAL_ORGANIZATION_IDS", "")) or _org_has_internal_operator(db, organization):
+    if org_id in _csv(_configured("MARKET_INTELLIGENCE_INTERNAL_ORGANIZATION_IDS", "")) or _org_has_internal_operator(db, organization):
         return "internal"
     override = _override_cohort(db, org_id)
     if override == "internal":
         return "internal"
-    if org_id in _csv(getattr(settings, "MARKET_INTELLIGENCE_CANARY_ORGANIZATION_IDS", "")) or override == "canary":
+    if org_id in _csv(_configured("MARKET_INTELLIGENCE_CANARY_ORGANIZATION_IDS", "")) or override == "canary":
         return "canary"
     return "general"
 
