@@ -42,12 +42,29 @@ _SENSITIVE_SUFFIXES = (
     "_private_key",
     "_client_secret",
 )
+_SECRET_VALUE_PATTERNS = (
+    re.compile(r"^Bearer\s+[A-Za-z0-9._~+/=-]{16,}$", re.IGNORECASE),
+    re.compile(r"^sk_(?:live|test)_[A-Za-z0-9]{12,}$"),
+    re.compile(r"^rk_(?:live|test)_[A-Za-z0-9]{12,}$"),
+    re.compile(r"^gh[pousr]_[A-Za-z0-9]{20,}$"),
+    re.compile(r"^github_pat_[A-Za-z0-9_]{20,}$"),
+    re.compile(r"^xox[baprs]-[A-Za-z0-9-]{12,}$"),
+    re.compile(r"^AKIA[0-9A-Z]{16}$"),
+    re.compile(r"^-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+)
 _MAX_SCAN_DEPTH = 16
 
 
 def _normalized_key(value: object) -> str:
     text = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
     return text[:160]
+
+
+def _looks_like_secret_value(value: str) -> bool:
+    candidate = value.strip()
+    if len(candidate) < 16:
+        return False
+    return any(pattern.search(candidate) is not None for pattern in _SECRET_VALUE_PATTERNS)
 
 
 def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str | None:
@@ -69,6 +86,8 @@ def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str 
             found = _credential_path(child, path=f"{path}[{index}]", depth=depth + 1)
             if found:
                 return found
+    elif isinstance(value, str) and _looks_like_secret_value(value):
+        return path
     return None
 
 
