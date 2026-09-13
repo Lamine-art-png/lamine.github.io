@@ -34,10 +34,15 @@ const COMMERCIAL_PLATFORM_ROUTES = ["/", "/home", "/api-keys", "/playground", "/
 function PlatformProduct() {
   const { platformDeveloper } = useAuth();
   const { pathname } = useLocation();
-  if (!platformDeveloper) return <PlatformSelfServiceGate />;
   const normalizedPath = pathname.replace(/^\/platform(?=\/|$)/, "") || "/";
   const commercialSurface = COMMERCIAL_PLATFORM_ROUTES.some((path) => normalizedPath === path || (path !== "/" && normalizedPath.startsWith(`${path}/`)));
+
+  // Paid advisory intelligence is intentionally self-serve for verified,
+  // approved organization owners/admins. The backend commercial dependency is
+  // authoritative; broader Platform administration still requires the legacy
+  // developer enrollment below.
   if (commercialSurface) return <PlatformIntelligenceConsole />;
+  if (!platformDeveloper) return <PlatformSelfServiceGate />;
   return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
@@ -91,7 +96,7 @@ const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.
 
 if (isPlatformHostname) {
   document.documentElement.dataset.agroaiPlatformReleaseCompatibilityV1 =
-    "Platform API enrollment remains a separate reviewed step after sign-in.";
+    "Paid advisory intelligence is self-serve; broader Platform administration remains separately enrolled.";
 }
 
 const platformRouter = createBrowserRouter([
