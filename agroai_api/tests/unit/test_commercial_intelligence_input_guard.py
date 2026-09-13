@@ -21,11 +21,22 @@ def test_rejects_credentials_inside_arrays() -> None:
     assert guard._credential_path(payload) == "input.sources[1].refresh_token"
 
 
+def test_rejects_secret_value_hidden_under_innocent_key() -> None:
+    payload = {"notes": {"integration_value": "sk_live_1234567890ABCDEFGHIJK"}}
+    assert guard._credential_path(payload) == "input.notes.integration_value"
+
+
+def test_rejects_private_key_material_hidden_in_notes() -> None:
+    payload = {"operator_notes": "-----BEGIN PRIVATE KEY-----\nabc"}
+    assert guard._credential_path(payload) == "input.operator_notes"
+
+
 def test_normal_agricultural_keys_are_allowed() -> None:
     payload = {
         "crop": "almond",
         "soil": {"moisture_pct": 24.8, "water_potential_kpa": -120},
         "weather": [{"temperature_c": 34.1, "wind_speed_mps": 2.5}],
+        "notes": "Operator observed mild leaf curl on the western block after the afternoon heat.",
     }
     assert guard._credential_path(payload) is None
 
