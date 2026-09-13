@@ -1,11 +1,12 @@
 import type { ComponentType } from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { AssuranceRouteRecovery } from "./components/AssuranceRouteRecovery";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
 import { PlatformCliDeviceApproval } from "./components/PlatformCliDeviceApproval";
 import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate";
 import { PlatformConsoleApp } from "./components/PlatformConsole";
+import { PlatformIntelligenceConsole } from "./components/PlatformIntelligenceConsole";
 import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
@@ -28,10 +29,14 @@ function PortalRouteError() {
   return <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]"><div className="mx-auto max-w-[720px] rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-8 shadow-[0_20px_60px_rgba(16,35,27,0.08)]"><div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#2D6A4F]">{t("app.recoveryEyebrow")}</div><h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("routeRecovery.title")}</h1><p className="mt-3 text-[14px] leading-7 text-[#65736A]">{t("routeRecovery.body")}</p><div className="mt-6 flex gap-3"><a href="/" className="rounded-lg bg-[#10231B] px-4 py-2 text-[13px] font-medium text-white">{t("routeRecovery.continue")}</a><a href="/intelligence" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.openAsk")}</a><a href="/settings" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.settings")}</a></div></div></div>;
 }
 
+const COMMERCIAL_PLATFORM_ROUTES = ["/", "/home", "/api-keys", "/playground", "/usage", "/billing", "/docs"];
+
 function PlatformProduct() {
   const { platformDeveloper } = useAuth();
+  const { pathname } = useLocation();
   if (!platformDeveloper) return <PlatformSelfServiceGate />;
-  return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
+  const commercialSurface = COMMERCIAL_PLATFORM_ROUTES.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)));
+  return <>{commercialSurface ? <PlatformIntelligenceConsole /> : <PlatformConsoleApp />}<PlatformSafetyNotice /></>;
 }
 
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
@@ -85,7 +90,7 @@ const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.
 // Existing production release workflows used this exact non-visual marker to
 // prove they had downloaded the Platform bundle. Preserve it during the public
 // self-service cutover so the deployment gate does not become weaker while the
-// visible product copy moves to the new TEST self-service contract.
+// visible product copy moves to the paid intelligence contract.
 if (isPlatformHostname) {
   document.documentElement.dataset.agroaiPlatformReleaseCompatibilityV1 =
     "Platform API enrollment remains a separate reviewed step after sign-in.";
