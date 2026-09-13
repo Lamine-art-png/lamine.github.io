@@ -21,12 +21,14 @@ def _include_commercial_intelligence(router: Any) -> None:
         return
 
     # Import hardening before composition. It patches the machine intelligence
-    # runtime in-place. The original browser commerce routes are then removed
-    # from that router and replaced by narrower verified self-service routes,
-    # avoiding duplicate FastAPI path/method registrations while keeping the
-    # public browser contract stable.
+    # runtime in-place. The recursive input guard is layered after the money
+    # hardening so credentials are rejected before context reaches inference.
+    # The original browser commerce routes are then removed from that router and
+    # replaced by narrower verified self-service routes, avoiding duplicate
+    # FastAPI path/method registrations while keeping the public contract stable.
     from app.api.v1 import commercial_intelligence_key_guard as _key_guard  # noqa: F401
     from app.api.v1.commercial_intelligence_hardened import router as commercial_intelligence_router
+    from app.api.v1 import commercial_intelligence_input_guard as _input_guard  # noqa: F401
     from app.api.v1.commercial_intelligence_selfserve import router as commercial_selfserve_router
 
     commercial_intelligence_router.routes[:] = [
