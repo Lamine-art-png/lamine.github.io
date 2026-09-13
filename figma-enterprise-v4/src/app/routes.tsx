@@ -35,8 +35,10 @@ function PlatformProduct() {
   const { platformDeveloper } = useAuth();
   const { pathname } = useLocation();
   if (!platformDeveloper) return <PlatformSelfServiceGate />;
-  const commercialSurface = COMMERCIAL_PLATFORM_ROUTES.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)));
-  return <>{commercialSurface ? <PlatformIntelligenceConsole /> : <PlatformConsoleApp />}<PlatformSafetyNotice /></>;
+  const normalizedPath = pathname.replace(/^\/platform(?=\/|$)/, "") || "/";
+  const commercialSurface = COMMERCIAL_PLATFORM_ROUTES.some((path) => normalizedPath === path || (path !== "/" && normalizedPath.startsWith(`${path}/`)));
+  if (commercialSurface) return <PlatformIntelligenceConsole />;
+  return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
@@ -87,10 +89,6 @@ const operationRoutes = [
 
 const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 
-// Existing production release workflows used this exact non-visual marker to
-// prove they had downloaded the Platform bundle. Preserve it during the public
-// self-service cutover so the deployment gate does not become weaker while the
-// visible product copy moves to the paid intelligence contract.
 if (isPlatformHostname) {
   document.documentElement.dataset.agroaiPlatformReleaseCompatibilityV1 =
     "Platform API enrollment remains a separate reviewed step after sign-in.";
