@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.v1 import commercial_intelligence as legacy
@@ -12,6 +13,7 @@ from app.platform_api.programs import enforce_enrollment_limit, require_active_e
 
 
 _original_create_platform_key = legacy.create_platform_key
+COMMERCIAL_ADVISORY_KEY_LIMIT = 10
 
 
 def _bounded_create_platform_key(
@@ -27,15 +29,6 @@ def _bounded_create_platform_key(
     organization = db.get(Organization, project.organization_id)
     if organization is None:
         raise ValueError("organization unavailable")
-    # The commercial advisory surface intentionally grants a restricted LIVE
-    # project even when the developer's ordinary self-service enrollment is
-    # TEST-only. Use the governing enrollment solely for its server-authoritative
-    # credential count; do not reinterpret it as a physical/provider LIVE grant.
-    enrollment = require_active_enrollment(
-        db,
-        organization,
-        operation="intelligence_key_create",
-    )
     active_count = (
         db.query(PlatformApiKey)
         .filter(
@@ -45,12 +38,29 @@ def _bounded_create_platform_key(
         )
         .count()
     )
-    enforce_enrollment_limit(
-        db,
-        enrollment=enrollment,
-        resource_name="keys",
-        current_count=active_count,
-    )
+
+    # Existing Platform customers keep their server-authoritative enrollment
+    # limit. A verified commercial-only customer does not need a legacy program
+    # enrollment merely to buy advisory intelligence, but still receives the
+    # same conservative credential cap.
+    try:
+        enrollment = require_active_enrollment(
+            db,
+            organization,
+            operation="intelligence_key_create",
+        )
+    except HTTPException:
+        enrollment = None
+    if enrollment is not None:
+        enforce_enrollment_limit(
+            db,
+            enrollment=enrollment,
+            resource_name="keys",
+            current_count=active_count,
+        )
+    elif active_count >= COMMERCIAL_ADVISORY_KEY_LIMIT:
+        raise ValueError(f"Commercial advisory key limit reached ({COMMERCIAL_ADVISORY_KEY_LIMIT})")
+
     return _original_create_platform_key(
         db,
         project=project,
