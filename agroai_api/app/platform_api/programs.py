@@ -33,6 +33,12 @@ ACTIVE_ENROLLMENT_STATUSES = frozenset({"active", "approved"})
 API_ACCESS_SUBSCRIPTION_STATES = frozenset({"free", "trialing", "active", "past_due", "grace", "enterprise_contract"})
 LIVE_ACCESS_SUBSCRIPTION_STATES = frozenset({"trialing", "active", "enterprise_contract"})
 
+# LIVE advisory intelligence is deliberately separated from provider writes and
+# physical execution. These operations may proceed for a paid self-service
+# developer without a separately reviewed LIVE-access request. Every other LIVE
+# operation still requires the existing explicit approval gate.
+SELF_SERVICE_LIVE_ADVISORY_OPERATIONS = frozenset({"projects.create", "intelligence.run"})
+
 
 def active_enrollments(db: Session, organization_id: str, *, now: datetime | None = None) -> list[PlatformProgramEnrollment]:
     moment = now or datetime.utcnow()
@@ -99,6 +105,10 @@ def current_api_subscription(db: Session, organization_id: str) -> PlatformApiSu
     )
 
 
+def _active_live_subscription(subscription: PlatformApiSubscription | None) -> bool:
+    return bool(subscription is not None and subscription.status in LIVE_ACCESS_SUBSCRIPTION_STATES)
+
+
 def require_api_entitlement(
     db: Session,
     organization: Organization,
@@ -108,7 +118,19 @@ def require_api_entitlement(
     api_project_id: str | None,
 ) -> tuple[PlatformProgramEnrollment, PlatformApiSubscription | None]:
     enrollment = require_active_enrollment(db, organization, environment=environment, operation=operation)
-    if environment == "live":
+    subscription = current_api_subscription(db, organization.id)
+
+    # Paid self-service LIVE advisory intelligence is intentionally self-serve.
+    # It does NOT grant provider writes, production webhooks, actions:execute, or
+    # any other LIVE operation; those continue through the reviewed gate below.
+    advisory_self_service = bool(
+        environment == "live"
+        and enrollment.program == "developer_self_service"
+        and operation in SELF_SERVICE_LIVE_ADVISORY_OPERATIONS
+        and _active_live_subscription(subscription)
+    )
+
+    if environment == "live" and not advisory_self_service:
         moment = datetime.utcnow()
         project_scope = (
             PlatformLiveAccessRequest.api_project_id.is_(None)
@@ -136,7 +158,7 @@ def require_api_entitlement(
                     "message": "An active live-access approval is required for this operation.",
                 },
             )
-    subscription = current_api_subscription(db, organization.id)
+
     if enrollment.billing_mode in {"enterprise_invoice", "contract"}:
         return enrollment, subscription
     if subscription is None:
@@ -146,9 +168,6 @@ def require_api_entitlement(
             "strategic_partner",
             "developer_self_service",
         }:
-            # TEST development is deliberately non-billable and needs no paid
-            # subscription. This branch is guarded by `environment == "test"`,
-            # so LIVE always falls through to the subscription/approval checks.
             return enrollment, None
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -199,17 +218,17 @@ def enforce_enrollment_limit(
         )
 
 
-# Server-authoritative safe limits for automatic TEST self-service enrollment.
-# These are deliberately conservative and cannot be widened by client input.
+# Server-authoritative limits for automatic developer self-service enrollment.
+# A verified developer can evaluate in TEST immediately. A paid subscription can
+# additionally create one LIVE advisory project, but ordinary LIVE API routes
+# remain separately approved. No physical/provider-write scopes are granted.
 SELF_SERVICE_TEST_DEFAULTS = {
-    "allowed_environments": ["test"],   # TEST only — never "live"
+    "allowed_environments": ["test", "live"],
     "maximum_projects": 3,
-    "maximum_live_projects": 0,         # LIVE stays separately gated + approved
+    "maximum_live_projects": 1,
     "maximum_service_accounts": 5,
     "maximum_keys": 10,
     "maximum_webhooks": 3,
-    # Advisory default scopes: read-first TEST scopes; no actions:execute
-    # (physical), no connectors:sync (real provider I/O).
     "default_scopes": [
         "projects:read",
         "service_accounts:read",
@@ -241,29 +260,22 @@ def ensure_self_service_test_enrollment(
     actor_user_id: str | None = None,
     now: datetime | None = None,
 ) -> PlatformProgramEnrollment | None:
-    """Idempotently grant an eligible developer a TEST-only self-service enrollment.
+    """Idempotently grant an eligible developer the self-service entitlement.
 
-    Server-authoritative. Returns the governing enrollment, or ``None`` when
-    auto-enrollment is disabled, the organization is not eligible, an existing
-    enrollment already governs, or a suspension must be respected. Eligibility
-    of the *caller* (verified email, owner/admin membership, accepted terms) is
-    enforced by ``require_developer_control_plane`` before this is invoked; this
-    function additionally re-checks the server-authoritative organization state.
+    TEST remains free/evaluation-oriented. LIVE advisory intelligence requires a
+    paid subscription and is enforced again server-side per operation. Provider
+    writes and physical execution are never granted by this enrollment alone.
     """
     if not self_service_auto_enroll_enabled():
         return None
-    # Re-assert the server-authoritative organization gate (never trust caller).
     if not organization_access_allowed(organization):
         return None
     moment = now or datetime.utcnow()
 
-    # If any higher-or-equal-priority active enrollment already governs, use it.
     existing_active = active_enrollments(db, organization.id, now=moment)
     if existing_active:
-        return None  # require_active_enrollment will select the governing row
+        return None
 
-    # Respect an existing developer_self_service row (e.g. a suspension is an
-    # abuse control that must NOT be silently reactivated).
     existing = (
         db.query(PlatformProgramEnrollment)
         .filter(
@@ -275,10 +287,6 @@ def ensure_self_service_test_enrollment(
     if existing is not None and existing.status == "suspended":
         return None
 
-    # Terms are a HARD prerequisite for automatic enrollment, independent of the
-    # PLATFORM_API_TERMS_ENFORCEMENT_ENABLED flag: a developer is never silently
-    # auto-enrolled without having accepted the CURRENT developer terms. This
-    # raises (fail closed) when the current terms are unaccepted or superseded.
     from app.platform_api.terms import require_user_acceptance
 
     if actor_user_id is None:
@@ -304,16 +312,13 @@ def ensure_self_service_test_enrollment(
     row.plan_identifier = None
     row.effective_at = moment
     row.expires_at = None
-    row.approved_by_user_id = None  # automatic — no human approver
+    row.approved_by_user_id = None
     row.approved_at = moment
     row.updated_at = moment
     if existing is None:
         row.created_at = moment
         db.add(row)
     db.flush()
-    # Persist the enrollment immediately: it is a distinct, idempotent grant
-    # that must survive even on read-only control-plane requests (which never
-    # commit the request session). This commits only the enrollment row.
     db.commit()
     _logger.info(
         "platform.self_service.auto_enrolled",
