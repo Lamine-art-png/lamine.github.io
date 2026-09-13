@@ -190,16 +190,17 @@ def create_observation(payload: ObservationInput, ctx: AuthContext = Depends(get
     duplicate = db.query(MarketObservation.id).filter(MarketObservation.organization_id == org_id, MarketObservation.evidence_id == payload.evidence_id).first()
     if duplicate is not None:
         raise HTTPException(status_code=409, detail={"code": "evidence_id_exists", "message": "This evidence id has already been ingested."})
-    # Customer/manual ingestion must never self-label arbitrary values as LIVE;
-    # live status is reserved for configured provider adapters.
-    source_state = "MANUAL" if payload.source_status == "LIVE" and payload.provider == "manual" else payload.source_status
+    # Client/customer input can carry a provider name for provenance, but it can
+    # never grant itself LIVE authority. Only a configured MarketDataProvider
+    # adapter is allowed to emit LIVE after verified upstream retrieval.
+    source_state = "MANUAL" if payload.source_status == "LIVE" else payload.source_status
     row = MarketObservation(
         id=str(uuid.uuid4()), organization_id=org_id, position_id=payload.position_id, evidence_id=payload.evidence_id,
         observation_type=payload.observation_type, provider=payload.provider, source_name=payload.source_name,
         source_status=source_state, value=payload.value, unit=payload.unit, currency=payload.currency,
         observed_at=payload.observed_at, retrieved_at=datetime.utcnow(), delay_minutes=payload.delay_minutes,
         quality_json=payload.quality, licensing_json=payload.licensing,
-        metadata_json={**payload.metadata, "input_source": "customer_structured_input"},
+        metadata_json={**payload.metadata, "input_source": "customer_structured_input", "requested_source_status": payload.source_status},
     )
     db.add(row)
     db.commit()
