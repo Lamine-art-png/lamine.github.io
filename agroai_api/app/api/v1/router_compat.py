@@ -10,19 +10,19 @@ def _mount_product_routes(router: Any) -> None:
     """Attach product modules that intentionally live outside the legacy main.py list.
 
     Market Intelligence is composed here before FastAPI's deferred includes are
-    materialized.  This keeps the large legacy application factory stable while
+    materialized. This keeps the large legacy application factory stable while
     preserving one explicit, testable composition point for new product modules.
+    Import failures are intentionally not swallowed: a broken product module
+    must fail CI/startup instead of silently disappearing from the API.
     """
-    try:
-        from app.api.v1.market_intelligence import router as market_intelligence_router
-    except Exception:
-        # Import errors must remain visible when the application later touches
-        # the module; do not make basic router compatibility itself a boot trap.
-        return
+    from app.api.v1.market_intelligence import router as market_intelligence_router
+    from app.api.v1.market_intelligence_ingestion import router as market_intelligence_ingestion_router
+
     marker = "_agroai_market_intelligence_mounted"
     if getattr(router, marker, False):
         return
     router.include_router(market_intelligence_router, prefix="/v1")
+    router.include_router(market_intelligence_ingestion_router, prefix="/v1")
     setattr(router, marker, True)
 
 
