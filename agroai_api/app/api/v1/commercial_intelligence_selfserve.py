@@ -22,7 +22,7 @@ from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.terms import require_organization_acceptance
 
 
-router = APIRouter(prefix="/platform/commercial", tags=["commercial-intelligence-browser"])
+router = APIRouter(prefix="/platform/developer", tags=["commercial-intelligence-browser"])
 
 
 def require_commercial_intelligence_browser(
@@ -45,7 +45,7 @@ def require_commercial_intelligence_browser(
     return ctx
 
 
-@router.get("/access")
+@router.get("/intelligence/access")
 def commercial_access(ctx: AuthContext = Depends(require_commercial_intelligence_browser)) -> dict[str, Any]:
     return {
         "enabled": True,
@@ -81,12 +81,10 @@ def commercial_wallet_checkout(
     ctx: AuthContext = Depends(require_commercial_intelligence_browser),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    # Reuse the authoritative Stripe implementation while supplying the narrower
-    # verified commercial browser context instead of a legacy program enrollment.
     return legacy.wallet_checkout(payload=payload, idempotency_key=idempotency_key, ctx=ctx, db=db)
 
 
-@router.post("/bootstrap")
+@router.post("/intelligence/bootstrap")
 def commercial_bootstrap(
     payload: legacy.BootstrapRequest,
     ctx: AuthContext = Depends(require_commercial_intelligence_browser),
@@ -95,7 +93,7 @@ def commercial_bootstrap(
     return legacy.bootstrap_intelligence_key(payload=payload, ctx=ctx, db=db)
 
 
-@router.post("/run")
+@router.post("/intelligence/run")
 async def commercial_browser_run(
     payload: legacy.BrowserIntelligenceRequest,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=255),
