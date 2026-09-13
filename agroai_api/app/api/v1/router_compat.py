@@ -6,6 +6,21 @@ from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 
 
+def _include_commercial_intelligence(router: Any) -> None:
+    """Attach the paid Intelligence API at the final composition boundary.
+
+    ``main.py`` already calls this module after all first-party routers are
+    registered. Keeping the commercial surface here avoids a second app factory
+    while preserving the existing production route-materialization contract.
+    """
+    if getattr(router, "_agroai_commercial_intelligence_included", False):
+        return
+    from app.api.v1.commercial_intelligence import router as commercial_intelligence_router
+
+    router.include_router(commercial_intelligence_router, prefix="/v1")
+    setattr(router, "_agroai_commercial_intelligence_included", True)
+
+
 def materialize_included_routes(router: Any) -> None:
     """Expand FastAPI deferred router includes for current route contracts.
 
@@ -14,6 +29,8 @@ def materialize_included_routes(router: Any) -> None:
     includes as private ``_IncludedRouter`` wrappers, so materialize them after
     all local composition hooks have run.
     """
+    _include_commercial_intelligence(router)
+
     try:
         from fastapi.routing import _IncludedRouter
     except Exception:  # pragma: no cover - older FastAPI already flattens.
