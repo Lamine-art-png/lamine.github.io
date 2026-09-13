@@ -33,10 +33,10 @@ ACTIVE_ENROLLMENT_STATUSES = frozenset({"active", "approved"})
 API_ACCESS_SUBSCRIPTION_STATES = frozenset({"free", "trialing", "active", "past_due", "grace", "enterprise_contract"})
 LIVE_ACCESS_SUBSCRIPTION_STATES = frozenset({"trialing", "active", "enterprise_contract"})
 
-# LIVE advisory intelligence is deliberately separated from provider writes and
-# physical execution. These operations may proceed for a paid self-service
-# developer without a separately reviewed LIVE-access request. Every other LIVE
-# operation still requires the existing explicit approval gate.
+# Paid LIVE advisory intelligence is a narrow commercial capability layered on
+# top of the existing TEST-only self-service enrollment. It does not widen the
+# base program enrollment and therefore does not silently enable other LIVE
+# provider/data/action surfaces.
 SELF_SERVICE_LIVE_ADVISORY_OPERATIONS = frozenset({"projects.create", "intelligence.run"})
 
 
@@ -109,6 +109,19 @@ def _active_live_subscription(subscription: PlatformApiSubscription | None) -> b
     return bool(subscription is not None and subscription.status in LIVE_ACCESS_SUBSCRIPTION_STATES)
 
 
+def _self_service_advisory_enrollment(
+    db: Session,
+    organization: Organization,
+    *,
+    operation: str,
+    subscription: PlatformApiSubscription | None,
+) -> PlatformProgramEnrollment | None:
+    if operation not in SELF_SERVICE_LIVE_ADVISORY_OPERATIONS or not _active_live_subscription(subscription):
+        return None
+    rows = [row for row in active_enrollments(db, organization.id) if row.program == "developer_self_service"]
+    return rows[0] if rows else None
+
+
 def require_api_entitlement(
     db: Session,
     organization: Organization,
@@ -117,18 +130,24 @@ def require_api_entitlement(
     operation: str,
     api_project_id: str | None,
 ) -> tuple[PlatformProgramEnrollment, PlatformApiSubscription | None]:
-    enrollment = require_active_enrollment(db, organization, environment=environment, operation=operation)
     subscription = current_api_subscription(db, organization.id)
-
-    # Paid self-service LIVE advisory intelligence is intentionally self-serve.
-    # It does NOT grant provider writes, production webhooks, actions:execute, or
-    # any other LIVE operation; those continue through the reviewed gate below.
-    advisory_self_service = bool(
-        environment == "live"
-        and enrollment.program == "developer_self_service"
-        and operation in SELF_SERVICE_LIVE_ADVISORY_OPERATIONS
-        and _active_live_subscription(subscription)
+    advisory_enrollment = (
+        _self_service_advisory_enrollment(
+            db,
+            organization,
+            operation=operation,
+            subscription=subscription,
+        )
+        if environment == "live"
+        else None
     )
+    enrollment = advisory_enrollment or require_active_enrollment(
+        db,
+        organization,
+        environment=environment,
+        operation=operation,
+    )
+    advisory_self_service = advisory_enrollment is not None
 
     if environment == "live" and not advisory_self_service:
         moment = datetime.utcnow()
@@ -198,14 +217,29 @@ def enforce_enrollment_limit(
     }.get(resource_name)
     if column is None:
         raise ValueError(f"unsupported enrollment limit: {resource_name}")
-    limits = [int(getattr(enrollment, column) or 0)]
+
     subscription = current_api_subscription(db, enrollment.organization_id)
-    if subscription is not None:
-        plan = db.get(PlatformApiPlan, subscription.plan_id)
-        plan_limit = (plan.limits_json or {}).get(resource_name) if plan is not None else None
+    plan = db.get(PlatformApiPlan, subscription.plan_id) if subscription is not None else None
+    plan_limit = (plan.limits_json or {}).get(resource_name) if plan is not None else None
+
+    # The base automatic enrollment intentionally remains maximum_live_projects=0.
+    # A paid Developer/Scale plan may layer its explicit LIVE project limit on
+    # top of that base without mutating or broadening the enrollment itself.
+    if (
+        resource_name == "live_projects"
+        and enrollment.program == "developer_self_service"
+        and _active_live_subscription(subscription)
+        and isinstance(plan_limit, int)
+        and not isinstance(plan_limit, bool)
+        and plan_limit > 0
+    ):
+        maximum = plan_limit
+    else:
+        limits = [int(getattr(enrollment, column) or 0)]
         if isinstance(plan_limit, int) and not isinstance(plan_limit, bool) and plan_limit >= 0:
             limits.append(plan_limit)
-    maximum = min(limits)
+        maximum = min(limits)
+
     if maximum >= 0 and current_count >= maximum:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -218,14 +252,13 @@ def enforce_enrollment_limit(
         )
 
 
-# Server-authoritative limits for automatic developer self-service enrollment.
-# A verified developer can evaluate in TEST immediately. A paid subscription can
-# additionally create one LIVE advisory project, but ordinary LIVE API routes
-# remain separately approved. No physical/provider-write scopes are granted.
+# Server-authoritative safe limits for automatic TEST self-service enrollment.
+# These remain deliberately conservative. Paid LIVE advisory access is layered
+# separately by require_api_entitlement and never mutates this base grant.
 SELF_SERVICE_TEST_DEFAULTS = {
-    "allowed_environments": ["test", "live"],
+    "allowed_environments": ["test"],
     "maximum_projects": 3,
-    "maximum_live_projects": 1,
+    "maximum_live_projects": 0,
     "maximum_service_accounts": 5,
     "maximum_keys": 10,
     "maximum_webhooks": 3,
@@ -260,11 +293,11 @@ def ensure_self_service_test_enrollment(
     actor_user_id: str | None = None,
     now: datetime | None = None,
 ) -> PlatformProgramEnrollment | None:
-    """Idempotently grant an eligible developer the self-service entitlement.
+    """Idempotently grant an eligible developer a TEST-only base enrollment.
 
-    TEST remains free/evaluation-oriented. LIVE advisory intelligence requires a
-    paid subscription and is enforced again server-side per operation. Provider
-    writes and physical execution are never granted by this enrollment alone.
+    A paid subscription may separately authorize the narrow LIVE advisory
+    operations defined above. Provider writes and physical execution are never
+    granted by this automatic enrollment.
     """
     if not self_service_auto_enroll_enabled():
         return None
