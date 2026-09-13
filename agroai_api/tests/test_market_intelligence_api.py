@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from app.api.deps import AuthContext, get_auth_context
-from app.core.config import settings
 from app.main import app
 from app.models.market_intelligence import MarketPosition
 from app.models.saas import Organization, OrganizationMembership, User
@@ -91,7 +90,7 @@ def test_scenarios_persist_and_viewer_is_read_only(client, db):
 
 def test_cross_tenant_position_is_404(client, db):
     user1, org1, membership1 = identity(db, suffix="tenant-one")
-    user2, org2, _ = identity(db, suffix="tenant-two")
+    _, org2, _ = identity(db, suffix="tenant-two")
     row = MarketPosition(
         organization_id=org2.id,
         position_key="private-position",
@@ -121,7 +120,7 @@ def test_cross_tenant_position_is_404(client, db):
 def test_release_state_fails_closed(client, db, monkeypatch):
     user, org, membership = identity(db, suffix="disabled")
     set_context(user, org, membership)
-    monkeypatch.setattr(settings, "MARKET_INTELLIGENCE_RELEASE_STATE", "disabled", raising=False)
+    monkeypatch.setenv("MARKET_INTELLIGENCE_RELEASE_STATE", "disabled")
     response = client.get("/v1/market-intelligence/overview")
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "market_intelligence_not_released"
