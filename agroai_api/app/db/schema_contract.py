@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "032_repair_onboarding_state"
+HEAD_ALEMBIC_REVISION = "033_intelligence_wallet_commerce"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -48,14 +48,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     },
     "agent_workflow_runs": {"id"},
     "users": {
-        "id",
-        "email",
-        "credentials_changed_at",
-        "account_status",
-        "failed_login_attempts",
-        "locked_until",
-        "access_restriction_reason",
-        "access_restricted_at",
+        "id", "email", "credentials_changed_at", "account_status", "failed_login_attempts",
+        "locked_until", "access_restriction_reason", "access_restricted_at",
     },
     "organizations": {"id", "owner_user_id", "verification_status", "verification_score", "verification_engine_version"},
     "workspaces": {"id", "organization_id"},
@@ -63,16 +57,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "onboarding_states": {"id", "organization_id", "workspace_id", "user_id", "current_step", "created_at", "updated_at"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
-    "account_access_appeals": {
-        "id",
-        "user_id",
-        "token_hash",
-        "token_expires_at",
-        "status",
-        "submitted_at",
-        "reviewed_at",
-        "created_at",
-    },
+    "account_access_appeals": {"id", "user_id", "token_hash", "token_expires_at", "status", "submitted_at", "reviewed_at", "created_at"},
     "conversations": {"id", "organization_id", "user_id"},
     "conversation_messages": {"id", "conversation_id", "organization_id"},
     "email_verification_tokens": {"id", "user_id", "token_hash"},
@@ -97,39 +82,19 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_api_keys": {"id", "organization_id", "api_project_id", "service_account_id", "workspace_id", "cidr_allowlist_json"},
     "platform_idempotency_records": {"id", "organization_id", "api_project_id", "operation", "idempotency_key", "request_hash", "status"},
     "platform_webhook_endpoints": {
-        "id",
-        "organization_id",
-        "api_project_id",
-        "signing_secret_key_version",
-        "signing_secret_nonce_b64",
-        "signing_secret_ciphertext_b64",
-        "revoked_at",
+        "id", "organization_id", "api_project_id", "signing_secret_key_version",
+        "signing_secret_nonce_b64", "signing_secret_ciphertext_b64", "revoked_at",
     },
     "platform_webhook_events": {"id", "organization_id", "api_project_id", "event_type", "version"},
     "platform_webhook_delivery_attempts": {"id", "event_id", "endpoint_id", "attempt_number", "status"},
     "platform_webhook_outbox": {"id", "organization_id", "api_project_id", "event_id", "endpoint_id", "status"},
     "platform_webhook_audit_events": {"id", "organization_id", "api_project_id", "endpoint_id", "action"},
-    "field_capture_sessions": {
-        "id", "tenant_id", "workspace_id", "user_id", "client_capture_id",
-        "idempotency_key", "status", "asset_manifest_json", "metadata_json",
-    },
-    "field_observations": {
-        "id", "tenant_id", "workspace_id", "capture_session_id", "status",
-        "structured_json", "confidence", "provenance_json",
-    },
-    "field_observation_assets": {
-        "id", "tenant_id", "capture_session_id", "client_asset_id", "object_ref",
-        "content_sha256", "status",
-    },
-    "field_observation_processing_runs": {
-        "id", "tenant_id", "capture_session_id", "stage", "status", "attempt_count",
-    },
-    "field_observation_audit_events": {
-        "id", "tenant_id", "capture_session_id", "action", "created_at",
-    },
-    "field_storage_reservations": {
-        "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
-    },
+    "field_capture_sessions": {"id", "tenant_id", "workspace_id", "user_id", "client_capture_id", "idempotency_key", "status", "asset_manifest_json", "metadata_json"},
+    "field_observations": {"id", "tenant_id", "workspace_id", "capture_session_id", "status", "structured_json", "confidence", "provenance_json"},
+    "field_observation_assets": {"id", "tenant_id", "capture_session_id", "client_asset_id", "object_ref", "content_sha256", "status"},
+    "field_observation_processing_runs": {"id", "tenant_id", "capture_session_id", "stage", "status", "attempt_count"},
+    "field_observation_audit_events": {"id", "tenant_id", "capture_session_id", "action", "created_at"},
+    "field_storage_reservations": {"id", "tenant_id", "capture_session_id", "size_bytes", "expires_at"},
     "platform_api_applications": {"id", "organization_id", "applicant_user_id", "application_type", "status"},
     "platform_program_enrollments": {"id", "organization_id", "program", "status", "allowed_environments_json"},
     "platform_live_access_requests": {"id", "organization_id", "requested_by_user_id", "status"},
@@ -140,27 +105,26 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_api_plans": {"id", "catalog_version", "plan_identifier", "active", "included_credits"},
     "platform_api_operation_costs": {"id", "catalog_version", "operation_id", "environment", "credits"},
     "platform_api_subscriptions": {"id", "organization_id", "plan_id", "status", "status_slot"},
-    "platform_checkout_idempotency": {
-        "id",
-        "organization_id",
-        "operation",
-        "client_key",
-        "request_hash",
-        "status",
-    },
+    "platform_checkout_idempotency": {"id", "organization_id", "operation", "client_key", "request_hash", "status"},
     "platform_credit_reservations": {"id", "organization_id", "api_project_id", "logical_operation_id", "state"},
     "platform_stripe_meter_outbox": {"id", "organization_id", "usage_event_id", "meter_event_identifier", "status"},
     "platform_stripe_events": {"id", "stripe_event_id", "event_type", "status"},
-    "platform_request_logs": {
-        "id",
-        "organization_id",
-        "api_project_id",
-        "request_id",
-        "client_correlation_id",
-        "operation_id",
-    },
+    "platform_request_logs": {"id", "organization_id", "api_project_id", "request_id", "client_correlation_id", "operation_id"},
     "platform_notifications": {"id", "organization_id", "notification_type", "dedupe_key", "status"},
     "platform_sandbox_states": {"id", "organization_id", "api_project_id", "fixture_version", "reset_counter"},
+    "platform_intelligence_wallets": {
+        "id", "organization_id", "currency", "balance_cents", "lifetime_funded_cents",
+        "lifetime_spent_cents", "auto_reload_enabled", "created_at", "updated_at",
+    },
+    "platform_intelligence_wallet_ledger": {
+        "id", "organization_id", "wallet_id", "kind", "status", "amount_cents",
+        "idempotency_key", "external_reference", "intelligence_run_id", "metadata_json", "created_at", "posted_at",
+    },
+    "platform_commercial_intelligence_runs": {
+        "id", "organization_id", "api_project_id", "api_key_id", "workspace_id", "field_id",
+        "idempotency_key", "request_hash", "task", "mode", "public_model", "status",
+        "charge_cents", "currency", "request_safe_json", "response_json", "created_at", "completed_at",
+    },
     "platform_support_requests": {"id", "organization_id", "category", "severity", "status"},
     "platform_support_messages": {"id", "support_request_id", "visibility", "body"},
     "platform_status_components": {"id", "component_key", "status", "public"},
@@ -172,10 +136,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
 }
 
 
-def schema_contract_gaps(
-    connection,
-    requirements: Mapping[str, set[str]] | None = None,
-) -> dict[str, list[str]]:
+def schema_contract_gaps(connection, requirements: Mapping[str, set[str]] | None = None) -> dict[str, list[str]]:
     required = requirements or HEAD_SCHEMA_REQUIREMENTS
     inspector = sa.inspect(connection)
     tables = set(inspector.get_table_names())

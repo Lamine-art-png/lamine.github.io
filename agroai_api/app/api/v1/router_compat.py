@@ -6,6 +6,41 @@ from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 
 
+_COMMERCIAL_BROWSER_PATHS = {
+    "/platform/developer/wallet",
+    "/platform/developer/wallet/sync",
+    "/platform/developer/wallet/checkout",
+    "/platform/developer/intelligence/bootstrap",
+    "/platform/developer/intelligence/run",
+}
+
+
+def _include_commercial_intelligence(router: Any) -> None:
+    """Attach hardened machine and verified browser Intelligence commerce."""
+    if getattr(router, "_agroai_commercial_intelligence_included", False):
+        return
+
+    # Import hardening before composition. It patches the machine intelligence
+    # runtime in-place. The recursive input guard is layered after the money
+    # hardening so credentials are rejected before context reaches inference.
+    # The original browser commerce routes are then removed from that router and
+    # replaced by narrower verified self-service routes, avoiding duplicate
+    # FastAPI path/method registrations while keeping the public contract stable.
+    from app.api.v1 import commercial_intelligence_key_guard as _key_guard  # noqa: F401
+    from app.api.v1.commercial_intelligence_hardened import router as commercial_intelligence_router
+    from app.api.v1 import commercial_intelligence_input_guard as _input_guard  # noqa: F401
+    from app.api.v1.commercial_intelligence_selfserve import router as commercial_selfserve_router
+
+    commercial_intelligence_router.routes[:] = [
+        route
+        for route in commercial_intelligence_router.routes
+        if getattr(route, "path", None) not in _COMMERCIAL_BROWSER_PATHS
+    ]
+    router.include_router(commercial_selfserve_router, prefix="/v1")
+    router.include_router(commercial_intelligence_router, prefix="/v1")
+    setattr(router, "_agroai_commercial_intelligence_included", True)
+
+
 def materialize_included_routes(router: Any) -> None:
     """Expand FastAPI deferred router includes for current route contracts.
 
@@ -14,6 +49,8 @@ def materialize_included_routes(router: Any) -> None:
     includes as private ``_IncludedRouter`` wrappers, so materialize them after
     all local composition hooks have run.
     """
+    _include_commercial_intelligence(router)
+
     try:
         from fastapi.routing import _IncludedRouter
     except Exception:  # pragma: no cover - older FastAPI already flattens.
