@@ -88,6 +88,7 @@ def _route_from_context(context: Any) -> BaseRoute:
         response_class=context.response_class,
         dependency_overrides_provider=context.dependency_overrides_provider,
         callbacks=context.callbacks,
+        openapi_extra=getattr(context, "openapi_extra", getattr(original, "openapi_extra", None)),
         generate_unique_id_function=context.generate_unique_id_function,
         strict_content_type=context.strict_content_type,
     )
