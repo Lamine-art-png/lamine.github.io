@@ -3,7 +3,7 @@ from decimal import Decimal
 from app.api.deps import AuthContext, get_auth_context
 from app.main import app
 from app.models.market_intelligence import MarketPosition
-from app.models.saas import Organization, OrganizationMembership, User
+from app.models.saas import Organization, OrganizationMembership, User, Workspace
 
 
 def identity(db, *, suffix="one", role="owner"):
@@ -23,11 +23,35 @@ def set_context(user, org, membership):
     app.dependency_overrides[get_auth_context] = lambda: AuthContext(user=user, organization=org, membership=membership)
 
 
+def position_payload(**overrides):
+    payload = {
+        "position_key": "customer-corn-2026",
+        "name": "Customer Corn 2026",
+        "commodity": "corn",
+        "season": "2026",
+        "country_code": "US",
+        "market_structure": "hybrid",
+        "local_currency": "USD",
+        "reporting_currency": "USD",
+        "quantity_unit": "bushel",
+        "expected_production": "100000",
+        "inventory_quantity": "0",
+        "production_cost_per_unit": "3.50",
+        "current_realizable_price": "4.50",
+        "price_currency": "USD",
+        "freight_per_unit": "0.10",
+        "storage_per_unit": "0.05",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_market_intelligence_routes_are_materialized():
     paths = {getattr(route, "path", "") for route in app.routes}
     assert "/v1/market-intelligence/overview" in paths
     assert "/v1/market-intelligence/scenarios" in paths
     assert "/v1/market-intelligence/positions" in paths
+    assert "/v1/market-intelligence/observations" in paths
 
 
 def test_global_demo_seed_is_idempotent_and_never_claims_live(client, db):
@@ -115,6 +139,60 @@ def test_cross_tenant_position_is_404(client, db):
     set_context(user1, org1, membership1)
     response = client.get(f"/v1/market-intelligence/positions/{row.id}")
     assert response.status_code == 404
+
+
+def test_cross_tenant_workspace_cannot_be_attached_to_position(client, db):
+    user1, org1, membership1 = identity(db, suffix="workspace-one")
+    _, org2, _ = identity(db, suffix="workspace-two")
+    foreign_workspace = Workspace(organization_id=org2.id, name="Foreign operation", mode="evaluation")
+    db.add(foreign_workspace)
+    db.commit()
+    set_context(user1, org1, membership1)
+
+    response = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(position_key="workspace-isolation", workspace_id=foreign_workspace.id),
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Workspace not found"
+
+
+def test_customer_observation_can_never_self_grant_live_authority(client, db):
+    user, org, membership = identity(db, suffix="manual-source")
+    set_context(user, org, membership)
+    position_response = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(position_key="manual-source-position"),
+    )
+    assert position_response.status_code == 201
+    position_id = position_response.json()["id"]
+
+    response = client.post(
+        "/v1/market-intelligence/observations",
+        json={
+            "position_id": position_id,
+            "evidence_id": "customer-live-attempt-1",
+            "observation_type": "cash_price",
+            "provider": "claimed_exchange_provider",
+            "source_name": "Customer supplied benchmark",
+            "source_status": "LIVE",
+            "value": "4.75",
+            "unit": "USD/bushel",
+            "currency": "USD",
+            "observed_at": "2026-09-13T20:00:00Z",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["source_status"] == "MANUAL"
+
+    overview = client.get("/v1/market-intelligence/overview").json()
+    source_states = {
+        source["status"]
+        for position in overview["positions"]
+        for source in position["data_health"]["sources"]
+    }
+    assert "LIVE" not in source_states
+    assert "MANUAL" in source_states
 
 
 def test_release_state_fails_closed(client, db, monkeypatch):
