@@ -34,8 +34,12 @@ from app.services.market_intelligence import (
 )
 from app.services.market_intelligence_ai import generate_market_brief
 from app.services.market_intelligence_demo import seed_demo_markets
-from app.services.market_intelligence_release import market_intelligence_access
-
+from app.services.market_intelligence_release import (
+    configured_release_state,
+    demo_fixtures_enabled,
+    market_intelligence_access,
+    organization_cohort,
+)
 
 WRITE_ROLES = {"owner", "admin", "operator", "analyst"}
 ADMIN_ROLES = {"owner", "admin"}
@@ -89,7 +93,10 @@ def _require_write(ctx: AuthContext) -> None:
 
 def _require_admin(ctx: AuthContext) -> None:
     if _role(ctx) not in ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail={"code": "market_intelligence_admin_required", "message": "Organization administrator access required."})
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "market_intelligence_admin_required", "message": "Organization administrator access required."},
+        )
 
 
 def _position(db: Session, org_id: str, position_id: str) -> MarketPosition:
@@ -139,6 +146,44 @@ def _position_payload(db: Session, org_id: str, row: MarketPosition) -> dict[str
     }
 
 
+def _contract_payload(row: MarketContractPosition) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "position_id": row.position_id,
+        "contract_code": row.contract_code,
+        "buyer": row.buyer,
+        "status": row.status,
+        "quantity": str(row.quantity),
+        "quantity_unit": row.quantity_unit,
+        "price": str(row.price),
+        "currency": row.currency,
+        "fx_rate_to_reporting": str(row.fx_rate_to_reporting) if row.fx_rate_to_reporting is not None else None,
+        "delivery_start": row.delivery_start.isoformat() + "Z" if row.delivery_start else None,
+        "delivery_end": row.delivery_end.isoformat() + "Z" if row.delivery_end else None,
+        "delivery_location": row.delivery_location,
+        "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
+    }
+
+
+def _observation_payload(row: MarketObservation) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "position_id": row.position_id,
+        "evidence_id": row.evidence_id,
+        "observation_type": row.observation_type,
+        "provider": row.provider,
+        "source_name": row.source_name,
+        "source_status": row.source_status,
+        "value": str(row.value) if row.value is not None else None,
+        "unit": row.unit,
+        "currency": row.currency,
+        "observed_at": row.observed_at.isoformat() + "Z" if row.observed_at else None,
+        "retrieved_at": row.retrieved_at.isoformat() + "Z" if row.retrieved_at else None,
+        "delay_minutes": str(row.delay_minutes) if row.delay_minutes is not None else None,
+        "quality": row.quality_json or {},
+    }
+
+
 def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     if position.get("over_contracted"):
@@ -178,6 +223,45 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
+def _aggregate_health(statuses: list[str]) -> str:
+    if not statuses:
+        return "missing"
+    if any(item in {"degraded", "missing"} for item in statuses):
+        return "degraded"
+    if all(item == "demo" for item in statuses):
+        return "demo"
+    if any(item == "demo" for item in statuses):
+        return "mixed"
+    return "healthy"
+
+
+def _demo_seed_allowed() -> bool:
+    env = str(getattr(settings, "APP_ENV", "development") or "development").strip().lower()
+    return env not in {"production", "staging"} or demo_fixtures_enabled()
+
+
+@router.get("/capabilities")
+def capabilities(
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    role = _role(ctx)
+    return {
+        "module": "market_intelligence",
+        "role": role,
+        "can_write": role in WRITE_ROLES,
+        "can_admin": role in ADMIN_ROLES,
+        "can_seed_demo": role in ADMIN_ROLES and _demo_seed_allowed(),
+        "release_state": configured_release_state(),
+        "cohort": organization_cohort(db, ctx.organization),
+        "policy": {
+            "scope": "commercial_decision_support",
+            "trade_execution": False,
+            "personalized_derivatives_instructions": False,
+        },
+    }
+
+
 @router.get("/overview")
 def overview(
     ctx: AuthContext = Depends(get_auth_context),
@@ -213,9 +297,10 @@ def overview(
         if item.get("exposed_revenue") is not None:
             bucket["exposed_revenue"] += Decimal(str(item["exposed_revenue"]))
     portfolio = []
-    for bucket in by_currency.values():
+    for currency in sorted(by_currency):
+        bucket = by_currency[currency]
         portfolio.append({
-            **{k: v for k, v in bucket.items() if not isinstance(v, Decimal)},
+            **{key: value for key, value in bucket.items() if not isinstance(value, Decimal)},
             "projected_revenue": format(bucket["projected_revenue"], "f"),
             "projected_margin": format(bucket["projected_margin"], "f"),
             "locked_revenue": format(bucket["locked_revenue"], "f"),
@@ -235,7 +320,7 @@ def overview(
         "attention": attention[:5],
         "positions": positions,
         "data_health": {
-            "status": "degraded" if any(s in {"degraded", "missing"} for s in statuses) else ("demo" if statuses and all(s == "demo" for s in statuses) else "healthy"),
+            "status": _aggregate_health(statuses),
             "position_statuses": statuses,
         },
         "policy": {
@@ -252,7 +337,12 @@ def list_positions(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     org_id = _org_id(ctx)
-    rows = db.query(MarketPosition).filter(MarketPosition.organization_id == org_id).order_by(MarketPosition.updated_at.desc()).all()
+    rows = (
+        db.query(MarketPosition)
+        .filter(MarketPosition.organization_id == org_id)
+        .order_by(MarketPosition.updated_at.desc())
+        .all()
+    )
     return {"positions": [_position_payload(db, org_id, row) for row in rows]}
 
 
@@ -264,6 +354,28 @@ def get_position(
 ) -> dict[str, Any]:
     org_id = _org_id(ctx)
     return _position_payload(db, org_id, _position(db, org_id, position_id))
+
+
+@router.get("/positions/{position_id}/contracts")
+def list_contracts(
+    position_id: str,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org_id = _org_id(ctx)
+    _position(db, org_id, position_id)
+    return {"contracts": [_contract_payload(row) for row in _contracts(db, org_id, position_id)]}
+
+
+@router.get("/positions/{position_id}/observations")
+def list_observations(
+    position_id: str,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org_id = _org_id(ctx)
+    _position(db, org_id, position_id)
+    return {"observations": [_observation_payload(row) for row in _observations(db, org_id, position_id)]}
 
 
 class ScenarioRequest(BaseModel):
@@ -298,7 +410,7 @@ def create_scenario(
         organization_id=org_id,
         position_id=position.id,
         created_by_user_id=ctx.user.id if ctx.user else None,
-        name=payload.name,
+        name=payload.name.strip(),
         assumptions_json=result["assumptions"],
         baseline_json=result["baseline"],
         result_json={"result": result["result"], "delta": result["delta"], "zero_change_invariant": result["zero_change_invariant"]},
@@ -328,8 +440,12 @@ def list_scenarios(
         query = query.filter(MarketScenario.position_id == position_id)
     rows = query.order_by(MarketScenario.created_at.desc()).limit(100).all()
     return {"scenarios": [{
-        "id": row.id, "position_id": row.position_id, "name": row.name,
-        "assumptions": row.assumptions_json, "baseline": row.baseline_json, "result": row.result_json,
+        "id": row.id,
+        "position_id": row.position_id,
+        "name": row.name,
+        "assumptions": row.assumptions_json,
+        "baseline": row.baseline_json,
+        "result": row.result_json,
         "calculation_version": row.calculation_version,
         "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
     } for row in rows]}
@@ -342,12 +458,20 @@ def get_scenario(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     org_id = _org_id(ctx)
-    row = db.query(MarketScenario).filter(MarketScenario.id == scenario_id, MarketScenario.organization_id == org_id).first()
+    row = (
+        db.query(MarketScenario)
+        .filter(MarketScenario.id == scenario_id, MarketScenario.organization_id == org_id)
+        .first()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
     return {
-        "id": row.id, "position_id": row.position_id, "name": row.name,
-        "assumptions": row.assumptions_json, "baseline": row.baseline_json, "result": row.result_json,
+        "id": row.id,
+        "position_id": row.position_id,
+        "name": row.name,
+        "assumptions": row.assumptions_json,
+        "baseline": row.baseline_json,
+        "result": row.result_json,
         "calculation_version": row.calculation_version,
         "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
     }
@@ -403,17 +527,31 @@ def create_journal_entry(
     org_id = _org_id(ctx)
     position = _position(db, org_id, payload.position_id)
     if payload.scenario_id:
-        scenario = db.query(MarketScenario).filter(MarketScenario.id == payload.scenario_id, MarketScenario.organization_id == org_id).first()
+        scenario = (
+            db.query(MarketScenario)
+            .filter(MarketScenario.id == payload.scenario_id, MarketScenario.organization_id == org_id)
+            .first()
+        )
         if scenario is None or scenario.position_id != position.id:
             raise HTTPException(status_code=404, detail="Scenario not found")
     row = MarketDecisionJournalEntry(
-        id=str(uuid.uuid4()), organization_id=org_id, position_id=position.id,
-        scenario_id=payload.scenario_id, created_by_user_id=ctx.user.id if ctx.user else None,
-        decision=payload.decision, rationale=payload.rationale, assumptions_json=payload.assumptions,
+        id=str(uuid.uuid4()),
+        organization_id=org_id,
+        position_id=position.id,
+        scenario_id=payload.scenario_id,
+        created_by_user_id=ctx.user.id if ctx.user else None,
+        decision=payload.decision.strip(),
+        rationale=payload.rationale.strip() if payload.rationale else None,
+        assumptions_json=payload.assumptions,
     )
     db.add(row)
     db.commit()
-    return {"id": row.id, "position_id": row.position_id, "scenario_id": row.scenario_id, "created_at": row.created_at.isoformat() + "Z" if row.created_at else None}
+    return {
+        "id": row.id,
+        "position_id": row.position_id,
+        "scenario_id": row.scenario_id,
+        "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
+    }
 
 
 @router.get("/decision-journal")
@@ -429,9 +567,14 @@ def list_journal_entries(
         query = query.filter(MarketDecisionJournalEntry.position_id == position_id)
     rows = query.order_by(MarketDecisionJournalEntry.created_at.desc()).limit(100).all()
     return {"entries": [{
-        "id": row.id, "position_id": row.position_id, "scenario_id": row.scenario_id,
-        "decision": row.decision, "rationale": row.rationale, "assumptions": row.assumptions_json,
-        "outcome": row.outcome_json, "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
+        "id": row.id,
+        "position_id": row.position_id,
+        "scenario_id": row.scenario_id,
+        "decision": row.decision,
+        "rationale": row.rationale,
+        "assumptions": row.assumptions_json,
+        "outcome": row.outcome_json,
+        "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
     } for row in rows]}
 
 
@@ -441,7 +584,12 @@ def seed_demo(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     _require_admin(ctx)
-    env = str(getattr(settings, "APP_ENV", "development") or "development").strip().lower()
-    if env in {"production", "staging"} and not bool(getattr(settings, "MARKET_INTELLIGENCE_DEMO_FIXTURES_ENABLED", False)):
-        raise HTTPException(status_code=403, detail={"code": "demo_fixtures_disabled", "message": "Market Intelligence demo fixtures are disabled in this environment."})
+    if not _demo_seed_allowed():
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "demo_fixtures_disabled",
+                "message": "Market Intelligence demo fixtures are disabled in this environment.",
+            },
+        )
     return seed_demo_markets(db, _org_id(ctx))
