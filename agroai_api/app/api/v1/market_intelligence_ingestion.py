@@ -19,6 +19,7 @@ from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.market_intelligence import enforce_market_intelligence_release
 from app.db.base import get_db
 from app.models.market_intelligence import MarketContractPosition, MarketObservation, MarketPosition
+from app.models.saas import Workspace
 
 router = APIRouter(
     prefix="/market-intelligence",
@@ -46,6 +47,13 @@ def _currency(value: str) -> str:
     return code
 
 
+def _clean_required(value: str, field_name: str) -> str:
+    cleaned = " ".join(str(value or "").strip().split())
+    if not cleaned:
+        raise ValueError(f"{field_name} cannot be blank")
+    return cleaned
+
+
 class PositionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     position_key: str = Field(min_length=1, max_length=160)
@@ -69,6 +77,11 @@ class PositionInput(BaseModel):
     workspace_id: str | None = Field(default=None, max_length=120)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("position_key", "name", "commodity", "season", "quantity_unit")
+    @classmethod
+    def validate_required_text(cls, value: str, info) -> str:
+        return _clean_required(value, info.field_name)
+
     @field_validator("country_code")
     @classmethod
     def validate_country(cls, value: str) -> str:
@@ -82,10 +95,22 @@ class PositionInput(BaseModel):
     def validate_currency(cls, value: str | None) -> str | None:
         return _currency(value) if value else value
 
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.strip().split())
+        return cleaned or None
+
 
 @router.post("/positions", status_code=status.HTTP_201_CREATED)
 def create_position(payload: PositionInput, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
     org_id = _scope(ctx)
+    if payload.workspace_id:
+        workspace = db.query(Workspace.id).filter(Workspace.id == payload.workspace_id, Workspace.organization_id == org_id).first()
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
     existing = db.query(MarketPosition).filter(MarketPosition.organization_id == org_id, MarketPosition.position_key == payload.position_key).first()
     if existing is not None:
         raise HTTPException(status_code=409, detail={"code": "position_key_exists", "message": "A market position already uses this key."})
@@ -119,6 +144,11 @@ class ContractInput(BaseModel):
     delivery_end: datetime | None = None
     delivery_location: str | None = Field(default=None, max_length=240)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("position_id", "contract_code", "quantity_unit")
+    @classmethod
+    def validate_required_text(cls, value: str, info) -> str:
+        return _clean_required(value, info.field_name)
 
     @field_validator("currency")
     @classmethod
@@ -165,6 +195,11 @@ class ObservationInput(BaseModel):
     quality: dict[str, Any] = Field(default_factory=dict)
     licensing: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("evidence_id", "observation_type", "provider", "source_name")
+    @classmethod
+    def validate_required_text(cls, value: str, info) -> str:
+        return _clean_required(value, info.field_name)
 
     @field_validator("source_status")
     @classmethod
