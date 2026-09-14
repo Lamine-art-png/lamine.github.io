@@ -8,29 +8,60 @@ fallback rather than shown to a customer.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.services.model_router import ModelRouter
 
-PROMPT_VERSION = "market-intelligence-grounded-2026.09.1"
+PROMPT_VERSION = "market-intelligence-grounded-2026.09.2"
+_TEXT_NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?(?:\d[\d,]*)(?:\.\d+)?")
 
 
 def _canonical_number(value: Any) -> Decimal | None:
     try:
-        number = Decimal(str(value))
+        number = Decimal(str(value).replace(",", ""))
     except (InvalidOperation, TypeError, ValueError):
         return None
     return number.normalize() if number.is_finite() else None
 
 
+def _text_numbers(value: Any) -> list[Decimal]:
+    text = str(value or "")
+    numbers: list[Decimal] = []
+    for match in _TEXT_NUMBER_RE.finditer(text):
+        parsed = _canonical_number(match.group(0))
+        if parsed is not None:
+            numbers.append(parsed)
+    return numbers
+
+
 def validate_numeric_grounding(payload: dict[str, Any], evidence: dict[str, str]) -> list[str]:
-    """Return validation errors for unsupported structured numeric claims."""
+    """Return validation errors for unsupported or hidden numeric claims.
+
+    The structured ``numeric_claims`` list is not trusted by itself. Numbers in
+    customer-visible summary/title/explanation/limitations must also correspond
+    to a validated structured claim. This prevents a model from putting an
+    invented number in prose while leaving ``numeric_claims`` empty.
+    """
     errors: list[str] = []
-    for insight in payload.get("insights") or []:
+    global_claim_numbers: set[Decimal] = set()
+
+    for insight_index, insight in enumerate(payload.get("insights") or []):
         if not isinstance(insight, dict):
             errors.append("insight_not_object")
             continue
+
+        declared_evidence_ids = {
+            str(item or "")
+            for item in (insight.get("evidence_ids") or [])
+            if str(item or "")
+        }
+        for evidence_id in declared_evidence_ids:
+            if evidence_id not in evidence:
+                errors.append(f"unsupported_evidence:{evidence_id}")
+
+        insight_claim_numbers: set[Decimal] = set()
         for claim in insight.get("numeric_claims") or []:
             if not isinstance(claim, dict):
                 errors.append("numeric_claim_not_object")
@@ -39,32 +70,89 @@ def validate_numeric_grounding(payload: dict[str, Any], evidence: dict[str, str]
             if evidence_id not in evidence:
                 errors.append(f"unsupported_evidence:{evidence_id}")
                 continue
+            if evidence_id not in declared_evidence_ids:
+                errors.append(f"numeric_claim_missing_evidence_id:{evidence_id}")
             expected = _canonical_number(evidence[evidence_id])
             actual = _canonical_number(claim.get("value"))
             if expected is None or actual is None or expected != actual:
                 errors.append(f"numeric_mismatch:{evidence_id}")
-    return errors
+                continue
+            insight_claim_numbers.add(actual)
+            global_claim_numbers.add(actual)
+
+        visible_text = " ".join(
+            str(insight.get(key) or "")
+            for key in ("title", "explanation")
+        )
+        for number in _text_numbers(visible_text):
+            if number not in insight_claim_numbers:
+                errors.append(f"unstructured_numeric_claim:insight_{insight_index}:{number}")
+
+    top_level_text = " ".join(
+        [str(payload.get("summary") or "")]
+        + [str(item or "") for item in (payload.get("limitations") or [])]
+    )
+    for number in _text_numbers(top_level_text):
+        if number not in global_claim_numbers:
+            errors.append(f"unstructured_numeric_claim:summary:{number}")
+
+    # Stable ordering and de-duplication keeps audit traces compact.
+    return list(dict.fromkeys(errors))
 
 
-def deterministic_brief(position: dict[str, Any], *, question: str | None = None) -> dict[str, Any]:
+def deterministic_brief(
+    position: dict[str, Any],
+    *,
+    question: str | None = None,
+    language: str = "en",
+) -> dict[str, Any]:
     exposed = position.get("exposed_percent")
     margin = position.get("projected_margin_percent")
     warnings = list(position.get("warnings") or [])
+    lang = str(language or "en").strip().lower().split("-")[0]
+    templates = {
+        "en": {
+            "exposed": "{value}% of expected production remains commercially exposed.",
+            "margin": "Projected margin is {value}% under the current structured assumptions.",
+            "warning": "Data or position warnings require review before relying on projected margin.",
+            "missing": "The commercial position is available, but more structured market or cost data is required for a complete margin view.",
+        },
+        "fr": {
+            "exposed": "{value}% de la production attendue reste exposée commercialement.",
+            "margin": "La marge projetée est de {value}% selon les hypothèses structurées actuelles.",
+            "warning": "Les alertes de données ou de position doivent être examinées avant de s'appuyer sur la marge projetée.",
+            "missing": "La position commerciale est disponible, mais des données de marché ou de coûts plus structurées sont nécessaires pour une vue complète de la marge.",
+        },
+        "es": {
+            "exposed": "El {value}% de la producción esperada sigue expuesta comercialmente.",
+            "margin": "El margen proyectado es del {value}% con los supuestos estructurados actuales.",
+            "warning": "Las alertas de datos o de posición deben revisarse antes de confiar en el margen proyectado.",
+            "missing": "La posición comercial está disponible, pero se necesitan más datos estructurados de mercado o costes para completar la visión del margen.",
+        },
+        "pt": {
+            "exposed": "{value}% da produção esperada permanece comercialmente exposta.",
+            "margin": "A margem projetada é de {value}% sob as premissas estruturadas atuais.",
+            "warning": "Alertas de dados ou de posição precisam ser revisados antes de confiar na margem projetada.",
+            "missing": "A posição comercial está disponível, mas são necessários mais dados estruturados de mercado ou custos para uma visão completa da margem.",
+        },
+    }
+    copy = templates.get(lang, templates["en"])
     lines: list[str] = []
     if exposed is not None:
-        lines.append(f"{exposed}% of expected production remains commercially exposed.")
+        lines.append(copy["exposed"].format(value=exposed))
     if margin is not None:
-        lines.append(f"Projected margin is {margin}% under the current structured assumptions.")
+        lines.append(copy["margin"].format(value=margin))
     if warnings:
-        lines.append("Data or position warnings require review before relying on projected margin.")
+        lines.append(copy["warning"])
     if not lines:
-        lines.append("The commercial position is available, but more structured market or cost data is required for a complete margin view.")
+        lines.append(copy["missing"])
     return {
         "status": "deterministic",
         "prompt_version": PROMPT_VERSION,
         "summary": " ".join(lines),
         "insights": [],
         "question": question,
+        "response_language": lang,
         "model_trace": {"provider": "deterministic", "model": None, "grounded": True},
     }
 
@@ -78,7 +166,7 @@ async def generate_market_brief(
 ) -> dict[str, Any]:
     router = ModelRouter()
     if router.mode() == "offline":
-        return deterministic_brief(position, question=question)
+        return deterministic_brief(position, question=question, language=language)
 
     facts = {
         "position": position,
@@ -89,8 +177,10 @@ async def generate_market_brief(
     system = (
         "You are the AGRO-AI Market Intelligence synthesis layer. Explain only the supplied structured facts. "
         "Never invent or calculate financial numbers. Never describe a scenario as a forecast. Never give a direct instruction to buy, sell, "
-        "short, or enter a specific derivatives position. Every numeric claim must copy an evidence value exactly and include its evidence_id. "
-        "If evidence is incomplete, say so. Return concise enterprise decision-support language."
+        "short, or enter a specific derivatives position. Every numeric claim must copy an evidence value exactly, include its evidence_id in "
+        "numeric_claims, and include that same id in evidence_ids. Do not put any number in summary, title, explanation, or limitations unless it "
+        "is represented by a numeric_claim. Respond in FACTS.response_language. If evidence is incomplete, say so. Return concise enterprise "
+        "decision-support language."
     )
     schema = {
         "type": "json_schema",
@@ -149,18 +239,18 @@ async def generate_market_brief(
         max_model_attempts=2,
     )
     if result.status != "ok" or not str(result.content or "").strip():
-        fallback = deterministic_brief(position, question=question)
+        fallback = deterministic_brief(position, question=question, language=language)
         fallback["model_trace"]["fallback_reason"] = result.error or result.status
         return fallback
     try:
         payload = json.loads(result.content)
     except (TypeError, ValueError, json.JSONDecodeError):
-        fallback = deterministic_brief(position, question=question)
+        fallback = deterministic_brief(position, question=question, language=language)
         fallback["model_trace"]["fallback_reason"] = "invalid_structured_output"
         return fallback
     errors = validate_numeric_grounding(payload, evidence)
     if errors:
-        fallback = deterministic_brief(position, question=question)
+        fallback = deterministic_brief(position, question=question, language=language)
         fallback["model_trace"]["fallback_reason"] = "numeric_grounding_failed"
         fallback["model_trace"]["validation_errors"] = errors[:8]
         return fallback
@@ -169,6 +259,7 @@ async def generate_market_brief(
         "prompt_version": PROMPT_VERSION,
         **payload,
         "question": question,
+        "response_language": str(language or "en")[:16],
         "model_trace": {
             "provider": result.provider,
             "model": result.model or selection.model,
