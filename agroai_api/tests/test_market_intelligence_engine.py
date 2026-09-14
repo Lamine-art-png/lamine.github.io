@@ -130,12 +130,52 @@ def test_specialty_crop_does_not_require_futures_market():
 
 def test_ai_numeric_claims_must_reference_exact_structured_evidence():
     evidence = {"projected_margin": "82000.00"}
-    valid = {"insights": [{"numeric_claims": [{"evidence_id": "projected_margin", "value": "82000.00"}]}]}
-    invalid = {"insights": [{"numeric_claims": [{"evidence_id": "projected_margin", "value": "90000"}]}]}
-    invented = {"insights": [{"numeric_claims": [{"evidence_id": "invented", "value": "10"}]}]}
+    valid = {
+        "summary": "Projected margin is 82,000.",
+        "insights": [{
+            "title": "Margin",
+            "explanation": "Projected margin is 82000.00.",
+            "evidence_ids": ["projected_margin"],
+            "numeric_claims": [{"evidence_id": "projected_margin", "value": "82000.00"}],
+        }],
+        "limitations": [],
+    }
+    invalid = {
+        "summary": "Projected margin is 90,000.",
+        "insights": [{
+            "title": "Margin",
+            "explanation": "Projected margin is 90000.",
+            "evidence_ids": ["projected_margin"],
+            "numeric_claims": [{"evidence_id": "projected_margin", "value": "90000"}],
+        }],
+    }
+    invented = {
+        "insights": [{
+            "title": "Invented",
+            "explanation": "Value is 10.",
+            "evidence_ids": ["invented"],
+            "numeric_claims": [{"evidence_id": "invented", "value": "10"}],
+        }],
+    }
     assert validate_numeric_grounding(valid, evidence) == []
     assert validate_numeric_grounding(invalid, evidence)
     assert validate_numeric_grounding(invented, evidence)
+
+
+def test_ai_prose_cannot_hide_an_unstructured_numeric_claim():
+    evidence = {"projected_margin": "82000.00"}
+    payload = {
+        "summary": "Projected margin is 95000.",
+        "insights": [{
+            "title": "Margin",
+            "explanation": "The margin is materially exposed.",
+            "evidence_ids": ["projected_margin"],
+            "numeric_claims": [{"evidence_id": "projected_margin", "value": "82000.00"}],
+        }],
+        "limitations": [],
+    }
+    errors = validate_numeric_grounding(payload, evidence)
+    assert any(error.startswith("unstructured_numeric_claim:summary") for error in errors)
 
 
 def test_live_provider_observation_requires_verified_upstream_provenance():
