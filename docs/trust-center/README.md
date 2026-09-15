@@ -1,96 +1,99 @@
 # AGRO-AI Trust & Data Governance Program
 
-**Status:** DRAFT FOR EXECUTIVE, ENGINEERING, SECURITY, AND COUNSEL REVIEW  
-**Created:** 2026-09-14  
-**Publication gate:** Do not publish or merge public-facing claims until every claim is mapped to an implemented control and evidence.
+**Program version:** 2026-09  
+**Public Trust Center:** `https://agroai-pilot.com/trust/`  
+**Publication architecture:** isolated Cloudflare route `agroai-pilot.com/trust*`
 
-## Why this exists
+## Purpose
 
-AGRO-AI processes and connects data that can be commercially sensitive even when it is not legally defined as personal data: field boundaries, agronomic records, equipment telemetry, precise geolocation, imagery, irrigation data, operational records, farm financial or management data, files, connector data, and model inputs and outputs.
+AGRO-AI handles agricultural operational data that can be commercially sensitive even when it is not legally classified as personal information. The Trust & Data Governance Program therefore treats privacy, farm-data governance, model data use, security, customer control, subprocessors, retention, portability, deletion, provenance, and enterprise procurement as one coordinated trust system.
 
-A generic privacy policy is therefore insufficient. Enterprise trust requires a system covering personal data, customer operational data, AI use, third parties, security, retention, portability, deletion, incident response, and evidence.
+The program applies across the AGRO-AI Enterprise Portal, Field Intelligence, Platform API, customer-authorized connectors, support workflows, and material infrastructure or model-provider paths.
 
-This program is designed around five layers:
+## Public Trust Center surfaces
 
-1. **Public commitments** — plain-language promises customers can understand.
-2. **Contractual protections** — terms, DPA, security exhibit, and enterprise-specific commitments.
-3. **Internal governance** — ownership, data classification, approvals, retention, vendor review, and incident handling.
-4. **Technical controls** — tenant isolation, authorization, encryption, logging, scoped integrations, model boundaries, and deletion/export workflows.
-5. **Evidence** — a record proving each public claim is implemented and continuously reviewed.
+The public website provides the following versioned pages:
 
-## Proposed public trust stack
+- `/trust/` — Trust Center overview
+- `/trust/privacy/` — company Privacy Notice
+- `/trust/data-governance/` — public Data Governance Standard
+- `/trust/ai-data-use/` — AI & Model Data Use Policy
+- `/trust/security/` — Security Program overview
+- `/trust/subprocessors/` — Subprocessors & Integrations transparency
+- `/trust/farm-data-covenant/` — Farm Data Trust Covenant
 
-- **AGRO-AI Farm Data Trust Covenant** — agriculture-specific customer-data commitments.
-- **Privacy Notice v2** — personal-data disclosures for websites, accounts, support, billing, security, and business operations.
-- **AI & Model Data Use Policy** — explicit rules for inference, model training, cross-customer use, human review, provenance, and derived data.
-- **Data Processing Addendum** — processor/service-provider terms for covered personal data.
-- **Subprocessor Registry** — vendor, purpose, data categories, processing location, and change history.
-- **Security & Trust Center** — implemented controls, assurance status, incident reporting, documents, and customer controls.
-- **Retention & Deletion Standard** — enforceable lifecycle rules tied to real systems.
-- **Enterprise Trust Pack** — procurement-ready answers and evidence.
+The pages are served through a dedicated Worker whose only route is `agroai-pilot.com/trust*`. The Worker does not own or intercept careers, demo booking, newsroom, Platform API, Enterprise Portal, machine API, integrations, or other marketing routes.
 
-## Agriculture-specific design principles
+## Core design principles
 
-AGRO-AI should govern both **Personal Data** and **Customer Operational Data**. The latter includes data that can reveal how a farm operates even where no individual is identifiable.
+1. **Customer control.** Customer Data is governed by customer authorization and the applicable agreement rather than treated as unrestricted AGRO-AI property.
+2. **Operational data is protected even when it is not personal data.** Precise field geometry, machine telemetry, irrigation/controller records, yield, financial records, non-public imagery, and equivalent data are classified as Restricted Operational Data.
+3. **Purpose limitation.** A connection or upload authorizes the requested service, not unlimited secondary use.
+4. **Tenant boundaries before intelligence.** Organization/workspace authorization is enforced before retrieval and context assembly.
+5. **No hidden shared-model training.** Customer Data is not used to train shared AGRO-AI or third-party foundation models for unrelated customers unless expressly authorized through an appropriate agreement or control.
+6. **Secrets stay outside model context.** Connector credentials, private keys, API keys, and equivalent secrets are not ordinary model inputs.
+7. **Human control for consequential workflows.** Recommendations do not automatically become permission for physical action, compliance submission, financial action, or other high-consequence execution.
+8. **Portability and deletion are lifecycle controls.** Export/return and deletion behavior must account for active stores, derived indexes, logs, media, backups, processors, and lawful retention.
+9. **Providers are governed.** Infrastructure vendors, subprocessors, and customer-authorized integrations are distinguished and reviewed according to role and risk.
+10. **Trust claims require evidence.** AGRO-AI does not use certifications, zero-retention claims, residency claims, or deletion guarantees as marketing language without supporting evidence and scope.
 
-Recommended classification:
+## Internal governance artifacts
 
-| Class | Examples | Default handling |
-| --- | --- | --- |
-| Public | Published articles, public product docs | Normal public controls |
-| Internal | Internal planning, non-sensitive operational material | Workforce-only access |
-| Confidential | Customer business records, support content, contracts | Need-to-know, logged access |
-| Restricted Operational Data | Field boundaries, precise location, yield, financial/commercial data, equipment telemetry, irrigation/controller data, imagery, credentials, sensitive agronomic records | Tenant-scoped access, strict purpose limitation, least privilege, heightened logging and vendor review |
+This directory contains the operational source material behind the public pages:
 
-## Data lifecycle
+- `data-governance-standard.md`
+- `ai-model-data-use-policy.md`
+- `farm-data-trust-covenant.md`
+- `privacy-notice-v2-draft.md`
+- `trust-center-web-copy.md`
+- `implementation-plan.md`
 
-Every material data flow should be registered through this lifecycle:
+The internal documents are intentionally more conservative than marketing copy and identify areas requiring ongoing engineering, security, legal, or operational verification.
 
-**Collect → classify → authorize → store → retrieve → infer/derive → share/subprocess → retain → export/return → delete**
+## Living registers required by the program
 
-No new connector, subprocessor, model-training use, retention exception, or material data category should enter production without a registry entry and approval.
+AGRO-AI should maintain:
+
+- a Data Processing Register;
+- a Data Flow Map;
+- a Subprocessor & Vendor Register;
+- a Retention Schedule;
+- a Privileged Access Register;
+- an AI / Model Register;
+- a Trust Claims Register;
+- an Incident Register; and
+- a Rights / Customer Request Register.
 
 ## Trust Claims Register
 
-AGRO-AI should maintain a **Trust Claims Register** as the control against privacy/security theater. Every statement published in the Trust Center, sales material, DPA, security questionnaire, or enterprise contract must map to:
+The Trust Claims Register is the control that prevents website copy, sales responses, legal documents, procurement questionnaires, and engineering reality from drifting apart.
 
-- the exact claim;
-- scope and exceptions;
-- technical or organizational control;
+A material claim should record:
+
+- exact public or contractual language;
+- product and data scope;
+- known exceptions;
+- implemented control;
 - evidence location;
-- control owner;
-- last-tested date;
-- next review date;
-- publication status.
+- responsible owner;
+- last test/review;
+- next review; and
+- approval status.
 
-If a claim cannot be evidenced, it does not get published.
+If a claim can no longer be supported, AGRO-AI should correct the claim rather than quietly leaving it in place.
 
-## Launch gates
+## Assurance posture
 
-Before public publication, verify at minimum:
+Frameworks such as NIST, SOC 2 criteria, ISO/IEC 27001, and privacy-management standards may guide control design and readiness. AGRO-AI must not represent that it is certified, audited, or fully compliant merely because controls are mapped to a framework.
 
-- production infrastructure and storage locations;
-- encryption in transit and at rest by system;
-- tenant-isolation controls and authorization boundaries;
-- complete subprocessor/vendor inventory and executed agreements;
-- actual retention periods for databases, logs, object storage, backups, support records, analytics, billing, and deleted tenants;
-- export and deletion behavior, including backups and legal holds;
-- model providers, inference retention settings, and whether any customer data can be used for provider or AGRO-AI model training;
-- website cookies/analytics/advertising technologies and U.S. state privacy implications;
-- incident-response process and customer notification channel;
-- international-transfer mechanisms for relevant personal data;
-- privacy request intake, identity verification, and response workflow;
-- exact assurance status (no unearned SOC 2, ISO, GDPR, LGPD, or similar claims).
+The recommended maturity sequence remains:
 
-## Benchmark alignment
+1. operational evidence baseline;
+2. risk-driven independent security testing;
+3. SOC 2 readiness where customer demand justifies it;
+4. formal SOC 2 audit when the control environment is ready;
+5. additional ISO/privacy assurance when business requirements justify it.
 
-This program is designed to be compatible with the direction of:
+## Change control
 
-- Ag Data Transparent Core Principles (updated 2024), including explicit transparency around AI/model training, aggregation, portability, data partners, retention, deletion, and farmer control;
-- NIST Cybersecurity Framework 2.0;
-- NIST AI Risk Management Framework;
-- ISO/IEC 27001:2022 security-management concepts;
-- ISO/IEC 27701:2025 privacy-information-management concepts;
-- applicable privacy and data laws, including U.S. state privacy laws, GDPR where applicable, Brazil's LGPD where applicable, and the EU Data Act where applicable to connected-product/data-access scenarios.
-
-This document is a governance and product-design program, not a certification statement or legal opinion.
+Material trust-policy changes should update the public version/date and the internal registers that support the claim. New model providers, sensitive data categories, countries, high-risk automated decisioning, physical write-back, or material secondary uses should receive a documented data/privacy/security impact review before production activation.
