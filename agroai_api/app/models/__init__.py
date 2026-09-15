@@ -74,6 +74,10 @@ from app.models.platform_product import (
     PlatformSupportMessage, PlatformSupportRequest, PlatformTermsAcceptance,
     PlatformTermsDocument,
 )
+from app.models.market_intelligence import (
+    MarketPosition, MarketContractPosition, MarketObservation,
+    MarketScenario, MarketDecisionJournalEntry, MarketIntelligenceInsight,
+)
 
 __all__ = [
     "Tenant", "Client", "Block", "Telemetry", "Event", "Recommendation",
@@ -116,4 +120,6 @@ __all__ = [
     "PlatformStatusIncidentUpdate", "PlatformStripeEvent", "PlatformStripeMeterOutbox",
     "PlatformSupportMessage", "PlatformSupportRequest", "PlatformTermsAcceptance",
     "PlatformTermsDocument",
+    "MarketPosition", "MarketContractPosition", "MarketObservation", "MarketScenario",
+    "MarketDecisionJournalEntry", "MarketIntelligenceInsight",
 ]

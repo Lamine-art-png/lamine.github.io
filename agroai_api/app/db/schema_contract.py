@@ -5,10 +5,36 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "032_repair_onboarding_state"
+HEAD_ALEMBIC_REVISION = "033_market_intelligence"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
+    "market_positions": {
+        "id", "organization_id", "workspace_id", "position_key", "commodity", "season",
+        "country_code", "market_structure", "local_currency", "reporting_currency",
+        "quantity_unit", "expected_production", "inventory_quantity", "status",
+    },
+    "market_contract_positions": {
+        "id", "organization_id", "position_id", "contract_code", "quantity",
+        "quantity_unit", "price", "currency", "fx_rate_to_reporting", "status",
+    },
+    "market_observations": {
+        "id", "organization_id", "position_id", "evidence_id", "observation_type",
+        "provider", "source_name", "source_status", "value", "unit", "currency",
+        "observed_at", "retrieved_at", "quality_json", "licensing_json",
+    },
+    "market_scenarios": {
+        "id", "organization_id", "position_id", "created_by_user_id", "name",
+        "assumptions_json", "baseline_json", "result_json", "calculation_version",
+    },
+    "market_decision_journal": {
+        "id", "organization_id", "position_id", "scenario_id", "created_by_user_id",
+        "decision", "rationale", "assumptions_json", "outcome_json",
+    },
+    "market_intelligence_insights": {
+        "id", "organization_id", "position_id", "kind", "title", "summary",
+        "importance", "evidence_json", "confidence_json", "model_trace_json",
+    },
     "platform_cli_device_authorizations": {"device_code_hash", "user_code", "status", "expires_at", "consumed_at"},
     "field_states": {
         "id", "organization_id", "workspace_id", "field_id", "block_id", "scope_key",
