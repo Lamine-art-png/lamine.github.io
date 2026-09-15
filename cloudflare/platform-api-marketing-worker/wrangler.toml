@@ -1,5 +1,5 @@
 name = "agroai-platform-api-marketing"
-main = "src/emergency.ts"
+main = "src/trust-wrapper.ts"
 compatibility_date = "2026-07-23"
 workers_dev = false
 
@@ -27,6 +27,14 @@ zone_name = "agroai-pilot.com"
 
 [[routes]]
 pattern = "agroai-pilot.com/contact/*"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/trust"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/trust/*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
