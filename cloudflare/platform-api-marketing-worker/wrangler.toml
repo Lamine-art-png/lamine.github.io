@@ -38,6 +38,30 @@ pattern = "agroai-pilot.com/trust/*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
+pattern = "agroai-pilot.com/terms-of-service"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/terms-of-service/*"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/privacy-policy"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/privacy-policy/*"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/pilot-agreement"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/pilot-agreement/*"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
 pattern = "agroai-pilot.com/platform-api"
 zone_name = "agroai-pilot.com"
 
