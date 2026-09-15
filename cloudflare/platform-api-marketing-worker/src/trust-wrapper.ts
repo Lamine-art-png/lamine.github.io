@@ -11,7 +11,7 @@ interface Env {
 const DEFAULT_MARKETING_ORIGIN = "https://agroai-343.pages.dev";
 const LEGAL_ROUTES = new Set(["/terms-of-service", "/privacy-policy", "/pilot-agreement"]);
 const INTEGRATION_TAGS = '<link rel="stylesheet" href="/trust/legal-integration.css"><script src="/trust/legal-integration.js" defer></script>';
-const MAIN_SITE_LOGO = "/assets/Copy%20of%20AGRO-AI%20(1)_1763408301972-IcCnFklR.png";
+const MAIN_SITE_LOGO = "/platform-api/assets/logo.svg";
 
 const TRUST_ROUTES: Record<string, string> = {
   "/trust": "/trust/index.html",
