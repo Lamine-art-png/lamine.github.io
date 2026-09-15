@@ -1,3 +1,4 @@
+// AGRO-AI Trust Center · isolated /trust* production surface · v2026-09
 const RAW_BASE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/trust";
 
 const ROUTES: Record<string, string> = {
