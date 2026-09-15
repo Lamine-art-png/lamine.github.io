@@ -1,0 +1,8 @@
+name = "agroai-trust-center"
+main = "src/index.ts"
+compatibility_date = "2026-09-14"
+workers_dev = false
+
+routes = [
+  { pattern = "agroai-pilot.com/trust*", zone_name = "agroai-pilot.com" }
+]
