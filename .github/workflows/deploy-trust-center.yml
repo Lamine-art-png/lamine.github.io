@@ -1,0 +1,88 @@
+name: Deploy AGRO-AI Trust Center
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "client/public/trust/**"
+      - "cloudflare/trust-center-worker/**"
+      - ".github/workflows/deploy-trust-center.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-trust-center-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate isolated trust surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s client/public/trust/index.html
+          test -s client/public/trust/privacy/index.html
+          test -s client/public/trust/data-governance/index.html
+          test -s client/public/trust/ai-data-use/index.html
+          test -s client/public/trust/security/index.html
+          test -s client/public/trust/subprocessors/index.html
+          test -s client/public/trust/farm-data-covenant/index.html
+          test -s cloudflare/trust-center-worker/src/index.ts
+          test -s cloudflare/trust-center-worker/wrangler.toml
+          grep -F 'pattern = "agroai-pilot.com/trust*"' cloudflare/trust-center-worker/wrangler.toml >/dev/null
+          ! grep -E 'careers|book-a-demo\*|news\*|platform-api\*|app\.agroai-pilot\.com|api\.agroai-pilot\.com/v1' cloudflare/trust-center-worker/wrangler.toml
+          grep -F '"/trust/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/privacy/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/data-governance/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/ai-data-use/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/security/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/subprocessors/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+          grep -F '"/trust/farm-data-covenant/"' cloudflare/trust-center-worker/src/index.ts >/dev/null
+
+      - name: Cloudflare dry run
+        run: npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/trust-center-worker/wrangler.toml
+
+      - name: Deploy exact Trust Center route
+        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/trust-center-worker/wrangler.toml
+
+      - name: Verify live Trust Center
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            "/trust/"
+            "/trust/privacy/"
+            "/trust/data-governance/"
+            "/trust/ai-data-use/"
+            "/trust/security/"
+            "/trust/subprocessors/"
+            "/trust/farm-data-covenant/"
+          )
+          for path in "${paths[@]}"; do
+            ok=0
+            for attempt in $(seq 1 24); do
+              code="$(curl -sS -L -o /tmp/trust.html -w '%{http_code}' --connect-timeout 5 --max-time 25 "https://agroai-pilot.com${path}?verify=${GITHUB_SHA}-${attempt}" || true)"
+              if [ "$code" = "200" ] && grep -F '<title>' /tmp/trust.html >/dev/null; then
+                ok=1
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ok" != "1" ]; then
+              echo "Trust Center verification failed for ${path}"
+              exit 1
+            fi
+          done
