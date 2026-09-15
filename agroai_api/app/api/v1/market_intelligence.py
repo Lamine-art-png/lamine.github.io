@@ -7,6 +7,7 @@ request bodies never select an organization.
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -136,14 +137,56 @@ def _observations(db: Session, org_id: str, position_id: str) -> list[MarketObse
     )
 
 
-def _position_payload(db: Session, org_id: str, row: MarketPosition) -> dict[str, Any]:
-    computation = compute_position(row, _contracts(db, org_id, row.id))
-    observations = _observations(db, org_id, row.id)
+def _position_payload(
+    db: Session,
+    org_id: str,
+    row: MarketPosition,
+    *,
+    contracts: list[MarketContractPosition] | None = None,
+    observations: list[MarketObservation] | None = None,
+) -> dict[str, Any]:
+    computation = compute_position(row, _contracts(db, org_id, row.id) if contracts is None else contracts)
+    observations = _observations(db, org_id, row.id) if observations is None else observations
     return {
         **computation.payload,
         "data_health": data_health(observations),
         "evidence": computation.evidence,
     }
+
+
+def _position_payloads(db: Session, org_id: str, rows: list[MarketPosition]) -> list[dict[str, Any]]:
+    """Load portfolio dependencies in two queries rather than two queries per position."""
+    if not rows:
+        return []
+    position_ids = [row.id for row in rows]
+    contracts_by_position: dict[str, list[MarketContractPosition]] = defaultdict(list)
+    for contract in (
+        db.query(MarketContractPosition)
+        .filter(MarketContractPosition.organization_id == org_id, MarketContractPosition.position_id.in_(position_ids))
+        .order_by(MarketContractPosition.created_at.asc())
+        .all()
+    ):
+        contracts_by_position[contract.position_id].append(contract)
+    observations_by_position: dict[str, list[MarketObservation]] = defaultdict(list)
+    for observation in (
+        db.query(MarketObservation)
+        .filter(MarketObservation.organization_id == org_id, MarketObservation.position_id.in_(position_ids))
+        .order_by(MarketObservation.observed_at.desc())
+        .all()
+    ):
+        bucket = observations_by_position[observation.position_id]
+        if len(bucket) < 100:
+            bucket.append(observation)
+    return [
+        _position_payload(
+            db,
+            org_id,
+            row,
+            contracts=contracts_by_position[row.id],
+            observations=observations_by_position[row.id],
+        )
+        for row in rows
+    ]
 
 
 def _contract_payload(row: MarketContractPosition) -> dict[str, Any]:
@@ -166,6 +209,8 @@ def _contract_payload(row: MarketContractPosition) -> dict[str, Any]:
 
 
 def _observation_payload(row: MarketObservation) -> dict[str, Any]:
+    licensing = row.licensing_json or {}
+    display_allowed = licensing.get("display_allowed") is not False
     return {
         "id": row.id,
         "position_id": row.position_id,
@@ -174,13 +219,15 @@ def _observation_payload(row: MarketObservation) -> dict[str, Any]:
         "provider": row.provider,
         "source_name": row.source_name,
         "source_status": row.source_status,
-        "value": str(row.value) if row.value is not None else None,
+        "value": str(row.value) if display_allowed and row.value is not None else None,
         "unit": row.unit,
         "currency": row.currency,
         "observed_at": row.observed_at.isoformat() + "Z" if row.observed_at else None,
         "retrieved_at": row.retrieved_at.isoformat() + "Z" if row.retrieved_at else None,
         "delay_minutes": str(row.delay_minutes) if row.delay_minutes is not None else None,
         "quality": row.quality_json or {},
+        "licensing": licensing,
+        "redacted": not display_allowed,
     }
 
 
@@ -274,7 +321,7 @@ def overview(
         .order_by(MarketPosition.country_code.asc(), MarketPosition.commodity.asc(), MarketPosition.season.asc())
         .all()
     )
-    positions = [_position_payload(db, org_id, row) for row in rows]
+    positions = _position_payloads(db, org_id, rows)
     by_currency: dict[str, dict[str, Any]] = {}
     for item in positions:
         currency = str(item.get("reporting_currency") or "UNKNOWN")
@@ -299,13 +346,14 @@ def overview(
     portfolio = []
     for currency in sorted(by_currency):
         bucket = by_currency[currency]
+        partial = bucket["complete_positions"] != bucket["total_positions"]
         portfolio.append({
             **{key: value for key, value in bucket.items() if not isinstance(value, Decimal)},
-            "projected_revenue": format(bucket["projected_revenue"], "f"),
-            "projected_margin": format(bucket["projected_margin"], "f"),
+            "projected_revenue": None if partial else format(bucket["projected_revenue"], "f"),
+            "projected_margin": None if partial else format(bucket["projected_margin"], "f"),
             "locked_revenue": format(bucket["locked_revenue"], "f"),
             "exposed_revenue": format(bucket["exposed_revenue"], "f"),
-            "partial": bucket["complete_positions"] != bucket["total_positions"],
+            "partial": partial,
         })
     attention = [finding for item in positions for finding in _attention(item)]
     importance_order = {"high": 0, "medium": 1, "low": 2}
@@ -343,7 +391,7 @@ def list_positions(
         .order_by(MarketPosition.updated_at.desc())
         .all()
     )
-    return {"positions": [_position_payload(db, org_id, row) for row in rows]}
+    return {"positions": _position_payloads(db, org_id, rows)}
 
 
 @router.get("/positions/{position_id}")

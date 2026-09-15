@@ -106,8 +106,8 @@ type Overview = {
   position_count: number;
   portfolio_by_reporting_currency: Array<{
     currency: string;
-    projected_revenue: string;
-    projected_margin: string;
+    projected_revenue: string | null;
+    projected_margin: string | null;
     locked_revenue: string;
     exposed_revenue: string;
     complete_positions: number;
@@ -142,11 +142,16 @@ function numberValue(value: string | number | null | undefined): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
+function numberLocale(locale: string): string | undefined {
+  const normalized = String(locale || "").trim().toLowerCase();
+  return !normalized || normalized === "auto" ? undefined : locale;
+}
+
 function money(value: string | null | undefined, currency: string, locale: string) {
   const number = numberValue(value);
   if (number === null) return "—";
   try {
-    return new Intl.NumberFormat(locale || "en", {
+    return new Intl.NumberFormat(numberLocale(locale), {
       style: "currency",
       currency,
       notation: Math.abs(number) >= 1_000_000 ? "compact" : "standard",
@@ -160,7 +165,7 @@ function money(value: string | null | undefined, currency: string, locale: strin
 function quantity(value: string | null | undefined, unit: string, locale: string) {
   const number = numberValue(value);
   if (number === null) return "—";
-  return `${new Intl.NumberFormat(locale || "en", { maximumFractionDigits: 2, notation: Math.abs(number) >= 1_000_000 ? "compact" : "standard" }).format(number)} ${unit}`;
+  return `${new Intl.NumberFormat(numberLocale(locale), { maximumFractionDigits: 2, notation: Math.abs(number) >= 1_000_000 ? "compact" : "standard" }).format(number)} ${unit}`;
 }
 
 function pct(value: string | null | undefined) {
@@ -402,7 +407,7 @@ export function MarketIntelligence() {
               const badge = sourceBadge(source.status);
               return <div key={source.evidence_id || `${source.provider}-${source.source_name}`} className="rounded-2xl border p-4" style={{ borderColor: "#E1E5DD", background: "#FCFBF6" }}>
                 <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold" style={{ color: "#10231B" }}>{source.source_name || source.provider}</div><div className="mt-1 text-xs" style={{ color: "#7B877F" }}>{source.provider}</div></div><span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={badge.style}>{badge.state}</span></div>
-                {source.observed_at ? <div className="mt-3 text-[11px]" style={{ color: "#8B948E" }}>{new Date(source.observed_at).toLocaleString(locale || undefined)}</div> : null}
+                {source.observed_at ? <div className="mt-3 text-[11px]" style={{ color: "#8B948E" }}>{new Date(source.observed_at).toLocaleString(numberLocale(locale))}</div> : null}
               </div>;
             })}
           </div>

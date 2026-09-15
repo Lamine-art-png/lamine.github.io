@@ -23,6 +23,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  TrendingUp,
   UserCircle,
   Users,
   X,
@@ -117,6 +118,7 @@ export function MainLayout() {
   const canAskAgroAi = capabilityEnabled(entitlements, "intelligence.ask", !["free", "pilot"].includes(currentPlan));
   const canFieldIntelligence = capabilityEnabled(entitlements, "field_intelligence.capture", true);
   const canAssurance = capabilityEnabled(entitlements, "assurance.readiness", false);
+  const canMarketIntelligence = capabilityEnabled(entitlements, "market_intelligence.read", true);
   const currentPlanLabel = PLAN_LABELS[currentPlan] || "Free";
   const organizationWorkspaces = useMemo(
     () => currentOrganization?.id
@@ -140,6 +142,7 @@ export function MainLayout() {
 
   const intelligenceItems: NavItem[] = [
     { name: t("askAgroAi"), path: "/intelligence", icon: BrainCircuit, locked: !canAskAgroAi, upgradeTo: "professional" },
+    { name: tx("Market Intelligence"), path: "/market-intelligence", icon: TrendingUp, locked: !canMarketIntelligence, upgradeTo: "professional" },
     { name: t("readiness"), path: "/readiness", icon: Gauge },
     { name: t("exceptions"), path: "/exceptions", icon: AlertTriangle },
   ];

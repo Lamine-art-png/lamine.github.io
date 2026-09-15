@@ -16,6 +16,11 @@ from app.services.model_router import ModelRouter
 
 PROMPT_VERSION = "market-intelligence-grounded-2026.09.2"
 _TEXT_NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?(?:\d[\d,]*)(?:\.\d+)?")
+_DERIVATIVES_INSTRUCTION_RE = re.compile(
+    r"\b(?:buy|sell|short|long|enter|open|execute)\b.{0,80}\b(?:futures?|options?|swaps?|derivatives?)\b"
+    r"|\b(?:futures?|options?|swaps?|derivatives?)\b.{0,80}\b(?:buy|sell|short|long)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _canonical_number(value: Any) -> Decimal | None:
@@ -98,6 +103,20 @@ def validate_numeric_grounding(payload: dict[str, Any], evidence: dict[str, str]
 
     # Stable ordering and de-duplication keeps audit traces compact.
     return list(dict.fromkeys(errors))
+
+
+def validate_decision_support_policy(payload: dict[str, Any]) -> list[str]:
+    """Reject model output that crosses into personalized derivatives instructions."""
+    visible = " ".join(
+        [str(payload.get("summary") or "")]
+        + [str(item or "") for item in (payload.get("limitations") or [])]
+        + [
+            " ".join(str(insight.get(key) or "") for key in ("title", "explanation"))
+            for insight in (payload.get("insights") or [])
+            if isinstance(insight, dict)
+        ]
+    )
+    return ["personalized_derivatives_instruction"] if _DERIVATIVES_INSTRUCTION_RE.search(visible) else []
 
 
 def deterministic_brief(
@@ -248,10 +267,14 @@ async def generate_market_brief(
         fallback = deterministic_brief(position, question=question, language=language)
         fallback["model_trace"]["fallback_reason"] = "invalid_structured_output"
         return fallback
-    errors = validate_numeric_grounding(payload, evidence)
+    grounding_errors = validate_numeric_grounding(payload, evidence)
+    policy_errors = validate_decision_support_policy(payload)
+    errors = grounding_errors + policy_errors
     if errors:
         fallback = deterministic_brief(position, question=question, language=language)
-        fallback["model_trace"]["fallback_reason"] = "numeric_grounding_failed"
+        fallback["model_trace"]["fallback_reason"] = (
+            "decision_support_policy_failed" if policy_errors else "numeric_grounding_failed"
+        )
         fallback["model_trace"]["validation_errors"] = errors[:8]
         return fallback
     return {

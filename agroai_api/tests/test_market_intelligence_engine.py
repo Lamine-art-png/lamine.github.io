@@ -1,3 +1,5 @@
+import asyncio
+import json
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -10,7 +12,11 @@ from app.services.market_intelligence import (
     convert_quantity,
     scenario_position,
 )
-from app.services.market_intelligence_ai import validate_numeric_grounding
+from app.services.market_intelligence_ai import (
+    generate_market_brief,
+    validate_decision_support_policy,
+    validate_numeric_grounding,
+)
 
 
 def position(**overrides):
@@ -115,6 +121,39 @@ def test_zero_change_scenario_is_exact_invariant():
     assert result["delta"]["projected_revenue"] == "0.00"
 
 
+def test_fx_scenario_revalues_market_price_and_foreign_currency_contracts():
+    br_position = position(
+        commodity="soybeans",
+        quantity_unit="tonne",
+        reporting_currency="USD",
+        expected_production=Decimal("100"),
+        current_realizable_price=Decimal("2000"),
+        price_currency="BRL",
+        fx_rate_to_reporting=Decimal("0.20"),
+        production_cost_per_unit=Decimal("100"),
+        freight_per_unit=Decimal("0"),
+        storage_per_unit=Decimal("0"),
+    )
+    br_contract = contract(
+        quantity=Decimal("50"), quantity_unit="tonne", price=Decimal("1800"),
+        currency="BRL", fx_rate_to_reporting=Decimal("0.20"),
+    )
+    scenario = scenario_position(br_position, [br_contract], {"fx_pct": 10})
+    assert scenario["baseline"]["locked_revenue"] == "18000.00"
+    assert scenario["result"]["locked_revenue"] == "19800.00"
+    assert scenario["result"]["projected_revenue"] == "41800.00"
+
+
+def test_scenario_rejects_negative_costs_and_unreconciled_sell_now():
+    with pytest.raises(MarketCalculationError, match="cannot be negative"):
+        scenario_position(position(), [contract()], {"freight_per_unit_delta": -1})
+    foreign_contract = contract(currency="BRL", fx_rate_to_reporting=None)
+    with pytest.raises(MarketCalculationError, match="reconciled position"):
+        scenario_position(position(), [foreign_contract], {"sell_pct_now": 25})
+    with pytest.raises(MarketCalculationError, match="positive uncontracted production"):
+        scenario_position(position(expected_production=Decimal("0")), [], {"sell_pct_now": 25})
+
+
 def test_specialty_crop_does_not_require_futures_market():
     almonds = position(
         commodity="almonds", market_structure="physical", quantity_unit="pound",
@@ -176,6 +215,56 @@ def test_ai_prose_cannot_hide_an_unstructured_numeric_claim():
     }
     errors = validate_numeric_grounding(payload, evidence)
     assert any(error.startswith("unstructured_numeric_claim:summary") for error in errors)
+
+
+def test_ai_cannot_emit_personalized_derivatives_instruction():
+    unsafe = {
+        "summary": "Short December soybean futures now.",
+        "insights": [],
+        "limitations": [],
+    }
+    assert validate_decision_support_policy(unsafe) == ["personalized_derivatives_instruction"]
+    safe = {
+        "summary": "Review commercial exposure and compare educational hedge scenarios.",
+        "insights": [],
+        "limitations": [],
+    }
+    assert validate_decision_support_policy(safe) == []
+
+
+def test_all_model_outage_keeps_deterministic_brief_available(monkeypatch):
+    monkeypatch.setattr("app.services.market_intelligence_ai.ModelRouter.mode", lambda _self: "offline")
+    computed = compute_position(position(), [contract()])
+    result = asyncio.run(generate_market_brief(computed.payload, computed.evidence, question="What matters?"))
+    assert result["status"] == "deterministic"
+    assert result["model_trace"]["provider"] == "deterministic"
+    assert result["model_trace"]["grounded"] is True
+
+
+def test_model_derivatives_instruction_triggers_policy_fallback(monkeypatch):
+    unsafe = {
+        "summary": "Short December soybean futures now.",
+        "insights": [],
+        "confidence": "low",
+        "limitations": [],
+    }
+
+    class FakeRouter:
+        def mode(self):
+            return "online"
+
+        async def run(self, **_kwargs):
+            result = SimpleNamespace(
+                status="ok", content=json.dumps(unsafe), error=None, provider="fake", model="fake-model"
+            )
+            selection = SimpleNamespace(model="fake-model", profile="test")
+            return result, selection
+
+    monkeypatch.setattr("app.services.market_intelligence_ai.ModelRouter", FakeRouter)
+    computed = compute_position(position(), [contract()])
+    result = asyncio.run(generate_market_brief(computed.payload, computed.evidence))
+    assert result["status"] == "deterministic"
+    assert result["model_trace"]["fallback_reason"] == "decision_support_policy_failed"
 
 
 def test_live_provider_observation_requires_verified_upstream_provenance():

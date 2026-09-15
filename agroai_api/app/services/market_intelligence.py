@@ -6,6 +6,7 @@ FX, exposure and scenario transformations are fixed-precision and auditable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable
 
@@ -349,12 +350,36 @@ def scenario_position(position: Any, contracts: list[Any], assumptions: dict[str
         mutable["fx_rate_to_reporting"] = dec(mutable["fx_rate_to_reporting"]) * (ONE + fx_pct / Decimal("100"))
     if mutable["production_cost_per_unit"] is not None:
         mutable["production_cost_per_unit"] = dec(mutable["production_cost_per_unit"]) * (ONE + cost_pct / Decimal("100"))
-    mutable["freight_per_unit"] = max(ZERO, dec(mutable["freight_per_unit"], ZERO) + freight_delta)
-    mutable["storage_per_unit"] = max(ZERO, dec(mutable["storage_per_unit"], ZERO) + storage_delta)
+    mutable["freight_per_unit"] = dec(mutable["freight_per_unit"], ZERO) + freight_delta
+    mutable["storage_per_unit"] = dec(mutable["storage_per_unit"], ZERO) + storage_delta
+    if mutable["freight_per_unit"] < ZERO or mutable["storage_per_unit"] < ZERO:
+        raise MarketCalculationError("scenario freight and storage costs cannot be negative")
 
-    result = compute_position(mutable, contracts).payload
-    if sell_pct > ZERO and result.get("current_realizable_price") is not None and not result.get("over_contracted"):
+    scenario_contracts: list[dict[str, Any]] = []
+    for contract in contracts:
+        scenario_contract = {
+            key: _attr(contract, key)
+            for key in ("status", "quantity", "quantity_unit", "price", "currency", "fx_rate_to_reporting")
+        }
+        contract_currency = str(scenario_contract.get("currency") or "").upper()
+        if contract_currency != str(mutable["reporting_currency"] or "").upper() and scenario_contract["fx_rate_to_reporting"] is not None:
+            scenario_contract["fx_rate_to_reporting"] = dec(scenario_contract["fx_rate_to_reporting"]) * (
+                ONE + fx_pct / Decimal("100")
+            )
+        scenario_contracts.append(scenario_contract)
+
+    result = compute_position(mutable, scenario_contracts).payload
+    if sell_pct > ZERO and (
+        result.get("current_realizable_price") is None
+        or result.get("locked_revenue") is None
+        or result.get("projected_revenue") is None
+        or result.get("over_contracted")
+    ):
+        raise MarketCalculationError("sell_pct_now requires a reconciled position and realizable market price")
+    if sell_pct > ZERO:
         remaining = dec(result["uncontracted_quantity"], ZERO)
+        if remaining <= ZERO:
+            raise MarketCalculationError("sell_pct_now requires positive uncontracted production")
         sold_now = remaining * sell_pct / Decimal("100")
         price = dec(result["current_realizable_price"])
         add_locked = sold_now * price
@@ -367,6 +392,7 @@ def scenario_position(position: Any, contracts: list[Any], assumptions: dict[str
         result["exposed_revenue"] = _out(exposed, MONEY)
         result["contracted_percent"] = _out(_pct(dec(result["contracted_quantity"]), dec(result["expected_production"])), Decimal("0.0001"))
         result["exposed_percent"] = _out(_pct(new_uncontracted, dec(result["expected_production"])), Decimal("0.0001"))
+        result["weighted_contract_price"] = _out(locked / dec(result["contracted_quantity"]))
         result["scenario_volume_locked_now"] = _out(sold_now)
         # Revenue is unchanged by locking at the same spot price; the risk mix changes.
 
@@ -397,16 +423,31 @@ def data_health(observations: Iterable[Any]) -> dict[str, Any]:
         return {"status": "missing", "confidence": "low", "sources": [], "counts": {}}
     counts: dict[str, int] = {}
     sources: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
     for row in rows:
         state = str(_attr(row, "source_status", "UNAVAILABLE")).upper()
         counts[state] = counts.get(state, 0) + 1
+        observed_at = _attr(row, "observed_at")
+        retrieved_at = _attr(row, "retrieved_at")
+        observed_utc = None
+        if observed_at:
+            observed_utc = observed_at.replace(tzinfo=timezone.utc) if observed_at.tzinfo is None else observed_at.astimezone(timezone.utc)
+        retrieved_utc = None
+        if retrieved_at:
+            retrieved_utc = retrieved_at.replace(tzinfo=timezone.utc) if retrieved_at.tzinfo is None else retrieved_at.astimezone(timezone.utc)
         sources.append({
             "evidence_id": _attr(row, "evidence_id"),
             "provider": _attr(row, "provider"),
             "source_name": _attr(row, "source_name"),
             "status": state,
-            "observed_at": _attr(row, "observed_at").isoformat() + "Z" if _attr(row, "observed_at") else None,
-            "retrieved_at": _attr(row, "retrieved_at").isoformat() + "Z" if _attr(row, "retrieved_at") else None,
+            "observation_type": _attr(row, "observation_type"),
+            "unit": _attr(row, "unit"),
+            "currency": _attr(row, "currency"),
+            "observed_at": observed_utc.isoformat().replace("+00:00", "Z") if observed_utc else None,
+            "retrieved_at": retrieved_utc.isoformat().replace("+00:00", "Z") if retrieved_utc else None,
+            "age_minutes": max(0, int((now - observed_utc).total_seconds() // 60)) if observed_utc else None,
+            "quality": _attr(row, "quality_json", _attr(row, "quality", {})) or {},
+            "licensing": _attr(row, "licensing_json", _attr(row, "licensing", {})) or {},
         })
     adverse = sum(counts.get(s, 0) for s in ("STALE", "UNAVAILABLE", "NOT_CONFIGURED"))
     demos = counts.get("DEMO", 0)

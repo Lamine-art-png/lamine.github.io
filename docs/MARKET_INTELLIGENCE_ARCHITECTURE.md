@@ -72,7 +72,9 @@ Financial truth is computed in Python with `Decimal`/SQL fixed-precision numeric
 
 Bushel conversions are commodity-specific. A bushel is never treated as a universal mass unit. Unsupported crop/bushel combinations fail explicitly instead of inventing a conversion.
 
-The engine fails conservatively. Missing contract FX and over-contracting suppress projected margin rather than publishing a partial total as if it were complete.
+The engine fails conservatively. Missing contract FX and over-contracting suppress projected revenue and margin rather than publishing a partial total as if it were complete. Currency-grouped portfolio projected totals are also suppressed whenever any constituent position is incomplete. Position costs, freight and storage are entered in the position's reporting currency; realizable prices and contracts in other currencies require explicit FX rates.
+
+Scenario FX changes revalue both the realizable market price and every foreign-currency contract that has a baseline FX rate. Sell-now scenarios are rejected when market price, FX, production or contract reconciliation is incomplete; scenario assumptions never mutate the stored position or contracts.
 
 ### 3. Global market structure
 
@@ -99,7 +101,7 @@ Every market observation has an explicit source state:
 
 `LIVE` is a privileged state. The provider adapter contract rejects LIVE observations unless verified upstream retrieval metadata is present. Customer-facing structured ingestion cannot grant itself LIVE authority.
 
-Source records carry observation/retrieval timestamps, provider/source identity, delay, quality metadata and licensing/display constraints.
+Source records carry observation/retrieval timestamps, age, provider/source identity, unit, currency, delay, quality metadata and licensing/display constraints. Observation-list values are redacted whenever licensing explicitly sets `display_allowed` to `false`.
 
 ### 5. Provider-neutral market data
 
@@ -113,7 +115,7 @@ No exchange feed is represented as live merely because the architecture knows th
 
 Market Intelligence uses the existing AGRO-AI `ModelRouter`; it does not hard-code one provider or model. The AI layer receives deterministic facts and a bounded evidence map.
 
-Structured output requires every numeric claim to include an evidence ID and the exact evidence value. A validator rejects unsupported or modified numbers. If the model is unavailable, malformed, or fails numeric grounding, the product falls back to deterministic briefing instead of losing the commercial position.
+Structured output requires every numeric claim to include an evidence ID and the exact evidence value. Validators reject unsupported or modified numbers and personalized derivatives instructions. If the model is unavailable, malformed, or fails grounding or policy validation, the product falls back to deterministic briefing instead of losing the commercial position.
 
 This means an AI outage can remove natural-language synthesis, but not position, margin, exposure, scenarios or source health.
 
@@ -160,7 +162,7 @@ The Enterprise Portal exposes `/market-intelligence` with:
 - source/data-health view;
 - DEMO labeling and commercial-decision-support notice.
 
-Portfolio totals are never added across different currencies.
+Portfolio totals are never added across different currencies. Portfolio dependencies are batch-loaded by organization to avoid per-position contract and observation queries.
 
 ## Rollout
 

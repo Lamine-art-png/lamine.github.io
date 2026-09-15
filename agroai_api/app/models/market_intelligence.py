@@ -93,7 +93,7 @@ class MarketObservation(Base):
     observation_type = Column(String, nullable=False, index=True)
     provider = Column(String, nullable=False, index=True)
     source_name = Column(String, nullable=False)
-    source_status = Column(String, nullable=False, index=True)  # LIVE/DELAYED/DEMO/STALE/UNAVAILABLE/NOT_CONFIGURED
+    source_status = Column(String, nullable=False, index=True)  # LIVE/DELAYED/DEMO/STALE/UNAVAILABLE/NOT_CONFIGURED/MANUAL
     value = Column(Numeric(24, 10), nullable=True)
     unit = Column(String, nullable=True)
     currency = Column(String(3), nullable=True)

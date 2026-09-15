@@ -193,6 +193,74 @@ def test_customer_observation_can_never_self_grant_live_authority(client, db):
     }
     assert "LIVE" not in source_states
     assert "MANUAL" in source_states
+    source = next(
+        source
+        for position in overview["positions"]
+        for source in position["data_health"]["sources"]
+        if source["evidence_id"] == "customer-live-attempt-1"
+    )
+    assert source["observation_type"] == "cash_price"
+    assert source["unit"] == "USD/bushel"
+    assert source["currency"] == "USD"
+    assert source["age_minutes"] >= 0
+
+
+def test_observation_value_is_redacted_when_licensing_disallows_display(client, db):
+    user, org, membership = identity(db, suffix="licensed-source")
+    set_context(user, org, membership)
+    position = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(position_key="licensed-source-position"),
+    )
+    assert position.status_code == 201
+    position_id = position.json()["id"]
+
+    created = client.post(
+        "/v1/market-intelligence/observations",
+        json={
+            "position_id": position_id,
+            "evidence_id": "licensed-source-1",
+            "observation_type": "cash_price",
+            "provider": "restricted_provider",
+            "source_name": "Restricted benchmark",
+            "source_status": "DELAYED",
+            "value": "4.75",
+            "unit": "USD/bushel",
+            "currency": "USD",
+            "observed_at": "2026-09-13T20:00:00Z",
+            "licensing": {"display_allowed": False, "license": "derived-use-only"},
+        },
+    )
+    assert created.status_code == 201
+
+    observations = client.get(f"/v1/market-intelligence/positions/{position_id}/observations")
+    assert observations.status_code == 200
+    observation = observations.json()["observations"][0]
+    assert observation["value"] is None
+    assert observation["redacted"] is True
+    assert observation["licensing"] == {"display_allowed": False, "license": "derived-use-only"}
+
+
+def test_portfolio_suppresses_partial_projected_totals(client, db):
+    user, org, membership = identity(db, suffix="partial-portfolio")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(
+            position_key="partial-portfolio-position",
+            reporting_currency="USD",
+            current_realizable_price="20",
+            price_currency="BRL",
+            fx_rate_to_reporting=None,
+        ),
+    )
+    assert created.status_code == 201
+    overview = client.get("/v1/market-intelligence/overview")
+    assert overview.status_code == 200
+    bucket = overview.json()["portfolio_by_reporting_currency"][0]
+    assert bucket["partial"] is True
+    assert bucket["projected_revenue"] is None
+    assert bucket["projected_margin"] is None
 
 
 def test_release_state_fails_closed(client, db, monkeypatch):
