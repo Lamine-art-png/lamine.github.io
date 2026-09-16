@@ -74,7 +74,8 @@ jobs:
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minio-ci \
             -e MINIO_ROOT_PASSWORD=minio-ci-password \
-            minio/minio:latest server /data --address :9000
+            quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data --address :9000
           for attempt in $(seq 1 45); do
             if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
               exit 0
