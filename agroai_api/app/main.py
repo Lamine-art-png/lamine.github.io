@@ -443,6 +443,8 @@ from app.api.v1.platform_billing import router as platform_billing_router  # noq
 from app.api.v1.platform_operations import router as platform_operations_router  # noqa: E402
 from app.api.v1.recommendations import router as recommendations_router  # noqa: E402
 from app.api.v1.reports import router as reports_router  # noqa: E402
+from app.api.v1.market_intelligence import router as market_intelligence_router  # noqa: E402
+from app.api.v1.market_intelligence_ingestion import router as market_intelligence_ingestion_router  # noqa: E402
 from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
 from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
 from app.platform_api.errors import PlatformApiHTTPException, error_response  # noqa: E402
@@ -501,6 +503,8 @@ app.include_router(platform_billing_router, prefix="/v1")
 app.include_router(platform_operations_router, prefix="/v1")
 app.include_router(recommendations_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")
+app.include_router(market_intelligence_router, prefix="/v1")
+app.include_router(market_intelligence_ingestion_router, prefix="/v1")
 app.include_router(webhooks_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402

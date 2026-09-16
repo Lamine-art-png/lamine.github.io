@@ -31,7 +31,16 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "032_repair_onboarding_state"
+    assert HEAD_ALEMBIC_REVISION == "033_market_intelligence"
+    assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["market_positions"]
+    )
+    assert {"organization_id", "position_id", "source_status", "observed_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["market_observations"]
+    )
+    assert {"organization_id", "position_id", "baseline_json", "result_json"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["market_scenarios"]
+    )
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )
