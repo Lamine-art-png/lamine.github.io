@@ -3,12 +3,21 @@ main = "src/index.ts"
 compatibility_date = "2026-09-05"
 workers_dev = false
 
+# Exact routes preserve the canonical no-query URLs.
 [[routes]]
 pattern = "agroai-pilot.com/guides"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
 pattern = "agroai-pilot.com/guides/*"
+zone_name = "agroai-pilot.com"
+
+# Cloudflare route matching includes the query string for an exact route.
+# This narrow wildcard keeps LinkedIn/marketing tracking URLs such as
+# /guides?trk=feed-details on the Guides Worker while the Worker itself
+# still closes every pathname outside the explicit /guides route table.
+[[routes]]
+pattern = "agroai-pilot.com/guides*"
 zone_name = "agroai-pilot.com"
 
 [assets]
