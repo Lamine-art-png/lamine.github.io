@@ -1,0 +1,88 @@
+name: Market Intelligence GA CI
+
+on:
+  pull_request:
+    paths:
+      - 'agroai_api/app/api/v1/market_intelligence*.py'
+      - 'agroai_api/app/services/market_data_providers.py'
+      - 'agroai_api/app/services/market_intelligence*.py'
+      - 'agroai_api/app/models/market_intelligence.py'
+      - 'agroai_api/tests/test_market_intelligence*.py'
+      - 'figma-enterprise-v4/src/app/components/MarketIntelligence*.tsx'
+      - 'figma-enterprise-v4/src/app/routes.tsx'
+      - 'figma-enterprise-v4/tests/market-intelligence*.mjs'
+      - 'figma-enterprise-v4/shared/ui-literals.en.*.json'
+      - '.github/workflows/market-intelligence-ga-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-ga-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt pytest==8.3.5
+      - name: Compile Market Intelligence production code
+        run: python -m compileall -q app/api/v1/market_intelligence.py app/api/v1/market_intelligence_ingestion.py app/api/v1/market_intelligence_operations.py app/services/market_intelligence.py app/services/market_intelligence_ai.py app/services/market_data_providers.py app/services/market_intelligence_refresh.py
+      - name: Run complete Market Intelligence backend contract
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/test_market_intelligence_engine.py \
+            tests/test_market_intelligence_api.py \
+            tests/test_market_intelligence_operations_contract.py \
+            tests/test_market_intelligence_providers_ga.py \
+            tests/test_market_intelligence_refresh_contract.py
+      - name: Assert Market Intelligence OpenAPI route uniqueness
+        run: |
+          python - <<'PY'
+          from app.main import app
+          schema = app.openapi()
+          seen = {}
+          for path, methods in schema.get('paths', {}).items():
+              if not path.startswith('/v1/market-intelligence'):
+                  continue
+              for method, payload in methods.items():
+                  if method.lower() not in {'get','post','put','patch','delete'}:
+                      continue
+                  op = payload.get('operationId')
+                  assert op, (method, path, 'missing operationId')
+                  assert op not in seen, (op, seen[op], (method, path))
+                  seen[op] = (method, path)
+          assert seen, 'Market Intelligence API surface is missing'
+          print(f'market_intelligence_operations={len(seen)}')
+          PY
+
+  portal-ga-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Validate Market Intelligence managed-workspace contract
+        run: node tests/market-intelligence-contract.mjs
+      - name: Validate GA management contract
+        run: node tests/market-intelligence-ga-management-contract.mjs
+      - name: Validate exact UI literal inventory
+        run: python3 scripts/check_ui_literal_inventory.py --check
+      - name: Build production portal
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
