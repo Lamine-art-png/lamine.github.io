@@ -1,0 +1,119 @@
+name: AGRO-AI Guides Production
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "guides/**"
+      - "cloudflare/guides-worker/**"
+      - ".github/workflows/deploy-guides.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-guides-production
+  cancel-in-progress: true
+
+jobs:
+  deploy-guides:
+    name: Deploy and verify isolated /guides routes
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GUIDES_CONFIG: cloudflare/guides-worker/wrangler.toml
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate isolated Guides package and route ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s guides/index.html
+          test -s guides/enterprise-portal/index.html
+          test -s guides/platform-api/index.html
+          test -s guides/assets/guides.css
+          test -s guides/assets/agro-ai-logo.png
+          grep -F '<title>AGRO-AI Guides | Enterprise Portal & Platform API</title>' guides/index.html >/dev/null
+          grep -F '<title>AGRO-AI Enterprise Portal Guide</title>' guides/enterprise-portal/index.html >/dev/null
+          grep -F '<title>AGRO-AI Platform API Guide</title>' guides/platform-api/index.html >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/guides"' "$GUIDES_CONFIG" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/guides/*"' "$GUIDES_CONFIG" >/dev/null
+          ! grep -F 'pattern = "agroai-pilot.com/*"' "$GUIDES_CONFIG"
+          ! grep -F 'pattern = "app.agroai-pilot.com' "$GUIDES_CONFIG"
+          ! grep -F 'pattern = "api.agroai-pilot.com' "$GUIDES_CONFIG"
+
+      - name: Prove critical production surfaces before Guides deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe() {
+            local name="$1" url="$2" code
+            code="$(curl -sS -L -o "/tmp/${name}.before" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
+            case "$code" in 2*|3*) ;; *) echo "Pre-deploy continuity failure: $name -> $code" >&2; exit 1 ;; esac
+          }
+          probe homepage "https://agroai-pilot.com/"
+          probe careers "https://agroai-pilot.com/careers"
+          probe application "https://agroai-pilot.com/apply?role=research"
+          probe demo "https://agroai-pilot.com/book-a-demo"
+          probe platform "https://agroai-pilot.com/platform-api"
+          probe portal "https://app.agroai-pilot.com/"
+          probe api "https://api.agroai-pilot.com/v1/health"
+
+      - name: Dry-run isolated Guides Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$GUIDES_CONFIG"
+
+      - name: Deploy isolated Guides Worker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.107.0 deploy --config "$GUIDES_CONFIG"
+
+      - name: Verify Guides, tracked links, and production continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          wait_for() {
+            local name="$1" url="$2" marker="$3" body headers code ok
+            body="$(mktemp)"; headers="$(mktemp)"; ok=0
+            for attempt in $(seq 1 30); do
+              code="$(curl -sS -L -D "$headers" -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url" || true)"
+              if [ "$code" = "200" ] && grep -F "$marker" "$body" >/dev/null && grep -Fi 'x-agroai-guides-surface: guide' "$headers" >/dev/null; then ok=1; break; fi
+              sleep 2
+            done
+            if [ "$ok" != "1" ]; then
+              echo "Guide verification failed for $name: HTTP $code" >&2
+              head -c 800 "$body" >&2 || true
+              exit 1
+            fi
+            rm -f "$body" "$headers"
+          }
+          wait_for guides "https://agroai-pilot.com/guides/" '<title>AGRO-AI Guides | Enterprise Portal & Platform API</title>'
+          wait_for tracked_guides "https://agroai-pilot.com/guides?trk=feed-details" '<title>AGRO-AI Guides | Enterprise Portal & Platform API</title>'
+          wait_for enterprise "https://agroai-pilot.com/guides/enterprise-portal/" '<title>AGRO-AI Enterprise Portal Guide</title>'
+          wait_for platform_guide "https://agroai-pilot.com/guides/platform-api/" '<title>AGRO-AI Platform API Guide</title>'
+
+          probe() {
+            local name="$1" url="$2" code
+            code="$(curl -sS -L -o "/tmp/${name}.after" -w '%{http_code}' --connect-timeout 10 --max-time 40 "$url")"
+            case "$code" in 2*|3*) ;; *) echo "Post-deploy continuity failure: $name -> $code" >&2; exit 1 ;; esac
+          }
+          probe homepage "https://agroai-pilot.com/"
+          probe careers "https://agroai-pilot.com/careers"
+          probe application "https://agroai-pilot.com/apply?role=research"
+          probe demo "https://agroai-pilot.com/book-a-demo"
+          probe platform "https://agroai-pilot.com/platform-api"
+          probe portal "https://app.agroai-pilot.com/"
+          probe api "https://api.agroai-pilot.com/v1/health"
