@@ -1,0 +1,22 @@
+# Market Intelligence production release checklist
+
+- [x] deterministic economics engine and scenario semantics
+- [x] organization-scoped persistence and RBAC
+- [x] managed Enterprise Portal workflow for positions, contracts and manual prices
+- [x] governed provider status and refresh controls
+- [x] daily ECB reference FX adapter
+- [x] USDA MyMarketNews adapter with explicit credential requirement
+- [x] provider retries, timeout, cache and circuit breaker
+- [x] provenance and source-state truthfulness
+- [x] customer input cannot self-label LIVE
+- [x] source/unit compatibility gate before automatic price promotion
+- [x] grounded model synthesis with deterministic fallback
+- [x] derivatives/execution boundary
+- [x] route/OpenAPI uniqueness tests
+- [x] frontend contract tests
+- [x] provider adapter tests
+- [ ] merge only after branch CI is green or remaining failures are proven repository-wide/pre-existing
+- [ ] deploy exact merged SHA
+- [ ] set `MARKET_INTELLIGENCE_RELEASE_STATE=general`
+- [ ] keep `MARKET_INTELLIGENCE_DEMO_FIXTURES_ENABLED=false`
+- [ ] verify authenticated production portal and API smoke

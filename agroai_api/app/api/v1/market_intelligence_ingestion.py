@@ -240,3 +240,10 @@ def create_observation(payload: ObservationInput, ctx: AuthContext = Depends(get
     db.add(row)
     db.commit()
     return {"id": row.id, "evidence_id": row.evidence_id, "source_status": row.source_status, "status": "created"}
+
+
+# The management/refresh router intentionally inherits this router's release
+# and authentication dependency so every endpoint remains tenant-scoped.
+from app.api.v1.market_intelligence_operations import router as operations_router  # noqa: E402
+
+router.include_router(operations_router)

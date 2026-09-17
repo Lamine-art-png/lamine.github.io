@@ -1,0 +1,1 @@
+Market Intelligence GA completion branch ready for CI.
