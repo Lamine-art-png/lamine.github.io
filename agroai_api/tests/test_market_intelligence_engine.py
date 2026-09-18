@@ -434,6 +434,29 @@ def test_provider_runtime_retries_caches_and_opens_circuit():
     assert broken.calls == 1
 
 
+def test_future_dated_market_evidence_can_never_look_healthy():
+    now = datetime.now(timezone.utc)
+    future = SimpleNamespace(
+        evidence_id="future",
+        provider="licensed",
+        source_name="Licensed feed",
+        source_status="LIVE",
+        observation_type="cash_price",
+        unit="USD/t",
+        currency="USD",
+        observed_at=now + timedelta(hours=2),
+        retrieved_at=now,
+        quality_json={"confidence": "high"},
+        licensing_json={"display_allowed": True},
+        metadata_json={"freshness_max_age_minutes": 30},
+    )
+    health = data_health([future])
+    assert health["status"] == "degraded"
+    assert health["confidence"] != "high"
+    assert health["sources"][0]["status"] == "STALE"
+    assert "observed_at_in_future" in health["sources"][0]["health_reasons"]
+
+
 def test_unconfigured_provider_reports_truthfully_and_returns_no_observations():
     provider = NotConfiguredMarketDataProvider(
         "government_cash_market",
