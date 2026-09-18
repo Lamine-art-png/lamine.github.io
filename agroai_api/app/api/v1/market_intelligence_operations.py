@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -378,7 +378,7 @@ def set_manual_price(
         value=payload.value,
         unit=f"{payload.currency}/{row.quantity_unit}",
         currency=payload.currency,
-        observed_at=payload.observed_at.replace(tzinfo=None) if payload.observed_at.tzinfo else payload.observed_at,
+        observed_at=(payload.observed_at.astimezone(timezone.utc).replace(tzinfo=None) if payload.observed_at.tzinfo else payload.observed_at),
         retrieved_at=datetime.utcnow(),
         quality_json={"grade": "customer_entered"},
         licensing_json={"display_allowed": True},
