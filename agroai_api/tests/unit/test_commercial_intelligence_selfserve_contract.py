@@ -11,6 +11,8 @@ def test_commercial_browser_access_does_not_require_platform_enrollment() -> Non
     assert "get_auth_context" in inspect.getsource(selfserve)
     assert "require_developer_control_plane" not in source
     assert '{"owner", "admin"}' in source
+    assert "organization_access_allowed" in source
+    assert "organization_not_approved" in source
     assert "require_organization_acceptance" in source
 
 
