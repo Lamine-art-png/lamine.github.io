@@ -24,6 +24,7 @@ concurrency:
 
 env:
   WORKER_CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
+  HOME_URL: https://agroai-pilot.com/
   MARKETING_URL: https://agroai-pilot.com/platform-api
   DOCS_URL: https://agroai-pilot.com/platform-api/docs/
   INSTALLER_URL: https://agroai-pilot.com/platform-api/assets/install.sh
@@ -125,6 +126,7 @@ jobs:
           ready=0
           mkdir -p proof
           for attempt in $(seq 1 30); do
+            home_code="$(curl -sS -L --max-time 15 -D proof/home.headers -o proof/home.html -w '%{http_code}' "$HOME_URL" || true)"
             landing_code="$(curl -sS -L --max-time 15 -D proof/landing.headers -o proof/landing.html -w '%{http_code}' "$MARKETING_URL" || true)"
             docs_code="$(curl -sS -L --max-time 15 -D proof/docs.headers -o proof/docs.html -w '%{http_code}' "$DOCS_URL" || true)"
             installer_code="$(curl -sS -L --max-time 15 -o proof/install.sh -w '%{http_code}' "$INSTALLER_URL" || true)"
@@ -135,7 +137,14 @@ jobs:
             runtime_code="$(curl -sS --max-time 15 -o proof/runtime.json -w '%{http_code}' "$PLATFORM_RUNTIME_URL" || true)"
             terms_code="$(curl -sS --max-time 15 -o proof/terms.json -w '%{http_code}' "$PLATFORM_TERMS_URL" || true)"
             base_ok=false
-            if [[ "$landing_code" == "200" && "$docs_code" == "200" && "$installer_code" == "200" && "$unknown_code" == "404" && "$platform_code" == "200" && "$edge_code" == "200" && "$health_code" == "200" && "$runtime_code" == "200" ]] && \
+            if [[ "$home_code" == "200" && "$landing_code" == "200" && "$docs_code" == "200" && "$installer_code" == "200" && "$unknown_code" == "404" && "$platform_code" == "200" && "$edge_code" == "200" && "$health_code" == "200" && "$runtime_code" == "200" ]] && \
+               grep -Fi 'x-agroai-product-entry: conversion-home-v4' proof/home.headers >/dev/null && \
+               grep -F 'data-agroai-home-v4' proof/home.html >/dev/null && \
+               grep -F 'https://app.agroai-pilot.com/?mode=register' proof/home.html >/dev/null && \
+               grep -F 'href="/book-a-demo"' proof/home.html >/dev/null && \
+               grep -F 'href="/careers"' proof/home.html >/dev/null && \
+               grep -F 'href="/trust"' proof/home.html >/dev/null && \
+               grep -F 'href="/platform-api/"' proof/home.html >/dev/null && \
                grep -F '<title>AGRO-AI Platform API</title>' proof/landing.html >/dev/null && \
                grep -F '<title>AGRO-AI Platform API Documentation</title>' proof/docs.html >/dev/null && \
                grep -F 'Next: agroai login' proof/install.sh >/dev/null && \
