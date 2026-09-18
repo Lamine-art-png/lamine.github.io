@@ -18,7 +18,6 @@ from app.models.intelligence_commerce import CommercialIntelligenceRun, Intellig
 from app.models.operational_records import EvidenceRecord
 from app.models.platform_api import PlatformApiKey
 from app.models.saas import ManagedEntity
-from app.platform_api.programs import enforce_enrollment_limit
 from app.platform_api.principal import PlatformPrincipal
 from app.schemas.ai import EvidenceContext, ToolCitation
 
@@ -406,22 +405,9 @@ async def _execute_paid_intelligence(
         raise HTTPException(status_code=503, detail={"code": "intelligence_temporarily_unavailable"}) from exc
 
 
-def _enforce_bootstrap_key_limit(db: Session, ctx: Any, current_count: int) -> None:
-    enrollment = getattr(ctx, "platform_enrollment", None)
-    if enrollment is None:
-        raise HTTPException(status_code=403, detail={"code": "platform_enrollment_required"})
-    enforce_enrollment_limit(
-        db,
-        enrollment=enrollment,
-        resource_name="keys",
-        current_count=current_count,
-    )
-
-
 # Patch the original module globals. FastAPI endpoint functions retain that
 # module as their global namespace, so every existing route now executes these
 # hardened implementations without creating a duplicate public router.
 legacy._context = _validate_and_build_context
 legacy._sync_pending_topups = _sync_pending_topups
 legacy._execute_paid_intelligence = _execute_paid_intelligence
-legacy._enforce_bootstrap_key_limit = _enforce_bootstrap_key_limit
