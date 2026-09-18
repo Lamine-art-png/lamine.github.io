@@ -182,29 +182,33 @@ const HOMEPAGE_SCRIPT = `<script id="agroai-product-entry-script">
 </script>`;
 
 async function homepage(request: Request, env: Env): Promise<Response> {
-  let origin: URL;
-  try { origin = safeOrigin(env.MARKETING_ORIGIN); }
-  catch { return unavailable("homepage-origin-invalid"); }
-
-  const upstream = await fetch(new URL("/", origin).toString(), {
+  const assetUrl = new URL("/homepage.html", "https://agroai-assets.invalid");
+  const upstream = await env.ASSETS.fetch(new Request(assetUrl, {
     method: request.method,
-    redirect: "follow",
-    headers: { accept: "text/html", "user-agent": "AGRO-AI-Product-Entry/3.0" },
-    cf: { cacheEverything: false, cacheTtl: 0 },
-  } as RequestInit & { cf: { cacheEverything: boolean; cacheTtl: number } });
-  if (!upstream.ok) return unavailable("homepage-upstream-unavailable");
+    headers: { accept: "text/html,*/*;q=0.8" },
+    redirect: "manual",
+  }));
+
+  if (!upstream.ok) return unavailable("homepage-asset-unavailable");
 
   const headers = new Headers(upstream.headers);
   headers.delete("content-length");
   headers.delete("content-encoding");
   headers.delete("etag");
+  headers.set("content-type", "text/html; charset=utf-8");
   headers.set("cache-control", "public, max-age=0, must-revalidate");
-  headers.set("x-agroai-product-entry", "portal-and-api-v3");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("x-frame-options", "DENY");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  headers.set("x-agroai-product-entry", "conversion-home-v4");
+
   if (request.method === "HEAD") return new Response(null, { status: 200, headers });
 
-  let html = await upstream.text();
-  if (!html.includes('<div id="root"></div>') || looksLikeGenericErrorPage(html)) return unavailable("homepage-identity-mismatch");
-  html = html.replace("</head>", `${HOMEPAGE_STYLE}</head>`).replace("</body>", `${HOMEPAGE_SCRIPT}</body>`);
+  const html = await upstream.text();
+  if (!html.includes("data-agroai-home-v4") || !html.includes("https://app.agroai-pilot.com/?mode=register") || looksLikeGenericErrorPage(html)) {
+    return unavailable("homepage-identity-mismatch");
+  }
   return new Response(html, { status: 200, headers });
 }
 
