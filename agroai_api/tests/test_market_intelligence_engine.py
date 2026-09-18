@@ -278,6 +278,29 @@ def test_ai_cannot_emit_personalized_derivatives_instruction():
     }) == ["disallowed_action_kind:execute_trade"]
 
 
+def test_ai_action_descriptions_cannot_hide_trade_instructions_or_numbers():
+    unsafe_policy = {
+        "summary": "Review the current exposure.",
+        "insights": [],
+        "limitations": [],
+        "actions": [{"kind": "compare", "description": "Use 12 soybean futures contracts to hedge this exposure."}],
+    }
+    policy_errors = validate_decision_support_policy(unsafe_policy)
+    assert "personalized_derivatives_instruction" in policy_errors
+
+    numeric_errors = validate_numeric_grounding(unsafe_policy, {})
+    assert any(error.startswith("unstructured_numeric_claim:action_0") for error in numeric_errors)
+
+    safe = {
+        "summary": "Review the current exposure.",
+        "insights": [],
+        "limitations": [],
+        "actions": [{"kind": "verify", "description": "Verify the contract register against the latest signed records."}],
+    }
+    assert validate_decision_support_policy(safe) == []
+    assert validate_numeric_grounding(safe, {}) == []
+
+
 def test_all_model_outage_keeps_deterministic_brief_available(monkeypatch):
     monkeypatch.setattr("app.services.market_intelligence_ai.ModelRouter.mode", lambda _self: "offline")
     computed = compute_position(position(), [contract()])
