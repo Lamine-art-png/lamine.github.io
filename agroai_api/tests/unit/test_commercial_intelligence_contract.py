@@ -13,16 +13,18 @@ from app.api.v1.commercial_intelligence import (
     WalletCheckoutRequest,
     router,
 )
+from app.api.v1.commercial_intelligence_selfserve import router as selfserve_router
 
 
 def test_commercial_intelligence_surface_is_small_and_paid() -> None:
     paths = {route.path for route in router.routes}
     assert "/intelligence" in paths
     assert "/intelligence/pricing" in paths
-    assert "/platform/developer/wallet" in paths
-    assert "/platform/developer/wallet/checkout" in paths
-    assert "/platform/developer/intelligence/bootstrap" in paths
-    assert "/platform/developer/intelligence/run" in paths
+    browser_paths = {route.path for route in selfserve_router.routes}
+    assert "/platform/developer/wallet" in browser_paths
+    assert "/platform/developer/wallet/checkout" in browser_paths
+    assert "/platform/developer/intelligence/bootstrap" in browser_paths
+    assert "/platform/developer/intelligence/run" in browser_paths
     assert PUBLIC_MODEL == "agroai-intelligence-1"
     assert TASK_CATALOG
     assert all(int(item["price_cents"]) > 0 for item in TASK_CATALOG.values())
