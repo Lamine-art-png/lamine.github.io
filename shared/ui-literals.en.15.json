@@ -1,5 +1,5 @@
 {
   "literal.08fa1fcb7610e61a": "POST /v1/intelligence",
-  "literal.6f9f03f95e7890c4": "X-API-Key",
-  "literal.a6f98ae3648f2336": "· grounded"
+  "literal.a6f98ae3648f2336": "· grounded",
+  "literal.ff5aa98707a53f31": "Bearer / X-API-Key"
 }
