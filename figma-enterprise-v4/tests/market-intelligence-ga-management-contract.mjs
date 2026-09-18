@@ -31,14 +31,13 @@ for (const endpoint of [
   "/v1/market-intelligence/providers",
   "/v1/market-intelligence/positions",
   "/v1/market-intelligence/contracts",
-  "/v1/market-intelligence/observations",
   "/v1/market-intelligence/refresh",
 ]) {
   assert.ok(page.includes(endpoint), `missing GA endpoint usage: ${endpoint}`);
 }
 
 assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(created\.id\)\}\/refresh/);
-assert.match(page, /source_status:\s*"MANUAL"/);
+assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(priceForm\.position_id\)\}\/manual-price/);
 assert.match(page, /Customer entered market price/);
 assert.match(page, /USDA MyMarketNews/);
 assert.match(page, /ECB/);
