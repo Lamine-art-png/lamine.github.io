@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import AuthContext, get_auth_context
+from app.api.deps import AuthContext, get_auth_context, require_approved_organization
 from app.api.v1 import commercial_intelligence as legacy
 from app.core.config import settings
 from app.db.base import get_db
@@ -33,6 +33,7 @@ def require_commercial_intelligence_browser(
         raise HTTPException(status_code=404, detail={"code": "platform_api_disabled"})
     if ctx.organization is None or ctx.membership is None:
         raise HTTPException(status_code=403, detail={"code": "organization_membership_required"})
+    require_approved_organization(ctx.organization)
     if getattr(ctx.membership, "status", "active") != "active":
         raise HTTPException(status_code=403, detail={"code": "active_membership_required"})
     if str(ctx.membership.role or "").lower() not in {"owner", "admin"}:
