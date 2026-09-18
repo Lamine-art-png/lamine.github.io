@@ -214,6 +214,15 @@ export function MarketIntelligenceV2() {
     }
   };
 
+  const refreshPositionAfterWrite = async (positionId: string) => {
+    try {
+      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(positionId)}/refresh`, {});
+      return "";
+    } catch (cause) {
+      return errorMessage(cause);
+    }
+  };
+
   const createPosition = async () => {
     setError("");
     const inventory = decimalInput(positionForm.inventory_quantity, "0");
@@ -242,9 +251,12 @@ export function MarketIntelligenceV2() {
         storage_per_unit: decimalInput(positionForm.storage_per_unit, "0"),
         metadata,
       });
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(created.id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(created.id);
       setManageOpen(false);
-      await changed("Commercial position created and market sources refreshed.");
+      await changed(refreshError
+        ? "Commercial position created. Market-source refresh needs attention."
+        : "Commercial position created and market sources refreshed.");
+      if (refreshError) setError(`The position was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -263,9 +275,12 @@ export function MarketIntelligenceV2() {
         price: decimalInput(contractForm.price),
         currency: contractForm.currency.trim().toUpperCase(),
       });
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(contractForm.position_id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(contractForm.position_id);
       setContractForm((current) => ({ ...current, contract_code: "", buyer: "", quantity: "", price: "" }));
-      await changed("Contract added and FX reconciled.");
+      await changed(refreshError
+        ? "Contract added. Market-source refresh needs attention."
+        : "Contract added and FX reconciled.");
+      if (refreshError) setError(`The contract was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -283,9 +298,12 @@ export function MarketIntelligenceV2() {
         observed_at: observedAtIso(priceForm.observed_at),
         source_name: "Customer entered market price",
       });
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(priceForm.position_id);
       setPriceForm((current) => ({ ...current, price: "" }));
-      await changed("Market price updated and FX refreshed.");
+      await changed(refreshError
+        ? "Market price saved. FX refresh needs attention."
+        : "Market price updated and FX refreshed.");
+      if (refreshError) setError(`The market price was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
