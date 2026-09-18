@@ -6,7 +6,7 @@ FX, exposure and scenario transformations are fixed-precision and auditable.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable
 
@@ -511,6 +511,14 @@ def data_health(observations: Iterable[Any]) -> dict[str, Any]:
         freshness_minutes = int(dec(freshness_raw)) if freshness_raw is not None else None
         state = declared_state
         health_reasons: list[str] = []
+        clock_skew_limit = now + timedelta(minutes=5)
+        if observed_utc is not None and observed_utc > clock_skew_limit:
+            state = "STALE"
+            derived_stale += 1
+            health_reasons.append("observed_at_in_future")
+        if retrieved_utc is not None and retrieved_utc > clock_skew_limit:
+            state = "STALE"
+            health_reasons.append("retrieved_at_in_future")
         if freshness_minutes is not None:
             if age_minutes is None:
                 missing_freshness += 1
