@@ -231,7 +231,8 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     spot_price_reporting: Decimal | None = None
     raw_price = _attr(position, "current_realizable_price")
     if raw_price is None:
-        missing_inputs.append("current_realizable_price")
+        if uncontracted > ZERO:
+            missing_inputs.append("current_realizable_price")
     else:
         try:
             spot_price_reporting = fx_to_reporting(
@@ -241,10 +242,15 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
                 _attr(position, "fx_rate_to_reporting"),
             )
         except MarketCalculationError:
-            missing_inputs.append("market_fx")
-            warnings.append("current market price cannot be translated to reporting currency without FX")
+            if uncontracted > ZERO:
+                missing_inputs.append("market_fx")
+                warnings.append("current market price cannot be translated to reporting currency without FX")
 
-    exposed_revenue = uncontracted * spot_price_reporting if spot_price_reporting is not None else None
+    exposed_revenue = (
+        ZERO
+        if uncontracted == ZERO
+        else uncontracted * spot_price_reporting if spot_price_reporting is not None else None
+    )
     expected_revenue: Decimal | None = None
     if not missing_contract_fx and exposed_revenue is not None:
         expected_revenue = locked_revenue + exposed_revenue
