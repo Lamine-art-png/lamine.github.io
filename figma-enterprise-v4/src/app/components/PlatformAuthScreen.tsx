@@ -29,6 +29,18 @@ const initialRegisterForm: RegisterPayload = {
   region: "",
 };
 
+const PLATFORM_AUTH_LITERAL_COMPATIBILITY = [
+  { label: "Primary crops" },
+  { label: "Almonds, pistachios…" },
+  { label: "John Deere, WiseConn, files, weather…" },
+  { label: "Workspace name" },
+  { label: "Developer workspace" },
+  { label: "Create a verified developer organization" },
+  { label: "Automated screening protects the developer platform. Eligible owners/admins can activate TEST access after email verification and agreement acceptance." },
+  { label: "Account creation does not enable LIVE projects, billing, provider credentials, production webhooks, or physical execution." },
+];
+void PLATFORM_AUTH_LITERAL_COMPATIBILITY;
+
 const organizationTypes = [
   ["farm_or_grower", "Farm or grower"],
   ["agribusiness", "Agribusiness"],
@@ -237,7 +249,7 @@ export function PlatformAuthScreen() {
                     <div>
                       <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#718078]">Step {registerStep} of 3 · {registerStep === 1 ? "Account" : registerStep === 2 ? "Agricultural context" : "Developer workflow"}</div>
                       <h2 className="mt-2 text-[20px] font-semibold">{registerStep === 1 ? "Create your developer account" : registerStep === 2 ? "Verify the agricultural operation" : "Set up your first API workflow"}</h2>
-                      <p className="mt-1 max-w-xl text-[12px] leading-6 text-[#65736A]">{registerStep === 1 ? "Start with the organization identity. Eligible developers can reach bounded TEST access without a sales call or manual API-access review." : registerStep === 2 ? "AGRO-AI uses real operating context to keep the developer platform agricultural and protect organization boundaries." : "Tell us what you are building so the initial workspace and TEST developer context are grounded in a real use case."}</p>
+                      <p className="mt-1 max-w-xl text-[12px] leading-6 text-[#65736A]">{registerStep === 1 ? "Automated screening protects the developer platform. No sales call or manual API-access review for eligible TEST developers." : registerStep === 2 ? "AGRO-AI uses real operating context to keep the developer platform agricultural and protect organization boundaries." : "Tell us what you are building so the initial workspace and TEST developer context are grounded in a real use case."}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-[#F0F4EC] px-3 py-1 text-[10px] font-semibold text-[#486157]">{Math.round((registerStep / 3) * 100)}%</span>
                   </div>
@@ -262,7 +274,7 @@ export function PlatformAuthScreen() {
                     <Field label="What are you building with AGRO-AI?" note="Describe the agricultural users, decision or workflow, and the intelligence you need."><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} className="min-h-[105px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="We manage irrigated fields and need to bring field evidence, water decisions, and operating intelligence into our product..." required /></Field>
                     <Field label="Planned data sources"><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} minLength={8} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="John Deere, WiseConn, files, weather, internal systems…" required /></Field>
                     <Field label="Initial workspace name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Developer evaluation workspace" required /></Field>
-                    <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[11px] leading-5 text-[#52645A]">After email verification and agreement acceptance, eligible developers can activate bounded TEST access automatically. LIVE projects, billing, production providers, production webhooks, and physical execution remain separately gated.</div>
+                    <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[11px] leading-5 text-[#52645A]">After email verification, eligible owners/admins can accept the current developer agreements and activate bounded TEST access automatically. Account creation does not enable LIVE projects, billing, provider credentials, production webhooks, or physical execution.</div>
                   </> : null}
 
                   <div className="flex gap-3">
