@@ -10,6 +10,7 @@ def test_commercial_browser_access_does_not_require_platform_enrollment() -> Non
     source = inspect.getsource(selfserve.require_commercial_intelligence_browser)
     assert "get_auth_context" in inspect.getsource(selfserve)
     assert "require_developer_control_plane" not in source
+    assert "require_approved_organization" in source
     assert '{"owner", "admin"}' in source
     assert "require_organization_acceptance" in source
 
@@ -23,7 +24,7 @@ def test_commercial_browser_routes_replace_legacy_gated_routes() -> None:
         "/platform/developer/intelligence/run",
     }
     assert router_compat._COMMERCIAL_BROWSER_PATHS == expected
-    source = inspect.getsource(router_compat._include_commercial_intelligence)
+    source = inspect.getsource(router_compat.include_commercial_intelligence)
     assert "commercial_intelligence_router.routes[:]" in source
     assert "commercial_selfserve_router" in source
 
