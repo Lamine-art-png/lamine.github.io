@@ -6,7 +6,7 @@ upstream evidence with provenance before any derived economics are recomputed.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -97,8 +97,8 @@ def _upsert_observation(db: Session, organization_id: str, position_id: str, ite
         "value": item.value,
         "unit": item.unit,
         "currency": item.currency,
-        "observed_at": item.observed_at.replace(tzinfo=None) if item.observed_at.tzinfo else item.observed_at,
-        "retrieved_at": item.retrieved_at.replace(tzinfo=None) if item.retrieved_at.tzinfo else item.retrieved_at,
+        "observed_at": item.observed_at.astimezone(timezone.utc).replace(tzinfo=None) if item.observed_at.tzinfo else item.observed_at,
+        "retrieved_at": item.retrieved_at.astimezone(timezone.utc).replace(tzinfo=None) if item.retrieved_at.tzinfo else item.retrieved_at,
         "delay_minutes": item.delay_minutes,
         "quality_json": item.quality,
         "licensing_json": item.licensing,
