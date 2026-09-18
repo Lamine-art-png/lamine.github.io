@@ -13,6 +13,7 @@ def test_market_intelligence_management_routes_are_mounted_once():
         ("DELETE", "/v1/market-intelligence/contracts/{contract_id}"),
         ("GET", "/v1/market-intelligence/providers"),
         ("POST", "/v1/market-intelligence/positions/{position_id}/refresh"),
+        ("POST", "/v1/market-intelligence/positions/{position_id}/manual-price"),
         ("POST", "/v1/market-intelligence/refresh"),
     }
 
