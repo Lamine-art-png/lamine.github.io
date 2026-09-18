@@ -142,6 +142,8 @@ jobs:
                grep -F 'data-agroai-home-v4' proof/home.html >/dev/null && \
                grep -F 'https://app.agroai-pilot.com/?mode=register' proof/home.html >/dev/null && \
                grep -F 'href="/book-a-demo"' proof/home.html >/dev/null && \
+               grep -F 'data-conversion="nav-demo">Book a Demo</a>' proof/home.html >/dev/null && \
+               grep -F 'src="/platform-api/assets/agro-ai-logo-full.png"' proof/home.html >/dev/null && \
                grep -F 'href="/careers"' proof/home.html >/dev/null && \
                grep -F 'href="/trust"' proof/home.html >/dev/null && \
                grep -F 'href="/platform-api/"' proof/home.html >/dev/null && \
