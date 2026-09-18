@@ -90,6 +90,20 @@ def test_position_math_is_deterministic_decimal_economics():
     assert result["data_complete"] is True
 
 
+def test_fully_contracted_position_does_not_require_spot_price():
+    result = compute_position(
+        position(current_realizable_price=None),
+        [contract(quantity=Decimal("110000"))],
+    ).payload
+    assert result["uncontracted_quantity"] == "0.00000000"
+    assert result["current_realizable_price"] is None
+    assert result["exposed_revenue"] == "0.00"
+    assert result["projected_revenue"] == "484000.00"
+    assert result["projected_margin"] == "82500.00"
+    assert "current_realizable_price" not in result["missing_inputs"]
+    assert result["data_complete"] is True
+
+
 def test_missing_contract_fx_suppresses_margin_instead_of_partial_total():
     br_position = position(
         commodity="soybeans",
