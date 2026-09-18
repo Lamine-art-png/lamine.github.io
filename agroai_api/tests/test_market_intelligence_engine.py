@@ -195,8 +195,29 @@ def test_inventory_requires_cost_basis_for_margin_but_still_counts_as_supply():
     result = compute_position(without_basis, [contract()]).payload
     assert result["marketable_supply"] == "110000.00000000"
     assert result["projected_revenue"] == "492000.00"
+    assert result["projected_cost"] is None
     assert result["projected_margin"] is None
+    assert result["break_even_price"] is None
     assert "inventory_cost_per_unit" in result["missing_inputs"]
+
+
+def test_missing_production_cost_never_becomes_zero_cost_margin():
+    result = compute_position(
+        position(
+            inventory_quantity=Decimal("0"),
+            production_cost_per_unit=None,
+            metadata_json={"production_cost_behavior": "fixed_total_at_baseline_yield"},
+        ),
+        [contract()],
+    ).payload
+    assert result["projected_revenue"] == "447000.00"
+    assert result["production_cost_per_unit"] is None
+    assert result["fixed_production_cost_total"] is None
+    assert result["projected_cost"] is None
+    assert result["break_even_price"] is None
+    assert result["projected_margin"] is None
+    assert "production_cost_per_unit" in result["missing_inputs"]
+    assert result["data_complete"] is False
 
 
 def test_ai_numeric_claims_must_reference_exact_structured_evidence():
