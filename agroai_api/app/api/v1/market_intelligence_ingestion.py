@@ -7,7 +7,7 @@ live exchange data.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -265,7 +265,7 @@ def create_observation(payload: ObservationInput, ctx: AuthContext = Depends(get
         id=str(uuid.uuid4()), organization_id=org_id, position_id=payload.position_id, evidence_id=payload.evidence_id,
         observation_type=payload.observation_type, provider=payload.provider, source_name=payload.source_name,
         source_status=source_state, value=payload.value, unit=payload.unit, currency=payload.currency,
-        observed_at=payload.observed_at, retrieved_at=datetime.utcnow(), delay_minutes=payload.delay_minutes,
+        observed_at=(payload.observed_at.astimezone(timezone.utc).replace(tzinfo=None) if payload.observed_at.tzinfo else payload.observed_at), retrieved_at=datetime.utcnow(), delay_minutes=payload.delay_minutes,
         quality_json=payload.quality, licensing_json=payload.licensing,
         metadata_json={**payload.metadata, "input_source": "customer_structured_input", "requested_source_status": payload.source_status},
     )
