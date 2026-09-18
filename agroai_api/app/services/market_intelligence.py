@@ -168,14 +168,19 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     marketable_supply = expected + inventory
     metadata = _metadata(position)
 
-    cost_per_unit = dec(_attr(position, "production_cost_per_unit"), ZERO)
+    production_cost_raw = _attr(position, "production_cost_per_unit")
+    fixed_production_cost_raw = _attr(position, "fixed_production_cost_total")
+    cost_per_unit = dec(production_cost_raw) if production_cost_raw is not None else None
     freight_per_unit = dec(_attr(position, "freight_per_unit"), ZERO)
     storage_per_unit = dec(_attr(position, "storage_per_unit"), ZERO)
-    if min(cost_per_unit, freight_per_unit, storage_per_unit) < ZERO:
+    if (cost_per_unit is not None and cost_per_unit < ZERO) or min(freight_per_unit, storage_per_unit) < ZERO:
         raise MarketCalculationError("cost values cannot be negative")
 
     warnings: list[str] = []
     missing_inputs: list[str] = []
+    if cost_per_unit is None and fixed_production_cost_raw is None:
+        missing_inputs.append("production_cost_per_unit")
+        warnings.append("production cost basis is required before projected cost, break-even and margin can be calculated")
     contracted = ZERO
     locked_revenue = ZERO
     weighted_price_numerator = ZERO
@@ -245,7 +250,15 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     cost_behavior = str(metadata.get("production_cost_behavior") or "fixed_total_at_baseline_yield")
     if cost_behavior != "fixed_total_at_baseline_yield":
         raise MarketCalculationError("unsupported production_cost_behavior")
-    fixed_production_cost_total = dec(_attr(position, "fixed_production_cost_total"), expected * cost_per_unit)
+    if fixed_production_cost_raw is not None:
+        fixed_production_cost_total = dec(fixed_production_cost_raw)
+    elif cost_per_unit is not None:
+        fixed_production_cost_total = expected * cost_per_unit
+    else:
+        fixed_production_cost_total = None
+    if fixed_production_cost_total is not None and fixed_production_cost_total < ZERO:
+        raise MarketCalculationError("fixed production cost cannot be negative")
+
     inventory_cost_raw = metadata.get("inventory_cost_per_unit")
     inventory_cost_per_unit = dec(inventory_cost_raw) if inventory_cost_raw is not None else None
     if inventory > ZERO and inventory_cost_per_unit is None:
@@ -253,10 +266,22 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         warnings.append("carry inventory is included in marketable supply, but margin is suppressed until its cost basis is supplied")
     inventory_cost_total = inventory * inventory_cost_per_unit if inventory_cost_per_unit is not None else ZERO
     variable_commercial_cost = marketable_supply * (freight_per_unit + storage_per_unit)
-    total_cost = fixed_production_cost_total + inventory_cost_total + variable_commercial_cost
-    cost_basis_complete = inventory == ZERO or inventory_cost_per_unit is not None
-    break_even = total_cost / marketable_supply if marketable_supply > ZERO and cost_basis_complete else None
-    suppress_margin = over_contracted or missing_contract_fx or expected_revenue is None or (inventory > ZERO and inventory_cost_per_unit is None)
+    cost_basis_complete = (
+        fixed_production_cost_total is not None
+        and (inventory == ZERO or inventory_cost_per_unit is not None)
+    )
+    total_cost = (
+        fixed_production_cost_total + inventory_cost_total + variable_commercial_cost
+        if cost_basis_complete
+        else None
+    )
+    break_even = total_cost / marketable_supply if total_cost is not None and marketable_supply > ZERO else None
+    suppress_margin = (
+        over_contracted
+        or missing_contract_fx
+        or expected_revenue is None
+        or total_cost is None
+    )
     gross_margin = None if suppress_margin else expected_revenue - total_cost
     margin_pct = None if gross_margin is None or expected_revenue in {None, ZERO} else _pct(gross_margin, expected_revenue)
     weighted_contract_price = None if contracted <= ZERO or missing_contract_fx else weighted_price_numerator / contracted
@@ -286,9 +311,9 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         "exposed_percent": _out(exposed_pct, Decimal("0.0001")) if exposed_pct is not None else None,
         "weighted_contract_price": _out(weighted_contract_price) if weighted_contract_price is not None else None,
         "current_realizable_price": _out(spot_price_reporting) if spot_price_reporting is not None else None,
-        "production_cost_per_unit": _out(cost_per_unit),
+        "production_cost_per_unit": _out(cost_per_unit) if cost_per_unit is not None else None,
         "production_cost_behavior": cost_behavior,
-        "fixed_production_cost_total": _out(fixed_production_cost_total, MONEY),
+        "fixed_production_cost_total": _out(fixed_production_cost_total, MONEY) if fixed_production_cost_total is not None else None,
         "inventory_cost_per_unit": _out(inventory_cost_per_unit) if inventory_cost_per_unit is not None else None,
         "freight_per_unit": _out(freight_per_unit),
         "storage_per_unit": _out(storage_per_unit),
@@ -297,7 +322,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         "locked_revenue": None if missing_contract_fx else _out(locked_revenue, MONEY),
         "exposed_revenue": _out(exposed_revenue, MONEY) if exposed_revenue is not None else None,
         "projected_revenue": _out(expected_revenue, MONEY) if expected_revenue is not None and not over_contracted else None,
-        "projected_cost": _out(total_cost, MONEY),
+        "projected_cost": _out(total_cost, MONEY) if total_cost is not None else None,
         "projected_margin": _out(gross_margin, MONEY) if gross_margin is not None else None,
         "projected_margin_percent": _out(margin_pct, Decimal("0.0001")) if margin_pct is not None else None,
         "over_contracted": over_contracted,
@@ -371,7 +396,16 @@ def scenario_position(position: Any, contracts: list[Any], assumptions: dict[str
             "metadata_json",
         )
     }
-    baseline_production_cost_total = dec(mutable["expected_production"]) * dec(mutable["production_cost_per_unit"], ZERO)
+    baseline_cost_per_unit = (
+        dec(mutable["production_cost_per_unit"])
+        if mutable["production_cost_per_unit"] is not None
+        else None
+    )
+    baseline_production_cost_total = (
+        dec(mutable["expected_production"]) * baseline_cost_per_unit
+        if baseline_cost_per_unit is not None
+        else None
+    )
     mutable["expected_production"] = dec(mutable["expected_production"]) * (ONE + yield_pct / Decimal("100"))
     if mutable["current_realizable_price"] is not None:
         mutable["current_realizable_price"] = dec(mutable["current_realizable_price"]) * (ONE + price_pct / Decimal("100"))
@@ -379,7 +413,8 @@ def scenario_position(position: Any, contracts: list[Any], assumptions: dict[str
         mutable["fx_rate_to_reporting"] = dec(mutable["fx_rate_to_reporting"]) * (ONE + fx_pct / Decimal("100"))
     if mutable["production_cost_per_unit"] is not None:
         mutable["production_cost_per_unit"] = dec(mutable["production_cost_per_unit"]) * (ONE + cost_pct / Decimal("100"))
-    mutable["fixed_production_cost_total"] = baseline_production_cost_total * (ONE + cost_pct / Decimal("100"))
+    if baseline_production_cost_total is not None:
+        mutable["fixed_production_cost_total"] = baseline_production_cost_total * (ONE + cost_pct / Decimal("100"))
     mutable["freight_per_unit"] = dec(mutable["freight_per_unit"], ZERO) + freight_delta
     mutable["storage_per_unit"] = dec(mutable["storage_per_unit"], ZERO) + storage_delta
     if mutable["freight_per_unit"] < ZERO or mutable["storage_per_unit"] < ZERO:
