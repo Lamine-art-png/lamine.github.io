@@ -12,7 +12,7 @@ on:
       - agroai_api/app/api/v1/commercial_intelligence_selfserve.py
       - agroai_api/app/api/v1/router_compat.py
       - agroai_api/app/models/intelligence_commerce.py
-      - agroai_api/alembic/versions/033_intelligence_wallet_commerce.py
+      - agroai_api/alembic/versions/034_intelligence_wallet_commerce.py
       - figma-enterprise-v4/src/app/components/PlatformIntelligenceConsole.tsx
       - figma-enterprise-v4/src/app/platformIntelligenceCopy.ts
       - figma-enterprise-v4/src/app/routes.tsx
