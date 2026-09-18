@@ -334,16 +334,15 @@
         </div>
         <div class="api-terminal" aria-label="Platform API product capabilities">
           <div class="terminal-top"><span></span><span></span><span></span><b>AGRO-AI Platform API</b></div>
-          <div class="terminal-line"><span class="terminal-key">POST</span><code>/v1/platform/intelligence</code></div>
+          <div class="terminal-line"><span class="terminal-key">GET</span><code>/v1/platform/me</code></div>
           <div class="terminal-response">
             <span>{</span>
-            <span>&nbsp;&nbsp;"recommendation": <em>"decision-ready output"</em>,</span>
-            <span>&nbsp;&nbsp;"confidence": <em>"scored"</em>,</span>
-            <span>&nbsp;&nbsp;"evidence": <em>"traceable"</em>,</span>
-            <span>&nbsp;&nbsp;"actions": <em>"workflow-ready"</em></span>
+            <span>&nbsp;&nbsp;"principal": <em>"organization-scoped"</em>,</span>
+            <span>&nbsp;&nbsp;"environment": <em>"test"</em>,</span>
+            <span>&nbsp;&nbsp;"scopes": <em>"server-authoritative"</em></span>
             <span>}</span>
           </div>
-          <p>Illustrative response shape. Use the documentation and current API contract for exact endpoints and schemas.</p>
+          <p>Illustrative formatting of a real Platform API identity route. Use the documentation for the exact response schema.</p>
         </div>
       </div>
     </section>
