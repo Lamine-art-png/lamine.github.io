@@ -415,10 +415,15 @@ def test_semantic_position_edits_fail_closed_and_reporting_currency_clears_fx(cl
         f"/v1/market-intelligence/positions/{position_id}",
         json={"reporting_currency": "EUR"},
     )
-    assert changed_currency.status_code == 200
+    assert changed_currency.status_code == 422
+    assert changed_currency.json()["detail"]["code"] == "reporting_currency_change_requires_restatement"
 
-    row = db.query(MarketPosition).filter(MarketPosition.id == position_id).one()
-    assert row.fx_rate_to_reporting is None
+    changed_price_currency = client.patch(
+        f"/v1/market-intelligence/positions/{position_id}",
+        json={"price_currency": "EUR"},
+    )
+    assert changed_price_currency.status_code == 422
+    assert changed_price_currency.json()["detail"]["code"] == "price_currency_change_requires_price_restatement"
 
 
 def test_contract_unit_patch_requires_quantity_and_price_restatement(client, db):
@@ -448,6 +453,13 @@ def test_contract_unit_patch_requires_quantity_and_price_restatement(client, db)
     )
     assert patched.status_code == 422
     assert patched.json()["detail"]["code"] == "contract_unit_change_requires_restatement"
+
+    currency_only = client.patch(
+        f"/v1/market-intelligence/contracts/{contract.json()['id']}",
+        json={"currency": "BRL"},
+    )
+    assert currency_only.status_code == 422
+    assert currency_only.json()["detail"]["code"] == "contract_currency_change_requires_price_restatement"
 
 
 def test_portfolio_suppresses_partial_projected_totals(client, db):
