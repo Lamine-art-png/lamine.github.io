@@ -14,6 +14,8 @@ const portalRoutes = read("figma-enterprise-v4/src/app/routes.tsx");
 const portalShell = read("figma-enterprise-v4/src/app/components/MainLayout.tsx");
 const consoleSource = read("figma-enterprise-v4/src/app/components/PlatformConsole.tsx");
 const officialLogo = read("platform-api/assets/logo.svg");
+const homepageFullLogo = readFileSync(resolve(root, "platform-api/assets/agro-ai-logo-full.png"));
+const canonicalFullLogo = readFileSync(resolve(root, "figma-enterprise-v4/src/imports/agro-ai-logo-1.png"));
 const homepage = read("platform-api/homepage.html");
 const homepageCss = read("platform-api/assets/homepage-v4.css");
 const homepageJs = read("platform-api/assets/homepage-v4.js");
@@ -92,6 +94,7 @@ assert.match(officialLogo, /viewBox="0 0 256 256"/);
 assert.match(officialLogo, /width="256" height="256" preserveAspectRatio="xMidYMid meet"/);
 assert.match(officialLogo, /data:image\/webp;base64,/);
 assert.doesNotMatch(officialLogo, /viewBox="0 0 96 96"|id="agLeaf"|<rect x="1" y="1"/);
+assert.ok(homepageFullLogo.equals(canonicalFullLogo), "homepage full logo must reuse the canonical official AGRO-AI asset");
 
 const genericErrorPage = /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i;
 for (const relativePath of htmlFiles) {
@@ -129,6 +132,8 @@ for (const required of [
   "https://app.agroai-pilot.com/?mode=register",
   "https://platform.agroai-pilot.com/?mode=register",
   'href="/book-a-demo"',
+  'data-conversion="nav-demo">Book a Demo</a>',
+  'src="/platform-api/assets/agro-ai-logo-full.png"',
   'href="/careers"',
   'href="/contact"',
   'href="/trust"',
@@ -155,6 +160,7 @@ for (const required of [
   '--cream:#eee9db',
   '--lime:#dce98f',
   '"Glacial Indifference"',
+  '.button-demo{',
   '@media(prefers-reduced-motion:reduce)',
 ]) {
   assert.ok(homepageCss.includes(required), `missing homepage design-system contract: ${required}`);
