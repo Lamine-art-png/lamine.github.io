@@ -110,3 +110,29 @@ def test_usda_adapter_refuses_to_invent_coverage_outside_supported_request():
         region="California",
         metadata={},
     ))) == []
+
+
+def test_usda_adapter_rejects_rows_without_a_parseable_market_date():
+    payload = {
+        "results": [
+            {
+                "commodity": "Corn",
+                "weighted_average": "4.62",
+                "price_unit": "USD/bu",
+            },
+            {
+                "report_begin_date": "not-a-date",
+                "commodity": "Corn",
+                "weighted_average": "4.70",
+                "price_unit": "USD/bu",
+            },
+        ]
+    }
+    provider = USDAMyMarketNewsProvider("test-key", fetch_json=lambda *_args, **_kwargs: payload)
+    rows = asyncio.run(provider.observations(MarketDataRequest(
+        commodity="corn",
+        country_code="US",
+        region="Iowa",
+        reporting_currency="USD",
+    )))
+    assert rows == []

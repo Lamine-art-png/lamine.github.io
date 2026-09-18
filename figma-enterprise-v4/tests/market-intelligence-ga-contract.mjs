@@ -15,9 +15,9 @@ assert.match(page, /\/v1\/market-intelligence\/providers/);
 assert.match(page, /\/v1\/market-intelligence\/refresh/);
 assert.match(page, /\/v1\/market-intelligence\/positions/);
 assert.match(page, /\/v1\/market-intelligence\/contracts/);
+assert.match(page, /manual-price/);
 assert.match(page, /\/v1\/market-intelligence\/observations/);
 assert.match(page, /Customer entered market price/);
-assert.match(page, /source_status: "MANUAL"/);
 assert.match(page, /never presents manual or delayed data as live/);
 assert.doesNotMatch(page, /fakeLive|mockPrice|Math\.random/);
 
