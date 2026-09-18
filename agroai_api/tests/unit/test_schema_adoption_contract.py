@@ -31,7 +31,16 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "033_market_intelligence"
+    assert HEAD_ALEMBIC_REVISION == "034_intelligence_wallet_commerce"
+    assert {"organization_id", "balance_cents", "lifetime_funded_cents", "lifetime_spent_cents"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["platform_intelligence_wallets"]
+    )
+    assert {"organization_id", "wallet_id", "kind", "amount_cents", "idempotency_key"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["platform_intelligence_wallet_ledger"]
+    )
+    assert {"organization_id", "api_project_id", "idempotency_key", "task", "charge_cents", "response_json"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["platform_commercial_intelligence_runs"]
+    )
     assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["market_positions"]
     )

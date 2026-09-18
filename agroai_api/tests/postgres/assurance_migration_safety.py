@@ -23,7 +23,7 @@ from app.models.saas import Organization, User, Workspace
 
 PG_URL = os.environ.get("ASSURANCE_MIGRATION_TEST_DATABASE_URL", "")
 ROOT = Path(__file__).resolve().parents[2]
-MERGED_HEAD = "033_market_intelligence"
+MERGED_HEAD = "034_intelligence_wallet_commerce"
 
 pytestmark = pytest.mark.skipif(
     not PG_URL.startswith("postgresql"),

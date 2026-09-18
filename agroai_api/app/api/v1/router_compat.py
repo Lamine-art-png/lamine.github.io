@@ -6,6 +6,52 @@ from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 
 
+_COMMERCIAL_BROWSER_PATHS = {
+    "/platform/developer/wallet",
+    "/platform/developer/wallet/sync",
+    "/platform/developer/wallet/checkout",
+    "/platform/developer/intelligence/bootstrap",
+    "/platform/developer/intelligence/run",
+}
+
+
+def _is_application_router(router: Any) -> bool:
+    """Identify the top-level FastAPI router without coupling to app.main.
+
+    This compatibility helper is also used by nested product routers. Only the
+    application router owns global `/v1/intelligence` commerce, so require the
+    canonical application health route before composing it.
+    """
+    return any(getattr(route, "path", None) == "/v1/health" for route in getattr(router, "routes", ()))
+
+
+def _include_commercial_intelligence(router: Any) -> None:
+    if not _is_application_router(router):
+        return
+    if getattr(router, "_agroai_commercial_intelligence_included", False):
+        return
+
+    # Order matters: harden the money-moving executor first, then wrap it with
+    # the recursive credential guard. The key guard independently constrains
+    # commercial credentials. Browser commerce replaces the legacy enrollment-
+    # gated browser routes while the machine endpoint remains on the hardened
+    # commercial router.
+    from app.api.v1 import commercial_intelligence_hardened as _hardening  # noqa: F401
+    from app.api.v1 import commercial_intelligence_key_guard as _key_guard  # noqa: F401
+    from app.api.v1 import commercial_intelligence_input_guard as _input_guard  # noqa: F401
+    from app.api.v1.commercial_intelligence_hardened import router as commercial_router
+    from app.api.v1.commercial_intelligence_selfserve import router as commercial_selfserve_router
+
+    commercial_router.routes[:] = [
+        route
+        for route in commercial_router.routes
+        if getattr(route, "path", None) not in _COMMERCIAL_BROWSER_PATHS
+    ]
+    router.include_router(commercial_selfserve_router, prefix="/v1")
+    router.include_router(commercial_router, prefix="/v1")
+    setattr(router, "_agroai_commercial_intelligence_included", True)
+
+
 def materialize_included_routes(router: Any) -> None:
     """Expand FastAPI deferred router includes for current route contracts.
 
@@ -14,6 +60,8 @@ def materialize_included_routes(router: Any) -> None:
     includes as private ``_IncludedRouter`` wrappers, so materialize them after
     all local composition hooks have run.
     """
+    _include_commercial_intelligence(router)
+
     try:
         from fastapi.routing import _IncludedRouter
     except Exception:  # pragma: no cover - older FastAPI already flattens.
