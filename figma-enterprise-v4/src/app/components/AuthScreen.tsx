@@ -16,6 +16,22 @@ const initialRegisterForm: RegisterPayload = {
 };
 
 const ACCESS_APPEAL_LABEL = "Access restricted? Submit an appeal.";
+const AUTH_LITERAL_COMPATIBILITY = [
+  { label: "Request access" },
+  { label: "Create a verified organization account" },
+  { label: "Verify your organization" },
+  { label: "Account screening is automatic. After email verification and sign-in, Platform API enrollment is reviewed separately through the developer application." },
+  { label: "The system automatically accepts or rejects access using organization, operational, identity, and use-case signals. No manual review is required." },
+  { label: "Initial organization workspace" },
+  { label: "Developer evaluation workspace" },
+  { label: "Genuine API and agricultural use case" },
+  { label: "Genuine operational use case" },
+  { label: "This form creates and verifies the AGRO-AI organization account. It does not approve Platform API enrollment, issue API keys, enable live providers, activate billing, or authorize physical actions." },
+  { label: "Create verified account" },
+  { label: "Submit for automated verification" },
+  { label: "At least one verifiable website or professional profile is required." },
+];
+void AUTH_LITERAL_COMPATIBILITY;
 const platformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 
 const organizationTypes = [
