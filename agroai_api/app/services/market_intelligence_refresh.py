@@ -66,6 +66,22 @@ def _quantity_unit_from_price_unit(value: str | None) -> str | None:
     return None
 
 
+def _select_unambiguous_latest_price(
+    observations: list[ProviderObservation],
+) -> tuple[ProviderObservation | None, str | None]:
+    if not observations:
+        return None, "no_compatible_observation"
+    latest_date = max(item.observed_at.date() for item in observations)
+    latest_rows = [item for item in observations if item.observed_at.date() == latest_date]
+    signatures = {
+        (item.value, _norm(item.unit), str(item.currency or "").upper())
+        for item in latest_rows
+    }
+    if len(signatures) != 1:
+        return None, "ambiguous_latest_market_observations"
+    return max(latest_rows, key=lambda item: item.observed_at), None
+
+
 def _scoped_evidence_id(position_id: str, upstream_evidence_id: str) -> str:
     """Keep provider evidence independently attached to every commercial position.
 
@@ -270,8 +286,8 @@ async def refresh_position_market_data(
                     and observed_unit == _canonical_quantity_unit(position.quantity_unit)
                 ):
                     compatible.append(item)
-            if compatible:
-                latest = max(compatible, key=lambda item: item.observed_at)
+            latest, selection_error = _select_unambiguous_latest_price(compatible)
+            if latest is not None:
                 promoted_currency = str(latest.currency or "").upper()
                 position.current_realizable_price = latest.value
                 position.price_currency = promoted_currency
@@ -312,11 +328,19 @@ async def refresh_position_market_data(
                     "observation_count": 0,
                     "promoted_to_position": False,
                 }
+            elif selection_error == "ambiguous_latest_market_observations":
+                provider_results["usda_mymarketnews"] = {
+                    "status": "REVIEW_REQUIRED",
+                    "reason": selection_error,
+                    "observation_count": len(rows),
+                    "compatible_observation_count": len(compatible),
+                    "promoted_to_position": False,
+                }
             else:
                 provider_results["usda_mymarketnews"] = {
                     "status": "ok" if rows else "no_matching_observation",
                     "observation_count": len(rows),
-                    "promoted_to_position": bool(compatible),
+                    "promoted_to_position": latest is not None,
                 }
         except Exception as exc:
             provider_results["usda_mymarketnews"] = {
