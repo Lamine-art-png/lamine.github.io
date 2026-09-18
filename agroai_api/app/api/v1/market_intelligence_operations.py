@@ -141,6 +141,17 @@ def patch_position(
                     "message": "Changing the position quantity unit requires restating production, inventory, costs, prices and contracts. Create a new position instead.",
                 },
             )
+    if (
+        "reporting_currency" in changes
+        and str(changes["reporting_currency"]).upper() != str(row.reporting_currency or "").upper()
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "reporting_currency_change_requires_restatement",
+                "message": "Changing reporting currency would reinterpret stored cost economics. Create a new position with restated costs instead.",
+            },
+        )
 
     reporting_changed = (
         "reporting_currency" in changes
@@ -151,6 +162,14 @@ def patch_position(
         and changes["price_currency"] is not None
         and str(changes["price_currency"]).upper() != str(row.price_currency or "").upper()
     )
+    if price_currency_changed and row.current_realizable_price is not None and "current_realizable_price" not in changes:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "price_currency_change_requires_price_restatement",
+                "message": "Changing price currency requires restating the current realizable price in the same request.",
+            },
+        )
 
     for field_name, value in changes.items():
         if isinstance(value, str) and field_name in {"name", "commodity", "season", "quantity_unit", "region"}:
@@ -296,6 +315,14 @@ def patch_contract(
         "currency" in changes
         and str(changes["currency"]).upper() != str(row.currency or "").upper()
     )
+    if currency_changed and "price" not in changes:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "contract_currency_change_requires_price_restatement",
+                "message": "Changing contract currency requires restating the contract price in the same request.",
+            },
+        )
     for field_name, value in changes.items():
         setattr(row, field_name, value)
     if currency_changed:
