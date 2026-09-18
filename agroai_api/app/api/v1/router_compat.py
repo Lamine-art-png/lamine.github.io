@@ -39,16 +39,16 @@ def _include_commercial_intelligence(router: Any) -> None:
     from app.api.v1 import commercial_intelligence_hardened as _hardening  # noqa: F401
     from app.api.v1 import commercial_intelligence_key_guard as _key_guard  # noqa: F401
     from app.api.v1 import commercial_intelligence_input_guard as _input_guard  # noqa: F401
-    from app.api.v1.commercial_intelligence_hardened import router as commercial_router
+    from app.api.v1.commercial_intelligence_hardened import router as commercial_intelligence_router
     from app.api.v1.commercial_intelligence_selfserve import router as commercial_selfserve_router
 
-    commercial_router.routes[:] = [
+    commercial_intelligence_router.routes[:] = [
         route
-        for route in commercial_router.routes
+        for route in commercial_intelligence_router.routes
         if getattr(route, "path", None) not in _COMMERCIAL_BROWSER_PATHS
     ]
     router.include_router(commercial_selfserve_router, prefix="/v1")
-    router.include_router(commercial_router, prefix="/v1")
+    router.include_router(commercial_intelligence_router, prefix="/v1")
     setattr(router, "_agroai_commercial_intelligence_included", True)
 
 
