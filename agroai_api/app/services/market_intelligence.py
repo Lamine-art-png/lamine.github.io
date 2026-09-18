@@ -188,7 +188,9 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     missing_contract_fx = False
 
     for contract in contracts:
-        if str(_attr(contract, "status", "active")).lower() not in {"active", "priced", "committed"}:
+        # Fulfilled contracts remain part of the season's committed volume
+        # and locked/realized commercial revenue. Cancelled contracts do not.
+        if str(_attr(contract, "status", "active")).lower() not in {"active", "priced", "committed", "fulfilled"}:
             continue
         quantity = convert_quantity(
             _attr(contract, "quantity"),
