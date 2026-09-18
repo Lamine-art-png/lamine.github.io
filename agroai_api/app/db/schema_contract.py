@@ -5,10 +5,25 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "033_market_intelligence"
+HEAD_ALEMBIC_REVISION = "034_intelligence_wallet_commerce"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
+    "platform_intelligence_wallets": {
+        "id", "organization_id", "currency", "balance_cents", "lifetime_funded_cents",
+        "lifetime_spent_cents", "auto_reload_enabled", "created_at", "updated_at",
+    },
+    "platform_intelligence_wallet_ledger": {
+        "id", "organization_id", "wallet_id", "kind", "status", "amount_cents",
+        "idempotency_key", "external_reference", "intelligence_run_id", "metadata_json",
+        "created_at", "posted_at",
+    },
+    "platform_commercial_intelligence_runs": {
+        "id", "organization_id", "api_project_id", "api_key_id", "workspace_id", "field_id",
+        "idempotency_key", "request_hash", "task", "mode", "public_model", "status",
+        "charge_cents", "currency", "request_safe_json", "response_json", "provider_internal",
+        "model_internal", "error_code", "error_detail", "created_at", "completed_at",
+    },
     "market_positions": {
         "id", "organization_id", "workspace_id", "position_key", "commodity", "season",
         "country_code", "market_structure", "local_currency", "reporting_currency",

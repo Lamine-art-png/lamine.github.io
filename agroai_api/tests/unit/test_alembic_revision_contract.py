@@ -85,6 +85,7 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
         ),
         "032_repair_onboarding_state": "031_merge_assurance_intelligence",
         "033_market_intelligence": "032_repair_onboarding_state",
+        "034_intelligence_wallet_commerce": "033_market_intelligence",
     }
     actual = {}
 
