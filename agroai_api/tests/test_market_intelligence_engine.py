@@ -113,6 +113,15 @@ def test_missing_contract_fx_suppresses_margin_instead_of_partial_total():
     assert result["data_complete"] is False
 
 
+def test_fulfilled_contracts_remain_committed_while_cancelled_contracts_drop_out():
+    fulfilled = compute_position(position(), [contract(status="fulfilled")]).payload
+    cancelled = compute_position(position(), [contract(status="cancelled")]).payload
+    assert fulfilled["contracted_quantity"] == "30000.00000000"
+    assert fulfilled["locked_revenue"] == "132000.00"
+    assert cancelled["contracted_quantity"] == "0.00000000"
+    assert cancelled["locked_revenue"] == "0.00"
+
+
 def test_over_contracting_suppresses_projected_margin():
     result = compute_position(position(expected_production=Decimal("100"), inventory_quantity=Decimal("0")), [contract(quantity=Decimal("120"))]).payload
     assert result["over_contracted"] is True
