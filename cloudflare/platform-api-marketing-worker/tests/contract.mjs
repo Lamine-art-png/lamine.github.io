@@ -14,6 +14,9 @@ const portalRoutes = read("figma-enterprise-v4/src/app/routes.tsx");
 const portalShell = read("figma-enterprise-v4/src/app/components/MainLayout.tsx");
 const consoleSource = read("figma-enterprise-v4/src/app/components/PlatformConsole.tsx");
 const officialLogo = read("platform-api/assets/logo.svg");
+const homepage = read("platform-api/homepage.html");
+const homepageCss = read("platform-api/assets/homepage-v4.css");
+const homepageJs = read("platform-api/assets/homepage-v4.js");
 
 const htmlFiles = [
   "platform-api/index.html",
@@ -119,4 +122,60 @@ for (const productCapability of [
   assert.ok(consoleSource.includes(`"${productCapability}"`), `missing developer console capability: ${productCapability}`);
 }
 
-console.log(`Platform API contract green: ${htmlFiles.length} pages, ${exactRoutes.length} exact routes, official branding, exact asset handling.`);
+for (const required of [
+  "data-agroai-home-v4",
+  "Enterprise Agriculture Intelligence",
+  "The intelligence layer for modern agricultural operations.",
+  "https://app.agroai-pilot.com/?mode=register",
+  "https://platform.agroai-pilot.com/?mode=register",
+  'href="/book-a-demo"',
+  'href="/careers"',
+  'href="/contact"',
+  'href="/trust"',
+  'href="/trust/data-governance"',
+  'href="/terms-of-service"',
+  'href="/privacy-policy"',
+  'href="/pilot-agreement"',
+  'href="/news"',
+  'href="/insights"',
+  'href="/guides/"',
+  'href="/integrations"',
+  'href="/about"',
+  'href="/docs"',
+  'src="/platform-api/assets/logo.svg"',
+  'id="agroai-social-footer"',
+  'data-testid="footer-legal"',
+  "not a fabricated customer dashboard",
+]) {
+  assert.ok(homepage.includes(required), `missing homepage conversion/continuity contract: ${required}`);
+}
+
+for (const required of [
+  '--forest:#0b2f23',
+  '--cream:#eee9db',
+  '--lime:#dce98f',
+  '"Glacial Indifference"',
+  '@media(prefers-reduced-motion:reduce)',
+]) {
+  assert.ok(homepageCss.includes(required), `missing homepage design-system contract: ${required}`);
+}
+
+for (const required of [
+  "const intentConfig",
+  "const portalConfig",
+  "https://app.agroai-pilot.com/?mode=register",
+  "https://platform.agroai-pilot.com/?mode=register",
+]) {
+  assert.ok(homepageJs.includes(required), `missing homepage interaction contract: ${required}`);
+}
+
+for (const required of [
+  'new URL("/homepage.html", "https://agroai-assets.invalid")',
+  '"conversion-home-v4"',
+  '"data-agroai-home-v4"',
+  'return unavailable("homepage-identity-mismatch")',
+]) {
+  assert.ok(source.includes(required), `missing homepage Worker contract: ${required}`);
+}
+
+console.log(`Platform + conversion homepage contract green: ${htmlFiles.length} Platform pages, ${exactRoutes.length} exact routes, direct product entry, official branding, continuity links, and exact asset handling.`);

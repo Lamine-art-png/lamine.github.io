@@ -69,7 +69,7 @@ function active(pathname: string, target: string): string {
 }
 
 function mainSiteHeader(): string {
-  return `<header class="top" data-agroai-main-shell="true"><div class="site-nav"><a class="brand" href="/" aria-label="AGRO-AI home"><img src="${MAIN_SITE_LOGO}" alt="AGRO-AI"></a><nav class="mainnav" aria-label="Primary navigation"><a href="/#platform">Platform</a><a href="/integrations">Integrations</a><a href="/#intelligence">Intelligence</a><a href="/docs">Docs</a><a href="/news">News</a><a href="/insights">Insights</a><a href="/about">Company</a></nav><div class="navactions"><a class="portalbtn" href="https://app.agroai-pilot.com">Open Portal</a><a class="demobtn" href="/book-a-demo">Book a Demo</a></div></div></header>`;
+  return `<header class="top" data-agroai-main-shell="true"><div class="site-nav"><a class="brand" href="/" aria-label="AGRO-AI home"><img src="${MAIN_SITE_LOGO}" alt="AGRO-AI"></a><nav class="mainnav" aria-label="Primary navigation"><a href="/#platform">Platform</a><a href="/integrations">Integrations</a><a href="/#intelligence">Intelligence</a><a href="/docs">Docs</a><a href="/guides/">Guide</a><a href="/news">News</a><a href="/insights">Insights</a><a href="/about">Company</a></nav><div class="navactions"><a class="portalbtn" href="https://app.agroai-pilot.com">Open Portal</a><a class="demobtn" href="/book-a-demo">Book a Demo</a></div></div></header>`;
 }
 
 function trustLegalNavigation(pathname: string): string {
