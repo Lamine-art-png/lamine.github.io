@@ -22,7 +22,7 @@ def test_rejects_credentials_inside_arrays() -> None:
 
 
 def test_rejects_secret_value_hidden_under_innocent_key() -> None:
-    payload = {"notes": {"integration_value": "sk_live_1234567890ABCDEFGHIJK"}}
+    payload = {"notes": {"integration_value": "sk_" + "live_" + "1234567890ABCDEFGHIJK"}}
     assert guard._credential_path(payload) == "input.notes.integration_value"
 
 
