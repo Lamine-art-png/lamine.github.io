@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1 import commercial_intelligence as legacy
 from app.core.config import settings
+from app.core.organization_access import organization_access_allowed
 from app.db.base import get_db
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.terms import require_organization_acceptance
@@ -35,6 +36,8 @@ def require_commercial_intelligence_browser(
         raise HTTPException(status_code=403, detail={"code": "organization_membership_required"})
     if getattr(ctx.membership, "status", "active") != "active":
         raise HTTPException(status_code=403, detail={"code": "active_membership_required"})
+    if not organization_access_allowed(ctx.organization):
+        raise HTTPException(status_code=403, detail={"code": "organization_not_approved"})
     if str(ctx.membership.role or "").lower() not in {"owner", "admin"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
