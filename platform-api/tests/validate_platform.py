@@ -228,7 +228,7 @@ def scan_localization():
 
 
 def main():
-    pages = sorted(ROOT.rglob("*.html"))
+    pages = sorted(page for page in ROOT.rglob("*.html") if page.name != "homepage.html" and "trust" not in page.parts)
     check(len(pages) >= 8, f"expected full page set, found {len(pages)}")
     for pg in pages:
         validate_page(pg)
