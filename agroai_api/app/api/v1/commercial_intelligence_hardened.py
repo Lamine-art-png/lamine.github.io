@@ -17,7 +17,7 @@ from app.api.v1 import commercial_intelligence as legacy
 from app.models.intelligence_commerce import CommercialIntelligenceRun, IntelligenceWalletLedger
 from app.models.operational_records import EvidenceRecord
 from app.models.platform_api import PlatformApiKey
-from app.models.saas import ManagedEntity
+from app.models.saas import ManagedEntity, Workspace
 from app.platform_api.programs import enforce_enrollment_limit
 from app.platform_api.principal import PlatformPrincipal
 from app.schemas.ai import EvidenceContext, ToolCitation
@@ -41,6 +41,20 @@ def _validate_and_build_context(
     requested_workspace = payload.workspace_id
     if key_workspace and requested_workspace and requested_workspace != key_workspace:
         raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
+
+    resolved_requested_workspace = key_workspace or requested_workspace
+    if resolved_requested_workspace:
+        workspace = (
+            db.query(Workspace)
+            .filter(
+                Workspace.id == resolved_requested_workspace,
+                Workspace.organization_id == principal.organization_id,
+            )
+            .first()
+        )
+        if workspace is None:
+            # Keep cross-tenant and nonexistent workspace probes indistinguishable.
+            raise HTTPException(status_code=404, detail={"code": "workspace_not_found"})
 
     field: ManagedEntity | None = None
     if payload.field_id:
