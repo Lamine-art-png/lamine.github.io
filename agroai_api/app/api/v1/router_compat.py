@@ -15,7 +15,7 @@ _COMMERCIAL_BROWSER_PATHS = {
 }
 
 
-def _include_commercial_intelligence(router: Any) -> None:
+def include_commercial_intelligence(router: Any) -> None:
     """Attach hardened machine and verified browser Intelligence commerce."""
     if getattr(router, "_agroai_commercial_intelligence_included", False):
         return
@@ -49,8 +49,6 @@ def materialize_included_routes(router: Any) -> None:
     includes as private ``_IncludedRouter`` wrappers, so materialize them after
     all local composition hooks have run.
     """
-    _include_commercial_intelligence(router)
-
     try:
         from fastapi.routing import _IncludedRouter
     except Exception:  # pragma: no cover - older FastAPI already flattens.
