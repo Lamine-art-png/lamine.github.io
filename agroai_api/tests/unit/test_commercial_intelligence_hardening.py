@@ -54,3 +54,11 @@ def test_bootstrap_key_creation_is_bounded() -> None:
     assert 'resource_name="keys"' in source
     assert "current_count=active_count" in source
     assert "COMMERCIAL_ADVISORY_KEY_LIMIT" in source
+
+
+def test_concurrent_idempotency_insert_is_resolved_without_second_run() -> None:
+    source = inspect.getsource(hardened._execute_paid_intelligence)
+    assert "except IntegrityError" in source
+    assert "db.rollback()" in source
+    assert "concurrent.request_hash != request_hash" in source
+    assert '"intelligence_run_in_progress"' in source
