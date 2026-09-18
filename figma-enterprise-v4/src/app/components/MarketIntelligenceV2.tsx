@@ -67,9 +67,20 @@ const COPY = [
   "Saved.",
 ] as const;
 
-function cleanNumber(value: string, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function decimalInput(value: string, fallback?: string) {
+  const raw = value.trim() || fallback;
+  if (!raw || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
+    throw new Error("Enter a valid non-negative decimal value.");
+  }
+  if (raw.startsWith(".")) return `0${raw}`;
+  if (raw.endsWith(".")) return `${raw}0`;
+  return raw;
+}
+
+function observedAtIso(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("Enter a valid observation date and time.");
+  return date.toISOString();
 }
 
 function errorMessage(cause: unknown) {
@@ -205,9 +216,9 @@ export function MarketIntelligenceV2() {
 
   const createPosition = async () => {
     setError("");
-    const inventory = cleanNumber(positionForm.inventory_quantity);
+    const inventory = decimalInput(positionForm.inventory_quantity, "0");
     const metadata: Record<string, unknown> = { production_cost_behavior: "fixed_total_at_baseline_yield" };
-    if (inventory > 0 && positionForm.inventory_cost_per_unit.trim()) metadata.inventory_cost_per_unit = positionForm.inventory_cost_per_unit;
+    if (positionForm.inventory_cost_per_unit.trim()) metadata.inventory_cost_per_unit = decimalInput(positionForm.inventory_cost_per_unit);
     if (positionForm.usda_mmn_slug.trim()) metadata.usda_mmn_slug = positionForm.usda_mmn_slug.trim();
     const slug = `${positionForm.commodity}-${positionForm.season}-${Date.now().toString(36)}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
     try {
@@ -222,32 +233,15 @@ export function MarketIntelligenceV2() {
         local_currency: positionForm.local_currency.trim().toUpperCase(),
         reporting_currency: positionForm.reporting_currency.trim().toUpperCase(),
         quantity_unit: positionForm.quantity_unit,
-        expected_production: cleanNumber(positionForm.expected_production),
+        expected_production: decimalInput(positionForm.expected_production),
         inventory_quantity: inventory,
-        production_cost_per_unit: positionForm.production_cost_per_unit.trim() ? cleanNumber(positionForm.production_cost_per_unit) : null,
-        current_realizable_price: positionForm.current_realizable_price.trim() ? cleanNumber(positionForm.current_realizable_price) : null,
+        production_cost_per_unit: positionForm.production_cost_per_unit.trim() ? decimalInput(positionForm.production_cost_per_unit) : null,
+        current_realizable_price: positionForm.current_realizable_price.trim() ? decimalInput(positionForm.current_realizable_price) : null,
         price_currency: positionForm.price_currency.trim().toUpperCase(),
-        freight_per_unit: cleanNumber(positionForm.freight_per_unit),
-        storage_per_unit: cleanNumber(positionForm.storage_per_unit),
+        freight_per_unit: decimalInput(positionForm.freight_per_unit, "0"),
+        storage_per_unit: decimalInput(positionForm.storage_per_unit, "0"),
         metadata,
       });
-      if (positionForm.current_realizable_price.trim()) {
-        await apiClient.post("/v1/market-intelligence/observations", {
-          position_id: created.id,
-          evidence_id: `manual-price-${created.id}-${Date.now()}`,
-          observation_type: "cash_price",
-          provider: "customer",
-          source_name: "Customer entered market price",
-          source_status: "MANUAL",
-          value: cleanNumber(positionForm.current_realizable_price),
-          unit: `${positionForm.price_currency.trim().toUpperCase()}/${positionForm.quantity_unit}`,
-          currency: positionForm.price_currency.trim().toUpperCase(),
-          observed_at: new Date().toISOString(),
-          quality: { grade: "customer_entered" },
-          licensing: { display_allowed: true },
-          metadata: { entry_surface: "enterprise_portal" },
-        });
-      }
       await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(created.id)}/refresh`, {});
       setManageOpen(false);
       await changed("Commercial position created and market sources refreshed.");
@@ -264,9 +258,9 @@ export function MarketIntelligenceV2() {
         position_id: contractForm.position_id,
         contract_code: contractForm.contract_code.trim(),
         buyer: contractForm.buyer.trim() || null,
-        quantity: cleanNumber(contractForm.quantity),
+        quantity: decimalInput(contractForm.quantity),
         quantity_unit: contractForm.quantity_unit,
-        price: cleanNumber(contractForm.price),
+        price: decimalInput(contractForm.price),
         currency: contractForm.currency.trim().toUpperCase(),
       });
       await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(contractForm.position_id)}/refresh`, {});
@@ -281,26 +275,13 @@ export function MarketIntelligenceV2() {
     if (!priceForm.position_id || !selectedForPrice) return;
     setError("");
     try {
-      const value = cleanNumber(priceForm.price);
+      const value = decimalInput(priceForm.price);
       const currency = priceForm.currency.trim().toUpperCase();
-      await apiClient.patch(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}`, {
-        current_realizable_price: value,
-        price_currency: currency,
-      });
-      await apiClient.post("/v1/market-intelligence/observations", {
-        position_id: priceForm.position_id,
-        evidence_id: `manual-price-${priceForm.position_id}-${Date.now()}`,
-        observation_type: "cash_price",
-        provider: "customer",
-        source_name: "Customer entered market price",
-        source_status: "MANUAL",
+      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}/manual-price`, {
         value,
-        unit: `${currency}/${selectedForPrice.quantity_unit}`,
         currency,
-        observed_at: new Date(priceForm.observed_at).toISOString(),
-        quality: { grade: "customer_entered" },
-        licensing: { display_allowed: true },
-        metadata: { entry_surface: "enterprise_portal" },
+        observed_at: observedAtIso(priceForm.observed_at),
+        source_name: "Customer entered market price",
       });
       await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}/refresh`, {});
       setPriceForm((current) => ({ ...current, price: "" }));
