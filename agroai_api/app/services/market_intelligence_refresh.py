@@ -25,6 +25,32 @@ def _norm(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().replace("_", " ").replace("-", " ").split())
 
 
+def _canonical_quantity_unit(value: str | None) -> str | None:
+    text = _norm(value)
+    aliases = {
+        "bu": "bushel",
+        "bushel": "bushel",
+        "bushels": "bushel",
+        "lb": "pound",
+        "lbs": "pound",
+        "pound": "pound",
+        "pounds": "pound",
+        "kg": "kg",
+        "kilogram": "kg",
+        "kilograms": "kg",
+        "t": "tonne",
+        "ton": "tonne",
+        "tons": "tonne",
+        "tonne": "tonne",
+        "tonnes": "tonne",
+        "metric ton": "tonne",
+        "metric tons": "tonne",
+        "metric tonne": "tonne",
+        "metric tonnes": "tonne",
+    }
+    return aliases.get(text)
+
+
 def _quantity_unit_from_price_unit(value: str | None) -> str | None:
     text = _norm(value)
     if not text:
@@ -227,6 +253,10 @@ async def refresh_position_market_data(
             metadata=metadata,
         )
         try:
+            provider_state = await usda_provider.status()
+        except Exception as exc:
+            provider_state = {"status": "UNAVAILABLE", "error": exc.__class__.__name__}
+        try:
             rows = await usda_provider.observations(request)
             compatible: list[ProviderObservation] = []
             for item in rows:
@@ -237,7 +267,7 @@ async def refresh_position_market_data(
                     item.observation_type == "cash_price"
                     and item.value is not None
                     and item.currency
-                    and observed_unit == _norm(position.quantity_unit)
+                    and observed_unit == _canonical_quantity_unit(position.quantity_unit)
                 ):
                     compatible.append(item)
             if compatible:
@@ -276,11 +306,18 @@ async def refresh_position_market_data(
                     if fx_errors
                     else {"status": "ok", "pairs": sorted(fx_by_source)}
                 )
-            provider_results["usda_mymarketnews"] = {
-                "status": "ok" if rows else "no_matching_observation",
-                "observation_count": len(rows),
-                "promoted_to_position": bool(compatible),
-            }
+            if str(provider_state.get("status") or "").upper() == "NOT_CONFIGURED":
+                provider_results["usda_mymarketnews"] = {
+                    **provider_state,
+                    "observation_count": 0,
+                    "promoted_to_position": False,
+                }
+            else:
+                provider_results["usda_mymarketnews"] = {
+                    "status": "ok" if rows else "no_matching_observation",
+                    "observation_count": len(rows),
+                    "promoted_to_position": bool(compatible),
+                }
         except Exception as exc:
             provider_results["usda_mymarketnews"] = {
                 "status": "UNAVAILABLE",
