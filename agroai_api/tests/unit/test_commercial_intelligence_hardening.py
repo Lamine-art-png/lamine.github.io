@@ -29,6 +29,9 @@ def test_customer_debit_occurs_only_after_model_result() -> None:
 def test_workspace_boundary_is_server_authoritative() -> None:
     source = inspect.getsource(hardened._validate_and_build_context)
     assert "requested_workspace != key_workspace" in source
+    assert "Workspace.id == resolved_requested_workspace" in source
+    assert "Workspace.organization_id == principal.organization_id" in source
+    assert '"workspace_not_found"' in source
     assert "field.workspace_id != key_workspace" in source
     assert "key_workspace or requested_workspace" in source
 
