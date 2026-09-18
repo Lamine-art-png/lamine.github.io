@@ -59,6 +59,7 @@ def test_market_intelligence_routes_are_materialized():
         ("GET", "/v1/market-intelligence/positions/{position_id}/contracts"),
         ("GET", "/v1/market-intelligence/positions/{position_id}/observations"),
         ("POST", "/v1/market-intelligence/positions/{position_id}/refresh"),
+        ("POST", "/v1/market-intelligence/positions/{position_id}/manual-price"),
         ("POST", "/v1/market-intelligence/contracts"),
         ("PATCH", "/v1/market-intelligence/contracts/{contract_id}"),
         ("DELETE", "/v1/market-intelligence/contracts/{contract_id}"),
@@ -280,10 +281,173 @@ def test_observation_value_is_redacted_when_licensing_disallows_display(client, 
 
     observations = client.get(f"/v1/market-intelligence/positions/{position_id}/observations")
     assert observations.status_code == 200
-    observation = observations.json()["observations"][0]
+    observation = next(
+        item for item in observations.json()["observations"]
+        if item["evidence_id"] == "licensed-source-1"
+    )
     assert observation["value"] is None
     assert observation["redacted"] is True
     assert observation["licensing"] == {"display_allowed": False, "license": "derived-use-only"}
+
+
+def test_position_creation_persists_customer_price_provenance_atomically(client, db):
+    user, org, membership = identity(db, suffix="create-price-provenance")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(position_key="create-price-provenance"),
+    )
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    observations = client.get(f"/v1/market-intelligence/positions/{position_id}/observations")
+    assert observations.status_code == 200
+    manual = [
+        item for item in observations.json()["observations"]
+        if item["source_status"] == "MANUAL" and item["provider"] == "customer"
+    ]
+    assert len(manual) == 1
+    assert manual[0]["value"] == "4.5000000000"
+    assert manual[0]["currency"] == "USD"
+
+
+def test_manual_price_endpoint_updates_price_and_evidence_together(client, db):
+    user, org, membership = identity(db, suffix="manual-price-atomic")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(
+            position_key="manual-price-atomic",
+            current_realizable_price=None,
+            price_currency=None,
+        ),
+    )
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    updated = client.post(
+        f"/v1/market-intelligence/positions/{position_id}/manual-price",
+        json={
+            "value": "4.81234567",
+            "currency": "USD",
+            "observed_at": "2026-09-17T18:45:00Z",
+            "source_name": "Customer elevator quote",
+        },
+    )
+    assert updated.status_code == 201
+    assert updated.json()["source_status"] == "MANUAL"
+
+    position = client.get(f"/v1/market-intelligence/positions/{position_id}")
+    assert position.status_code == 200
+    assert position.json()["current_realizable_price"] == "4.81234567"
+
+    observations = client.get(f"/v1/market-intelligence/positions/{position_id}/observations")
+    evidence_id = updated.json()["evidence_id"]
+    evidence = next(item for item in observations.json()["observations"] if item["evidence_id"] == evidence_id)
+    assert evidence["value"] == "4.8123456700"
+    assert evidence["source_name"] == "Customer elevator quote"
+    assert evidence["observed_at"].startswith("2026-09-17T18:45:00")
+
+
+def test_contract_creation_rejects_incompatible_quantity_units(client, db):
+    user, org, membership = identity(db, suffix="contract-unit")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(
+            position_key="almond-contract-unit",
+            commodity="almonds",
+            quantity_unit="pound",
+            current_realizable_price="2.50",
+            production_cost_per_unit="1.50",
+        ),
+    )
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    contract = client.post(
+        "/v1/market-intelligence/contracts",
+        json={
+            "position_id": position_id,
+            "contract_code": "BAD-UNIT-1",
+            "quantity": "100",
+            "quantity_unit": "bushel",
+            "price": "2.40",
+            "currency": "USD",
+        },
+    )
+    assert contract.status_code == 422
+    assert contract.json()["detail"]["code"] == "contract_unit_incompatible"
+
+
+def test_semantic_position_edits_fail_closed_and_reporting_currency_clears_fx(client, db):
+    user, org, membership = identity(db, suffix="semantic-edit")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(
+            position_key="semantic-edit",
+            local_currency="BRL",
+            reporting_currency="USD",
+            current_realizable_price="2200",
+            price_currency="BRL",
+            fx_rate_to_reporting="0.18",
+        ),
+    )
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    rejected_unit = client.patch(
+        f"/v1/market-intelligence/positions/{position_id}",
+        json={"quantity_unit": "tonne"},
+    )
+    assert rejected_unit.status_code == 422
+    assert rejected_unit.json()["detail"]["code"] == "quantity_unit_change_requires_restatement"
+
+    rejected_crop = client.patch(
+        f"/v1/market-intelligence/positions/{position_id}",
+        json={"commodity": "wheat"},
+    )
+    assert rejected_crop.status_code == 422
+    assert rejected_crop.json()["detail"]["code"] == "commodity_change_requires_new_position"
+
+    changed_currency = client.patch(
+        f"/v1/market-intelligence/positions/{position_id}",
+        json={"reporting_currency": "EUR"},
+    )
+    assert changed_currency.status_code == 200
+
+    row = db.query(MarketPosition).filter(MarketPosition.id == position_id).one()
+    assert row.fx_rate_to_reporting is None
+
+
+def test_contract_unit_patch_requires_quantity_and_price_restatement(client, db):
+    user, org, membership = identity(db, suffix="contract-unit-patch")
+    set_context(user, org, membership)
+    created = client.post(
+        "/v1/market-intelligence/positions",
+        json=position_payload(position_key="contract-unit-patch"),
+    )
+    position_id = created.json()["id"]
+    contract = client.post(
+        "/v1/market-intelligence/contracts",
+        json={
+            "position_id": position_id,
+            "contract_code": "UNIT-PATCH-1",
+            "quantity": "100",
+            "quantity_unit": "bushel",
+            "price": "4.25",
+            "currency": "USD",
+        },
+    )
+    assert contract.status_code == 201
+
+    patched = client.patch(
+        f"/v1/market-intelligence/contracts/{contract.json()['id']}",
+        json={"quantity_unit": "tonne"},
+    )
+    assert patched.status_code == 422
+    assert patched.json()["detail"]["code"] == "contract_unit_change_requires_restatement"
 
 
 def test_portfolio_suppresses_partial_projected_totals(client, db):
