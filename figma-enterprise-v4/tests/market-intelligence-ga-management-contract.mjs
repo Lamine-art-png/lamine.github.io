@@ -36,7 +36,8 @@ for (const endpoint of [
   assert.ok(page.includes(endpoint), `missing GA endpoint usage: ${endpoint}`);
 }
 
-assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(created\.id\)\}\/refresh/);
+assert.match(page, /refreshPositionAfterWrite\(created\.id\)/);
+assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(positionId\)\}\/refresh/);
 assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(priceForm\.position_id\)\}\/manual-price/);
 assert.match(page, /Customer entered market price/);
 assert.match(page, /USDA MyMarketNews/);
