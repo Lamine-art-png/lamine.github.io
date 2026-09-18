@@ -36,10 +36,6 @@ def _feature_enabled() -> bool:
 
 
 def _program_policy_enabled() -> bool:
-    # When any program surface — including TEST self-service auto-enrollment — is
-    # enabled, Platform API key authentication enforces the program/enrollment
-    # policy, so suspending or removing an enrollment fails the key on its next
-    # request even if the private-beta/partner flags are off.
     return any(
         bool(getattr(settings, name, False))
         for name in (
@@ -65,17 +61,28 @@ def require_developer_control_plane(
     if ctx.membership.role not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administrator access required")
     if self_service_auto_enroll_enabled():
-        # Eligible developer (approved org + active owner/admin membership) is
-        # automatically granted a TEST-only self-service enrollment. Accepted
-        # CURRENT developer terms are enforced as a hard prerequisite inside
-        # ensure_self_service_test_enrollment (fail closed), regardless of the
-        # TERMS_ENFORCEMENT flag. Idempotent; LIVE stays separately gated.
+        # Automatic self-service creates a bounded developer enrollment. TEST is
+        # available for evaluation; LIVE advisory intelligence is additionally
+        # protected by a paid subscription and per-route entitlement checks.
         ensure_self_service_test_enrollment(db, ctx.organization, actor_user_id=ctx.user.id)
     enrollment = require_active_enrollment(db, ctx.organization, operation="developer_control_plane")
     if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
         require_user_acceptance(db, organization_id=ctx.organization.id, user_id=ctx.user.id)
     setattr(ctx, "platform_enrollment", enrollment)
     return ctx
+
+
+def _api_key_entitlement_operation(request: Request) -> str:
+    """Map authentication to the narrow operation being authorized.
+
+    This is intentionally route-specific for LIVE self-service advisory
+    intelligence. A paid LIVE key can authenticate the Intelligence Run surface
+    without thereby becoming valid for provider writes or physical execution.
+    """
+    path = request.url.path.rstrip("/")
+    if path == "/v1/platform/intelligence" or path.startswith("/v1/platform/intelligence/"):
+        return "intelligence.run"
+    return "api_key_authentication"
 
 
 def require_platform_api_principal(
@@ -169,7 +176,7 @@ def require_platform_api_principal(
                 db,
                 organization,
                 environment=verified.key.environment,
-                operation="api_key_authentication",
+                operation=_api_key_entitlement_operation(request),
                 api_project_id=verified.key.api_project_id,
             )
         except HTTPException as exc:
@@ -205,9 +212,6 @@ def require_platform_api_principal(
     decision = enforce_rate_limit(principal, route_id=str(matched_route))
     apply_rate_limit_headers(response, decision)
     request.state.platform_principal = principal
-    # Reuse the request-scoped dependency session for safe metadata logging.
-    # This also preserves dependency overrides in tests and avoids opening a
-    # second session against an unrelated configured database.
     request.state.platform_db = db
     if request.method == "GET":
         list_paths = {

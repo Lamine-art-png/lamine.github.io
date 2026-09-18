@@ -12,6 +12,36 @@ export type ApiResponse<T> = {
   rateLimit: RateLimitMetadata;
 };
 
+export type IntelligenceTask =
+  | "general"
+  | "field_diagnosis"
+  | "irrigation_plan"
+  | "crop_risk"
+  | "evidence_analysis"
+  | "report"
+  | "integration_diagnosis";
+
+export type IntelligenceRun = {
+  id: string;
+  object: "agroai.intelligence_run";
+  created_at: string;
+  status: "completed" | "needs_more_data" | "unavailable";
+  task: IntelligenceTask;
+  decision: Record<string, unknown>;
+  summary: string;
+  findings: unknown[];
+  recommendations: unknown[];
+  next_actions: unknown[];
+  confidence: string;
+  risk_flags: unknown[];
+  missing_data: unknown[];
+  citations: Record<string, unknown>[];
+  verification: Record<string, unknown>;
+  usage: { unit: string; credits: number; billable: boolean };
+  model?: string;
+  provider?: string;
+};
+
 type RequestOptions = {
   body?: unknown;
   idempotencyKey?: string;
@@ -63,6 +93,31 @@ export class AgroAIPlatformClient {
 
   usage() {
     return this.request<Record<string, unknown>>("GET", "/v1/platform/usage");
+  }
+
+  intelligence(payload: {
+    question: string;
+    task?: IntelligenceTask;
+    input?: Record<string, unknown>;
+    fieldId?: string;
+    audience?: string;
+    language?: string;
+  }, options: { idempotencyKey?: string } = {}) {
+    return this.request<IntelligenceRun>("POST", "/v1/platform/intelligence", {
+      body: {
+        question: payload.question,
+        task: payload.task || "general",
+        input: payload.input || {},
+        ...(payload.fieldId ? { field_id: payload.fieldId } : {}),
+        ...(payload.audience ? { audience: payload.audience } : {}),
+        ...(payload.language ? { language: payload.language } : {}),
+      },
+      idempotencyKey: options.idempotencyKey || `intel_${crypto.randomUUID()}`,
+    });
+  }
+
+  intelligenceRun(runId: string) {
+    return this.request<IntelligenceRun>("GET", `/v1/platform/intelligence/${encodeURIComponent(runId)}`);
   }
 
   listFields(options: { cursor?: string; limit?: number } = {}) {
