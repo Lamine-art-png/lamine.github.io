@@ -11,6 +11,7 @@ from typing import Any
 
 import stripe
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1 import commercial_intelligence as legacy
@@ -295,7 +296,35 @@ async def _execute_paid_intelligence(
         },
     )
     db.add(run)
-    db.commit()  # durable idempotency marker only; customer balance is untouched
+    try:
+        db.commit()  # durable idempotency marker only; customer balance is untouched
+    except IntegrityError:
+        # A concurrent retry may win the unique idempotency insert between the
+        # lookup above and this commit. Resolve that race as an idempotency
+        # response, never as an opaque database error or a second billable run.
+        db.rollback()
+        concurrent = (
+            db.query(CommercialIntelligenceRun)
+            .filter(
+                CommercialIntelligenceRun.organization_id == principal.organization_id,
+                CommercialIntelligenceRun.api_project_id == principal.api_project_id,
+                CommercialIntelligenceRun.idempotency_key == idempotency_key,
+            )
+            .first()
+        )
+        if concurrent is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "intelligence_idempotency_state_unavailable"},
+            )
+        if concurrent.request_hash != request_hash:
+            raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
+        if concurrent.response_json is not None:
+            return dict(concurrent.response_json)
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "intelligence_run_in_progress", "run_id": concurrent.id},
+        )
 
     input_text = legacy.json.dumps(payload.input, default=str, ensure_ascii=False)
     language_instruction = f" Respond in {payload.language}." if payload.language else ""
