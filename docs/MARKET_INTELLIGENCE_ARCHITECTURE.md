@@ -115,7 +115,7 @@ Examples of future provider families include USDA/government reports, properly l
 
 No exchange feed is represented as live merely because the architecture knows the exchange name. Licensing and credentials remain separate production prerequisites.
 
-Provider calls are wrapped by a bounded timeout/retry/cache/circuit-breaker boundary that preserves adapter provenance and never manufactures observations. The catalog exposes USDA MyMarketNews and FX reference entries as `NOT_CONFIGURED` until approved upstream access exists; an empty result from those entries is not represented as live data.
+Provider calls are wrapped by a bounded timeout/retry/cache/circuit-breaker boundary that preserves adapter provenance and never manufactures observations. ECB daily reference FX is available as a delayed reference source without private credentials. USDA MyMarketNews remains `NOT_CONFIGURED` until `USDA_MMN_API_KEY` is supplied. Missing credentials and empty/ambiguous market matches are never represented as live data or silently promoted into the commercial position.
 
 ### 6. AI layer
 
@@ -144,8 +144,16 @@ Authenticated routes are under `/v1/market-intelligence`:
 - `GET /positions`
 - `GET /positions/{id}`
 - `POST /positions`
+- `PATCH /positions/{id}`
+- `DELETE /positions/{id}`
+- `POST /positions/{id}/manual-price`
+- `POST /positions/{id}/refresh`
 - `POST /contracts`
+- `PATCH /contracts/{id}`
+- `DELETE /contracts/{id}`
 - `POST /observations`
+- `GET /providers`
+- `POST /refresh`
 - `POST /scenarios`
 - `GET /scenarios`
 - `GET /scenarios/{id}`
@@ -200,9 +208,8 @@ The production-shaped module, deterministic engine, persistence, authentication/
 
 The next production integration phase should prioritize provider coverage by customer decision value, not geography alone:
 
-1. FX source with explicit timestamps and retry/circuit-breaker policy.
-2. U.S. government/cash-market sources and licensed benchmark data where required.
-3. Brazil physical/benchmark/FX sources under appropriate data rights.
-4. specialty-crop physical-market sources.
-5. Australia/Europe/India/Africa regional adapters as customers require them.
-6. background refresh, caching/materiality detection and alert delivery on top of the time-series observations already persisted.
+1. Broaden U.S. government/cash-market coverage beyond the currently configured MyMarketNews report mappings and add licensed benchmark data where required.
+2. Add Brazil physical/benchmark sources under appropriate data rights; ECB cross-rates can support reference FX where covered but are not transaction execution rates.
+3. Add specialty-crop physical-market sources with explicit grade/location/pack semantics.
+4. Add Australia/Europe/India/Africa regional adapters as customers require them.
+5. Add background refresh, caching/materiality detection and alert delivery on top of the time-series observations already persisted.
