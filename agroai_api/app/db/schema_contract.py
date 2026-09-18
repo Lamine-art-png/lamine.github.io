@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "033_market_intelligence"
+HEAD_ALEMBIC_REVISION = "034_intelligence_wallet_commerce"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -187,6 +187,19 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     },
     "platform_notifications": {"id", "organization_id", "notification_type", "dedupe_key", "status"},
     "platform_sandbox_states": {"id", "organization_id", "api_project_id", "fixture_version", "reset_counter"},
+    "platform_intelligence_wallets": {
+        "id", "organization_id", "currency", "balance_cents", "lifetime_funded_cents",
+        "lifetime_spent_cents", "auto_reload_enabled", "created_at", "updated_at",
+    },
+    "platform_intelligence_wallet_ledger": {
+        "id", "organization_id", "wallet_id", "kind", "status", "amount_cents",
+        "idempotency_key", "external_reference", "intelligence_run_id", "metadata_json", "created_at", "posted_at",
+    },
+    "platform_commercial_intelligence_runs": {
+        "id", "organization_id", "api_project_id", "api_key_id", "workspace_id", "field_id",
+        "idempotency_key", "request_hash", "task", "mode", "public_model", "status",
+        "charge_cents", "currency", "request_safe_json", "response_json", "created_at", "completed_at",
+    },
     "platform_support_requests": {"id", "organization_id", "category", "severity", "status"},
     "platform_support_messages": {"id", "support_request_id", "visibility", "body"},
     "platform_status_components": {"id", "component_key", "status", "public"},
