@@ -1,4 +1,4 @@
 {
   "literal.08fa1fcb7610e61a": "POST /v1/intelligence",
-  "literal.ff5aa98707a53f31": "*** X-API-Key"
+  "literal.ff5aa98707a53f31": "Bearer / X-API-Key"
 }
