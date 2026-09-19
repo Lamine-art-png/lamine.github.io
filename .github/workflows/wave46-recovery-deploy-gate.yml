@@ -1,0 +1,44 @@
+name: Wave 46 Recovery Deploy Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/wave46-recovery-deploy-trigger"
+      - ".github/workflows/wave46-recovery-deploy-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deployment:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPECTED_BUILD_SHA: a1e25505043a33bbe4e513d88cd9e36c32859fdb
+    steps:
+      - name: Wait for exact production backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery-deploy
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error --max-time 20 https://api.agroai-pilot.com/v1/health 2>/dev/null || true)"
+            build_sha="$(printf '%s' "$payload" | jq -r '.build_sha // empty' 2>/dev/null || true)"
+            printf '%s\n' "$payload" > recovery-deploy/health.json
+            echo "attempt=${attempt} build_sha=${build_sha:-missing}"
+            if [ "$build_sha" = "$EXPECTED_BUILD_SHA" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Recovery build did not become live"
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wave46-recovery-deploy-evidence
+          path: recovery-deploy/
+          if-no-files-found: error
+          retention-days: 1
