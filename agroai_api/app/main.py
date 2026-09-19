@@ -445,7 +445,7 @@ from app.api.v1.recommendations import router as recommendations_router  # noqa:
 from app.api.v1.reports import router as reports_router  # noqa: E402
 from app.api.v1.market_intelligence import router as market_intelligence_router  # noqa: E402
 from app.api.v1.market_intelligence_ingestion import router as market_intelligence_ingestion_router  # noqa: E402
-from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
+from app.api.v1.router_compat import include_commercial_intelligence, materialize_included_routes  # noqa: E402
 from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
 from app.platform_api.errors import PlatformApiHTTPException, error_response  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
@@ -585,4 +585,5 @@ app.include_router(field_intelligence_router, prefix="/v1")
 from app.api.v1.field_intelligence_admin import router as field_intelligence_admin_router  # noqa: E402
 app.include_router(field_intelligence_admin_router, prefix="/v1")
 
+include_commercial_intelligence(app.router)
 materialize_included_routes(app.router)

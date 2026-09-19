@@ -14,6 +14,7 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -23,8 +24,6 @@ from app.models.saas import Organization, User, Workspace
 
 PG_URL = os.environ.get("ASSURANCE_MIGRATION_TEST_DATABASE_URL", "")
 ROOT = Path(__file__).resolve().parents[2]
-MERGED_HEAD = "033_market_intelligence"
-
 pytestmark = pytest.mark.skipif(
     not PG_URL.startswith("postgresql"),
     reason="ASSURANCE_MIGRATION_TEST_DATABASE_URL is not a PostgreSQL URL",
@@ -36,6 +35,15 @@ def _config() -> Config:
     config.set_main_option("script_location", str(ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", PG_URL)
     return config
+
+
+def _repository_head() -> str:
+    heads = sorted(ScriptDirectory.from_config(_config()).get_heads())
+    assert len(heads) == 1, heads
+    return heads[0]
+
+
+MERGED_HEAD = _repository_head()
 
 
 def _reset_public_schema(engine: sa.Engine) -> None:

@@ -152,13 +152,8 @@ def scan_content():
     for f in ROOT.rglob("*"):
         if not f.is_file() or f.suffix not in {".js", ".html", ".css"}:
             continue
-        rel = f.relative_to(REPO)
-        # Trust Center and the standalone marketing homepage have their own
-        # governance/compliance contracts. Do not apply developer-platform
-        # commercial-claim rules to those separately governed surfaces.
-        if "trust" in f.relative_to(ROOT).parts or f.name == "homepage.html":
-            continue
         text = f.read_text(encoding="utf-8", errors="ignore")
+        rel = f.relative_to(REPO)
         for pat, label in FORBIDDEN:
             for m in pat.finditer(text):
                 fail(f"{rel}: forbidden {label}: '{m.group(0).strip()}'")
