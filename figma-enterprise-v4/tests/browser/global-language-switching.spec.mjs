@@ -25,11 +25,12 @@ async function prepare(page) {
     const url = new URL(req.url());
     const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-    if (req.method() === "GET" && url.pathname === "/v1/auth/me") {
+    if (req.method() === "GET" && url.pathname === "/v1/auth/bootstrap") {
       return reply({
         user: { id: "qa", name: "QA", email: "qa@example.com" },
         current_organization: { id: "org", name: "QA Org", role: "owner" },
         organizations: [{ id: "org", name: "QA Org", role: "owner" }],
+        workspaces: [{ id: "ws", organization_id: "org", name: "QA Workspace", status: "active" }],
         entitlements: {},
       });
     }
@@ -105,7 +106,7 @@ test("non-French locale visibly translates from core while full literal chunks a
     const req = route.request();
     const url = new URL(req.url());
     const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-    if (req.method() === "GET" && url.pathname === "/v1/auth/me") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], entitlements: {} });
+    if (req.method() === "GET" && url.pathname === "/v1/auth/bootstrap") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], workspaces: [{ id: "ws", organization_id: "org", name: "QA Workspace", status: "active" }], entitlements: {} });
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
     if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
@@ -148,7 +149,7 @@ test("catalog failure never traps the language selector", async ({ page }) => {
     const req = route.request();
     const url = new URL(req.url());
     const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-    if (req.method() === "GET" && url.pathname === "/v1/auth/me") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], entitlements: {} });
+    if (req.method() === "GET" && url.pathname === "/v1/auth/bootstrap") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], workspaces: [{ id: "ws", organization_id: "org", name: "QA Workspace", status: "active" }], entitlements: {} });
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
     if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
