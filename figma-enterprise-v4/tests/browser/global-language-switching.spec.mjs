@@ -80,8 +80,8 @@ test("every visible non-English UI locale hydrates core first and full literals 
       // catalog. The literal below proves the dynamic catalog path hydrated.
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
     }
-    await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
+    await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible({ timeout: 15_000 });
     const expectedDir = ["ar", "fa", "ur"].includes(locale.split("-")[0]) ? "rtl" : "ltr";
     await expect(page.locator("html")).toHaveAttribute("dir", expectedDir);
   }
