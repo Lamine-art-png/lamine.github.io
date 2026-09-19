@@ -92,7 +92,13 @@ def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str 
 
 
 async def _guarded_execute_paid_intelligence(*, payload: Any, **kwargs: Any) -> dict[str, Any]:
-    credential_path = _credential_path(getattr(payload, "input", {}))
+    credential_path = _credential_path(
+        {
+            "question": getattr(payload, "question", ""),
+            "input": getattr(payload, "input", {}),
+        },
+        path="request",
+    )
     if credential_path:
         raise HTTPException(
             status_code=422,
