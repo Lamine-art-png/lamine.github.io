@@ -6,7 +6,7 @@ upstream evidence with provenance before any derived economics are recomputed.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -25,6 +25,32 @@ def _norm(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().replace("_", " ").replace("-", " ").split())
 
 
+def _canonical_quantity_unit(value: str | None) -> str | None:
+    text = _norm(value)
+    aliases = {
+        "bu": "bushel",
+        "bushel": "bushel",
+        "bushels": "bushel",
+        "lb": "pound",
+        "lbs": "pound",
+        "pound": "pound",
+        "pounds": "pound",
+        "kg": "kg",
+        "kilogram": "kg",
+        "kilograms": "kg",
+        "t": "tonne",
+        "ton": "tonne",
+        "tons": "tonne",
+        "tonne": "tonne",
+        "tonnes": "tonne",
+        "metric ton": "tonne",
+        "metric tons": "tonne",
+        "metric tonne": "tonne",
+        "metric tonnes": "tonne",
+    }
+    return aliases.get(text)
+
+
 def _quantity_unit_from_price_unit(value: str | None) -> str | None:
     text = _norm(value)
     if not text:
@@ -38,6 +64,22 @@ def _quantity_unit_from_price_unit(value: str | None) -> str | None:
     if "metric ton" in text or "metric tonne" in text or text in {"t", "tonne", "usd/t", "$/t"}:
         return "tonne"
     return None
+
+
+def _select_unambiguous_latest_price(
+    observations: list[ProviderObservation],
+) -> tuple[ProviderObservation | None, str | None]:
+    if not observations:
+        return None, "no_compatible_observation"
+    latest_date = max(item.observed_at.date() for item in observations)
+    latest_rows = [item for item in observations if item.observed_at.date() == latest_date]
+    signatures = {
+        (item.value, _norm(item.unit), str(item.currency or "").upper())
+        for item in latest_rows
+    }
+    if len(signatures) != 1:
+        return None, "ambiguous_latest_market_observations"
+    return max(latest_rows, key=lambda item: item.observed_at), None
 
 
 def _scoped_evidence_id(position_id: str, upstream_evidence_id: str) -> str:
@@ -71,8 +113,8 @@ def _upsert_observation(db: Session, organization_id: str, position_id: str, ite
         "value": item.value,
         "unit": item.unit,
         "currency": item.currency,
-        "observed_at": item.observed_at.replace(tzinfo=None) if item.observed_at.tzinfo else item.observed_at,
-        "retrieved_at": item.retrieved_at.replace(tzinfo=None) if item.retrieved_at.tzinfo else item.retrieved_at,
+        "observed_at": item.observed_at.astimezone(timezone.utc).replace(tzinfo=None) if item.observed_at.tzinfo else item.observed_at,
+        "retrieved_at": item.retrieved_at.astimezone(timezone.utc).replace(tzinfo=None) if item.retrieved_at.tzinfo else item.retrieved_at,
         "delay_minutes": item.delay_minutes,
         "quality_json": item.quality,
         "licensing_json": item.licensing,
@@ -227,6 +269,10 @@ async def refresh_position_market_data(
             metadata=metadata,
         )
         try:
+            provider_state = await usda_provider.status()
+        except Exception as exc:
+            provider_state = {"status": "UNAVAILABLE", "error": exc.__class__.__name__}
+        try:
             rows = await usda_provider.observations(request)
             compatible: list[ProviderObservation] = []
             for item in rows:
@@ -237,11 +283,11 @@ async def refresh_position_market_data(
                     item.observation_type == "cash_price"
                     and item.value is not None
                     and item.currency
-                    and observed_unit == _norm(position.quantity_unit)
+                    and observed_unit == _canonical_quantity_unit(position.quantity_unit)
                 ):
                     compatible.append(item)
-            if compatible:
-                latest = max(compatible, key=lambda item: item.observed_at)
+            latest, selection_error = _select_unambiguous_latest_price(compatible)
+            if latest is not None:
                 promoted_currency = str(latest.currency or "").upper()
                 position.current_realizable_price = latest.value
                 position.price_currency = promoted_currency
@@ -276,11 +322,26 @@ async def refresh_position_market_data(
                     if fx_errors
                     else {"status": "ok", "pairs": sorted(fx_by_source)}
                 )
-            provider_results["usda_mymarketnews"] = {
-                "status": "ok" if rows else "no_matching_observation",
-                "observation_count": len(rows),
-                "promoted_to_position": bool(compatible),
-            }
+            if str(provider_state.get("status") or "").upper() == "NOT_CONFIGURED":
+                provider_results["usda_mymarketnews"] = {
+                    **provider_state,
+                    "observation_count": 0,
+                    "promoted_to_position": False,
+                }
+            elif selection_error == "ambiguous_latest_market_observations":
+                provider_results["usda_mymarketnews"] = {
+                    "status": "REVIEW_REQUIRED",
+                    "reason": selection_error,
+                    "observation_count": len(rows),
+                    "compatible_observation_count": len(compatible),
+                    "promoted_to_position": False,
+                }
+            else:
+                provider_results["usda_mymarketnews"] = {
+                    "status": "ok" if rows else "no_matching_observation",
+                    "observation_count": len(rows),
+                    "promoted_to_position": latest is not None,
+                }
         except Exception as exc:
             provider_results["usda_mymarketnews"] = {
                 "status": "UNAVAILABLE",

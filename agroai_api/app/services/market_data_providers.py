@@ -43,7 +43,7 @@ def _normalize_key(value: str) -> str:
     return "_".join(str(value or "").strip().lower().replace("-", " ").split())
 
 
-def _parse_datetime(value: Any, *, fallback: datetime | None = None) -> datetime:
+def _parse_datetime(value: Any, *, fallback: datetime | None = None) -> datetime | None:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     text = str(value or "").strip()
@@ -60,7 +60,7 @@ def _parse_datetime(value: Any, *, fallback: datetime | None = None) -> datetime
                 return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
-    return fallback or _utc_now()
+    return fallback
 
 
 def _http_text(url: str, *, headers: dict[str, str] | None = None, timeout: float = 8.0) -> str:
@@ -347,7 +347,7 @@ class USDAMyMarketNewsProvider(MarketDataProvider):
         return fallback or None
 
     @staticmethod
-    def _observed_at(row: dict[str, Any]) -> datetime:
+    def _observed_at(row: dict[str, Any]) -> datetime | None:
         lookup = USDAMyMarketNewsProvider._row_lookup(row)
         for key in (
             "report_begin_date", "report_date", "published_date", "publication_date", "date", "report_end_date",
@@ -382,6 +382,10 @@ class USDAMyMarketNewsProvider(MarketDataProvider):
                 continue
             unit = self._unit(row, metadata)
             observed_at = self._observed_at(row)
+            # Freshness is a trust boundary. Never invent "now" when the
+            # upstream row does not carry a parseable market/report date.
+            if observed_at is None:
+                continue
             key = (str(price), unit or "", observed_at.date().isoformat())
             if key in seen:
                 continue

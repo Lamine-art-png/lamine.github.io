@@ -90,6 +90,20 @@ def test_position_math_is_deterministic_decimal_economics():
     assert result["data_complete"] is True
 
 
+def test_fully_contracted_position_does_not_require_spot_price():
+    result = compute_position(
+        position(current_realizable_price=None),
+        [contract(quantity=Decimal("110000"))],
+    ).payload
+    assert result["uncontracted_quantity"] == "0.00000000"
+    assert result["current_realizable_price"] is None
+    assert result["exposed_revenue"] == "0.00"
+    assert result["projected_revenue"] == "484000.00"
+    assert result["projected_margin"] == "82500.00"
+    assert "current_realizable_price" not in result["missing_inputs"]
+    assert result["data_complete"] is True
+
+
 def test_missing_contract_fx_suppresses_margin_instead_of_partial_total():
     br_position = position(
         commodity="soybeans",
@@ -111,6 +125,15 @@ def test_missing_contract_fx_suppresses_margin_instead_of_partial_total():
     assert result["projected_margin"] is None
     assert "contract_fx" in result["missing_inputs"]
     assert result["data_complete"] is False
+
+
+def test_fulfilled_contracts_remain_committed_while_cancelled_contracts_drop_out():
+    fulfilled = compute_position(position(), [contract(status="fulfilled")]).payload
+    cancelled = compute_position(position(), [contract(status="cancelled")]).payload
+    assert fulfilled["contracted_quantity"] == "30000.00000000"
+    assert fulfilled["locked_revenue"] == "132000.00"
+    assert cancelled["contracted_quantity"] == "0.00000000"
+    assert cancelled["locked_revenue"] == "0.00"
 
 
 def test_over_contracting_suppresses_projected_margin():
@@ -195,8 +218,29 @@ def test_inventory_requires_cost_basis_for_margin_but_still_counts_as_supply():
     result = compute_position(without_basis, [contract()]).payload
     assert result["marketable_supply"] == "110000.00000000"
     assert result["projected_revenue"] == "492000.00"
+    assert result["projected_cost"] is None
     assert result["projected_margin"] is None
+    assert result["break_even_price"] is None
     assert "inventory_cost_per_unit" in result["missing_inputs"]
+
+
+def test_missing_production_cost_never_becomes_zero_cost_margin():
+    result = compute_position(
+        position(
+            inventory_quantity=Decimal("0"),
+            production_cost_per_unit=None,
+            metadata_json={"production_cost_behavior": "fixed_total_at_baseline_yield"},
+        ),
+        [contract()],
+    ).payload
+    assert result["projected_revenue"] == "447000.00"
+    assert result["production_cost_per_unit"] is None
+    assert result["fixed_production_cost_total"] is None
+    assert result["projected_cost"] is None
+    assert result["break_even_price"] is None
+    assert result["projected_margin"] is None
+    assert "production_cost_per_unit" in result["missing_inputs"]
+    assert result["data_complete"] is False
 
 
 def test_ai_numeric_claims_must_reference_exact_structured_evidence():
@@ -276,6 +320,29 @@ def test_ai_cannot_emit_personalized_derivatives_instruction():
         "limitations": [],
         "actions": [{"kind": "execute_trade", "description": "Act"}],
     }) == ["disallowed_action_kind:execute_trade"]
+
+
+def test_ai_action_descriptions_cannot_hide_trade_instructions_or_numbers():
+    unsafe_policy = {
+        "summary": "Review the current exposure.",
+        "insights": [],
+        "limitations": [],
+        "actions": [{"kind": "compare", "description": "Use 12 soybean futures contracts to hedge this exposure."}],
+    }
+    policy_errors = validate_decision_support_policy(unsafe_policy)
+    assert "personalized_derivatives_instruction" in policy_errors
+
+    numeric_errors = validate_numeric_grounding(unsafe_policy, {})
+    assert any(error.startswith("unstructured_numeric_claim:action_0") for error in numeric_errors)
+
+    safe = {
+        "summary": "Review the current exposure.",
+        "insights": [],
+        "limitations": [],
+        "actions": [{"kind": "verify", "description": "Verify the contract register against the latest signed records."}],
+    }
+    assert validate_decision_support_policy(safe) == []
+    assert validate_numeric_grounding(safe, {}) == []
 
 
 def test_all_model_outage_keeps_deterministic_brief_available(monkeypatch):
@@ -379,6 +446,29 @@ def test_provider_runtime_retries_caches_and_opens_circuit():
     with pytest.raises(RuntimeError, match="circuit open"):
         asyncio.run(guarded.observations(request))
     assert broken.calls == 1
+
+
+def test_future_dated_market_evidence_can_never_look_healthy():
+    now = datetime.now(timezone.utc)
+    future = SimpleNamespace(
+        evidence_id="future",
+        provider="licensed",
+        source_name="Licensed feed",
+        source_status="LIVE",
+        observation_type="cash_price",
+        unit="USD/t",
+        currency="USD",
+        observed_at=now + timedelta(hours=2),
+        retrieved_at=now,
+        quality_json={"confidence": "high"},
+        licensing_json={"display_allowed": True},
+        metadata_json={"freshness_max_age_minutes": 30},
+    )
+    health = data_health([future])
+    assert health["status"] == "degraded"
+    assert health["confidence"] != "high"
+    assert health["sources"][0]["status"] == "STALE"
+    assert "observed_at_in_future" in health["sources"][0]["health_reasons"]
 
 
 def test_unconfigured_provider_reports_truthfully_and_returns_no_observations():
