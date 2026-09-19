@@ -26,7 +26,9 @@ for (const route of requiredRoutes) assert.ok(consoleSource.includes(`"${route}"
 assert.ok(routesSource.includes('path: "/platform/*"'), "Enterprise Portal must expose the controlled /platform/* surface");
 assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "platform.agroai-pilot.com must receive the standalone product shell");
 assert.ok(routesSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "router must select the product by hostname");
-assert.ok(routesSource.includes("if (!platformDeveloper) return <PlatformSelfServiceGate />"), "unenrolled Platform users must enter the self-service-aware gate");
+assert.ok(routesSource.includes("if (platformDeveloper) return <><PlatformConsoleApp /><PlatformSafetyNotice /></>"), "enrolled Platform developers must retain the advanced console before commercial routing");
+assert.ok(routesSource.includes("if (commercialSurface) return <PlatformIntelligenceConsole />"), "unenrolled users on commercial Intelligence routes must enter the simple paid Intelligence console");
+assert.ok(routesSource.includes("return <PlatformSelfServiceGate />"), "unenrolled users outside the commercial Intelligence surface must retain the self-service-aware gate");
 assert.ok(routesSource.match(/path: "\/cli", Component: PlatformCliDeviceApproval/g)?.length === 2, "CLI approval must be reachable on both product hosts");
 assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
 assert.ok(layoutSource.includes('{ name: "Platform API", path: "/platform", icon: Code2 }'), "Enterprise Portal must expose the unified Platform product");
