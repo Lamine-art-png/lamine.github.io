@@ -1,0 +1,3 @@
+{
+  "literal.1d384be33dc8abb3": ", apiClient.get(\"/v1/workspaces\") as Promise"
+}
