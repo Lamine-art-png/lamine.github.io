@@ -52,8 +52,9 @@ def _decision(**overrides):
     return GPT56Decision(**base)
 
 
-def test_model_routing_uses_luna_and_sol_by_workload(monkeypatch):
+def test_model_routing_uses_luna_terra_sol_by_workload(monkeypatch):
     monkeypatch.delenv("AGROAI_GPT56_SOL_MODEL", raising=False)
+    monkeypatch.delenv("AGROAI_GPT56_TERRA_MODEL", raising=False)
     monkeypatch.delenv("AGROAI_GPT56_LUNA_MODEL", raising=False)
     assert select_model("fast", "Summarize the latest field notes") == ("gpt-5.6-luna", "low")
     assert select_model("reasoning", "Compare these field records") == ("gpt-5.6-sol", "medium")
