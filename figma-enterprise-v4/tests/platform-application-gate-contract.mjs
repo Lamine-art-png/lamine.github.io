@@ -15,7 +15,9 @@ assert.ok(source.includes("document_references: []"), "the follow-up UI must not
 assert.ok(!source.includes("mailto:support@agroai-pilot.com?subject=Platform%20API%20application%20information"), "review follow-up must not escape into unaudited email");
 
 assert.ok(routes.includes('import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate"'), "unenrolled Platform users must enter the self-service-aware gate");
-assert.ok(routes.includes("if (!platformDeveloper) return <PlatformSelfServiceGate />"), "the standalone Platform route must not force public developers into the legacy application flow");
+assert.ok(routes.includes("if (platformDeveloper) return <><PlatformConsoleApp /><PlatformSafetyNotice /></>"), "advanced Platform developers must keep their existing console and deep links");
+assert.ok(routes.includes("if (commercialSurface) return <PlatformIntelligenceConsole />"), "public commercial Intelligence routes must not be forced through legacy Platform enrollment");
+assert.ok(routes.includes("return <PlatformSelfServiceGate />"), "non-commercial unenrolled Platform routes must retain the legal/self-service gate");
 assert.ok(selfService.includes('apiClient.get("/v1/platform/terms")'), "self-service must load the server-authoritative effective legal catalog");
 assert.ok(selfService.includes('item.legal_review_status !== "approved_effective"'), "the UI must fail closed when any required legal document is not effective");
 assert.ok(selfService.includes('apiClient.post("/v1/platform/terms/accept"'), "self-service must record versioned legal acceptance server-side");
