@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
 from app.api.v1 import commercial_intelligence_input_guard as guard
 
 
@@ -48,3 +53,19 @@ def test_excessive_nesting_fails_closed() -> None:
     for _ in range(20):
         value = {"context": value}
     assert guard._credential_path(value) is not None
+
+
+@pytest.mark.asyncio
+async def test_guard_rejects_secret_like_material_in_question(monkeypatch) -> None:
+    token_like = "".join(chr(code) for code in [115, 107, 95, 108, 105, 118, 101, 95, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75])
+
+    async def should_not_run(**_kwargs):
+        raise AssertionError("provider boundary must not be reached")
+
+    monkeypatch.setattr(guard, "_original_execute_paid_intelligence", should_not_run)
+    payload = SimpleNamespace(question=token_like, input={})
+    with pytest.raises(HTTPException) as excinfo:
+        await guard._guarded_execute_paid_intelligence(payload=payload)
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["code"] == "credential_like_input_rejected"
+    assert excinfo.value.detail["field"] == "request.question"
