@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -9,6 +10,7 @@ from app.api.v1 import commercial_intelligence as legacy
 from app.api.v1 import commercial_intelligence_hardened as hardened
 from app.api.v1 import commercial_intelligence_input_guard as input_guard
 from app.api.v1 import commercial_intelligence_key_guard as key_guard
+from app.models.intelligence_commerce import CommercialIntelligenceRun, IntelligenceWallet, IntelligenceWalletLedger
 from app.models.platform_api import ApiProject
 from app.models.saas import ManagedEntity, Organization, User, Workspace
 from app.platform_api.principal import PlatformPrincipal
@@ -171,3 +173,166 @@ def test_same_org_workspace_is_canonicalized_into_context(db) -> None:
     )
     context = hardened._validate_and_build_context(db, principal, payload)
     assert context.workspace_id == ws_a.id
+
+
+def _fund_wallet(db, organization_id: str, cents: int = 100) -> IntelligenceWallet:
+    wallet = IntelligenceWallet(
+        organization_id=organization_id,
+        currency="usd",
+        balance_cents=cents,
+        lifetime_funded_cents=cents,
+        lifetime_spent_cents=0,
+    )
+    db.add(wallet)
+    db.commit()
+    return wallet
+
+
+@pytest.mark.asyncio
+async def test_successful_intelligence_charges_once_and_replays_without_provider_rerun(db, monkeypatch) -> None:
+    org_a, _org_b, _ws_a, _ws_a_other, _ws_b, _project, principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org_a.id)
+    calls = 0
+
+    async def model_ok(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return (
+            {"answer": "Review the irrigation evidence.", "confidence": "medium"},
+            SimpleNamespace(status="ok", demo_fallback=False, provider="test-provider", model="test-model"),
+        )
+
+    monkeypatch.setattr(legacy, "_run_ai", model_ok)
+    payload = legacy.IntelligenceRequest(
+        task="answer",
+        question="What needs attention?",
+        input={"crop": "almond"},
+    )
+    first = await hardened._execute_paid_intelligence(
+        payload=payload,
+        idempotency_key="success-once",
+        principal=principal,
+        db=db,
+    )
+    replay = await hardened._execute_paid_intelligence(
+        payload=payload,
+        idempotency_key="success-once",
+        principal=principal,
+        db=db,
+    )
+    db.refresh(wallet)
+    assert calls == 1
+    assert first == replay
+    assert first["billing"]["charged_cents"] == legacy.TASK_CATALOG["answer"]["price_cents"]
+    assert wallet.balance_cents == 100 - legacy.TASK_CATALOG["answer"]["price_cents"]
+    assert wallet.lifetime_spent_cents == legacy.TASK_CATALOG["answer"]["price_cents"]
+    assert (
+        db.query(IntelligenceWalletLedger)
+        .filter(
+            IntelligenceWalletLedger.organization_id == org_a.id,
+            IntelligenceWalletLedger.kind == "intelligence_charge",
+            IntelligenceWalletLedger.status == "posted",
+        )
+        .count()
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_degraded_intelligence_is_persisted_without_charge(db, monkeypatch) -> None:
+    org_a, _org_b, _ws_a, _ws_a_other, _ws_b, _project, principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org_a.id)
+
+    async def degraded(**_kwargs):
+        return (
+            {"answer": "Provider fallback is unavailable.", "_safe_mode": True},
+            SimpleNamespace(status="ok", demo_fallback=False, provider="safe", model="safe"),
+        )
+
+    monkeypatch.setattr(legacy, "_run_ai", degraded)
+    payload = legacy.IntelligenceRequest(task="answer", question="What changed?", input={"crop": "almond"})
+    result = await hardened._execute_paid_intelligence(
+        payload=payload,
+        idempotency_key="degraded-zero",
+        principal=principal,
+        db=db,
+    )
+    db.refresh(wallet)
+    run = db.query(CommercialIntelligenceRun).filter(
+        CommercialIntelligenceRun.idempotency_key == "degraded-zero"
+    ).one()
+    assert result["status"] == "degraded"
+    assert result["billing"]["charged_cents"] == 0
+    assert wallet.balance_cents == 100
+    assert wallet.lifetime_spent_cents == 0
+    assert run.status == "degraded"
+    assert db.query(IntelligenceWalletLedger).filter(
+        IntelligenceWalletLedger.intelligence_run_id == run.id
+    ).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_charges_zero_and_closes_run(db, monkeypatch) -> None:
+    org_a, _org_b, _ws_a, _ws_a_other, _ws_b, _project, principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org_a.id)
+
+    async def provider_failure(**_kwargs):
+        raise RuntimeError("provider exploded")
+
+    monkeypatch.setattr(legacy, "_run_ai", provider_failure)
+    payload = legacy.IntelligenceRequest(task="answer", question="What changed?", input={"crop": "almond"})
+    with pytest.raises(HTTPException) as excinfo:
+        await hardened._execute_paid_intelligence(
+            payload=payload,
+            idempotency_key="provider-failure-zero",
+            principal=principal,
+            db=db,
+        )
+    assert excinfo.value.status_code == 503
+    db.refresh(wallet)
+    run = db.query(CommercialIntelligenceRun).filter(
+        CommercialIntelligenceRun.idempotency_key == "provider-failure-zero"
+    ).one()
+    assert wallet.balance_cents == 100
+    assert wallet.lifetime_spent_cents == 0
+    assert run.status == "failed"
+    assert db.query(IntelligenceWalletLedger).filter(
+        IntelligenceWalletLedger.intelligence_run_id == run.id
+    ).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_balance_change_during_inference_fails_without_charge(db, monkeypatch) -> None:
+    org_a, _org_b, _ws_a, _ws_a_other, _ws_b, _project, principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org_a.id)
+
+    async def consume_balance_elsewhere(**_kwargs):
+        locked = legacy._wallet(db, org_a.id, lock=True)
+        locked.balance_cents = 0
+        db.commit()
+        return (
+            {"answer": "A valid result was computed."},
+            SimpleNamespace(status="ok", demo_fallback=False, provider="test-provider", model="test-model"),
+        )
+
+    monkeypatch.setattr(legacy, "_run_ai", consume_balance_elsewhere)
+    payload = legacy.IntelligenceRequest(task="answer", question="What changed?", input={"crop": "almond"})
+    with pytest.raises(HTTPException) as excinfo:
+        await hardened._execute_paid_intelligence(
+            payload=payload,
+            idempotency_key="balance-changed",
+            principal=principal,
+            db=db,
+        )
+    assert excinfo.value.status_code == 402
+    db.refresh(wallet)
+    run = db.query(CommercialIntelligenceRun).filter(
+        CommercialIntelligenceRun.idempotency_key == "balance-changed"
+    ).one()
+    assert wallet.balance_cents == 0
+    assert wallet.lifetime_spent_cents == 0
+    assert run.status == "failed"
+    assert run.error_code == "insufficient_balance_at_completion"
+    assert db.query(IntelligenceWalletLedger).filter(
+        IntelligenceWalletLedger.intelligence_run_id == run.id
+    ).count() == 0
