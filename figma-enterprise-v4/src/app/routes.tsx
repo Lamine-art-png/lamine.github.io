@@ -41,9 +41,12 @@ function PlatformProduct() {
   // approved organization owners/admins. The backend commercial dependency is
   // authoritative; broader Platform administration still requires the legacy
   // developer enrollment below.
+  // Existing/enrolled Platform developers keep the advanced console and
+  // every historical deep link. Commercial Intelligence is the simpler front
+  // door only for verified customers who are not enrolled in advanced Platform.
+  if (platformDeveloper) return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
   if (commercialSurface) return <PlatformIntelligenceConsole />;
-  if (!platformDeveloper) return <PlatformSelfServiceGate />;
-  return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
+  return <PlatformSelfServiceGate />;
 }
 
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
