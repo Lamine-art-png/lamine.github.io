@@ -49,11 +49,12 @@ async function prepare(page, storedLocale) {
     const req = route.request();
     const url = new URL(req.url());
     const reply = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
-    if (req.method() === "GET" && url.pathname === "/v1/auth/me") {
+    if (req.method() === "GET" && url.pathname === "/v1/auth/bootstrap") {
       return reply({
         user: { id: "qa", name: "QA", email: "qa@example.com" },
         current_organization: { id: "org", name: "QA Org", role: "owner" },
         organizations: [{ id: "org", name: "QA Org", role: "owner" }],
+        workspaces: [{ id: "ws", organization_id: "org", name: "QA Workspace", status: "active" }],
         entitlements: {},
       });
     }
