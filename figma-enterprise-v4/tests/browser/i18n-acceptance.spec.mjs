@@ -90,11 +90,12 @@ async function installPortalMocks(page, { initialLocale = "en" } = {}) {
       }
     };
 
-    if (method === "GET" && path === "/v1/auth/me") {
+    if (method === "GET" && path === "/v1/auth/bootstrap") {
       return json({
         user: { id: "qa-user", name: "QA Operator", email: "qa@example.com" },
         current_organization: { id: "org-qa", name: "QA Farm", role: "owner", plan: "professional", subscription_status: "active" },
         organizations: [{ id: "org-qa", name: "QA Farm", role: "owner", plan: "professional", subscription_status: "active" }],
+        workspaces: [{ id: "ws-qa", organization_id: "org-qa", name: "QA Workspace", status: "active" }],
         entitlements: { capabilities: { "intelligence.ask": "enabled" } },
       });
     }
