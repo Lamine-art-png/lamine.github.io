@@ -27,10 +27,11 @@ assert.ok(!source.includes("sessionStorage"), "commercial console must never per
 assert.ok(routes.includes("<PlatformIntelligenceConsole />"), "paid intelligence console must be the commercial front door");
 assert.ok(routes.includes("<PlatformConsoleApp />"), "advanced control plane must remain reachable");
 assert.ok(routes.includes("COMMERCIAL_PLATFORM_ROUTES"));
+const authCheck = routes.indexOf("if (isLoading || !isAuthenticated) return");
 const advancedCheck = routes.indexOf("if (platformDeveloper) return");
 const commercialCheck = routes.indexOf("if (commercialSurface) return");
-assert.ok(advancedCheck >= 0 && commercialCheck >= 0 && advancedCheck < commercialCheck,
-  "enrolled advanced developers must be routed before the commercial surface");
+assert.ok(authCheck >= 0 && advancedCheck >= 0 && commercialCheck >= 0 && authCheck < advancedCheck && advancedCheck < commercialCheck,
+  "authentication must gate product routing, then enrolled advanced developers must be routed before the commercial surface");
 assert.ok(routes.includes("if (commercialSurface) return <PlatformIntelligenceConsole />"),
   "commercial-only customers must retain the paid Intelligence front door");
 
