@@ -211,7 +211,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const bootstrapResponse = await apiClient.get("/v1/auth/bootstrap") as Record<string, unknown>;
+      let bootstrapResponse = await apiClient.get("/v1/auth/bootstrap") as Record<string, unknown>;
+      // Backward-compatible recovery for older/partial API edges and contract
+      // harnesses that still expose the pre-bootstrap endpoints. Production
+      // keeps the one-request fast path whenever bootstrap is complete.
+      if (!bootstrapResponse?.user) {
+        const [legacyMe, legacyWorkspaces] = await Promise.all([
+          apiClient.get("/v1/auth/me") as Promise<Record<string, unknown>>,
+          apiClient.get("/v1/workspaces") as Promise<unknown>,
+        ]);
+        bootstrapResponse = {
+          ...legacyMe,
+          workspaces: arrayFromResponse<Workspace>(legacyWorkspaces, "workspaces"),
+        };
+      }
       const normalized = normalizeMe(bootstrapResponse);
       const nextOrganization = normalized.currentOrganization;
       const nextWorkspaces = arrayFromResponse<Workspace>(bootstrapResponse, "workspaces");
