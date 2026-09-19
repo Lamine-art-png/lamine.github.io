@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import inspect
 
+import pytest
+from fastapi import HTTPException
+
 from app.api.v1 import commercial_intelligence as legacy
 from app.api.v1 import commercial_intelligence_hardened as hardened
 from app.api.v1 import commercial_intelligence_input_guard as input_guard
 from app.api.v1 import commercial_intelligence_key_guard as key_guard
+from app.models.platform_api import ApiProject
+from app.models.saas import ManagedEntity, Organization, User, Workspace
+from app.platform_api.principal import PlatformPrincipal
 
 
 def test_hardened_composition_replaces_money_moving_runtime() -> None:
@@ -76,3 +82,92 @@ def test_concurrent_idempotency_insert_is_resolved_without_second_run() -> None:
     assert "db.rollback()" in source
     assert "concurrent.request_hash != request_hash" in source
     assert '"intelligence_run_in_progress"' in source
+
+
+def _tenant_context(db):
+    owner_a = User(email="commercial-a@example.test", password_hash="x")
+    owner_b = User(email="commercial-b@example.test", password_hash="x")
+    db.add_all([owner_a, owner_b])
+    db.flush()
+    org_a = Organization(name="Commercial A", slug="commercial-a", owner_user_id=owner_a.id)
+    org_b = Organization(name="Commercial B", slug="commercial-b", owner_user_id=owner_b.id)
+    db.add_all([org_a, org_b])
+    db.flush()
+    ws_a = Workspace(organization_id=org_a.id, name="A")
+    ws_a_other = Workspace(organization_id=org_a.id, name="A other")
+    ws_b = Workspace(organization_id=org_b.id, name="B")
+    db.add_all([ws_a, ws_a_other, ws_b])
+    db.flush()
+    project = ApiProject(
+        organization_id=org_a.id,
+        workspace_id=None,
+        name="Intelligence",
+        slug="intelligence",
+        environment="live",
+        status="active",
+        default_rate_limit_policy={},
+        created_by_user_id=owner_a.id,
+    )
+    db.add(project)
+    db.flush()
+    principal = PlatformPrincipal(
+        authentication_type="portal_user",
+        organization_id=org_a.id,
+        api_project_id=project.id,
+        scopes=frozenset({"intelligence:run"}),
+        environment="live",
+        request_id="tenant-test",
+    )
+    return org_a, org_b, ws_a, ws_a_other, ws_b, project, principal
+
+
+def test_foreign_workspace_is_rejected_without_persistable_context(db) -> None:
+    _org_a, _org_b, _ws_a, _ws_a_other, ws_b, _project, principal = _tenant_context(db)
+    payload = legacy.IntelligenceRequest(
+        task="answer",
+        question="What needs attention?",
+        input={"crop": "almond"},
+        workspace_id=ws_b.id,
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        hardened._validate_and_build_context(db, principal, payload)
+    assert excinfo.value.status_code == 404
+    assert excinfo.value.detail["code"] == "workspace_not_found"
+
+
+def test_field_workspace_mismatch_is_rejected(db) -> None:
+    org_a, _org_b, ws_a, ws_a_other, _ws_b, project, principal = _tenant_context(db)
+    field = ManagedEntity(
+        organization_id=org_a.id,
+        workspace_id=ws_a.id,
+        entity_type="platform_field",
+        external_id="field-one",
+        display_name="Field One",
+        status="active",
+        metadata_json={"api_project_id": project.id, "crop": "almond"},
+    )
+    db.add(field)
+    db.flush()
+    payload = legacy.IntelligenceRequest(
+        task="field_diagnosis",
+        question="What needs attention?",
+        input={"crop": "almond"},
+        workspace_id=ws_a_other.id,
+        field_id=field.id,
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        hardened._validate_and_build_context(db, principal, payload)
+    assert excinfo.value.status_code == 404
+    assert excinfo.value.detail["code"] == "field_not_found"
+
+
+def test_same_org_workspace_is_canonicalized_into_context(db) -> None:
+    _org_a, _org_b, ws_a, _ws_a_other, _ws_b, _project, principal = _tenant_context(db)
+    payload = legacy.IntelligenceRequest(
+        task="answer",
+        question="Summarize this field context.",
+        input={"crop": "almond"},
+        workspace_id=ws_a.id,
+    )
+    context = hardened._validate_and_build_context(db, principal, payload)
+    assert context.workspace_id == ws_a.id
