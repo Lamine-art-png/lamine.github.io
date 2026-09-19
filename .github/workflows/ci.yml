@@ -55,7 +55,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Run commercial control-plane contracts
-        run: python -m pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py tests/unit/test_monetization_convergence.py tests/unit/test_connector_runtime_v21.py tests/unit/test_production_readiness.py tests/unit/test_billing_production_readiness.py -vv --tb=short 2>&1 | tee commercial-test-output.log
+        run: python -m pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py tests/unit/test_monetization_convergence.py tests/unit/test_connector_runtime_v21.py tests/unit/test_production_readiness.py tests/unit/test_billing_production_readiness.py tests/unit/test_commercial_intelligence_contract.py tests/unit/test_commercial_intelligence_hardening.py tests/unit/test_commercial_intelligence_input_guard.py tests/unit/test_commercial_intelligence_selfserve_contract.py -vv --tb=short 2>&1 | tee commercial-test-output.log
       - name: Upload focused commercial test output
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,7 +77,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "033_market_intelligence (head)"
+          test "$(alembic heads)" = "034_intelligence_wallet_commerce (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
@@ -134,6 +134,8 @@ jobs:
         run: node tests/i18n-contract.mjs 2>&1 | tee i18n-contract.log
       - name: Validate Market Intelligence portal contract
         run: node tests/market-intelligence-contract.mjs 2>&1 | tee market-intelligence-contract.log
+      - name: Validate paid Intelligence developer console contract
+        run: node tests/platform-intelligence-commercial-contract.mjs 2>&1 | tee platform-intelligence-commercial-contract.log
       - name: Validate Portal performance hot path
         run: node tests/portal-performance-contract.mjs 2>&1 | tee portal-performance-contract.log
       - name: Validate exact UI literal inventory
@@ -147,6 +149,7 @@ jobs:
             figma-enterprise-v4/i18n-contract.log
             figma-enterprise-v4/i18n-inventory.log
             figma-enterprise-v4/market-intelligence-contract.log
+            figma-enterprise-v4/platform-intelligence-commercial-contract.log
             figma-enterprise-v4/portal-performance-contract.log
           if-no-files-found: warn
           retention-days: 3

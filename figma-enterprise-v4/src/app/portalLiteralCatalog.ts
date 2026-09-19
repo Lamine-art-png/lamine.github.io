@@ -12,6 +12,7 @@ import literalCatalogPart11 from "../../../shared/ui-literals.en.11.json";
 import literalCatalogPart12 from "../../../shared/ui-literals.en.12.json";
 import literalCatalogPart13 from "../../../shared/ui-literals.en.13.json";
 import literalCatalogPart14 from "../../../shared/ui-literals.en.14.json";
+import literalCatalogPart15 from "../../../shared/ui-literals.en.15.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
@@ -39,6 +40,7 @@ const GENERIC_STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.ass
   literalCatalogPart12,
   literalCatalogPart13,
   literalCatalogPart14,
+  literalCatalogPart15,
 );
 
 export const DECISION_MEMORY_UI_CATALOG: Record<string, string> = {

@@ -1,0 +1,207 @@
+name: Intelligence API Commercial Production Verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - agroai_api/app/api/v1/commercial_intelligence.py
+      - agroai_api/app/api/v1/commercial_intelligence_hardened.py
+      - agroai_api/app/api/v1/commercial_intelligence_input_guard.py
+      - agroai_api/app/api/v1/commercial_intelligence_key_guard.py
+      - agroai_api/app/api/v1/commercial_intelligence_selfserve.py
+      - agroai_api/app/api/v1/router_compat.py
+      - agroai_api/app/models/intelligence_commerce.py
+      - agroai_api/alembic/versions/034_intelligence_wallet_commerce.py
+      - figma-enterprise-v4/src/app/components/PlatformIntelligenceConsole.tsx
+      - figma-enterprise-v4/src/app/platformIntelligenceCopy.ts
+      - figma-enterprise-v4/src/app/routes.tsx
+      - .github/workflows/intelligence-api-commercial-production-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intelligence-api-commercial-production-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
+      PUBLIC_API_ORIGIN: https://api.agroai-pilot.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "EXPECTED_BACKEND_SHA=${expected_sha}" >> "$GITHUB_ENV"
+          echo "expected_backend_sha=${expected_sha}"
+
+      - name: Wait for exact Render release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail --silent --show-error --max-time 25 "${BACKEND_ORIGIN}/v1/health" 2>/dev/null || true)"
+            if PAYLOAD="$payload" EXPECTED_BACKEND_SHA="$EXPECTED_BACKEND_SHA" python3 - <<'PY'
+          import json, os, sys
+          try:
+              value = json.loads(os.environ["PAYLOAD"])
+          except Exception:
+              sys.exit(1)
+          expected = os.environ["EXPECTED_BACKEND_SHA"]
+          sys.exit(0 if value.get("status") == "ok" and value.get("build_sha") == expected else 1)
+          PY
+            then
+              printf '%s\n' "$payload" > backend-health.json
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+
+      - name: Verify production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/v1/readiness" -o readiness.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("readiness.json", encoding="utf-8"))
+          assert value.get("status") == "ready", value
+          assert (value.get("schema") or {}).get("ready") is True, value
+          assert (value.get("production") or {}).get("ready") is True, value
+          print("production_readiness=green")
+          PY
+
+      - name: Verify live Stripe readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/v1/platform/billing-readiness" -o billing-readiness.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("billing-readiness.json", encoding="utf-8"))
+          assert value.get("status") == "ready", value
+          assert value.get("bootstrapped") is True, value
+          assert value.get("complete_live_configuration") is True, value
+          assert value.get("missing") == [], value
+          assert value.get("invalid") == [], value
+          flags = value.get("effective_flags") or {}
+          assert flags.get("PLATFORM_API_BILLING_ENABLED") is True, value
+          assert flags.get("PLATFORM_API_STRIPE_CHECKOUT_ENABLED") is True, value
+          print("stripe_live_readiness=green")
+          PY
+
+      - name: Verify live Intelligence runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/ai/status" -o ai-status.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("ai-status.json", encoding="utf-8"))
+          assert value.get("configured") is True, value
+          assert value.get("fallback_active") is False, value
+          lanes = value.get("lanes") or {}
+          assert any(bool((lane or {}).get("configured")) for lane in lanes.values()), value
+          print("intelligence_runtime=green")
+          PY
+
+      - name: Verify commercial Intelligence catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/intelligence/pricing" -o intelligence-pricing.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("intelligence-pricing.json", encoding="utf-8"))
+          assert value.get("model") == "agroai-intelligence-1", value
+          assert value.get("currency") == "usd", value
+          assert value.get("failed_or_degraded_runs_are_refunded") is True, value
+          actual = {item["id"]: item["price_cents"] for item in value.get("tasks", [])}
+          expected = {
+              "answer": 5,
+              "field_diagnosis": 15,
+              "irrigation_plan": 20,
+              "crop_risk": 15,
+              "evidence_analysis": 25,
+              "decision": 25,
+              "report": 50,
+              "integration_diagnosis": 15,
+              "readiness_analysis": 15,
+          }
+          assert actual == expected, (actual, expected)
+          print("commercial_catalog=green")
+          PY
+
+      - name: Verify deployed route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/openapi.json" -o openapi.json
+          python3 - <<'PY'
+          import json
+          paths = json.load(open("openapi.json", encoding="utf-8")).get("paths", {})
+          required = {
+              "/v1/intelligence": "post",
+              "/v1/intelligence/pricing": "get",
+              "/v1/platform/developer/wallet": "get",
+              "/v1/platform/developer/wallet/sync": "post",
+              "/v1/platform/developer/wallet/checkout": "post",
+              "/v1/platform/developer/intelligence/bootstrap": "post",
+              "/v1/platform/developer/intelligence/run": "post",
+          }
+          for path, method in required.items():
+              assert method in (paths.get(path) or {}), f"missing {method.upper()} {path}"
+          print("commercial_route_contract=green")
+          PY
+
+      - name: Verify authentication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          machine_code="$(curl --silent --show-error --output machine-auth.json --write-out '%{http_code}' \
+            --max-time 30 -X POST \
+            -H 'Content-Type: application/json' \
+            -H 'Idempotency-Key: unauthenticated-production-probe' \
+            --data '{"task":"field_diagnosis","question":"probe","input":{"crop":"almond"}}' \
+            "${PUBLIC_API_ORIGIN}/v1/intelligence" || true)"
+          browser_code="$(curl --silent --show-error --output browser-auth.json --write-out '%{http_code}' \
+            --max-time 30 "${PUBLIC_API_ORIGIN}/v1/platform/developer/wallet" || true)"
+          test "$machine_code" = "401"
+          test "$browser_code" = "401"
+          echo "authentication_boundary=green"
+
+      - name: Upload immutable verification evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-api-commercial-production-${{ github.sha }}
+          path: |
+            backend-health.json
+            readiness.json
+            billing-readiness.json
+            ai-status.json
+            intelligence-pricing.json
+            openapi.json
+            machine-auth.json
+            browser-auth.json
+          if-no-files-found: ignore
+          retention-days: 30
