@@ -29,15 +29,29 @@ def test_customer_debit_occurs_only_after_model_result() -> None:
 def test_workspace_boundary_is_server_authoritative() -> None:
     source = inspect.getsource(hardened._validate_and_build_context)
     assert "requested_workspace != key_workspace" in source
-    assert "field.workspace_id != key_workspace" in source
-    assert "key_workspace or requested_workspace" in source
+    assert "Workspace.organization_id == principal.organization_id" in source
+    assert "project.organization_id != principal.organization_id" in source
+    assert "project_workspace" in source
+    assert "field.workspace_id != resolved_workspace" in source
+    assert "key_workspace or project_workspace or requested_workspace" in source
 
 
 def test_tax_reconciliation_uses_checkout_subtotal() -> None:
     source = inspect.getsource(hardened._sync_pending_topups)
     assert 'checkout.get("amount_subtotal")' in source
-    assert "amount_subtotal != int(item.amount_cents)" in source
+    assert "amount_subtotal != int(locked.amount_cents)" in source
     assert "amount_total < amount_subtotal" in source
+
+
+def test_topup_reconciliation_locks_authoritative_row_before_credit() -> None:
+    source = inspect.getsource(hardened._sync_pending_topups)
+    scalar_candidates = source.index("IntelligenceWalletLedger.external_reference")
+    row_lock = source.index(".with_for_update()")
+    status_check = source.index('locked.status != "pending"')
+    wallet_credit = source.index("wallet.balance_cents +=")
+    assert scalar_candidates < row_lock < status_check < wallet_credit
+    assert ".populate_existing()" in source
+    assert "db.commit()" in source
 
 
 def test_stale_run_recovery_cannot_leave_legacy_debit_posted() -> None:
