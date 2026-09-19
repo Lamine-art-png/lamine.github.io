@@ -11,18 +11,31 @@ from app.api.v1.commercial_intelligence import (
     TASK_CATALOG,
     IntelligenceRequest,
     WalletCheckoutRequest,
-    router,
 )
 
 
 def test_commercial_intelligence_surface_is_small_and_paid() -> None:
-    paths = {route.path for route in router.routes}
-    assert "/intelligence" in paths
-    assert "/intelligence/pricing" in paths
-    assert "/platform/developer/wallet" in paths
-    assert "/platform/developer/wallet/checkout" in paths
-    assert "/platform/developer/intelligence/bootstrap" in paths
-    assert "/platform/developer/intelligence/run" in paths
+    # Browser self-service and machine routes are intentionally composed from
+    # separate routers. The production contract is the final FastAPI app.
+    from app.main import app
+
+    required = {
+        ("POST", "/v1/intelligence"),
+        ("GET", "/v1/intelligence/pricing"),
+        ("GET", "/v1/platform/developer/wallet"),
+        ("POST", "/v1/platform/developer/wallet/sync"),
+        ("POST", "/v1/platform/developer/wallet/checkout"),
+        ("POST", "/v1/platform/developer/intelligence/bootstrap"),
+        ("POST", "/v1/platform/developer/intelligence/run"),
+    }
+    registered = [
+        (method, route.path)
+        for route in app.routes
+        for method in getattr(route, "methods", set())
+        if (method, route.path) in required
+    ]
+    assert set(registered) == required
+    assert len(registered) == len(required), "commercial route+method registrations must be unique"
     assert PUBLIC_MODEL == "agroai-intelligence-1"
     assert TASK_CATALOG
     assert all(int(item["price_cents"]) > 0 for item in TASK_CATALOG.values())
