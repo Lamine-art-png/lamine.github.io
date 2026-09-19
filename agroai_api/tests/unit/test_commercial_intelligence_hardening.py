@@ -336,3 +336,76 @@ async def test_balance_change_during_inference_fails_without_charge(db, monkeypa
     assert db.query(IntelligenceWalletLedger).filter(
         IntelligenceWalletLedger.intelligence_run_id == run.id
     ).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("case", "checkout_overrides", "expected_status"),
+    [
+        ("wrong_org", {"metadata": {"organization_id": "foreign-org"}}, "review_required"),
+        ("wrong_ledger", {"metadata": {"wallet_ledger_id": "foreign-ledger"}}, "review_required"),
+        ("wrong_currency", {"currency": "eur"}, "review_required"),
+        ("wrong_subtotal", {"amount_subtotal": 999}, "review_required"),
+        ("expired_unpaid", {"status": "expired", "payment_status": "unpaid"}, "expired"),
+        ("complete_unpaid", {"status": "complete", "payment_status": "unpaid"}, "pending"),
+    ],
+)
+def test_topup_reconciliation_rejects_invalid_stripe_state(
+    db,
+    monkeypatch,
+    case: str,
+    checkout_overrides: dict,
+    expected_status: str,
+) -> None:
+    org_a, _org_b, _ws_a, _ws_a_other, _ws_b, _project, _principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org_a.id, cents=0)
+    ledger = IntelligenceWalletLedger(
+        organization_id=org_a.id,
+        wallet_id=wallet.id,
+        kind="topup",
+        status="pending",
+        amount_cents=1000,
+        idempotency_key=f"topup-{case}",
+        external_reference=f"cs_{case}",
+        metadata_json={},
+    )
+    db.add(ledger)
+    db.commit()
+
+    monkeypatch.setattr(legacy.settings, "PLATFORM_API_BILLING_ENABLED", True)
+    monkeypatch.setattr(legacy.settings, "PLATFORM_API_STRIPE_SECRET_KEY", "sk_test_reconciliation")
+
+    checkout = {
+        "payment_status": "paid",
+        "status": "complete",
+        "amount_subtotal": 1000,
+        "amount_total": 1080,
+        "currency": "usd",
+        "metadata": {
+            "organization_id": org_a.id,
+            "wallet_ledger_id": ledger.id,
+        },
+    }
+    checkout.update(checkout_overrides)
+    # Partial metadata overrides deliberately preserve the non-target field.
+    if case == "wrong_org":
+        checkout["metadata"] = {
+            "organization_id": "foreign-org",
+            "wallet_ledger_id": ledger.id,
+        }
+    if case == "wrong_ledger":
+        checkout["metadata"] = {
+            "organization_id": org_a.id,
+            "wallet_ledger_id": "foreign-ledger",
+        }
+
+    monkeypatch.setattr(
+        hardened.stripe.checkout.Session,
+        "retrieve",
+        lambda session_id: checkout,
+    )
+    hardened._sync_pending_topups(db, org_a.id)
+    db.refresh(wallet)
+    db.refresh(ledger)
+    assert ledger.status == expected_status
+    assert wallet.balance_cents == 0
+    assert wallet.lifetime_funded_cents == 0
