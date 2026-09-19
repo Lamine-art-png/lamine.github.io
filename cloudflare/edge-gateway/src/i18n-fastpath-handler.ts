@@ -44,7 +44,7 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 const PUBLIC_FASTPATH_MAX_KEYS = 40;
 const WORKERS_AI_CIRCUIT_MS = 10 * 60 * 1_000;
-const I18N_EDGE_GENERATION_TIMEOUT_MS = 8_000;
+const I18N_EDGE_GENERATION_TIMEOUT_MS = 12_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
 let workersAiBlockedUntil = 0;
 

@@ -22,7 +22,8 @@ def test_workers_ai_validation_fastpath_is_bound_for_production_release():
     assert 'englishValidationRequest' not in handler
     assert 'cloudflare_workers_ai' in handler
     assert 'I18N_EDGE_GENERATION_TIMEOUT_MS = 12_000' in handler
-    assert 'I18N_UPSTREAM_TIMEOUT_MS = 30_000' in handler
+    assert 'translateWithPublicFallback' in handler
+    assert 'PUBLIC_FASTPATH_MAX_KEYS' in handler
     assert 'edge_i18n_generation_timeout' in handler
     assert 'ui-commercial-boundary.en.json' in canonical
     assert '@cf/zai-org/glm-4.7-flash' in chunked_engine
