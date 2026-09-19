@@ -26,11 +26,12 @@ async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspa
     const url = new URL(request.url());
     const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-    if (request.method() === "GET" && url.pathname === "/v1/auth/me") {
+    if (request.method() === "GET" && url.pathname === "/v1/auth/bootstrap") {
       return reply({
         user: { id: "qa", name: "QA Owner", email: "qa@example.com" },
         current_organization: { id: "org", name: "QA Agriculture", role: "owner", plan, subscription_status: plan === "free" ? "inactive" : "active" },
         organizations: [{ id: "org", name: "QA Agriculture", role: "owner", plan }],
+        workspaces: workspaceRows,
         entitlements: { max_workspaces: maxWorkspaces, access_profile: "customer", capabilities: {} },
       });
     }
