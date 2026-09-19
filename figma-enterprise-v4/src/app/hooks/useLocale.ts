@@ -179,12 +179,16 @@ export function useLocale() {
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "UI translation unavailable";
         console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, { locale: canonical, phase: "activation", error: message });
-        primeKnownLocale(current);
-        setSelectedLocaleState(current);
+        // Preserve the customer's explicit language choice even when the
+        // translation provider is temporarily unavailable. Missing keys fail
+        // open to English per-key and the background hydration effect retries
+        // the selected locale without trapping or reverting the selector.
+        const activated = setStoredLocale(canonical);
+        setSelectedLocaleState(activated);
         setCatalogError(message);
         setCatalogLoading(false);
         notifyLocaleRuntime();
-        throw cause instanceof Error ? cause : new Error(message);
+        return activated;
       }
     }
 
