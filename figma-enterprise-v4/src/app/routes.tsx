@@ -32,7 +32,7 @@ function PortalRouteError() {
 const COMMERCIAL_PLATFORM_ROUTES = ["/", "/home", "/api-keys", "/playground", "/usage", "/billing", "/docs"];
 
 function PlatformProduct() {
-  const { platformDeveloper } = useAuth();
+  const { platformDeveloper, isAuthenticated, isLoading } = useAuth();
   const { pathname } = useLocation();
   const normalizedPath = pathname.replace(/^\/platform(?=\/|$)/, "") || "/";
   const commercialSurface = COMMERCIAL_PLATFORM_ROUTES.some((path) => normalizedPath === path || (path !== "/" && normalizedPath.startsWith(`${path}/`)));
@@ -44,6 +44,10 @@ function PlatformProduct() {
   // Existing/enrolled Platform developers keep the advanced console and
   // every historical deep link. Commercial Intelligence is the simpler front
   // door only for verified customers who are not enrolled in advanced Platform.
+  // Authentication and verification entry points must stay reachable before
+  // either Platform product renders. Otherwise an unauthenticated visitor to
+  // platform.agroai-pilot.com would land in the paid console and only see 401s.
+  if (isLoading || !isAuthenticated) return <PlatformSelfServiceGate />;
   if (platformDeveloper) return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
   if (commercialSurface) return <PlatformIntelligenceConsole />;
   return <PlatformSelfServiceGate />;
