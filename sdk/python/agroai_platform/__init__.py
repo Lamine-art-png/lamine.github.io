@@ -6,8 +6,11 @@ from .client import (
     RateLimitMetadata,
     verify_webhook_signature,
 )
+from .intelligence import AgroAI, AsyncAgroAI
 
 __all__ = [
+    "AgroAI",
+    "AsyncAgroAI",
     "AgroAIPlatformClient",
     "AgroAIPlatformError",
     "ApiResponse",
