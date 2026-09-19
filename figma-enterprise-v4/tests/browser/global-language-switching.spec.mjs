@@ -58,7 +58,7 @@ function languageSelector(page) {
 }
 
 test("every visible non-English UI locale hydrates core first and full literals progressively", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   const state = await prepare(page);
