@@ -13,8 +13,8 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
         // Preference sync is best effort. The activated local switch remains authoritative for this session.
       });
     } catch {
-      // Atomic activation keeps the previous locale selected when translation
-      // infrastructure cannot prove a valid critical catalog.
+      // Unexpected activation errors are fail-safe. Provider/catalog outages
+      // are handled inside activateLocale while preserving the chosen locale.
     }
   }
 
