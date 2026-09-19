@@ -74,7 +74,7 @@ test("every visible non-English UI locale hydrates core first and full literals 
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
     await expect(selector).toBeEnabled();
-    const expectedSettings = locale === "fr-FR" ? "Paramètres" : `⟦${locale}⟧ Settings`;
+    const expectedSettings = locale === "fr-FR" ? "Paramètres" : locale === "pt" ? "Configurações" : `⟦${locale}⟧ Settings`;
     await expect(page.getByText(expectedSettings, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
@@ -140,7 +140,7 @@ test("non-French locale visibly translates from core while full literal chunks a
   await context.close();
 });
 
-test("catalog failure never traps the language selector", async ({ page }) => {
+test("catalog failure fails atomically without trapping the language selector", async ({ page }) => {
   await page.addInitScript((token) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", "en");
@@ -161,9 +161,13 @@ test("catalog failure never traps the language selector", async ({ page }) => {
   await page.goto(APP_URL);
   const selector = languageSelector(page);
   await selector.selectOption("de");
-  await expect(selector).toHaveValue("de");
-  await expect(selector).toBeEnabled();
-  await selector.selectOption("en");
+  // Critical-catalog activation is atomic: a failed target locale keeps the
+  // previously proven locale selected rather than exposing a half-translated UI.
   await expect(selector).toHaveValue("en");
+  await expect(selector).toBeEnabled();
+  // A fully bundled locale remains selectable immediately after the failure,
+  // proving the selector itself is not trapped by provider unavailability.
+  await selector.selectOption("fr-FR");
+  await expect(selector).toHaveValue("fr-FR");
   await expect(selector).toBeEnabled();
 });
