@@ -1,10 +1,9 @@
 name: Emergency Publish News
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/emergency-publish-news.yml"
+  # Routine article releases are owned by deploy-field-intelligence-launch-article.yml.
+  # Editing this emergency runbook must never publish production automatically.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,33 +54,33 @@ jobs:
           api="https://api.cloudflare.com/client/v4"
           zone_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
           zone_id="$(ZONE_RESPONSE="$zone_response" python3 - <<'PY'
-import json, os
-payload = json.loads(os.environ['ZONE_RESPONSE'])
-print((payload.get('result') or [{}])[0].get('id', ''))
-PY
+          import json, os
+          payload = json.loads(os.environ['ZONE_RESPONSE'])
+          print((payload.get('result') or [{}])[0].get('id', ''))
+          PY
           )"
           test -n "$zone_id"
           route_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
           ROUTE_RESPONSE="$route_response" python3 - <<'PY' > obsolete-newsroom-routes.tsv
-import json, os
-payload = json.loads(os.environ['ROUTE_RESPONSE'])
-obsolete = {
-    'agroai-pilot.com/news*',
-    'agroai-pilot.com/news/*',
-    'agroai-pilot.com/news/field-intelligence-newsroom.js',
-    'agroai-pilot.com/news/field-intelligence-newsroom.css',
-}
-for route in payload.get('result', []):
-    if route.get('pattern') in obsolete:
-        print(f"{route.get('id', '')}\t{route.get('pattern', '')}")
-PY
+          import json, os
+          payload = json.loads(os.environ['ROUTE_RESPONSE'])
+          obsolete = {
+              'agroai-pilot.com/news*',
+              'agroai-pilot.com/news/*',
+              'agroai-pilot.com/news/field-intelligence-newsroom.js',
+              'agroai-pilot.com/news/field-intelligence-newsroom.css',
+          }
+          for route in payload.get('result', []):
+              if route.get('pattern') in obsolete:
+                  print(f"{route.get('id', '')}\t{route.get('pattern', '')}")
+          PY
           while IFS=$'\t' read -r route_id route_pattern; do
             [ -n "${route_id:-}" ] || continue
             delete_response="$(curl -fsS -X DELETE -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}")"
             DELETE_RESPONSE="$delete_response" python3 - <<'PY'
-import json, os
-assert json.loads(os.environ['DELETE_RESPONSE']).get('success') is True
-PY
+          import json, os
+          assert json.loads(os.environ['DELETE_RESPONSE']).get('success') is True
+          PY
           done < obsolete-newsroom-routes.tsv
 
       - name: Prove live newsroom and both announcements
@@ -119,13 +118,13 @@ PY
                grep -Fi 'x-agroai-cover-target: 3840x2160' field-cover.headers >/dev/null; then
               test "$(wc -c < jd-cover.webp)" -gt 10000
               python3 - <<'PY'
-from pathlib import Path
-import re
-origin = Path('origin.html').read_text()
-live = Path('news.html').read_text()
-clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
-assert clean == origin
-PY
+          from pathlib import Path
+          import re
+          origin = Path('origin.html').read_text()
+          live = Path('news.html').read_text()
+          clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+          assert clean == origin
+          PY
               verified=1
               break
             fi

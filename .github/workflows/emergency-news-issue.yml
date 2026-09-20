@@ -117,13 +117,13 @@ jobs:
                grep -Fi 'x-agroai-cover-target: 3840x2160' proof/field-cover.headers >/dev/null; then
               test "$(wc -c < proof/jd-cover.webp)" -gt 10000
               python3 - <<'PY'
-from pathlib import Path
-import re
-origin = Path('proof/origin.html').read_text()
-live = Path('proof/news.html').read_text()
-clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
-assert clean == origin, 'native newsroom markup changed beyond the one deferred restoration script'
-PY
+          from pathlib import Path
+          import re
+          origin = Path('proof/origin.html').read_text()
+          live = Path('proof/news.html').read_text()
+          clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+          assert clean == origin, 'native newsroom markup changed beyond the one deferred restoration script'
+          PY
               ready=1
               break
             fi

@@ -53,32 +53,32 @@ jobs:
           api="https://api.cloudflare.com/client/v4"
           zone_json="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
           zone_id="$(ZONE_JSON="$zone_json" python3 - <<'PY'
-import json, os
-print((json.loads(os.environ['ZONE_JSON']).get('result') or [{}])[0].get('id', ''))
-PY
+          import json, os
+          print((json.loads(os.environ['ZONE_JSON']).get('result') or [{}])[0].get('id', ''))
+          PY
           )"
           test -n "$zone_id"
           routes_json="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
           ROUTES_JSON="$routes_json" python3 - <<'PY' > obsolete.tsv
-import json, os
-obsolete = {
-  'agroai-pilot.com/news*',
-  'agroai-pilot.com/news/*',
-  'agroai-pilot.com/news/field-intelligence-newsroom.js',
-  'agroai-pilot.com/news/field-intelligence-newsroom.css',
-}
-for route in json.loads(os.environ['ROUTES_JSON']).get('result', []):
-    if route.get('pattern') in obsolete:
-        print(f"{route.get('id','')}\t{route.get('pattern','')}")
-PY
+          import json, os
+          obsolete = {
+            'agroai-pilot.com/news*',
+            'agroai-pilot.com/news/*',
+            'agroai-pilot.com/news/field-intelligence-newsroom.js',
+            'agroai-pilot.com/news/field-intelligence-newsroom.css',
+          }
+          for route in json.loads(os.environ['ROUTES_JSON']).get('result', []):
+              if route.get('pattern') in obsolete:
+                  print(f"{route.get('id','')}\t{route.get('pattern','')}")
+          PY
           while IFS=$'\t' read -r route_id route_pattern; do
             [ -n "${route_id:-}" ] || continue
             echo "Deleting obsolete broad route: ${route_pattern}"
             result="$(curl -fsS -X DELETE -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}")"
             RESULT="$result" python3 - <<'PY'
-import json, os
-assert json.loads(os.environ['RESULT']).get('success') is True
-PY
+          import json, os
+          assert json.loads(os.environ['RESULT']).get('success') is True
+          PY
           done < obsolete.tsv
 
       - name: Verify actual public newsroom and both announcements
@@ -117,13 +117,13 @@ PY
                grep -Fi 'x-agroai-cover-target: 3840x2160' proof/field-cover.headers >/dev/null; then
               test "$(wc -c < proof/jd-cover.webp)" -gt 10000
               python3 - <<'PY'
-from pathlib import Path
-import re
-origin = Path('proof/origin.html').read_text()
-live = Path('proof/news.html').read_text()
-clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
-assert clean == origin
-PY
+          from pathlib import Path
+          import re
+          origin = Path('proof/origin.html').read_text()
+          live = Path('proof/news.html').read_text()
+          clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+          assert clean == origin
+          PY
               ready=1
               break
             fi

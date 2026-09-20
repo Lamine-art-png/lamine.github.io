@@ -109,7 +109,8 @@ jobs:
       - name: Comment verified result
         if: ${{ success() }}
         shell: bash
-        run: gh pr comment "${{ github.event.pull_request.number }}" --body "✅ Live production verified: native newsroom intact, reviewed John Deere article and supplied cover live, Field Intelligence article live, and both newsroom cards restored."
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body "✅ Live production verified: native newsroom intact, reviewed John Deere article and supplied cover live, Field Intelligence article live, and both newsroom cards restored."
 
       - name: Comment failure
         if: ${{ failure() }}

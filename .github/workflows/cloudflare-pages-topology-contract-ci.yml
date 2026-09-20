@@ -20,6 +20,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Record legacy Pages deployment diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/lamine-github-io"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$base" > legacy-project.json
+          jq -e '.success == true' legacy-project.json >/dev/null
+          jq '.result | {name, domains, build_config, source_config: .source.config,
+            latest_deployment: (.latest_deployment | {id, environment, latest_stage, deployment_trigger})}' legacy-project.json
+          deployment="$(jq -r '.result.latest_deployment.id // empty' legacy-project.json)"
+          if [ -n "$deployment" ]; then
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "$base/deployments/$deployment/history/logs" > legacy-build-log.json
+            jq -e '.success == true' legacy-build-log.json >/dev/null
+            jq -r '.result.data[-30:][]?.line' legacy-build-log.json
+          fi
+
       - name: Verify single authoritative Pages deployment path
         shell: bash
         run: |

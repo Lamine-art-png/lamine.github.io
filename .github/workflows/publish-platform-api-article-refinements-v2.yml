@@ -46,10 +46,10 @@ jobs:
           ! grep -F 'pattern = "agroai-pilot.com/news*"' "$routes"
           ! grep -F 'pattern = "agroai-pilot.com/news/*"' "$routes"
           python3 - <<'PY'
-from pathlib import Path
-html=Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
-assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
-PY
+          from pathlib import Path
+          html=Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
+          assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
+          PY
           npx --yes wrangler@4.107.0 deploy --dry-run --config "$routes"
 
       - name: Deploy narrow News Worker
@@ -76,10 +76,10 @@ PY
                grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' deere.html >/dev/null; then
               python3 - <<'PY'
-from pathlib import Path
-html=Path('article.html').read_text()
-assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
-PY
+          from pathlib import Path
+          html=Path('article.html').read_text()
+          assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
+          PY
               exit 0
             fi
             echo "attempt=$attempt article=$a news=$n script=$s field=$f deere=$d"

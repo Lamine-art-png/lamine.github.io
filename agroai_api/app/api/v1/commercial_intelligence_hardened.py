@@ -249,6 +249,16 @@ def _recover_if_stale(
     run: CommercialIntelligenceRun,
     principal: PlatformPrincipal,
 ) -> bool:
+    # Completion and recovery serialize on the same authoritative run row.
+    run = (
+        db.query(CommercialIntelligenceRun)
+        .filter(CommercialIntelligenceRun.id == run.id)
+        .with_for_update()
+        .populate_existing()
+        .one()
+    )
+    if run.status != "processing":
+        return False
     created = run.created_at or datetime.utcnow()
     if datetime.utcnow() - created < _STALE_RUN_AFTER:
         return False
@@ -282,6 +292,10 @@ async def _execute_paid_intelligence(
     price_cents = int(catalog["price_cents"])
     request_hash = legacy._request_hash(payload)
 
+    # An idempotency key identifies a request, not an authorization grant.
+    # Revalidate the current key's resource boundary before returning cached data.
+    context = _validate_and_build_context(db, principal, payload)
+
     existing = (
         db.query(CommercialIntelligenceRun)
         .filter(
@@ -294,6 +308,8 @@ async def _execute_paid_intelligence(
     if existing:
         if existing.request_hash != request_hash:
             raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
+        if existing.workspace_id != context.workspace_id:
+            raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
         if existing.response_json is not None:
             return dict(existing.response_json)
         if existing.status == "processing" and _recover_if_stale(db, run=existing, principal=principal):
@@ -306,10 +322,6 @@ async def _execute_paid_intelligence(
                 },
             )
         raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": existing.id})
-
-    # Authorization and resource context MUST resolve before even creating the
-    # billable run marker, and therefore before any possibility of charging.
-    context = _validate_and_build_context(db, principal, payload)
 
     # Fast fail before spending provider compute. The final debit is rechecked
     # under a row lock after successful inference to handle concurrent requests.
@@ -374,6 +386,8 @@ async def _execute_paid_intelligence(
             )
         if concurrent.request_hash != request_hash:
             raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
+        if concurrent.workspace_id != context.workspace_id:
+            raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
         if concurrent.response_json is not None:
             return dict(concurrent.response_json)
         raise HTTPException(
@@ -404,9 +418,21 @@ async def _execute_paid_intelligence(
             or model_result.demo_fallback
             or body.get("_safe_mode")
         )
-        fresh_run = db.get(CommercialIntelligenceRun, run.id)
+        fresh_run = (
+            db.query(CommercialIntelligenceRun)
+            .filter(CommercialIntelligenceRun.id == run.id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
         if fresh_run is None:
             raise RuntimeError("commercial intelligence run disappeared")
+        if fresh_run.status != "processing":
+            response = dict(fresh_run.response_json) if fresh_run.response_json is not None else None
+            db.rollback()
+            if response is not None:
+                return response
+            raise HTTPException(status_code=409, detail={"code": "intelligence_run_already_closed"})
         fresh_run.provider_internal = str(model_result.provider or "") or None
         fresh_run.model_internal = str(model_result.model or "") or None
 
@@ -479,7 +505,13 @@ async def _execute_paid_intelligence(
         raise
     except Exception as exc:
         db.rollback()
-        failed_run = db.get(CommercialIntelligenceRun, run.id)
+        failed_run = (
+            db.query(CommercialIntelligenceRun)
+            .filter(CommercialIntelligenceRun.id == run.id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
         if failed_run is not None and failed_run.status == "processing":
             failed_run.status = "failed"
             failed_run.error_code = "intelligence_execution_failed"

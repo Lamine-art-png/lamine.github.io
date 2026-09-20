@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from app.api.v1 import commercial_intelligence as legacy
 from app.api.v1 import commercial_intelligence_hardened as hardened
@@ -186,6 +189,54 @@ def _fund_wallet(db, organization_id: str, cents: int = 100) -> IntelligenceWall
     db.add(wallet)
     db.commit()
     return wallet
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("explicit_workspace", [True, False])
+async def test_completed_replay_cannot_escape_current_key_workspace(db, monkeypatch, explicit_workspace):
+    org, _, workspace, other_workspace, _, _, principal = _tenant_context(db)
+    _fund_wallet(db, org.id)
+    payload = legacy.IntelligenceRequest(question="Summarize evidence", workspace_id=workspace.id if explicit_workspace else None)
+    principal = replace(principal, workspace_id=workspace.id)
+    restricted = replace(principal, authentication_type="platform_api_key", workspace_id=other_workspace.id)
+
+    async def model_ok(**kwargs):
+        return {"answer": "Workspace evidence"}, SimpleNamespace(status="ok", demo_fallback=False, provider="test", model="test")
+
+    monkeypatch.setattr(legacy, "_run_ai", model_ok)
+    await hardened._execute_paid_intelligence(payload=payload, idempotency_key="workspace-replay", principal=principal, db=db)
+    with pytest.raises(HTTPException) as error:
+        await hardened._execute_paid_intelligence(payload=payload, idempotency_key="workspace-replay", principal=restricted, db=db)
+    assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_late_provider_completion_cannot_charge_recovered_run(db, monkeypatch):
+    org, _, _, _, _, _, principal = _tenant_context(db)
+    wallet = _fund_wallet(db, org.id)
+    wallet_id = wallet.id
+
+    async def model_finishes_after_recovery(**kwargs):
+        # A second worker recovers the durable marker while inference is still
+        # running. Completion must honor that terminal transition.
+        with Session(db.bind) as recovery:
+            run = recovery.query(CommercialIntelligenceRun).filter_by(idempotency_key="late-completion").one()
+            run.created_at = datetime.utcnow() - timedelta(minutes=11)
+            recovery.commit()
+            assert hardened._recover_if_stale(recovery, run=run, principal=principal)
+        return {"answer": "Late result"}, SimpleNamespace(status="ok", demo_fallback=False, provider="test", model="test")
+
+    monkeypatch.setattr(legacy, "_run_ai", model_finishes_after_recovery)
+    with pytest.raises(HTTPException) as error:
+        await hardened._execute_paid_intelligence(
+            payload=legacy.IntelligenceRequest(question="Summarize evidence"),
+            idempotency_key="late-completion", principal=principal, db=db,
+        )
+    assert error.value.status_code == 409
+    db.expire_all()
+    assert db.get(IntelligenceWallet, wallet_id).balance_cents == 100
+    assert db.query(CommercialIntelligenceRun).filter_by(idempotency_key="late-completion").one().status == "failed"
+    assert db.query(IntelligenceWalletLedger).filter_by(kind="intelligence_charge").count() == 0
 
 
 @pytest.mark.asyncio

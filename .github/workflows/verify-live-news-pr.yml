@@ -69,14 +69,14 @@ jobs:
                grep -F 'Introducing AGRO-AI Field Intelligence' restore.js >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' restore.js >/dev/null; then
               python3 - <<'PY'
-from pathlib import Path
-import re
-origin = Path('origin.html').read_text()
-live = Path('live.html').read_text()
-clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
-if clean != origin:
-    raise SystemExit('Native newsroom markup differs beyond the single restoration script tag')
-PY
+          from pathlib import Path
+          import re
+          origin = Path('origin.html').read_text()
+          live = Path('live.html').read_text()
+          clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+          if clean != origin:
+              raise SystemExit('Native newsroom markup differs beyond the single restoration script tag')
+          PY
               exit 0
             fi
             sleep 5
