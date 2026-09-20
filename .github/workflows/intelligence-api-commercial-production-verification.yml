@@ -117,8 +117,10 @@ jobs:
           value = json.load(open("ai-status.json", encoding="utf-8"))
           assert value.get("configured") is True, value
           assert value.get("fallback_active") is False, value
-          lanes = value.get("lanes") or {}
-          assert any(bool((lane or {}).get("configured")) for lane in lanes.values()), value
+          assert value.get("missing_env") == [], value
+          assert value.get("provider") not in (None, "", "offline"), value
+          assert bool(value.get("base_url_present")) is True, value
+          assert bool(value.get("model")), value
           print("intelligence_runtime=green")
           PY
 
