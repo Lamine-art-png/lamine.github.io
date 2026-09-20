@@ -110,14 +110,36 @@ jobs:
           while IFS= read -r locale; do
             headers="headers.txt"
             body="body.json"
-            status="$(curl --silent --show-error --max-time 20 -D "$headers" -o "$body" -w '%{http_code}' \
-              -H "Origin: ${PORTAL_ORIGIN}" \
-              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d "{\"locale\":\"${locale}\"}" \
-              "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}" || true)"
-            marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
-            if [ "$status" != "200" ] || [ "$marker" != "$I18N_EDGE_RELEASE" ] || ! jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then
+            status=""
+            marker=""
+            locale_ok=0
+
+            # Cold edge translation can legitimately outlive the customer-facing
+            # 12s fail-closed timeout while the underlying generation continues
+            # and warms the durable cache. Retry only explicit retryable 503s;
+            # permanent contract failures still fail the production gate.
+            for attempt in 1 2 3; do
+              status="$(curl --silent --show-error --max-time 20 -D "$headers" -o "$body" -w '%{http_code}' \
+                -H "Origin: ${PORTAL_ORIGIN}" \
+                -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+                -H 'Content-Type: application/json' \
+                -d "{\"locale\":\"${locale}\"}" \
+                "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}-${attempt}" || true)"
+              marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+
+              if [ "$status" = "200" ] && [ "$marker" = "$I18N_EDGE_RELEASE" ] && jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then
+                locale_ok=1
+                break
+              fi
+
+              retryable="$(jq -r 'if .retryable == true then "true" else "false" end' "$body" 2>/dev/null || echo false)"
+              if [ "$status" != "503" ] || [ "$retryable" != "true" ] || [ "$marker" != "$I18N_EDGE_RELEASE" ] || [ "$attempt" -eq 3 ]; then
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "$locale_ok" -ne 1 ]; then
               {
                 echo "locale=${locale}"
                 echo "http_status=${status}"
