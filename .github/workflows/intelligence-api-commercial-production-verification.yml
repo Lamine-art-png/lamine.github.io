@@ -1,4 +1,5 @@
 name: Intelligence API Commercial Production Verification
+# Post-merge proof gate: exact backend SHA, Stripe, runtime, routes, and auth boundaries.
 
 on:
   push:
