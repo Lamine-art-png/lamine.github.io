@@ -1,10 +1,8 @@
 name: Direct Platform API News Production Repair
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/deploy-platform-api-news-direct.yml"
+  # Routine article releases are owned by deploy-field-intelligence-launch-article.yml.
+  # This repair remains available explicitly, not on edits to its own runbook.
   pull_request:
     branches: ["main"]
     paths:
@@ -58,13 +56,13 @@ jobs:
           grep -F '<section class="enterprise-portal">' "$article" >/dev/null
           grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' "$article" >/dev/null
           python3 - <<'PY'
-from pathlib import Path
-html = Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
-closing = html.index('<section class="closing">')
-enterprise = html.index('<section class="enterprise-portal">')
-if enterprise <= closing:
-    raise SystemExit('Enterprise Portal section must follow the Start building section')
-PY
+          from pathlib import Path
+          html = Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
+          closing = html.index('<section class="closing">')
+          enterprise = html.index('<section class="enterprise-portal">')
+          if enterprise <= closing:
+              raise SystemExit('Enterprise Portal section must follow the Start building section')
+          PY
           grep -F 'PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch"' cloudflare/field-intelligence-launch-worker/src/index.ts >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch"' cloudflare/field-intelligence-launch-worker/wrangler.toml >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch/*"' cloudflare/field-intelligence-launch-worker/wrangler.toml >/dev/null
@@ -98,12 +96,12 @@ PY
             article_not_found=false; grep -F "Article not found" article.html >/dev/null && article_not_found=true
             section_order=false
             python3 - <<'PY' && section_order=true || true
-from pathlib import Path
-html = Path('article.html').read_text()
-closing = html.index('<section class="closing">')
-enterprise = html.index('<section class="enterprise-portal">')
-raise SystemExit(0 if enterprise > closing else 1)
-PY
+          from pathlib import Path
+          html = Path('article.html').read_text()
+          closing = html.index('<section class="closing">')
+          enterprise = html.index('<section class="enterprise-portal">')
+          raise SystemExit(0 if enterprise > closing else 1)
+          PY
             cover_marker=false; grep -Fi 'x-agroai-asset-source: reviewed-platform-api-cover' cover.headers >/dev/null && cover_marker=true
             logo_marker=false; grep -Fi 'x-agroai-asset-source: official-repository-logo' logo.headers >/dev/null && logo_marker=true
             newsroom_marker=false; grep -Fi 'x-agroai-newsroom-source: native-pages-origin' news.headers >/dev/null && newsroom_marker=true

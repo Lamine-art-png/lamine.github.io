@@ -52,13 +52,13 @@ jobs:
                grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' deere.html >/dev/null; then
               python3 - <<'PY'
-from pathlib import Path
-html = Path('article.html').read_text()
-closing = html.index('<section class="closing">')
-enterprise = html.index('<section class="enterprise-portal">')
-if enterprise <= closing:
-    raise SystemExit('Enterprise Portal section is not separate and after the builder CTA')
-PY
+          from pathlib import Path
+          html = Path('article.html').read_text()
+          closing = html.index('<section class="closing">')
+          enterprise = html.index('<section class="enterprise-portal">')
+          if enterprise <= closing:
+              raise SystemExit('Enterprise Portal section is not separate and after the builder CTA')
+          PY
               echo "platform_api_article_refinements=verified_live"
               echo "platform_api_newsroom_card_date=verified_live"
               exit 0

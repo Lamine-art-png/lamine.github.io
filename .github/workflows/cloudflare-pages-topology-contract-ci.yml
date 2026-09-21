@@ -20,6 +20,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This retired customer-portal project has no custom domains or production
+      # deployment. Its obsolete Git builds must not shadow the release gates.
+      - name: Verify legacy Pages automatic builds remain retired
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/lamine-github-io"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$base" > legacy-project.json
+          jq -e '
+            .success == true
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+          ' legacy-project.json >/dev/null
+          echo "legacy_pages_automatic_builds=disabled"
+
       - name: Verify single authoritative Pages deployment path
         shell: bash
         run: |
