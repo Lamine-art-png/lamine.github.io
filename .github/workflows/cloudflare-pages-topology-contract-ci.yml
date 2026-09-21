@@ -20,7 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Record legacy Pages deployment diagnostics
+      # This retired customer-portal project has no custom domains or production
+      # deployment. Its obsolete Git builds must not shadow the release gates.
+      - name: Verify legacy Pages automatic builds remain retired
         shell: bash
         run: |
           set -euo pipefail
@@ -28,17 +30,12 @@ jobs:
           curl --fail --silent --show-error \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             "$base" > legacy-project.json
-          jq -e '.success == true' legacy-project.json >/dev/null
-          jq '.result | {name, domains, build_config, source_config: .source.config,
-            latest_deployment: (.latest_deployment | {id, environment, latest_stage, deployment_trigger})}' legacy-project.json
-          deployment="$(jq -r '.result.latest_deployment.id // empty' legacy-project.json)"
-          if [ -n "$deployment" ]; then
-            curl --fail --silent --show-error \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              "$base/deployments/$deployment/history/logs" > legacy-build-log.json
-            jq -e '.success == true' legacy-build-log.json >/dev/null
-            jq -r '.result.data[-30:][]?.line' legacy-build-log.json
-          fi
+          jq -e '
+            .success == true
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+          ' legacy-project.json >/dev/null
+          echo "legacy_pages_automatic_builds=disabled"
 
       - name: Verify single authoritative Pages deployment path
         shell: bash
