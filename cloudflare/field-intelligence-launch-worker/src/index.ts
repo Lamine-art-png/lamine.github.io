@@ -48,7 +48,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
       image:"https://img.youtube.com/vi/PT-nc0YcHWQ/maxresdefault.jpg",
       category:"Product News",
       title:"AGRO-AI launches Crop Intelligence",
-      description:"A crop-focused operating view brings field evidence, conditions, risks, unknowns and next steps into one governed workspace.",
+      description:"Crop Intelligence connects crop and field evidence with Market Intelligence—linking operational signals to production, contracts, prices, exposure and commercial scenarios.",
       date:"San Francisco, California — September 22, 2026",
       publishAt:"2026-09-22T08:00:00-07:00"
     },
