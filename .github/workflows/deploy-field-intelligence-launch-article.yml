@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
+      - "client/public/news/agro-ai-crop-intelligence-enterprise-portal/**"
       - "client/public/news/agro-ai-assurance-enterprise-portal/**"
       - "client/public/news/agro-ai-field-intelligence-upgrade/**"
       - "client/public/news/agro-ai-platform-api-launch/**"
@@ -31,6 +32,7 @@ jobs:
       NEWSROOM_URL: https://agroai-pilot.com/news
       NEWSROOM_ORIGIN_URL: https://agroai-343.pages.dev/news
       NEWSROOM_SCRIPT_URL: https://agroai-pilot.com/news/agroai-news-card-restore.js
+      CROP_ARTICLE_URL: https://agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal
       ASSURANCE_ARTICLE_URL: https://agroai-pilot.com/news/agro-ai-assurance-enterprise-portal
       ASSURANCE_COVER_URL: https://agroai-pilot.com/news/agro-ai-assurance-enterprise-portal/cover.svg
       ASSURANCE_LOGO_URL: https://agroai-pilot.com/news/agro-ai-assurance-enterprise-portal/agro-ai-logo.png
@@ -55,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          crop_article="client/public/news/agro-ai-crop-intelligence-enterprise-portal/index.html"
           assurance_article="client/public/news/agro-ai-assurance-enterprise-portal/index.html"
           assurance_cover="client/public/news/agro-ai-assurance-enterprise-portal/cover.svg"
           field_update_article="client/public/news/agro-ai-field-intelligence-upgrade/index.html"
@@ -66,12 +69,19 @@ jobs:
           routes="cloudflare/field-intelligence-launch-worker/wrangler.toml"
 
           for file in \
+            "$crop_article" \
             "$assurance_article" "$assurance_cover" \
             "$field_update_article" "$field_update_cover" \
             "$platform_article" "$field_article" "$deere_article" \
             "$worker" "$routes"; do
             test -s "$file"
           done
+
+          grep -F "AGRO-AI launches Crop Intelligence." "$crop_article" >/dev/null
+          grep -F "Tuesday, September 22, 2026 · 8:00 a.m. PT" "$crop_article" >/dev/null
+          grep -F 'https://youtu.be/PT-nc0YcHWQ' "$crop_article" >/dev/null
+          grep -F '"@type":"NewsArticle"' "$crop_article" >/dev/null
+          grep -F 'rel="canonical" href="https://agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal"' "$crop_article" >/dev/null
 
           grep -F "AGRO-AI launches Assurance in the Enterprise Portal" "$assurance_article" >/dev/null
           grep -F "Tuesday, August 25, 2026" "$assurance_article" >/dev/null
@@ -83,12 +93,16 @@ jobs:
           grep -F '"@type":"NewsArticle"' "$field_update_article" >/dev/null
           grep -F 'rel="canonical" href="https://agroai-pilot.com/news/agro-ai-field-intelligence-upgrade"' "$field_update_article" >/dev/null
 
+          grep -F 'CROP_INTELLIGENCE_ARTICLE_PATH = "/news/agro-ai-crop-intelligence-enterprise-portal"' "$worker" >/dev/null
+          grep -F 'CROP_INTELLIGENCE_PUBLISH_AT = "2026-09-22T08:00:00-07:00"' "$worker" >/dev/null
           grep -F 'ASSURANCE_ARTICLE_PATH = "/news/agro-ai-assurance-enterprise-portal"' "$worker" >/dev/null
           grep -F 'FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH = "/news/agro-ai-field-intelligence-upgrade"' "$worker" >/dev/null
           grep -F 'PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch"' "$worker" >/dev/null
 
           grep -F 'pattern = "agroai-pilot.com/news"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/"' "$routes" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal"' "$routes" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal/*"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-assurance-enterprise-portal"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-assurance-enterprise-portal/*"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-field-intelligence-upgrade"' "$routes" >/dev/null
@@ -126,6 +140,7 @@ jobs:
                grep -Fi 'x-agroai-newsroom-source: native-pages-origin' live-newsroom.headers >/dev/null && \
                grep -F 'agroai-news-card-restore.js' live-newsroom.html >/dev/null && \
                grep -F 'AGRO-AI launches its Enterprise Portal globally' live-newsroom.html >/dev/null && \
+               grep -F '/news/agro-ai-crop-intelligence-enterprise-portal' newsroom-script.js >/dev/null && \
                grep -F '/news/agro-ai-assurance-enterprise-portal' newsroom-script.js >/dev/null && \
                grep -F '/news/agro-ai-field-intelligence-upgrade' newsroom-script.js >/dev/null; then
               python3 - <<'PY'
@@ -153,6 +168,26 @@ jobs:
           printf 'origin_status=%s live_status=%s script_status=%s\n' "$origin_status" "$live_status" "$script_status"
           cat live-newsroom.headers || true
           exit 1
+
+      - name: Prove Crop Intelligence publication gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish_epoch="$(date -u -d '2026-09-22T15:00:00Z' +%s)"
+          now_epoch="$(date -u +%s)"
+          article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D crop.headers -o crop.html -w '%{http_code}' --max-time 25 "${CROP_ARTICLE_URL}" || true)"
+
+          if [ "$now_epoch" -lt "$publish_epoch" ]; then
+            test "$article_status" = "404"
+            grep -Fi 'x-agroai-scheduled-publication: 2026-09-22T08:00:00-07:00' crop.headers >/dev/null
+            echo "crop_intelligence_article=scheduled"
+          else
+            test "$article_status" = "200"
+            grep -F "AGRO-AI launches Crop Intelligence." crop.html >/dev/null
+            grep -F "Tuesday, September 22, 2026 · 8:00 a.m. PT" crop.html >/dev/null
+            grep -F "https://youtu.be/PT-nc0YcHWQ" crop.html >/dev/null
+            echo "crop_intelligence_article=verified_live"
+          fi
 
       - name: Prove Assurance article and official assets live
         shell: bash
