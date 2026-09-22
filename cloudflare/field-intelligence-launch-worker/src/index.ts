@@ -8,6 +8,9 @@ const PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch";
 const FIELD_INTELLIGENCE_ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
 const JOHN_DEERE_ARTICLE_PATH = "/news/agro-ai-connected-john-deere-operations-center";
 const LEGACY_JOHN_DEERE_ARTICLE_PATH = "/news/john-deere-api-access";
+const CROP_INTELLIGENCE_ARTICLE_PATH = "/news/agro-ai-crop-intelligence-enterprise-portal";
+const CROP_INTELLIGENCE_PUBLISH_AT = "2026-09-22T08:00:00-07:00";
+const CROP_INTELLIGENCE_PUBLISH_AT_MS = Date.parse(CROP_INTELLIGENCE_PUBLISH_AT);
 const JOHN_DEERE_PUBLISH_AT = "2026-07-28T08:00:00-07:00";
 const JOHN_DEERE_PUBLISH_AT_MS = Date.parse(JOHN_DEERE_PUBLISH_AT);
 
@@ -21,6 +24,7 @@ const FIELD_INTELLIGENCE_COVER_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/cover.
 const FIELD_INTELLIGENCE_LOGO_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/agro-ai-logo.png`;
 const JOHN_DEERE_COVER_PATH = `${JOHN_DEERE_ARTICLE_PATH}/cover.webp`;
 const JOHN_DEERE_LOGO_PATH = `${JOHN_DEERE_ARTICLE_PATH}/agro-ai-logo.png`;
+const CROP_INTELLIGENCE_LOGO_PATH = `${CROP_INTELLIGENCE_ARTICLE_PATH}/agro-ai-logo.png`;
 
 const ASSURANCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-assurance-enterprise-portal/index.html";
 const ASSURANCE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-assurance-enterprise-portal/cover.svg";
@@ -31,6 +35,7 @@ const PLATFORM_API_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-
 const FIELD_INTELLIGENCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-field-intelligence/index.html";
 const JOHN_DEERE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-connected-john-deere-operations-center/index.html";
 const JOHN_DEERE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp";
+const CROP_INTELLIGENCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-crop-intelligence-enterprise-portal/index.html";
 const OFFICIAL_LOGO_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/customer-portal/assets/agro-ai-logo.png";
 const CURRENT_VIDEO_ID = "GiM6WZY0HG0";
 const OBSOLETE_VIDEO_ID = "IMLVblFeW3s";
@@ -38,6 +43,15 @@ const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefa
 
 const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
+    {
+      path:"/news/agro-ai-crop-intelligence-enterprise-portal",
+      image:"https://img.youtube.com/vi/PT-nc0YcHWQ/maxresdefault.jpg",
+      category:"Product News",
+      title:"AGRO-AI launches Crop Intelligence",
+      description:"A crop-focused operating view brings field evidence, conditions, risks, unknowns and next steps into one governed workspace.",
+      date:"San Francisco, California — September 22, 2026",
+      publishAt:"2026-09-22T08:00:00-07:00"
+    },
     {
       path:"/news/agro-ai-field-intelligence-upgrade",
       image:"/news/agro-ai-field-intelligence-upgrade/cover.svg",
@@ -79,6 +93,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
       date:"San Francisco, California — July 21, 2026"
     }
   ];
+  const visibleManaged=managed.filter((item)=>!item.publishAt||Date.now()>=Date.parse(item.publishAt));
   const legacyPath="/news/john-deere-api-access";
   const legacyTitle="agro-ai moves forward through john deere api access process";
   const preserved=[
@@ -103,13 +118,14 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
     for(const card of directCards(grid)){
       const path=normalize(card.getAttribute("href")||card.href);
       const title=((card.querySelector("h3")&&card.querySelector("h3").textContent)||"").replace(/\\s+/g," ").trim().toLowerCase();
-      if(path===legacyPath||title===legacyTitle||managed.some((item)=>item.path===path))card.remove();
+      if(path===legacyPath||title===legacyTitle||visibleManaged.some((item)=>item.path===path))card.remove();
     }
-    for(const item of [...managed].reverse())grid.insertAdjacentHTML("afterbegin",cardHtml(item));
+    for(const item of [...visibleManaged].reverse())grid.insertAdjacentHTML("afterbegin",cardHtml(item));
     const cards=directCards(grid);
     const paths=cards.map((card)=>normalize(card.getAttribute("href")||card.href));
     const counts=new Map(paths.map((path)=>[path,paths.filter((candidate)=>candidate===path).length]));
-    const valid=cards.length===9&&new Set(paths).size===9&&preserved.every((path)=>counts.get(path)===1)&&managed.every((item)=>counts.get(item.path)===1)&&!paths.includes(legacyPath)&&!grid.textContent.toLowerCase().includes(legacyTitle)&&cards.every((card)=>(card.textContent.match(/Read article/g)||[]).length===1);
+    const expected=preserved.length+visibleManaged.length;
+    const valid=cards.length===expected&&new Set(paths).size===expected&&preserved.every((path)=>counts.get(path)===1)&&visibleManaged.every((item)=>counts.get(item.path)===1)&&!paths.includes(legacyPath)&&!grid.textContent.toLowerCase().includes(legacyTitle)&&cards.every((card)=>(card.textContent.match(/Read article/g)||[]).length===1);
     if(valid){
       grid.setAttribute("data-agroai-newsroom-grid","complete");
       document.documentElement.setAttribute("data-agroai-news-cards-restored","true");
@@ -125,6 +141,21 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",run,{once:true});else run();
   window.addEventListener("load",()=>{install();setTimeout(install,600);setTimeout(install,1800);},{once:true});
 })();`;
+
+function cropIntelligencePublished(now = Date.now()): boolean {
+  return now >= CROP_INTELLIGENCE_PUBLISH_AT_MS;
+}
+
+function cropIntelligenceScheduledResponse(): Response {
+  const headers = new Headers();
+  headers.set("cache-control", "no-store");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-robots-tag", "noindex, nofollow");
+  headers.set("x-agroai-scheduled-publication", CROP_INTELLIGENCE_PUBLISH_AT);
+  const retryAfter = Math.max(1, Math.ceil((CROP_INTELLIGENCE_PUBLISH_AT_MS - Date.now()) / 1000));
+  headers.set("retry-after", String(retryAfter));
+  return new Response(null, { status: 404, headers });
+}
 
 function johnDeerePublished(now = Date.now()): boolean {
   return now >= JOHN_DEERE_PUBLISH_AT_MS;
@@ -167,6 +198,11 @@ async function sourceArticleResponse(request: Request, source: string, userAgent
   const upstream = await fetchArticleSource(source, userAgent);
   if (!upstream.ok) return new Response(unavailable, { status: 503, headers: articleHeaders() });
   return new Response(request.method === "HEAD" ? null : await upstream.text(), { status: 200, headers: articleHeaders() });
+}
+
+async function cropIntelligenceArticleResponse(request: Request): Promise<Response> {
+  if (!cropIntelligencePublished()) return cropIntelligenceScheduledResponse();
+  return sourceArticleResponse(request, CROP_INTELLIGENCE_ARTICLE_SOURCE, "AGRO-AI-Crop-Intelligence-Launch/1.0", "The AGRO-AI Crop Intelligence launch article is temporarily unavailable.");
 }
 
 async function assuranceArticleResponse(request: Request): Promise<Response> {
@@ -269,7 +305,7 @@ async function newsroomResponse(request: Request): Promise<Response> {
   headers.set("cache-control", "private, no-cache, must-revalidate");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-agroai-newsroom-source", "native-pages-origin");
-  headers.set("x-agroai-newsroom-change", "preserve-four-native-cards-add-five-remove-one-obsolete");
+  headers.set("x-agroai-newsroom-change", "preserve-four-native-cards-add-scheduled-managed-cards-remove-one-obsolete");
   return new Response(request.method === "HEAD" ? null : body, { status: 200, headers });
 }
 
@@ -287,6 +323,12 @@ export default {
 
     if (normalized === NEWSROOM_PATH) return newsroomResponse(request);
     if (normalized === NEWSROOM_SCRIPT_PATH) return newsroomScriptResponse(request);
+
+    if (normalized === CROP_INTELLIGENCE_ARTICLE_PATH) return cropIntelligenceArticleResponse(request);
+    if (normalized === CROP_INTELLIGENCE_LOGO_PATH) {
+      if (!cropIntelligencePublished()) return cropIntelligenceScheduledResponse();
+      return officialLogoResponse(request);
+    }
 
     if (normalized === ASSURANCE_ARTICLE_PATH) return assuranceArticleResponse(request);
     if (normalized === ASSURANCE_COVER_PATH) return repositoryAssetResponse(request, ASSURANCE_COVER_SOURCE, "image/svg+xml", "reviewed-assurance-cover");
