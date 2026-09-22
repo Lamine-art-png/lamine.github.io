@@ -95,6 +95,8 @@ jobs:
 
           grep -F 'CROP_INTELLIGENCE_ARTICLE_PATH = "/news/agro-ai-crop-intelligence-enterprise-portal"' "$worker" >/dev/null
           grep -F 'CROP_INTELLIGENCE_PUBLISH_AT = "2026-09-22T08:00:00-07:00"' "$worker" >/dev/null
+          grep -F 'platform-api/assets/agro-ai-logo-full.png' "$worker" >/dev/null
+          ! grep -F 'customer-portal/assets/agro-ai-logo.png' "$worker"
           grep -F 'ASSURANCE_ARTICLE_PATH = "/news/agro-ai-assurance-enterprise-portal"' "$worker" >/dev/null
           grep -F 'FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH = "/news/agro-ai-field-intelligence-upgrade"' "$worker" >/dev/null
           grep -F 'PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch"' "$worker" >/dev/null
