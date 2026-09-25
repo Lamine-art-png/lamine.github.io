@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/api-edge-domain-repair.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "15 * * * *"
 
 permissions:
   contents: read
