@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.api.v1 import voice as voice_module
 from app.api.v1.voice import VoiceCallRequest, VoiceToolRequest, _instructions, _reasoning_effort, _realtime_api_key, _tools
 
 
@@ -97,3 +98,29 @@ def test_voice_instructions_allow_safe_actions_but_keep_external_approval():
     instructions = _instructions(payload)
     assert "Safe internal workspace actions may execute immediately" in instructions
     assert "External communications and physical/control actions require visible human confirmation" in instructions
+
+
+def test_realtime_http_client_is_reused(monkeypatch):
+    created = []
+
+    class FakeClient:
+        is_closed = False
+
+        async def aclose(self):
+            self.is_closed = True
+
+    def factory(*args, **kwargs):
+        client = FakeClient()
+        created.append((client, args, kwargs))
+        return client
+
+    monkeypatch.setattr(voice_module, "_realtime_http_client", None)
+    monkeypatch.setattr(voice_module.httpx, "AsyncClient", factory)
+
+    first = voice_module._get_realtime_http_client()
+    second = voice_module._get_realtime_http_client()
+
+    assert first is second
+    assert len(created) == 1
+    assert created[0][2]["timeout"] is voice_module._REALTIME_HTTP_TIMEOUT
+    assert created[0][2]["limits"] is voice_module._REALTIME_HTTP_LIMITS
