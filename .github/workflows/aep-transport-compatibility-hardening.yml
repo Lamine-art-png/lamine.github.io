@@ -1,0 +1,150 @@
+name: AEP Transport Compatibility Hardening
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/aep-transport-compatibility-hardening.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aep-transport-compatibility-hardening
+  cancel-in-progress: false
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_NAME: agroai-pilot.com
+  PORTAL_URL: https://app.agroai-pilot.com
+  API_URL: https://api.agroai-pilot.com
+  EVIDENCE_ISSUE: "128"
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Resolve active Cloudflare zone
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active" -o zone.json
+          zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zone.json)"
+          echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
+
+      - name: Disable HTTP3 QUIC for maximum customer compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${ZONE_ID}/settings/http3"             | jq '{success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'             > http3-before.json
+          jq -e '.success == true and .result.editable == true' http3-before.json >/dev/null
+
+          curl --fail --silent --show-error -X PATCH "${auth[@]}"             --data '{"value":"off"}'             "${CF_API}/zones/${ZONE_ID}/settings/http3"             | jq '{success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'             > http3-change.json
+          jq -e '.success == true and .result.value == "off"' http3-change.json >/dev/null
+
+          for attempt in $(seq 1 20); do
+            curl --fail --silent --show-error "${auth[@]}"               "${CF_API}/zones/${ZONE_ID}/settings/http3"               | jq '{success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'               > http3-after.json
+            if jq -e '.success == true and .result.value == "off"' http3-after.json >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "HTTP/3 did not converge to off"
+          exit 1
+
+      - name: Verify HTTP2 remains enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${ZONE_ID}/settings/http2"             | jq '{success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'             > http2.json
+          jq -e '.success == true and .result.value == "on"' http2.json >/dev/null
+
+      - name: Verify exact AEP and API Worker routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${ZONE_ID}/workers/routes" -o routes.raw.json
+          jq '{routes:[.result[]|select(.pattern=="app.agroai-pilot.com/v1/*" or .pattern=="api.agroai-pilot.com/v1/*" or .pattern=="platform.agroai-pilot.com/v1/*")|{pattern,script}]}'             routes.raw.json > routes.json
+          jq -e '
+            ([.routes[] | select(.pattern=="app.agroai-pilot.com/v1/*" and .script=="agroai-api-edge")] | length) == 1 and
+            ([.routes[] | select(.pattern=="api.agroai-pilot.com/v1/*" and .script=="agroai-api-edge")] | length) == 1 and
+            ([.routes[] | select(.pattern=="platform.agroai-pilot.com/v1/*" and .script=="agroai-api-edge")] | length) == 1
+          ' routes.json >/dev/null
+
+      - name: Verify portal fallback transports and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p transport-smoke
+          for mode in http2 http11; do
+            flag="--http2"
+            [ "$mode" = "http11" ] && flag="--http1.1"
+            curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30               "$flag"               -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36'               -D "transport-smoke/${mode}.headers"               "${PORTAL_URL}/" -o "transport-smoke/${mode}.html"
+            grep -F '<title>AGRO-AI Enterprise Portal</title>' "transport-smoke/${mode}.html" >/dev/null
+          done
+
+          asset="$(grep -oE '/assets/[A-Za-z0-9._/-]+\.js' transport-smoke/http2.html | head -1)"
+          test -n "$asset"
+          curl --fail --silent --show-error --http2 --max-time 30 "${PORTAL_URL}${asset}" -o transport-smoke/app-http2.js
+          curl --fail --silent --show-error --http1.1 --max-time 30 "${PORTAL_URL}${asset}" -o transport-smoke/app-http11.js
+          test -s transport-smoke/app-http2.js
+          test -s transport-smoke/app-http11.js
+
+          curl --fail --silent --show-error --http2 --max-time 30 "${PORTAL_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error --http1.1 --max-time 30 "${PORTAL_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+
+      - name: Verify HTTP3 is no longer advertised
+        shell: bash
+        run: |
+          set -euo pipefail
+          clean=0
+          for attempt in $(seq 1 20); do
+            headers="$(curl --silent --show-error --http2 --head --location --max-time 20 "${PORTAL_URL}/" | tr -d '\r')"
+            if ! printf '%s\n' "$headers" | grep -Eiq '^alt-svc:.*h3'; then
+              clean=1
+              break
+            fi
+            sleep 3
+          done
+          test "$clean" -eq 1
+
+      - name: Record compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aep-transport-compatibility-${{ github.sha }}
+          path: |
+            http3-before.json
+            http3-change.json
+            http3-after.json
+            http2.json
+            routes.json
+            transport-smoke/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Publish result
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(printf 'AEP transport compatibility hardened and verified.\\n\\nHTTP/3/QUIC: off\\nHTTP/2: on\\nHTTP/1.1 fallback: green\\nPortal root: green\\nPrimary JS asset: green over HTTP/2 and HTTP/1.1\\nPortal API health: green over HTTP/2 and HTTP/1.1\\nAEP/API/Platform Worker routes: exact and green\\nrun: %s\\nrelease: %s' "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
