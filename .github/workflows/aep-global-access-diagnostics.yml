@@ -154,18 +154,8 @@ jobs:
           http3="$(jq -r '.protocol_settings.http3 // "unknown"' classification.json 2>/dev/null || echo unknown)"
           machine_edge="$(jq -r '.probes[]? | select(.name=="machine_edge_health_http2") | .http' classification.json 2>/dev/null || echo unknown)"
           portal="$(jq -r '.probes[]? | select(.name=="portal_http2") | .http' classification.json 2>/dev/null || echo unknown)"
-          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments"             -f body="## AEP global access diagnostic
-
-- ready: \`${ready}\`
-- HTTP/2: \`${http2}\`
-- HTTP/3: \`${http3}\`
-- portal over HTTP/2: \`${portal}\`
-- machine edge-health over HTTP/2: \`${machine_edge}\`
-- failures: \`${failures}\`
-- run: \`${GITHUB_RUN_ID}\`
-- release: \`${GITHUB_SHA}\`
-
-Sanitized protocol, DNS, Worker-route and browser-like probe evidence is attached to the workflow run."
+          body="$(printf 'AEP global access diagnostic\\n\\nready: %s\\nHTTP/2: %s\\nHTTP/3: %s\\nportal over HTTP/2: %s\\nmachine edge-health over HTTP/2: %s\\nfailures: %s\\nrun: %s\\nrelease: %s\\n\\nSanitized protocol, DNS, Worker-route and browser-like probe evidence is attached to the workflow run.' "$ready" "$http2" "$http3" "$portal" "$machine_edge" "$failures" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
 
       - uses: actions/upload-artifact@v4
         if: always()
