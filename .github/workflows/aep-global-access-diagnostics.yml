@@ -52,10 +52,16 @@ jobs:
           echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
 
           for setting in http2 http3 tls_1_3 min_tls_version browser_check; do
-            curl --silent --show-error "${auth[@]}"               "${CF_API}/zones/${zone_id}/settings/${setting}"               | jq --arg setting "$setting" '{setting:$setting,success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'               >> zone-settings.jsonl || true
+            curl --silent --show-error "${auth[@]}"               "${CF_API}/zones/${zone_id}/settings/${setting}"               | jq -c --arg setting "$setting" '{setting:$setting,success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'               >> zone-settings.jsonl || true
           done
 
           curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${zone_id}/workers/routes"             | jq '{success,routes:[.result[]|{id,pattern,script}]}' > worker-routes.json
+
+          for host in "${APP_HOST}" "${API_HOST}"; do
+            safe="$(echo "$host" | tr '.' '_')"
+            status="$(curl --silent --show-error -o "dns-api-${safe}.raw.json" -w '%{http_code}' "${auth[@]}" "${CF_API}/zones/${zone_id}/dns_records?name=${host}&per_page=100" || true)"
+            jq -n --arg host "$host" --arg status "$status" --slurpfile raw "dns-api-${safe}.raw.json"               '{host:$host,http_status:$status,success:($raw[0].success // false),errors:($raw[0].errors // [])}' > "dns-api-${safe}.summary.json" || true
+          done
 
           : > public-dns.txt
           for host in "${APP_HOST}" "${API_HOST}"; do
@@ -169,6 +175,8 @@ jobs:
             zone-settings.jsonl
             worker-routes.json
             public-dns.txt
+            dns-api-app_agroai-pilot_com.summary.json
+            dns-api-api_agroai-pilot_com.summary.json
             probes.jsonl
             classification.json
           retention-days: 30
