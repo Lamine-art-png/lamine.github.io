@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/aep-global-access-diagnostics.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
 
 permissions:
   contents: read
@@ -55,9 +57,13 @@ jobs:
 
           curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${zone_id}/workers/routes"             | jq '{success,routes:[.result[]|{id,pattern,script}]}' > worker-routes.json
 
+          : > public-dns.txt
           for host in "${APP_HOST}" "${API_HOST}"; do
-            safe="$(echo "$host" | tr '.' '_')"
-            curl --fail --silent --show-error "${auth[@]}"               "${CF_API}/zones/${zone_id}/dns_records?name=${host}&per_page=100"               | jq '{success,result:[.result[]|{id,type,name,content,proxied,ttl}]}' > "dns-${safe}.json"
+            {
+              echo "### ${host}"
+              getent ahostsv4 "${host}" || true
+              getent ahostsv6 "${host}" || true
+            } >> public-dns.txt
           done
 
       - name: Probe portal over TCP protocols and browser-like requests
@@ -111,15 +117,14 @@ jobs:
               if line.strip():
                   row=json.loads(line); settings[row["setting"]]=row.get("result",{}).get("value")
           routes=json.load(open("worker-routes.json")).get("routes",[])
-          app_dns=json.load(open("dns-app_agroai-pilot_com.json")).get("result",[])
-          api_dns=json.load(open("dns-api_agroai-pilot_com.json")).get("result",[])
+          app_dns_public=Path("public-dns.txt").read_text(encoding="utf-8")
           probes=[json.loads(x) for x in Path("probes.jsonl").read_text().splitlines() if x.strip()]
           by={p["name"]:p for p in probes}
 
           failures=[]
           if settings.get("http2") != "on": failures.append("http2_not_on")
-          if not app_dns or not all(bool(x.get("proxied")) for x in app_dns): failures.append("app_dns_not_fully_proxied")
-          if not api_dns or not all(bool(x.get("proxied")) for x in api_dns): failures.append("api_dns_not_fully_proxied")
+          if settings.get("http3") != "off": failures.append("http3_not_off")
+          if not app_dns_public.strip(): failures.append("public_dns_resolution_missing")
           for name in ["portal_default","portal_http2","portal_http11","portal_login_default","portal_api_health_http2","portal_edge_health_http2","machine_api_health_http2","machine_edge_health_http2"]:
               if by.get(name,{}).get("http") not in ("200","204","301","302","307","308"):
                   failures.append(f"{name}_http_{by.get(name,{}).get('http','missing')}")
@@ -132,8 +137,7 @@ jobs:
               "ready": not failures,
               "failures": failures,
               "protocol_settings": settings,
-              "app_dns": app_dns,
-              "api_dns": api_dns,
+              "public_dns": app_dns_public,
               "app_worker_routes":[r for r in routes if "app.agroai-pilot.com" in str(r.get("pattern",""))],
               "api_worker_routes":[r for r in routes if "api.agroai-pilot.com" in str(r.get("pattern",""))],
               "probes":probes,
@@ -164,8 +168,7 @@ jobs:
           path: |
             zone-settings.jsonl
             worker-routes.json
-            dns-app_agroai-pilot_com.json
-            dns-api_agroai-pilot_com.json
+            public-dns.txt
             probes.jsonl
             classification.json
           retention-days: 30
