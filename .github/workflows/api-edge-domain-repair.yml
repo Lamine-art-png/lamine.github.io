@@ -1,0 +1,133 @@
+name: API Edge Domain Repair
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/api-edge-domain-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: api-edge-domain-repair
+  cancel-in-progress: false
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_NAME: agroai-pilot.com
+  API_HOST: api.agroai-pilot.com
+  WORKER_SERVICE: agroai-api-edge
+  EVIDENCE_ISSUE: "128"
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Resolve active zone
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active" -o zone.json
+          zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zone.json)"
+          echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
+
+      - name: Inspect current Worker custom domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          code="$(curl --silent --show-error -o worker-domains-before.json -w '%{http_code}' "${auth[@]}"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains?hostname=${API_HOST}" || true)"
+          echo "WORKER_DOMAINS_HTTP=${code}" >> "$GITHUB_ENV"
+          jq '{success,result:[(.result // [])[]|{id,hostname,service,zone_id,zone_name,environment}],errors}'             worker-domains-before.json > worker-domains-before.safe.json 2>/dev/null || true
+
+      - name: Attach API hostname as Worker Custom Domain if needed
+        id: attach
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          existing="$(jq -r --arg host "${API_HOST}" --arg service "${WORKER_SERVICE}"             '.result // [] | map(select(.hostname==$host and .service==$service)) | length'             worker-domains-before.json 2>/dev/null || echo 0)"
+          if [ "$existing" = "1" ]; then
+            echo "already_attached=true" >> "$GITHUB_OUTPUT"
+            cp worker-domains-before.json worker-domain-attach.json
+            exit 0
+          fi
+
+          payload="$(jq -nc             --arg hostname "${API_HOST}"             --arg service "${WORKER_SERVICE}"             --arg zone_id "${ZONE_ID}"             --arg zone_name "${ZONE_NAME}"             '{hostname:$hostname,service:$service,zone_id:$zone_id,zone_name:$zone_name}')"
+
+          code="$(curl --silent --show-error -X PUT -o worker-domain-attach.json -w '%{http_code}'             "${auth[@]}" --data "$payload"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" || true)"
+          echo "ATTACH_HTTP=${code}" >> "$GITHUB_ENV"
+          jq '{success,result:{id:.result.id,hostname:.result.hostname,service:.result.service,zone_id:.result.zone_id,zone_name:.result.zone_name},errors,messages}'             worker-domain-attach.json > worker-domain-attach.safe.json 2>/dev/null || true
+          jq -e '.success == true and .result.hostname == env.API_HOST and .result.service == env.WORKER_SERVICE'             worker-domain-attach.json >/dev/null
+
+      - name: Wait for edge routing to become authoritative
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 40); do
+            status="$(curl --silent --show-error --max-time 20 -o edge-health.json -w '%{http_code}'               "https://${API_HOST}/v1/edge-health" || true)"
+            if [ "$status" = "200" ] && jq -e '.status=="ok" and .service=="agroai-api-edge"' edge-health.json >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ok" -eq 1
+
+          curl --fail --silent --show-error --max-time 30 "https://${API_HOST}/v1/health"             | jq -e '.status=="ok"' >/dev/null
+
+      - name: Verify resulting Worker domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains?hostname=${API_HOST}"             | jq '{success,result:[(.result // [])[]|{id,hostname,service,zone_id,zone_name,environment}],errors}'             > worker-domains-after.safe.json
+          jq -e --arg host "${API_HOST}" --arg service "${WORKER_SERVICE}"             '.success == true and ([.result[]|select(.hostname==$host and .service==$service)]|length)==1'             worker-domains-after.safe.json >/dev/null
+
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-edge-domain-repair-${{ github.sha }}
+          path: |
+            worker-domains-before.safe.json
+            worker-domain-attach.safe.json
+            worker-domains-after.safe.json
+            edge-health.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Publish success
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(printf 'API edge hostname repaired and verified.\\n\\napi.agroai-pilot.com now routes through agroai-api-edge.\\n/v1/edge-health: 200\\n/v1/health: 200\\nrun: %s\\nrelease: %s' "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
+
+      - name: Publish blocker
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          errors="$(jq -c '.errors // []' worker-domain-attach.json 2>/dev/null || echo '[]')"
+          body="$(printf 'API edge hostname repair blocked.\\n\\nCloudflare attach errors: %s\\nrun: %s\\nrelease: %s' "$errors" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
