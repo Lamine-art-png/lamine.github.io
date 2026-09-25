@@ -1,0 +1,187 @@
+name: AEP Global Access Diagnostics
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/aep-global-access-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aep-global-access-diagnostics
+  cancel-in-progress: true
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_NAME: agroai-pilot.com
+  APP_HOST: app.agroai-pilot.com
+  API_HOST: api.agroai-pilot.com
+  PORTAL_URL: https://app.agroai-pilot.com
+  EVIDENCE_ISSUE: "128"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Inspect zone protocol and routing state
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active" -o zone.json
+          zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zone.json)"
+          echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
+
+          for setting in http2 http3 tls_1_3 min_tls_version browser_check; do
+            curl --silent --show-error "${auth[@]}"               "${CF_API}/zones/${zone_id}/settings/${setting}"               | jq --arg setting "$setting" '{setting:$setting,success,result:{id:.result.id,value:.result.value,editable:.result.editable},errors}'               >> zone-settings.jsonl || true
+          done
+
+          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/zones/${zone_id}/workers/routes"             | jq '{success,routes:[.result[]|{id,pattern,script}]}' > worker-routes.json
+
+          for host in "${APP_HOST}" "${API_HOST}"; do
+            safe="$(echo "$host" | tr '.' '_')"
+            curl --fail --silent --show-error "${auth[@]}"               "${CF_API}/zones/${zone_id}/dns_records?name=${host}&per_page=100"               | jq '{success,result:[.result[]|{id,type,name,content,proxied,ttl}]}' > "dns-${safe}.json"
+          done
+
+      - name: Probe portal over TCP protocols and browser-like requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > probes.jsonl
+          probe() {
+            local name="$1"; shift
+            local body headers code version
+            body="$(mktemp)"; headers="$(mktemp)"
+            code="$(curl --silent --show-error --location --connect-timeout 10 --max-time 35               -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36'               -D "$headers" -o "$body" -w '%{http_code}' "$@" || printf '000')"
+            version="$(curl --silent --show-error --location --connect-timeout 10 --max-time 35               -o /dev/null -w '%{http_version}' "$@" || true)"
+            title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' "$body" | head -1)"
+            server="$(tr -d '\r' < "$headers" | sed -n 's/^server:[[:space:]]*//Ip' | tail -1)"
+            cf_ray="$(tr -d '\r' < "$headers" | sed -n 's/^cf-ray:[[:space:]]*//Ip' | tail -1)"
+            alt_svc="$(tr -d '\r' < "$headers" | sed -n 's/^alt-svc:[[:space:]]*//Ip' | tail -1)"
+            jq -nc --arg name "$name" --arg code "$code" --arg version "$version" --arg title "$title"               --arg server "$server" --arg cf_ray "$cf_ray" --arg alt_svc "$alt_svc"               '{name:$name,http:$code,http_version:$version,title:$title,server:$server,cf_ray:$cf_ray,alt_svc:$alt_svc}' >> probes.jsonl
+            rm -f "$body" "$headers"
+          }
+
+          probe portal_default "${PORTAL_URL}/"
+          probe portal_http2 --http2 "${PORTAL_URL}/"
+          probe portal_http11 --http1.1 "${PORTAL_URL}/"
+          probe portal_login_default "${PORTAL_URL}/login"
+          probe portal_api_health_http2 --http2 "${PORTAL_URL}/v1/health"
+          probe portal_edge_health_http2 --http2 "${PORTAL_URL}/v1/edge-health"
+          probe machine_api_health_http2 --http2 "https://${API_HOST}/v1/health"
+          probe machine_edge_health_http2 --http2 "https://${API_HOST}/v1/edge-health"
+
+          # Discover and probe the exact production JS entrypoint.
+          html="$(mktemp)"
+          curl --fail --silent --show-error --location --max-time 30 "${PORTAL_URL}/" -o "$html"
+          asset="$(grep -oE '/assets/[A-Za-z0-9._/-]+\.js' "$html" | head -1 || true)"
+          if [ -n "$asset" ]; then
+            probe portal_primary_js_http2 --http2 "${PORTAL_URL}${asset}"
+            probe portal_primary_js_http11 --http1.1 "${PORTAL_URL}${asset}"
+          fi
+          rm -f "$html"
+
+      - name: Classify customer-access readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          settings={}
+          for line in Path("zone-settings.jsonl").read_text().splitlines():
+              if line.strip():
+                  row=json.loads(line); settings[row["setting"]]=row.get("result",{}).get("value")
+          routes=json.load(open("worker-routes.json")).get("routes",[])
+          app_dns=json.load(open("dns-app_agroai-pilot_com.json")).get("result",[])
+          api_dns=json.load(open("dns-api_agroai-pilot_com.json")).get("result",[])
+          probes=[json.loads(x) for x in Path("probes.jsonl").read_text().splitlines() if x.strip()]
+          by={p["name"]:p for p in probes}
+
+          failures=[]
+          if settings.get("http2") != "on": failures.append("http2_not_on")
+          if not app_dns or not all(bool(x.get("proxied")) for x in app_dns): failures.append("app_dns_not_fully_proxied")
+          if not api_dns or not all(bool(x.get("proxied")) for x in api_dns): failures.append("api_dns_not_fully_proxied")
+          for name in ["portal_default","portal_http2","portal_http11","portal_login_default","portal_api_health_http2","portal_edge_health_http2","machine_api_health_http2","machine_edge_health_http2"]:
+              if by.get(name,{}).get("http") not in ("200","204","301","302","307","308"):
+                  failures.append(f"{name}_http_{by.get(name,{}).get('http','missing')}")
+          if by.get("portal_http2",{}).get("title") != "AGRO-AI Enterprise Portal":
+              failures.append("portal_title_mismatch_http2")
+          if by.get("portal_http11",{}).get("title") != "AGRO-AI Enterprise Portal":
+              failures.append("portal_title_mismatch_http11")
+
+          result={
+              "ready": not failures,
+              "failures": failures,
+              "protocol_settings": settings,
+              "app_dns": app_dns,
+              "api_dns": api_dns,
+              "app_worker_routes":[r for r in routes if "app.agroai-pilot.com" in str(r.get("pattern",""))],
+              "api_worker_routes":[r for r in routes if "api.agroai-pilot.com" in str(r.get("pattern",""))],
+              "probes":probes,
+          }
+          Path("classification.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(result,indent=2,sort_keys=True))
+          PY
+
+      - name: Publish sanitized evidence
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ready="$(jq -r '.ready // false' classification.json 2>/dev/null || echo false)"
+          failures="$(jq -c '.failures // ["diagnostic_failed"]' classification.json 2>/dev/null || echo '["diagnostic_failed"]')"
+          http2="$(jq -r '.protocol_settings.http2 // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          http3="$(jq -r '.protocol_settings.http3 // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          machine_edge="$(jq -r '.probes[]? | select(.name=="machine_edge_health_http2") | .http' classification.json 2>/dev/null || echo unknown)"
+          portal="$(jq -r '.probes[]? | select(.name=="portal_http2") | .http' classification.json 2>/dev/null || echo unknown)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments"             -f body="## AEP global access diagnostic
+
+- ready: \`${ready}\`
+- HTTP/2: \`${http2}\`
+- HTTP/3: \`${http3}\`
+- portal over HTTP/2: \`${portal}\`
+- machine edge-health over HTTP/2: \`${machine_edge}\`
+- failures: \`${failures}\`
+- run: \`${GITHUB_RUN_ID}\`
+- release: \`${GITHUB_SHA}\`
+
+Sanitized protocol, DNS, Worker-route and browser-like probe evidence is attached to the workflow run."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aep-global-access-diagnostics-${{ github.sha }}
+          path: |
+            zone-settings.jsonl
+            worker-routes.json
+            dns-app_agroai-pilot_com.json
+            dns-api_agroai-pilot_com.json
+            probes.jsonl
+            classification.json
+          retention-days: 30
+
+      - name: Fail if customer access is not clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.ready == true' classification.json >/dev/null
