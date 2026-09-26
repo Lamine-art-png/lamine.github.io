@@ -108,6 +108,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    try:
+        from app.api.v1.voice import close_realtime_http_client
+
+        await close_realtime_http_client()
+    except Exception:
+        logger.exception("Realtime voice HTTP client failed to close cleanly")
+
     if field_worker_started:
         try:
             from app.services.field_intelligence_worker import stop_field_intelligence_worker

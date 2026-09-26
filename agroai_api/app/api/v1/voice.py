@@ -36,6 +36,35 @@ _ALLOWED_VOICES = {
 _ALLOWED_SURFACES = {"ask", "field"}
 _ALLOWED_REASONING = {"quick", "standard", "deep"}
 
+# Reuse the upstream transport across realtime call negotiations. Recreating an
+# AsyncClient for every SDP exchange forces a fresh DNS/TCP/TLS setup and adds
+# avoidable latency to a user-visible voice connection path.
+_REALTIME_HTTP_TIMEOUT = httpx.Timeout(20.0, connect=8.0, pool=2.0)
+_REALTIME_HTTP_LIMITS = httpx.Limits(
+    max_connections=20,
+    max_keepalive_connections=10,
+    keepalive_expiry=300.0,
+)
+_realtime_http_client: httpx.AsyncClient | None = None
+
+
+def _get_realtime_http_client() -> httpx.AsyncClient:
+    global _realtime_http_client
+    if _realtime_http_client is None or _realtime_http_client.is_closed:
+        _realtime_http_client = httpx.AsyncClient(
+            timeout=_REALTIME_HTTP_TIMEOUT,
+            limits=_REALTIME_HTTP_LIMITS,
+        )
+    return _realtime_http_client
+
+
+async def close_realtime_http_client() -> None:
+    global _realtime_http_client
+    client = _realtime_http_client
+    _realtime_http_client = None
+    if client is not None and not client.is_closed:
+        await client.aclose()
+
 
 class VoiceCallRequest(BaseModel):
     sdp: str = Field(..., min_length=10, max_length=120_000)
@@ -389,12 +418,12 @@ async def create_realtime_call(
         "tracing": "auto",
         "max_output_tokens": 4096,
     }
-    timeout = httpx.Timeout(20.0, connect=8.0)
     multipart = [
         ("sdp", (None, payload.sdp.encode("utf-8"), "application/sdp")),
         ("session", (None, json.dumps(session).encode("utf-8"), "application/json")),
     ]
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    client = _get_realtime_http_client()
+    try:
         upstream = await client.post(
             f"{_OPENAI_BASE}/realtime/calls",
             headers={
@@ -403,6 +432,16 @@ async def create_realtime_call(
             },
             files=multipart,
         )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Realtime provider timed out while starting the voice session",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Realtime provider is temporarily unreachable",
+        ) from exc
     if upstream.status_code >= 400:
         detail = upstream.text[:800] or "Realtime provider rejected the session"
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
