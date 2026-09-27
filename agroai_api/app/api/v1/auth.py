@@ -325,6 +325,7 @@ def _register_failure(
     reason_codes: list[str] | tuple[str, ...],
     score: int | None = None,
 ) -> None:
+    ip_address, user_agent = _request_metadata(request)
     record_security_event(
         db,
         event_type="registration_verification",
@@ -510,6 +511,22 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.flush()
     ensure_evaluation_context(db, org, workspace)
     ip_address, user_agent = _request_metadata(request)
+    record_security_event(
+        db,
+        event_type="portal_legal_acceptance",
+        outcome="accepted",
+        organization_id=org.id,
+        user_id=user.id,
+        subject=email,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        metadata={
+            "terms_version": PORTAL_TERMS_VERSION,
+            "privacy_version": PORTAL_PRIVACY_VERSION,
+            "document_bundle_hash": legal_acceptance.document_bundle_hash,
+            "acceptance_id": legal_acceptance.id,
+        },
+    )
     record_security_event(
         db,
         event_type="registration_verification",
