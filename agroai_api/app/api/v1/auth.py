@@ -309,38 +309,6 @@ def _register_failure(
     score: int | None = None,
 ) -> None:
     ip_address, user_agent = _request_metadata(request)
-    if legal_enforcement:
-        legal_acceptance = SelfServiceLegalAcceptance(
-            organization_id=org.id,
-            user_id=user.id,
-            terms_version=SELF_SERVICE_TERMS_VERSION,
-            privacy_version=SELF_SERVICE_PRIVACY_VERSION,
-            terms_url=SELF_SERVICE_TERMS_URL,
-            privacy_url=SELF_SERVICE_PRIVACY_URL,
-            acceptance_text=SELF_SERVICE_ACCEPTANCE_TEXT,
-            authority_confirmed=True,
-            ip_hash=privacy_hash(ip_address, "ip"),
-            user_agent_hash=privacy_hash(user_agent, "user-agent"),
-            accepted_at=now,
-        )
-        db.add(legal_acceptance)
-        record_security_event(
-            db,
-            event_type="legal.clickwrap.accepted",
-            outcome="accepted",
-            organization_id=org.id,
-            user_id=user.id,
-            subject=email,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            metadata={
-                "terms_version": SELF_SERVICE_TERMS_VERSION,
-                "privacy_version": SELF_SERVICE_PRIVACY_VERSION,
-                "terms_url": SELF_SERVICE_TERMS_URL,
-                "privacy_url": SELF_SERVICE_PRIVACY_URL,
-                "authority_confirmed": True,
-            },
-        )
     record_security_event(
         db,
         event_type="registration_verification",
@@ -498,6 +466,38 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.flush()
     ensure_evaluation_context(db, org, workspace)
     ip_address, user_agent = _request_metadata(request)
+    if legal_enforcement:
+        legal_acceptance = SelfServiceLegalAcceptance(
+            organization_id=org.id,
+            user_id=user.id,
+            terms_version=SELF_SERVICE_TERMS_VERSION,
+            privacy_version=SELF_SERVICE_PRIVACY_VERSION,
+            terms_url=SELF_SERVICE_TERMS_URL,
+            privacy_url=SELF_SERVICE_PRIVACY_URL,
+            acceptance_text=SELF_SERVICE_ACCEPTANCE_TEXT,
+            authority_confirmed=True,
+            ip_hash=privacy_hash(ip_address, "ip"),
+            user_agent_hash=privacy_hash(user_agent, "user-agent"),
+            accepted_at=now,
+        )
+        db.add(legal_acceptance)
+        record_security_event(
+            db,
+            event_type="legal.clickwrap.accepted",
+            outcome="accepted",
+            organization_id=org.id,
+            user_id=user.id,
+            subject=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={
+                "terms_version": SELF_SERVICE_TERMS_VERSION,
+                "privacy_version": SELF_SERVICE_PRIVACY_VERSION,
+                "terms_url": SELF_SERVICE_TERMS_URL,
+                "privacy_url": SELF_SERVICE_PRIVACY_URL,
+                "authority_confirmed": True,
+            },
+        )
     record_security_event(
         db,
         event_type="registration_verification",
