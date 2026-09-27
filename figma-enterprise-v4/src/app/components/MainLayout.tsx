@@ -217,7 +217,7 @@ export function MainLayout() {
     <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden" style={{ background: "#F6F4EE" }} data-portal-shell>
       <aside
         className="relative hidden flex-shrink-0 flex-col transition-[width] duration-200 ease-out md:flex"
-        style={{ background: "#061D15", width: sidebarCollapsed ? 76 : 280 }}
+        style={{ background: "#061D15", width: sidebarCollapsed ? 76 : 304 }}
         data-desktop-sidebar
         data-collapsed={sidebarCollapsed ? "true" : "false"}
       >
@@ -258,7 +258,7 @@ export function MainLayout() {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto" data-portal-content>
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain" data-portal-content>
           <StagingBanner />
           <div className="flex justify-end px-3 pt-2" data-sync-center>
             <SyncCenter />
@@ -277,7 +277,7 @@ export function MainLayout() {
             aria-label="Close navigation"
           />
           <aside
-            className="absolute inset-y-0 left-0 flex w-[min(86vw,320px)] flex-col overflow-hidden shadow-2xl"
+            className="absolute inset-y-0 left-0 flex h-[100dvh] w-[min(92vw,360px)] flex-col overflow-hidden shadow-2xl"
             style={{ background: "#061D15", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <button
@@ -342,8 +342,8 @@ function SidebarContent({
 }) {
   const isCollapsed = collapsed && !mobile;
   return (
-    <>
-      <div className={mobile ? "px-5 pb-4 pt-5" : isCollapsed ? "px-2 pb-4 pt-4" : "px-6 pb-5 pt-6"} style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className={mobile ? "shrink-0 px-5 pb-4 pt-5" : isCollapsed ? "shrink-0 px-2 pb-4 pt-4" : "shrink-0 px-6 pb-5 pt-6"} style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
         <div className={isCollapsed ? "flex flex-col items-center gap-3" : "flex items-center gap-3"}>
           <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg" style={{ background: "#16533C" }} title="AGRO-AI">
             <ImageWithFallback src={logoImg} alt="AGRO-AI" className="h-full w-full object-contain" />
@@ -415,7 +415,8 @@ function SidebarContent({
         </NavLink>
       </div>
 
-      <nav className={isCollapsed ? "flex-1 space-y-4 overflow-y-auto px-2 py-4" : "flex-1 space-y-5 overflow-y-auto px-3 py-4"} style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-sidebar-scroll style={{ WebkitOverflowScrolling: "touch", scrollbarGutter: "stable" }}>
+      <nav className={isCollapsed ? "space-y-4 px-2 py-4" : "space-y-5 px-3 py-4"}>
         <NavSection title={t("operate")} items={operateItems} onNavigate={onNavigate} collapsed={isCollapsed} />
         <NavSection title={t("intelligence")} items={intelligenceItems} onNavigate={onNavigate} collapsed={isCollapsed} />
         <NavSection title="Products" items={productItems} onNavigate={onNavigate} collapsed={isCollapsed} />
@@ -436,16 +437,17 @@ function SidebarContent({
           {!isCollapsed ? <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>{t("account")}</div> : null}
           <div className="space-y-1">
             {accountItems.map((item) => <AccountNavItem key={item.path} item={item} onNavigate={onNavigate} collapsed={isCollapsed} />)}
-            <button type="button" onClick={() => { onNavigate(); replayProductTour(); }} className={isCollapsed ? "flex h-10 w-full items-center justify-center rounded-lg" : "flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? "Product tour" : undefined}>
+            <button type="button" onClick={() => { onNavigate(); replayProductTour(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? "Product tour" : undefined}>
               <HelpCircle className="h-4 w-4" /> {!isCollapsed ? "Product tour" : null}
             </button>
-            <button type="button" onClick={() => { onNavigate(); onLogout(); }} className={isCollapsed ? "flex h-10 w-full items-center justify-center rounded-lg" : "flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? t("logout") : undefined}>
+            <button type="button" onClick={() => { onNavigate(); onLogout(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? t("logout") : undefined}>
               <LogOut className="h-4 w-4" /> {!isCollapsed ? t("logout") : null}
             </button>
           </div>
         </div>
       </div>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -456,7 +458,7 @@ function AccountNavItem({ item, onNavigate, collapsed = false }: { item: NavItem
       key={item.path}
       to={item.path}
       onClick={onNavigate}
-      className={collapsed ? "flex h-10 items-center justify-center rounded-lg" : "flex h-10 items-center gap-2 rounded-lg px-2 text-[12px]"}
+      className={collapsed ? "flex h-11 items-center justify-center rounded-lg" : "flex h-11 items-center gap-2 rounded-lg px-2 text-[12px]"}
       style={({ isActive }) => ({ background: isActive ? "rgba(255,255,255,0.08)" : "transparent", color: isActive ? "white" : "rgba(255,255,255,0.62)" })}
       title={collapsed ? item.name : undefined}
       aria-label={item.name}
