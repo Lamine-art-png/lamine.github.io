@@ -106,7 +106,7 @@ def test_assessment_parses_typed_response(monkeypatch):
                 "model": "test-model",
                 "answers": {
                     "focus_item": {"type": "choice", "choice": "item_2", "confidence": 0.93},
-                    "urgency": {"type": "choice", "choice": "high", "confidence": 0.88},
+                    "urgency": {"type": "score", "score": 2.4, "confidence": 0.88},
                     "needs_human_review": {"type": "noul", "noul": 0.91},
                     "data_sufficient": {"type": "noul", "noul": 0.72},
                     "should_act_now": {"type": "noul", "noul": 0.84},
@@ -126,7 +126,7 @@ def test_assessment_parses_typed_response(monkeypatch):
     assert assessment is not None
     assert assessment.focus_ref == "item_2"
     assert assessment.focus_confidence == 0.93
-    assert assessment.needs_human_review == 0.91
+    assert assessment.urgency_score == 0.8\n    assert assessment.needs_human_review == 0.91
     assert seen["url"].endswith("/v1/systemone")
 
 
@@ -135,7 +135,7 @@ def test_assist_only_reorders_within_highest_deterministic_priority():
     assessment = CommandCenterAssessment(
         focus_ref="item_2",
         focus_confidence=0.96,
-        urgency="high",
+        urgency_score=0.8,
         urgency_confidence=0.9,
         needs_human_review=0.9,
         data_sufficient=0.8,
@@ -148,7 +148,7 @@ def test_assist_only_reorders_within_highest_deterministic_priority():
     lower_priority = CommandCenterAssessment(
         focus_ref="item_3",
         focus_confidence=0.99,
-        urgency="normal",
+        urgency_score=0.4,
         urgency_confidence=0.9,
         needs_human_review=0.1,
         data_sufficient=0.9,
@@ -163,7 +163,7 @@ def test_low_confidence_cannot_change_command_center():
     assessment = CommandCenterAssessment(
         focus_ref="item_2",
         focus_confidence=0.5,
-        urgency="high",
+        urgency_score=0.8,
         urgency_confidence=0.4,
         needs_human_review=0.8,
         data_sufficient=0.7,
