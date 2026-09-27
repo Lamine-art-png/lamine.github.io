@@ -20,8 +20,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("agroai.decision_model")
-logger.setLevel(logging.INFO)
+logger = logging.getLogger("uvicorn.error")
 
 _DEFAULT_BASE_URL = ""
 _DEFAULT_MODEL = ""
