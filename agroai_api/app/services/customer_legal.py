@@ -22,6 +22,11 @@ ACCEPTANCE_TEXT = (
     "I agree to the AGRO-AI Terms of Service, acknowledge the Privacy Policy, "
     "and confirm that I am authorized to bind my organization."
 )
+COMMERCIAL_AUTHORIZATION_TEXT = (
+    "I authorize AGRO-AI to start the selected paid subscription at the displayed price "
+    "and billing interval. I understand it renews automatically until canceled and remains "
+    "subject to the AGRO-AI Terms of Service."
+)
 
 
 def _reference_digest(document_type: str, version: str, effective_date: str, url: str) -> str:
