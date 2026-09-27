@@ -38,6 +38,11 @@ STRONG = {
     "workspace_name": "Central Valley operations",
     "crop": "Almonds and pistachios",
     "region": "California Central Valley",
+    "terms_version": "2026-07-03",
+    "privacy_version": "2026-07-03",
+    "accepted_terms": True,
+    "acknowledged_privacy": True,
+    "authority_confirmed": True,
 }
 
 
