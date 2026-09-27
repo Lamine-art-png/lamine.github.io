@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { ArrowRight, CreditCard, RefreshCw } from "lucide-react";
-import { apiClient, ProductCheckoutPayload } from "../api/client";
+import { apiClient, LegalStatusResponse, ProductCheckoutPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
@@ -23,10 +23,15 @@ function barColor(row: QuotaRow) { const p = pct(row); return p >= 100 ? "#B4231
 export function BillingPageV2() {
   const { currentOrganization } = useAuth();
   const state = usePortalResource<CommercialSummary>(useCallback(() => apiClient.billing.commercialSummary(), []));
+  const legalState = usePortalResource<LegalStatusResponse>(useCallback(() => apiClient.legal.status(), []));
   const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [legacyLegalAccepted, setLegacyLegalAccepted] = useState(false);
+  const [commercialAccepted, setCommercialAccepted] = useState(false);
   const summary = state.data;
+  const legalCurrent = Boolean(legalState.data?.current);
+  const legalReady = legalCurrent || legacyLegalAccepted;
 
   async function upgrade(plan: Plan) {
     setBusy(plan.id); setMessage("");
@@ -36,7 +41,26 @@ export function BillingPageV2() {
         setMessage(String(result.message || "Enterprise request received."));
         return;
       }
-      const result = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: period }) as Record<string, unknown>;
+      if (!commercialAccepted) {
+        setMessage("Confirm the recurring billing terms before continuing to checkout.");
+        return;
+      }
+      if (!legalCurrent) {
+        if (!legacyLegalAccepted || !legalState.data?.documents) {
+          setMessage("Accept the current AGRO-AI Terms of Service before continuing to checkout.");
+          return;
+        }
+        const docs = legalState.data.documents;
+        await apiClient.legal.accept({
+          event_type: "reaccept",
+          terms_version: docs.terms.version,
+          privacy_version: docs.privacy.version,
+          accepted_terms: true,
+          acknowledged_privacy: true,
+          authority_confirmed: true,
+        });
+      }
+      const result = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: period, commercial_terms_accepted: true }) as Record<string, unknown>;
       if (typeof result.checkout_url === "string" && result.checkout_url) window.location.assign(result.checkout_url);
       else setMessage(String(result.message || "Upgrade request received."));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start checkout."); }
@@ -63,7 +87,7 @@ export function BillingPageV2() {
     </header>
 
     <main className="space-y-6 px-8 py-6" style={{ maxWidth: 1280 }}>
-      {state.error ? <Notice warn>{state.error}</Notice> : null}{message ? <Notice>{message}</Notice> : null}
+      {state.error ? <Notice warn>{state.error}</Notice> : null}{legalState.error ? <Notice warn>Legal acceptance status is temporarily unavailable. Paid checkout is paused until it can be verified.</Notice> : null}{message ? <Notice>{message}</Notice> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <Metric label="Current plan" value={summary?.current_plan?.name || "—"} detail={summary?.current_plan ? (period === "annual" ? summary.current_plan.public_price_annual : summary.current_plan.public_price_monthly) : "Loading"} />
         <Metric label="Billing state" value={summary?.billing_status || "—"} detail={summary?.subscription_source ? `Source: ${summary.subscription_source}` : "Commercial state"} />
@@ -77,8 +101,16 @@ export function BillingPageV2() {
       </section>
 
       <section className="rounded-[24px] p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>Upgrade capacity</h2><p className="mt-2 text-[13px]" style={{ color: MUTED }}>Checkout delegates to the authoritative subscription path.</p></div><div className="inline-flex rounded-lg p-1" style={{ background: BG, border: `1px solid ${BORDER}` }}>{(["monthly", "annual"] as const).map((value) => <button key={value} onClick={() => setPeriod(value)} className="rounded-md px-3 py-2 text-[12px] capitalize" style={{ background: period === value ? GREEN : "transparent", color: period === value ? "white" : TEXT }}>{value}</button>)}</div></div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">{(summary?.upgrade_options || []).map((plan) => <article key={plan.id} className="flex min-h-[210px] flex-col rounded-2xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[17px] font-semibold" style={{ color: TEXT }}>{plan.name}</div><div className="mt-1 text-[13px] font-semibold" style={{ color: GREEN }}>{period === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div><p className="mt-4 text-[12px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p><div className="mt-auto pt-5"><PortalButton onClick={() => upgrade(plan)} disabled={busy === plan.id}>{busy === plan.id ? "Opening…" : plan.id === "enterprise" ? "Talk to sales" : `Upgrade to ${plan.name}`} <ArrowRight className="h-4 w-4" /></PortalButton></div></article>)}</div>
+        <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>Upgrade capacity</h2><p className="mt-2 text-[13px]" style={{ color: MUTED }}>Choose a plan, confirm the commercial terms once, then continue to secure checkout.</p></div><div className="inline-flex rounded-lg p-1" style={{ background: BG, border: `1px solid ${BORDER}` }}>{(["monthly", "annual"] as const).map((value) => <button key={value} onClick={() => { setPeriod(value); setCommercialAccepted(false); }} className="rounded-md px-3 py-2 text-[12px] capitalize" style={{ background: period === value ? GREEN : "transparent", color: period === value ? "white" : TEXT }}>{value}</button>)}</div></div>
+        {!legalCurrent && legalState.data?.documents ? <label className="mt-5 flex items-start gap-3 rounded-xl p-4 text-[12px] leading-5" style={{ background: "#FFFDF8", border: `1px solid ${BORDER}`, color: MUTED }}>
+          <input type="checkbox" checked={legacyLegalAccepted} onChange={(event) => setLegacyLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#2D6A4F]" />
+          <span>I agree to the AGRO-AI <a href={legalState.data.documents.terms.url} target="_blank" rel="noreferrer" className="font-semibold underline">Terms of Service</a>, acknowledge the <a href={legalState.data.documents.privacy.url} target="_blank" rel="noreferrer" className="font-semibold underline">Privacy Policy</a>, and confirm that I am authorized to bind my organization.</span>
+        </label> : null}
+        <label className="mt-3 flex items-start gap-3 rounded-xl p-4 text-[12px] leading-5" style={{ background: "#F6FAF1", border: "1px solid #D7E4CF", color: MUTED }}>
+          <input type="checkbox" checked={commercialAccepted} onChange={(event) => setCommercialAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#2D6A4F]" />
+          <span>I authorize AGRO-AI to start the paid plan I select at the displayed {period} price. I understand the subscription renews automatically at that billing interval until canceled and remains subject to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer" className="font-semibold underline">Terms of Service</a>. I can manage or cancel it from Billing.</span>
+        </label>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">{(summary?.upgrade_options || []).map((plan) => <article key={plan.id} className="flex min-h-[210px] flex-col rounded-2xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[17px] font-semibold" style={{ color: TEXT }}>{plan.name}</div><div className="mt-1 text-[13px] font-semibold" style={{ color: GREEN }}>{period === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div><p className="mt-4 text-[12px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p><div className="mt-auto pt-5"><PortalButton onClick={() => upgrade(plan)} disabled={busy === plan.id || (plan.id !== "enterprise" && (!commercialAccepted || !legalReady || Boolean(legalState.error)))}>{busy === plan.id ? "Opening…" : plan.id === "enterprise" ? "Talk to sales" : `Upgrade to ${plan.name}`} <ArrowRight className="h-4 w-4" /></PortalButton></div></article>)}</div>
       </section>
     </main>
   </div>;
