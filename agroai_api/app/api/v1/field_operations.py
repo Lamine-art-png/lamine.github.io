@@ -4,13 +4,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.models.saas import Workspace
+from app.services.decision_model import assist_enabled, command_center_with_decision_layer, shadow_command_center, shadow_enabled
 from app.services.field_operating_loop import (
     audit_trail,
     autopilot_report,
@@ -99,11 +100,17 @@ def _context(db: Session, ctx: AuthContext, workspace_id: str | None = None):
 
 @router.get("/field-ops/command-center")
 def get_command_center(
+    background_tasks: BackgroundTasks,
     workspace_id: str | None = Query(default=None),
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
-    return command_center(_context(db, ctx, workspace_id))
+    state = command_center(_context(db, ctx, workspace_id))
+    if assist_enabled():
+        return command_center_with_decision_layer(state)
+    if shadow_enabled():
+        background_tasks.add_task(shadow_command_center, state)
+    return state
 
 
 @router.get("/field-ops/tasks")
