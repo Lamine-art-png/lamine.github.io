@@ -89,7 +89,6 @@ body {
   [data-portal-content] video,
   [data-portal-content] canvas {
     max-width: 100%;
-    height: auto;
   }
 
   [data-portal-content] table {
