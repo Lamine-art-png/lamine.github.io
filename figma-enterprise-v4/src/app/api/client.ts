@@ -287,6 +287,11 @@ export type RegisterPayload = {
   workspace_name: string;
   crop?: string;
   region?: string;
+  terms_version: string;
+  privacy_version: string;
+  accepted_terms: boolean;
+  acknowledged_privacy: boolean;
+  authority_confirmed: boolean;
 };
 export type LoginPayload = { email: string; password: string };
 export type CreateWorkspacePayload = { name: string; crop?: string; region?: string };
@@ -306,7 +311,14 @@ export type FieldUpdatePayload = { field_id?: string; field_name?: string; block
 export type FieldMessagePayload = { message: string; sender_role: "operator" | "manager" | "agency" | "advisor"; channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams"; field_hint?: string; workspace_id?: string };
 export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
 function providerForUpload(file: File) { const name = file.name.toLowerCase(); if (name.endsWith(".csv")) return "manual_csv"; return "chat_upload"; }
-export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual" };
+export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual"; commercial_terms_accepted: boolean };
+export type LegalDocumentsResponse = {
+  terms: { version: string; effective_date: string; url: string; reference_digest: string };
+  privacy: { version: string; effective_date: string; url: string; reference_digest: string };
+  acceptance_copy: string;
+};
+export type LegalStatusResponse = { current: boolean; latest_acceptance_id?: string | null; terms_version?: string | null; privacy_version?: string | null; accepted_at?: string | null; documents: LegalDocumentsResponse };
+export type LegalAcceptancePayload = { event_type?: "invite" | "reaccept"; terms_version: string; privacy_version: string; accepted_terms: boolean; acknowledged_privacy: boolean; authority_confirmed: boolean };
 export type BillingCheckoutSessionPayload = { organization_id: string; offer?: string; plan?: string };
 export type BillingPortalPayload = { organization_id: string };
 export type EmailVerificationRequestPayload = { email?: string };
@@ -359,6 +371,11 @@ function transcribeLiveFieldSpeech<T>(fields: Record<string, string>, file: File
 export const apiClient = {
   get, post, patch, remove, request, download,
   auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
+  legal: {
+    current: () => get("/v1/legal/documents/current"),
+    status: () => get("/v1/legal/status"),
+    accept: (payload: LegalAcceptancePayload) => post("/v1/legal/acceptances", payload),
+  },
   accessAppeals: { request: (payload: { email: string }) => post("/v1/access-appeals/request", payload, null), form: (token: string) => get(`/v1/access-appeals/form/${encodeURIComponent(token)}`, null), submit: (token: string, payload: AccessAppealSubmission) => post(`/v1/access-appeals/submit/${encodeURIComponent(token)}`, payload, null) },
   billing: {
     status: () => get("/v1/billing/status"),
