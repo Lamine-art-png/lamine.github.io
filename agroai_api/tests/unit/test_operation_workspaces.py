@@ -15,6 +15,11 @@ def _register_and_login(client, db, *, email: str, organization: str):
             "workspace_name": "Initial operation",
             "crop": "Grapes",
             "region": "California",
+            "terms_version": "2026-07-03",
+            "privacy_version": "2026-07-03",
+            "accepted_terms": True,
+            "acknowledged_privacy": True,
+            "authority_confirmed": True,
         },
     )
     assert response.status_code == 201, response.text
