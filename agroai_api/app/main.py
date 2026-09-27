@@ -441,6 +441,7 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
 
 
 from app.api.v1.auth import router as auth_router  # noqa: E402
+from app.api.v1.legal import router as legal_router  # noqa: E402
 from app.api.v1.access_appeals import router as access_appeals_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
 from app.api.v1.evaluation import legacy_router as evaluation_legacy_router  # noqa: E402
@@ -501,6 +502,7 @@ async def scoped_validation_exception_handler(request: Request, exc: RequestVali
     return await request_validation_exception_handler(request, exc)
 
 app.include_router(auth_router, prefix="/v1")
+app.include_router(legal_router, prefix="/v1")
 app.include_router(access_appeals_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 app.include_router(evaluation_router)
