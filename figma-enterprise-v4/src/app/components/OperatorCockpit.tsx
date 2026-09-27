@@ -33,7 +33,7 @@ export function Readiness() {
       action={<PortalButton variant="secondary" onClick={state.refresh}>Refresh</PortalButton>}
     >
       {state.error ? <InlineState title={state.error} /> : null}
-      <section className="grid grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Readiness" value={`${value(summary.readiness_score, 0)}%`} />
         <Metric label="Level" value={value(summary.readiness_level, "blocked")} />
         <Metric label="Sources" value={value(summary.data_sources, 0)} />
@@ -42,7 +42,7 @@ export function Readiness() {
 
       {summary.sample_mode ? <InlineState title="Sample mode" detail="This workspace has no operational evidence yet. Connect or upload data before sending reports or approving field actions." /> : null}
 
-      <section className="grid grid-cols-[1.1fr_0.9fr] gap-4">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Panel title="Missing Source Types">
           <ChipList items={arrayFromUnknown(summary.missing_source_types, [])} empty="No required source gaps detected." />
         </Panel>
@@ -51,7 +51,7 @@ export function Readiness() {
         </Panel>
       </section>
 
-      <section className="grid grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Connector Health">
           <div className="space-y-3">
             {connectorHealth.length ? connectorHealth.map((row) => (
@@ -71,7 +71,7 @@ export function Readiness() {
         <Panel title="Provider Breakdown">
           <div className="space-y-2">
             {breakdown.length ? breakdown.map((row) => (
-              <div key={row.provider} className="grid grid-cols-4 gap-2 rounded-lg px-3 py-2 text-[12px]" style={{ background: BG, color: TEXT }}>
+              <div key={row.provider} className="grid grid-cols-2 gap-2 rounded-lg px-3 py-2 text-[12px] sm:grid-cols-4" style={{ background: BG, color: TEXT }}>
                 <span className="font-semibold">{value(row.provider)}</span>
                 <span>{value(row.connections, 0)} connections</span>
                 <span>{value(row.data_sources, 0)} sources</span>
@@ -95,7 +95,7 @@ export function Fields() {
     <PageShell badge="Field Intelligence" title="Fields" detail="Field/block risk, evidence coverage, confidence, and next operator action." action={<PortalButton variant="secondary" onClick={state.refresh}>Refresh</PortalButton>}>
       {state.error ? <InlineState title={state.error} /> : null}
       {state.data?.sample_mode ? <InlineState title="No field evidence yet." detail="The field view is showing a safe sample placeholder until data is uploaded or connected." /> : null}
-      <section className="grid grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {fields.map((field) => (
           <button key={field.field_id} type="button" onClick={() => setSelected(field)} className="rounded-2xl p-5 text-left" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="flex items-start justify-between gap-3">
@@ -105,7 +105,7 @@ export function Fields() {
               </div>
               <StatusBadge label={`${Math.round(Number(field.confidence || 0) * 100)}%`} tone={Number(field.confidence || 0) > 0.55 ? "good" : "warn"} />
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Mini label="Evidence" value={value(field.evidence_count, 0)} />
               <Mini label="Providers" value={String(arrayFromUnknown(field.connected_providers, []).length)} />
             </div>
@@ -141,7 +141,7 @@ export function Exceptions() {
       <section className="space-y-3">
         {visible.length ? visible.map((row) => (
           <article key={row.id} className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <StatusBadge label={value(row.severity)} tone={row.severity === "low" ? "neutral" : "warn"} />
@@ -190,7 +190,7 @@ export function DecisionWorkbench() {
     <PageShell badge="Decision Workbench" title="Decision Workbench" detail="Evidence-backed recommendations, missing evidence, impact, and operator instructions." action={<PortalButton onClick={run} disabled={busy}>{busy ? "Running..." : "Run workbench"}</PortalButton>}>
       {state.error ? <InlineState title={state.error} /> : null}
       {message ? <InlineState title={message} /> : null}
-      <select value={mode} onChange={(event) => setMode(event.target.value as WorkbenchRunPayload["mode"])} className="h-10 w-[240px] rounded-lg px-3 text-[13px] outline-none" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT }}>
+      <select value={mode} onChange={(event) => setMode(event.target.value as WorkbenchRunPayload["mode"])} className="h-10 w-full rounded-lg px-3 text-[13px] outline-none sm:w-[240px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT }}>
         <option value="daily">Daily</option>
         <option value="field">Field</option>
         <option value="compliance">Compliance</option>
@@ -230,7 +230,7 @@ export function ReportFactory() {
     <PageShell badge="Report Factory" title="Report Factory" detail="Structured report preview from readiness, field intelligence, exceptions, decisions, and evidence appendix." action={<PortalButton onClick={generate} disabled={busy}>{busy ? "Generating..." : "Generate preview"}</PortalButton>}>
       {message ? <InlineState title={message} /> : null}
       <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Select label="Report type" value={reportType} onChange={(next) => setReportType(next as ReportFactoryPayload["report_type"])} options={["water_use_summary", "compliance_packet", "exception_report", "executive_brief", "grower_recommendation"]} />
           <Select label="Audience" value={audience || "owner"} onChange={(next) => setAudience(next as ReportFactoryPayload["audience"])} options={["operator", "owner", "agency", "lender", "investor", "grower"]} />
           <div className="flex items-end"><PortalButton variant="secondary" onClick={() => window.location.assign("/reports")}>Existing Reports</PortalButton></div>
@@ -245,7 +245,7 @@ export function ReportFactory() {
             </div>
             <StatusBadge label={value(report.report_type)} tone="good" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Panel title="Key Findings"><List items={arrayFromUnknown(report.key_findings, [])} /></Panel>
             <Panel title="Missing Evidence"><ChipList items={arrayFromUnknown(report.missing_evidence, [])} empty="No missing evidence listed." /></Panel>
             <Panel title="Exceptions"><List items={arrayFromUnknown(report.exceptions, []).map((row) => row.title || row.id)} /></Panel>
@@ -261,7 +261,7 @@ function DecisionPanel({ decision }: { decision: AnyRecord }) {
   const [status, setStatus] = useState(value(decision.approval_status, "needs_review"));
   return (
     <article className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <StatusBadge label={value(decision.risk_level)} tone={decision.risk_level === "low" ? "good" : "warn"} />
@@ -277,7 +277,7 @@ function DecisionPanel({ decision }: { decision: AnyRecord }) {
           ))}
         </div>
       </div>
-      <div className="mt-5 grid grid-cols-3 gap-4">
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Panel title="Evidence Used"><List items={arrayFromUnknown(decision.evidence_used, []).map((row) => row.title || row.label || row)} /></Panel>
         <Panel title="Missing Evidence"><ChipList items={arrayFromUnknown(decision.missing_evidence, [])} empty="No missing evidence listed." /></Panel>
         <Panel title="Operator Instructions"><List items={arrayFromUnknown(decision.operator_instructions, [])} /></Panel>
@@ -289,8 +289,8 @@ function DecisionPanel({ decision }: { decision: AnyRecord }) {
 function PageShell({ badge, title, detail, action, children }: { badge: string; title: string; detail: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
-        <div className="flex items-start justify-between gap-6">
+      <header className="px-4 py-5 sm:px-8 sm:py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div>
             <div className="mb-3"><StatusBadge label={badge} tone="good" /></div>
             <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>{title}</h1>
@@ -299,7 +299,7 @@ function PageShell({ badge, title, detail, action, children }: { badge: string; 
           {action}
         </div>
       </header>
-      <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1280 }}>{children}</main>
+      <main className="space-y-4 px-4 py-4 sm:space-y-5 sm:px-8 sm:py-6" style={{ maxWidth: 1280 }}>{children}</main>
     </div>
   );
 }
@@ -342,8 +342,8 @@ function Select({ label, value: selectedValue, options, onChange }: { label: str
 function DetailDrawer({ title, record, onClose }: { title: string; record: AnyRecord; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end" style={{ background: "rgba(6,29,21,0.24)" }}>
-      <aside className="h-full w-[460px] overflow-auto p-6" style={{ background: SURFACE, borderLeft: `1px solid ${BORDER}` }}>
-        <div className="flex items-start justify-between gap-4">
+      <aside className="h-full w-full overflow-auto p-4 sm:w-[460px] sm:p-6" style={{ background: SURFACE, borderLeft: `1px solid ${BORDER}` }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div>
             <h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>{title}</h2>
             <p className="mt-1 text-[13px]" style={{ color: MUTED }}>{value(record.crop)} · confidence {Math.round(Number(record.confidence || 0) * 100)}%</p>

@@ -25,6 +25,13 @@ body {
 
 [data-portal-content] {
   overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-sidebar-scroll] {
+  min-height: 0;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 767px) {
@@ -63,6 +70,37 @@ body {
   [data-portal-content] select,
   [data-portal-content] button {
     max-width: 100%;
+  }
+
+  /* Keep iOS from zooming the viewport when a field receives focus. */
+  [data-portal-content] input:not([type="checkbox"]):not([type="radio"]),
+  [data-portal-content] textarea,
+  [data-portal-content] select {
+    font-size: 16px !important;
+  }
+
+  [data-portal-content] button,
+  [data-portal-content] a,
+  [data-portal-content] label {
+    touch-action: manipulation;
+  }
+
+  [data-portal-content] img,
+  [data-portal-content] video,
+  [data-portal-content] canvas {
+    max-width: 100%;
+  }
+
+  [data-portal-content] table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-portal-content] {
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 
   /* Legacy desktop-authored 3+ column surfaces and inline fixed grids stack

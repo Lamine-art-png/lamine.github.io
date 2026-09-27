@@ -55,14 +55,14 @@ export function BillingPageV2() {
   }
 
   return <div className="min-h-screen" style={{ background: BG }}>
-    <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+    <header className="px-4 py-5 sm:px-8 sm:py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div><div className="mb-3 flex gap-2"><StatusBadge label="Commercial control" tone="good" /><StatusBadge label={summary?.billing_status || "loading"} /></div><h1 className="text-[30px] font-semibold" style={{ color: TEXT }}>Billing & usage</h1><p className="mt-2 max-w-3xl text-[14px] leading-7" style={{ color: MUTED }}>Exact plan limits, period usage and remaining capacity enforced by AGRO-AI.</p></div>
-        <div className="flex gap-2">{summary?.can_manage_billing && currentOrganization?.id ? <PortalButton variant="secondary" onClick={manageBilling} disabled={busy === "portal"}><CreditCard className="h-4 w-4" /> Manage billing</PortalButton> : null}<PortalButton variant="secondary" onClick={() => state.refresh()}><RefreshCw className="h-4 w-4" /> Refresh</PortalButton></div>
+        <div className="flex flex-wrap gap-2">{summary?.can_manage_billing && currentOrganization?.id ? <PortalButton variant="secondary" onClick={manageBilling} disabled={busy === "portal"}><CreditCard className="h-4 w-4" /> Manage billing</PortalButton> : null}<PortalButton variant="secondary" onClick={() => state.refresh()}><RefreshCw className="h-4 w-4" /> Refresh</PortalButton></div>
       </div>
     </header>
 
-    <main className="space-y-6 px-8 py-6" style={{ maxWidth: 1280 }}>
+    <main className="space-y-5 px-4 py-4 sm:space-y-6 sm:px-8 sm:py-6" style={{ maxWidth: 1280 }}>
       {state.error ? <Notice warn>{state.error}</Notice> : null}{message ? <Notice>{message}</Notice> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <Metric label="Current plan" value={summary?.current_plan?.name || "—"} detail={summary?.current_plan ? (period === "annual" ? summary.current_plan.public_price_annual : summary.current_plan.public_price_monthly) : "Loading"} />
@@ -71,12 +71,12 @@ export function BillingPageV2() {
         <Metric label="Period reset" value={dateLabel(summary?.current_period_end)} detail={summary?.cancel_at_period_end ? "Cancels at period end" : "Quota reset"} />
       </section>
 
-      <section className="rounded-[24px] p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <section className="rounded-[24px] p-4 sm:p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         <h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>Exact plan capacity</h2><p className="mt-2 text-[13px]" style={{ color: MUTED }}>Used plus reserved work is compared with the active commercial limit. Reserved work prevents concurrent over-consumption.</p>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(summary?.quota_rows || []).map((row) => <Quota key={row.metric} row={row} currentPlan={summary?.plan_id || "free"} />)}</div>
       </section>
 
-      <section className="rounded-[24px] p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <section className="rounded-[24px] p-4 sm:p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>Upgrade capacity</h2><p className="mt-2 text-[13px]" style={{ color: MUTED }}>Checkout delegates to the authoritative subscription path.</p></div><div className="inline-flex rounded-lg p-1" style={{ background: BG, border: `1px solid ${BORDER}` }}>{(["monthly", "annual"] as const).map((value) => <button key={value} onClick={() => setPeriod(value)} className="rounded-md px-3 py-2 text-[12px] capitalize" style={{ background: period === value ? GREEN : "transparent", color: period === value ? "white" : TEXT }}>{value}</button>)}</div></div>
         <div className="mt-5 grid gap-4 md:grid-cols-3">{(summary?.upgrade_options || []).map((plan) => <article key={plan.id} className="flex min-h-[210px] flex-col rounded-2xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[17px] font-semibold" style={{ color: TEXT }}>{plan.name}</div><div className="mt-1 text-[13px] font-semibold" style={{ color: GREEN }}>{period === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div><p className="mt-4 text-[12px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p><div className="mt-auto pt-5"><PortalButton onClick={() => upgrade(plan)} disabled={busy === plan.id}>{busy === plan.id ? "Opening…" : plan.id === "enterprise" ? "Talk to sales" : `Upgrade to ${plan.name}`} <ArrowRight className="h-4 w-4" /></PortalButton></div></article>)}</div>
       </section>

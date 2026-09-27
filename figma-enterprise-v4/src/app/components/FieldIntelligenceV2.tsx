@@ -172,21 +172,21 @@ export function FieldIntelligenceV2() {
   const filteredLocals = locals.filter((record) => !stateFilter || record.syncState === stateFilter);
 
   return (
-    <div className="min-h-full bg-[#F6F4EE] px-4 py-5 md:px-6 md:py-6">
-      <header className="rounded-2xl border border-[#D6DDD0] bg-[#10231B] p-5 text-white shadow-[0_20px_60px_rgba(16,35,27,0.16)]">
+    <div className="min-h-full bg-[#F6F4EE] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
+      <header className="rounded-2xl border border-[#D6DDD0] bg-[#10231B] p-4 text-white shadow-[0_20px_60px_rgba(16,35,27,0.16)] sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#92C7A9]">{t("fieldIntel.eyebrow")}</div>
-            <h1 className="mt-1 text-[28px] font-semibold tracking-tight">{t("fieldIntel.title")}</h1>
+            <h1 className="mt-1 text-[24px] font-semibold tracking-tight sm:text-[28px]">{t("fieldIntel.title")}</h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#D8E4DD]">{t("fieldIntel.subtitle")}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[12px] font-semibold">
               {online ? <Cloud className="h-4 w-4" /> : <CloudOff className="h-4 w-4" />}
               {online ? t("fieldIntel.online") : t("fieldIntel.offline")}
             </span>
             <span className="rounded-full bg-white/10 px-3 py-1 text-[12px]">{t("fieldIntel.pending")}: {pending}</span>
-            <button type="button" onClick={() => void doFlush()} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-white px-3 text-[13px] font-semibold text-[#10231B]">
+            <button type="button" onClick={() => void doFlush()} disabled={!online} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold text-[#10231B] disabled:cursor-not-allowed disabled:opacity-55 sm:flex-none">
               <RefreshCw className={`h-4 w-4 ${processingActive ? "animate-spin" : ""}`} /> {t("fieldIntel.syncNow")}
             </button>
           </div>
@@ -217,22 +217,22 @@ export function FieldIntelligenceV2() {
 
         <section className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[180px] flex-1">
+            <div className="relative w-full min-w-0 flex-1 sm:min-w-[220px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("fieldIntel.searchPlaceholder")}
                 className="w-full rounded-lg border border-[#D6DDD0] py-2 pl-9 pr-3 text-[13px]" />
             </div>
             <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}
-              className="rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px]" aria-label={t("fieldIntel.filterSeverity")}>
+              className="min-h-[44px] flex-1 rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px] sm:flex-none" aria-label={t("fieldIntel.filterSeverity")}>
               <option value="">{t("fieldIntel.all")}</option>
               {SEVERITIES.map((value) => <option key={value} value={value}>{t(`fieldIntel.sev.${value}`)}</option>)}
             </select>
             <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}
-              className="rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px]" aria-label={t("fieldIntel.filterState")}>
+              className="min-h-[44px] flex-1 rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px] sm:flex-none" aria-label={t("fieldIntel.filterState")}>
               <option value="">{t("fieldIntel.all")}</option>
               {SYNC_STATES.map((value) => <option key={value} value={value}>{t(`fieldIntel.state.${value}`)}</option>)}
             </select>
-            <div className="inline-flex overflow-hidden rounded-lg border border-[#D6DDD0]">
+            <div className="inline-flex min-h-[44px] flex-1 overflow-hidden rounded-lg border border-[#D6DDD0] sm:flex-none">
               {(["timeline", "map"] as const).map((mode) => (
                 <button key={mode} type="button" onClick={() => setView(mode)}
                   className="min-h-[40px] px-3 text-[13px] font-semibold"
@@ -1025,7 +1025,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
   if (reviewing) {
     return (
       <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.reviewTitle")}</div>
             <p className="mt-1 text-[12px] text-[#65736A]">{t("fieldIntel.reviewHint")}</p>
@@ -1039,7 +1039,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
           <textarea value={liveTranscript} onChange={(event) => setLiveTranscript(event.target.value)} rows={4}
             className="mt-2 w-full resize-none rounded-lg border border-[#D6DDD0] bg-white px-3 py-2 text-[13px]" />
         </div>}
-        {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+        {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {imagePreviews.map((preview) => <img key={preview.url} src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />)}
         </div>}
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -1052,7 +1052,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
 
   return (
     <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.compose")}</div>
           <div className="mt-1 flex items-center gap-2 text-[12px] text-[#65736A]">
@@ -1060,7 +1060,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
           </div>
         </div>
         <button type="button" disabled={videoRecording} onClick={() => recording ? void stopRecording() : void startRecording()}
-          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
+          className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40 sm:w-auto"
           style={{ background: recording ? "#B23B2E" : "#0D2B1E" }}>
           {recording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
           {recording ? t("fieldIntel.stop") : t("fieldIntel.record")}
@@ -1160,7 +1160,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
         </select>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
         <label className="flex min-h-[74px] cursor-pointer flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B]">
           <Camera className="mb-1 h-5 w-5 text-[#2D6A4F]" /> {t("fieldIntel.photoEvidence")}
           <input type="file" accept="image/*" capture="environment" className="hidden"
@@ -1172,7 +1172,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
             onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
         </label>
         <button type="button" onClick={() => captureLocation(false)}
-          className="flex min-h-[74px] flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B]">
+          className="col-span-2 flex min-h-[74px] flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B] min-[420px]:col-span-1">
           <MapPin className="mb-1 h-5 w-5 text-[#2D6A4F]" /> {location ? t("fieldIntel.locationCaptured") : t("fieldIntel.captureLocation")}
         </button>
       </div>
@@ -1180,7 +1180,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       {location && <p className="mt-2 flex items-center gap-1 text-[12px] text-[#1B5E3F]"><Navigation className="h-4 w-4" />{location.lat.toFixed(5)}, {location.lon.toFixed(5)} · {t("fieldIntel.accuracy")}: {Math.round(location.acc)}m</p>}
       {locError && <p className="mt-2 text-[12px] text-[#B23B2E]">{locError}</p>}
 
-      {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+      {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {imagePreviews.map((preview, index) => <div key={preview.url} className="relative">
           <img src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />
           <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== attachments.indexOf(preview.file)))}
@@ -1211,7 +1211,7 @@ function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDel
   return <div className="space-y-2">
     {locals.filter((record: CaptureRecord) => record.syncState !== "synced").map((record: CaptureRecord) => (
       <div key={record.clientCaptureId} className="rounded-xl border border-dashed border-[#BFD0C7] bg-[#F7FAF8] p-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-[#E7F3EC] px-2 py-1 text-[11px] font-semibold text-[#1B5E3F]">
               <Loader2 className="h-3 w-3 animate-spin" /> {stateLabel(t, record.syncState)}
@@ -1219,7 +1219,7 @@ function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDel
             <p className="mt-2 truncate text-[13px] text-[#10231B]">{record.noteText || t("fieldIntel.voiceCapture")}</p>
             {record.lastError && <p className="mt-1 text-[11px] text-[#B23B2E]">{record.lastError}</p>}
           </div>
-          <div className="flex gap-1">
+          <div className="flex justify-end gap-2 sm:justify-start">
             <button type="button" onClick={() => onRetry(record.clientCaptureId)} className="rounded-lg border border-[#D6DDD0] p-2"><RefreshCw className="h-4 w-4" /></button>
             <button type="button" onClick={() => onDelete(record.clientCaptureId)} className="rounded-lg border border-[#D6DDD0] p-2 text-[#B23B2E]"><Trash2 className="h-4 w-4" /></button>
           </div>
