@@ -45,7 +45,7 @@ class DecisionModelConfig:
 
     @property
     def configured(self) -> bool:
-        return bool(self.enabled and self.api_key and self.mode in {"shadow", "assist"})
+        return bool(\n            self.enabled\n            and self.api_key\n            and self.base_url\n            and self.model\n            and self.mode in {"shadow", "assist"}\n        )
 
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ def decision_model_config() -> DecisionModelConfig:
     return DecisionModelConfig(
         enabled=_env_bool("AGROAI_DECISION_MODEL_ENABLED", False),
         mode=mode,
-        api_key=(os.getenv("TYPESAFE_API_KEY") or "").strip(),
+        api_key=(os.getenv("AGROAI_DECISION_MODEL_API_KEY") or "").strip(),
         base_url=(os.getenv("AGROAI_DECISION_MODEL_BASE_URL") or _DEFAULT_BASE_URL).strip().rstrip("/"),
         model=(os.getenv("AGROAI_DECISION_MODEL_MODEL") or _DEFAULT_MODEL).strip(),
         timeout_seconds=_env_float(
