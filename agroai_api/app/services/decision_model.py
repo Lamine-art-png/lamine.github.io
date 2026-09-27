@@ -1,7 +1,8 @@
 """Internal fast-decision layer for AGRO-AI.
 
-This module is deliberately vendor-hidden from customer responses. It evaluates a
-small, redacted operating snapshot with a typed decision model and either:
+This module is deliberately provider-neutral and hidden from customer responses.
+It evaluates a small, redacted operating snapshot with a typed decision model and
+either:
 - runs in shadow mode (observe only), or
 - conservatively reorders equal-priority Command Center items in assist mode.
 
@@ -21,8 +22,8 @@ import httpx
 
 logger = logging.getLogger("agroai.decision_model")
 
-_DEFAULT_BASE_URL = "https://api.typesafe.ai"
-_DEFAULT_MODEL = "jev-latest"
+_DEFAULT_BASE_URL = ""
+_DEFAULT_MODEL = ""
 _ALLOWED_MODES = {"off", "shadow", "assist"}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _SECRET_PATTERN = re.compile(
@@ -45,7 +46,13 @@ class DecisionModelConfig:
 
     @property
     def configured(self) -> bool:
-        return bool(\n            self.enabled\n            and self.api_key\n            and self.base_url\n            and self.model\n            and self.mode in {"shadow", "assist"}\n        )
+        return bool(
+            self.enabled
+            and self.api_key
+            and self.base_url
+            and self.model
+            and self.mode in {"shadow", "assist"}
+        )
 
 
 @dataclass(frozen=True)
@@ -374,7 +381,7 @@ def apply_command_center_assessment(
 
 
 def command_center_with_decision_layer(command_state: dict[str, Any]) -> dict[str, Any]:
-    """Assist-mode entry point. No vendor/model metadata is returned to customers."""
+    """Assist-mode entry point. No provider/model metadata is returned to customers."""
     if not assist_enabled():
         return command_state
     assessment = assess_command_center(command_state)
