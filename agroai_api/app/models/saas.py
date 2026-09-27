@@ -139,6 +139,36 @@ class SecurityAuditEvent(Base):
     user = relationship("User", back_populates="security_events")
 
 
+class PortalLegalAcceptance(Base):
+    __tablename__ = "portal_legal_acceptances"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            "terms_version",
+            "privacy_version",
+            name="uq_portal_legal_acceptance_version",
+        ),
+    )
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    terms_version = Column(String, nullable=False)
+    terms_url = Column(String, nullable=False)
+    privacy_version = Column(String, nullable=False)
+    privacy_url = Column(String, nullable=False)
+    acceptance_text = Column(Text, nullable=False)
+    acceptance_text_hash = Column(String(64), nullable=False)
+    document_bundle_hash = Column(String(64), nullable=False, index=True)
+    authority_confirmed = Column(Boolean, nullable=False, default=True)
+    source = Column(String, nullable=False, default="signup")
+    ip_hash = Column(String(64), nullable=True)
+    user_agent_hash = Column(String(64), nullable=True)
+    accepted_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class AccountAccessAppeal(Base):
     __tablename__ = "account_access_appeals"
 
