@@ -14,6 +14,11 @@ def _register_and_login(client, db, email: str = "shell@example.com"):
             "workspace_name": "Shell Workspace",
             "crop": "Almonds",
             "region": "California",
+            "terms_version": "2026-07-03",
+            "privacy_version": "2026-07-03",
+            "accepted_terms": True,
+            "acknowledged_privacy": True,
+            "authority_confirmed": True,
         },
     )
     assert response.status_code == 201
@@ -77,7 +82,7 @@ def test_professional_checkout_fails_closed_if_stripe_missing(client, db, monkey
     response = client.post(
         "/v1/billing/checkout",
         headers=headers,
-        json={"plan_id": "professional", "billing_period": "monthly"},
+        json={"plan_id": "professional", "billing_period": "monthly", "commercial_terms_accepted": True},
     )
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "billing_unavailable"
@@ -103,7 +108,7 @@ def test_professional_checkout_returns_checkout_url_if_stripe_configured(client,
     response = client.post(
         "/v1/billing/checkout",
         headers=headers,
-        json={"plan_id": "professional", "billing_period": "monthly"},
+        json={"plan_id": "professional", "billing_period": "monthly", "commercial_terms_accepted": True},
     )
     assert response.status_code == 200
     assert response.json()["checkout_url"] == "https://checkout.example/session"
@@ -167,7 +172,7 @@ def test_customer_responses_do_not_expose_debug_model_or_provider_language(clien
         client.get("/v1/app/shell", headers=headers),
         client.get("/v1/billing/summary", headers=headers),
         client.get("/v1/account/security", headers=headers),
-        client.post("/v1/billing/checkout", headers=headers, json={"plan_id": "professional", "billing_period": "monthly"}),
+        client.post("/v1/billing/checkout", headers=headers, json={"plan_id": "professional", "billing_period": "monthly", "commercial_terms_accepted": True}),
         client.post("/v1/conversations", headers=headers, json={"message": "What evidence is missing?"}),
     ]
     combined = _body_text([response.json() for response in responses])
