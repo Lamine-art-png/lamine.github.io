@@ -152,8 +152,9 @@ class PortalLegalAcceptance(Base):
     )
 
     id = Column(String, primary_key=True, default=new_id, index=True)
-    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    organization_name = Column(String, nullable=False)
     email = Column(String, nullable=False, index=True)
     terms_version = Column(String, nullable=False)
     terms_url = Column(String, nullable=False)
