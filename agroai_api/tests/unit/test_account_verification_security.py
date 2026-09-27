@@ -5,6 +5,7 @@ from app.models.saas import (
     Organization,
     OrganizationMembership,
     OrganizationVerificationProfile,
+    PortalLegalAcceptance,
     SecurityAuditEvent,
     User,
 )
@@ -31,6 +32,11 @@ STRONG_APPLICATION = {
     "workspace_name": "Central Valley operations",
     "crop": "Almonds and pistachios",
     "region": "California Central Valley",
+    "terms_version": "2026-09-27",
+    "privacy_version": "2026-09",
+    "terms_accepted": True,
+    "privacy_acknowledged": True,
+    "authority_confirmed": True,
 }
 
 
@@ -101,6 +107,18 @@ def test_strict_registration_encrypts_phone_and_waits_for_email(client, db, monk
 
     membership = db.query(OrganizationMembership).filter_by(organization_id=org.id).one()
     assert membership.user.account_status == "pending_email"
+    acceptance = db.query(PortalLegalAcceptance).filter_by(
+        organization_id=org.id,
+        user_id=membership.user.id,
+    ).one()
+    assert acceptance.terms_version == "2026-09-27"
+    assert acceptance.privacy_version == "2026-09"
+    assert acceptance.authority_confirmed is True
+    assert acceptance.acceptance_text_hash
+    assert acceptance.document_bundle_hash
+    assert acceptance.ip_hash
+    assert acceptance.user_agent_hash
+    assert db.query(SecurityAuditEvent).filter_by(event_type="portal_legal_acceptance", outcome="accepted").count() == 1
     assert db.query(SecurityAuditEvent).filter_by(event_type="registration_verification", outcome="preapproved_pending_email").count() == 1
 
 
@@ -138,6 +156,11 @@ def test_login_lockout_and_server_side_organization_gate(client, db, monkeypatch
             "workspace_name": "Evaluation workspace",
             "crop": "Grapes",
             "region": "California",
+            "terms_version": "2026-09-27",
+            "privacy_version": "2026-09",
+            "terms_accepted": True,
+            "privacy_acknowledged": True,
+            "authority_confirmed": True,
         },
     )
     assert registration.status_code == 201, registration.text
@@ -167,3 +190,39 @@ def test_login_lockout_and_server_side_organization_gate(client, db, monkeypatch
     blocked = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["code"] == "organization_verification_required"
+
+
+
+def test_registration_fails_closed_without_current_legal_acceptance(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "ACCOUNT_VERIFICATION_MODE", "disabled")
+    missing = {
+        **STRONG_APPLICATION,
+        "email": "no-legal@example.com",
+        "terms_accepted": False,
+    }
+    response = client.post("/v1/auth/register", json=missing)
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "legal_acceptance_required"
+    assert db.query(User).filter_by(email="no-legal@example.com").first() is None
+
+    stale = {
+        **STRONG_APPLICATION,
+        "email": "stale-legal@example.com",
+        "terms_version": "2026-01",
+    }
+    response = client.post("/v1/auth/register", json=stale)
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "legal_terms_changed"
+    assert db.query(User).filter_by(email="stale-legal@example.com").first() is None
+
+
+def test_current_portal_legal_contract_is_public(client):
+    response = client.get("/v1/auth/legal/current")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["terms"]["version"] == "2026-09-27"
+    assert body["terms"]["url"] == "https://agroai-pilot.com/terms-of-service"
+    assert body["privacy"]["version"] == "2026-09"
+    assert body["privacy"]["url"] == "https://agroai-pilot.com/privacy-policy"
+    assert body["acceptance_text"].startswith("I agree to the AGRO-AI Terms of Service")
+    assert len(body["document_bundle_hash"]) == 64
