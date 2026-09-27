@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 from datetime import datetime, timedelta
@@ -26,6 +27,7 @@ from app.models.saas import (
     Organization,
     OrganizationMembership,
     OrganizationVerificationProfile,
+    PortalLegalAcceptance,
     User,
     Workspace,
 )
@@ -39,7 +41,7 @@ from app.services.entitlements import serialize_entitlements
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
 from app.services.password_policy import password_policy_error
-from app.services.security_audit import record_security_event
+from app.services.security_audit import privacy_hash, record_security_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -53,6 +55,29 @@ VERIFICATION_REQUEST_RATE_LIMIT = "3/minute" if _PRODUCTION_RATE_LIMITS else "10
 VERIFICATION_CONFIRM_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 _ENTERPRISE_ORIGIN = "https://app.agroai-pilot.com"
 _PLATFORM_ORIGIN = "https://platform.agroai-pilot.com"
+PORTAL_TERMS_VERSION = "2026-09-27"
+PORTAL_TERMS_URL = "https://agroai-pilot.com/terms-of-service"
+PORTAL_PRIVACY_VERSION = "2026-09"
+PORTAL_PRIVACY_URL = "https://agroai-pilot.com/privacy-policy"
+PORTAL_ACCEPTANCE_TEXT = (
+    "I agree to the AGRO-AI Terms of Service, acknowledge the Privacy Policy, "
+    "and confirm that I am authorized to bind my organization."
+)
+
+
+def _portal_legal_bundle_hash() -> str:
+    canonical = "\n".join(
+        (
+            PORTAL_TERMS_VERSION,
+            PORTAL_TERMS_URL,
+            PORTAL_PRIVACY_VERSION,
+            PORTAL_PRIVACY_URL,
+            PORTAL_ACCEPTANCE_TEXT,
+        )
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 
 
 class RegisterRequest(BaseModel):
@@ -74,6 +99,11 @@ class RegisterRequest(BaseModel):
     primary_crops: str | None = None
     intended_use: str | None = None
     planned_data_sources: str | None = None
+    terms_version: str = Field(min_length=1, max_length=64)
+    privacy_version: str = Field(min_length=1, max_length=64)
+    terms_accepted: bool
+    privacy_acknowledged: bool
+    authority_confirmed: bool
 
     @field_validator("email")
     @classmethod
@@ -295,7 +325,6 @@ def _register_failure(
     reason_codes: list[str] | tuple[str, ...],
     score: int | None = None,
 ) -> None:
-    ip_address, user_agent = _request_metadata(request)
     record_security_event(
         db,
         event_type="registration_verification",
@@ -308,9 +337,38 @@ def _register_failure(
     db.commit()
 
 
+@router.get("/legal/current")
+def current_portal_legal_terms() -> dict:
+    return {
+        "terms": {"version": PORTAL_TERMS_VERSION, "url": PORTAL_TERMS_URL},
+        "privacy": {"version": PORTAL_PRIVACY_VERSION, "url": PORTAL_PRIVACY_URL},
+        "acceptance_text": PORTAL_ACCEPTANCE_TEXT,
+        "document_bundle_hash": _portal_legal_bundle_hash(),
+    }
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_RATE_LIMIT)
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    if not payload.terms_accepted or not payload.privacy_acknowledged or not payload.authority_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "legal_acceptance_required",
+                "message": "Accept the current Terms of Service and acknowledge the Privacy Policy to create an account.",
+            },
+        )
+    if payload.terms_version != PORTAL_TERMS_VERSION or payload.privacy_version != PORTAL_PRIVACY_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "legal_terms_changed",
+                "message": "The legal terms changed. Refresh the signup page and review the current documents.",
+                "terms_version": PORTAL_TERMS_VERSION,
+                "privacy_version": PORTAL_PRIVACY_VERSION,
+            },
+        )
+
     email = payload.email.lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user with that email already exists")
@@ -378,6 +436,26 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(org)
     db.flush()
+
+    ip_address, user_agent = _request_metadata(request)
+    legal_acceptance = PortalLegalAcceptance(
+        organization_id=org.id,
+        user_id=user.id,
+        email=email,
+        terms_version=PORTAL_TERMS_VERSION,
+        terms_url=PORTAL_TERMS_URL,
+        privacy_version=PORTAL_PRIVACY_VERSION,
+        privacy_url=PORTAL_PRIVACY_URL,
+        acceptance_text=PORTAL_ACCEPTANCE_TEXT,
+        acceptance_text_hash=hashlib.sha256(PORTAL_ACCEPTANCE_TEXT.encode("utf-8")).hexdigest(),
+        document_bundle_hash=_portal_legal_bundle_hash(),
+        authority_confirmed=True,
+        source="signup",
+        ip_hash=privacy_hash(ip_address, "portal-legal-ip"),
+        user_agent_hash=privacy_hash(user_agent, "portal-legal-user-agent"),
+        accepted_at=now,
+    )
+    db.add(legal_acceptance)
 
     if strict_registration and decision is not None:
         profile = OrganizationVerificationProfile(
