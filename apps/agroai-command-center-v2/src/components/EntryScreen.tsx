@@ -10,6 +10,7 @@ export function EntryScreen() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [organization, setOrganization] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -26,6 +27,11 @@ export function EntryScreen() {
             name,
             organization_name: organization || "Evaluation organization",
             workspace_name: "Evaluation workspace",
+            terms_version: "2026-09-27",
+            privacy_version: "2026-09",
+            terms_accepted: legalAccepted,
+            privacy_acknowledged: legalAccepted,
+            authority_confirmed: legalAccepted,
           });
     setBusy(false);
     if (!response.ok || !response.data) {
@@ -73,9 +79,13 @@ export function EntryScreen() {
                 <span>Organization</span>
                 <input value={organization} onChange={(event) => setOrganization(event.target.value)} type="text" required />
               </label>
+              <label>
+                <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required />
+                <span>I agree to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer">AGRO-AI Terms of Service</a>, acknowledge the <a href="https://agroai-pilot.com/privacy-policy" target="_blank" rel="noreferrer">Privacy Policy</a>, and confirm that I am authorized to bind my organization.</span>
+              </label>
             </>
           )}
-          <button className="btn primary" type="submit" disabled={busy}>
+          <button className="btn primary" type="submit" disabled={busy || (mode === "register" && !legalAccepted)}>
             {busy ? "Connecting..." : mode === "login" ? "Sign in" : "Register"}
           </button>
         </form>
