@@ -78,6 +78,28 @@ export function SyncCenter() {
   const summary = useMemo(() => summarizeQueue(records), [records]);
   const pendingBadge = summary.queued + summary.syncing + summary.processing + summary.attention;
 
+  useEffect(() => {
+    if (!online || pendingBadge <= 0) return;
+
+    const resumeSync = () => {
+      if (document.visibilityState !== "hidden" && navigator.onLine) {
+        void flushQueue(fieldApi).then(refresh);
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") resumeSync();
+    };
+
+    const timer = window.setInterval(resumeSync, 30_000);
+    window.addEventListener("focus", resumeSync);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", resumeSync);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [online, pendingBadge, refresh]);
+
   const retry = useCallback(async (record: CaptureRecord) => {
     setBusyId(record.clientCaptureId);
     try { await retryRecord(fieldApi, record.clientCaptureId); await refresh(); }
