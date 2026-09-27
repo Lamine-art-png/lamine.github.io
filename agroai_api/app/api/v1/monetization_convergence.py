@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -21,6 +21,13 @@ from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection
 from app.models.saas import ManagedEntity, OrganizationMembership, Workspace
 from app.services.connector_commercial_guard import MANUAL_PROVIDERS
+from app.services.customer_legal import (
+    COMMERCIAL_AUTHORIZATION_TEXT,
+    TERMS_VERSION,
+    acceptance_is_current,
+    latest_acceptance,
+    record_acceptance,
+)
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
 from app.services.product_plans import plan_by_id, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
@@ -31,6 +38,7 @@ router = APIRouter(tags=["monetization-convergence"])
 class AuthoritativeCheckoutRequest(BaseModel):
     plan_id: Literal["free", "professional", "team", "network", "enterprise"]
     billing_period: Literal["monthly", "annual"] = "monthly"
+    commercial_terms_accepted: bool = False
 
 
 def _require_org(ctx: AuthContext):
@@ -153,6 +161,7 @@ def commercial_summary(ctx: AuthContext = Depends(get_auth_context), db: Session
 @router.post("/billing/checkout-authoritative")
 def checkout_authoritative(
     payload: AuthoritativeCheckoutRequest,
+    request: Request,
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -173,9 +182,59 @@ def checkout_authoritative(
             },
         )
 
+    legal_row = latest_acceptance(db, organization_id=org.id, user_id=ctx.user.id)
+    if not acceptance_is_current(legal_row):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "legal_reacceptance_required",
+                "message": "Review and accept the current AGRO-AI Terms of Service before starting paid checkout.",
+            },
+        )
+    if not payload.commercial_terms_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "commercial_authorization_required",
+                "message": "Confirm the displayed recurring billing terms before starting checkout.",
+            },
+        )
+
     checkout_payload = billing_api.CheckoutRequest(
         organization_id=org.id,
         offer=_offer(selected["id"], payload.billing_period),
     )
     result = billing_api.create_checkout_session(checkout_payload, user=ctx.user, db=db)
-    return {**result, "status": "checkout_ready", "plan": selected, "billing_period": payload.billing_period}
+    displayed_price = selected["public_price_annual"] if payload.billing_period == "annual" else selected["public_price_monthly"]
+    order_snapshot = {
+        "plan_id": selected["id"],
+        "plan_name": selected["name"],
+        "displayed_price": displayed_price,
+        "billing_period": payload.billing_period,
+        "renews_automatically": True,
+        "first_charge": "at checkout",
+        "cancellation_path": "Enterprise Portal > Billing & usage > Manage billing",
+        "terms_version": TERMS_VERSION,
+    }
+    acceptance = record_acceptance(
+        db,
+        request=request,
+        organization_id=org.id,
+        user_id=ctx.user.id,
+        subject_email=ctx.user.email,
+        event_type="subscription",
+        order_snapshot=order_snapshot,
+        acceptance_text=COMMERCIAL_AUTHORIZATION_TEXT,
+        accepted_terms=True,
+        acknowledged_privacy=False,
+        authority_confirmed=True,
+    )
+    db.commit()
+    return {
+        **result,
+        "status": "checkout_ready",
+        "plan": selected,
+        "billing_period": payload.billing_period,
+        "legal_acceptance_id": acceptance.id,
+        "order_snapshot": order_snapshot,
+    }
