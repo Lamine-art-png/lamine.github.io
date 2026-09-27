@@ -457,6 +457,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         accepted_at=now,
     )
     db.add(legal_acceptance)
+    db.flush()
 
     if strict_registration and decision is not None:
         profile = OrganizationVerificationProfile(
