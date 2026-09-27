@@ -14,6 +14,11 @@ def _register_and_login(client, db, email: str = "shell@example.com"):
             "workspace_name": "Shell Workspace",
             "crop": "Almonds",
             "region": "California",
+            "terms_version": "2026-09-27",
+            "privacy_version": "2026-09",
+            "terms_accepted": True,
+            "privacy_acknowledged": True,
+            "authority_confirmed": True,
         },
     )
     assert response.status_code == 201

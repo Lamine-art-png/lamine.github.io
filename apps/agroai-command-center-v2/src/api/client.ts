@@ -133,6 +133,11 @@ export const apiClient = {
     name?: string;
     organization_name: string;
     workspace_name?: string;
+    terms_version: string;
+    privacy_version: string;
+    terms_accepted: boolean;
+    privacy_acknowledged: boolean;
+    authority_confirmed: boolean;
     crop?: string;
     region?: string;
   }) => request<AuthSession>(ENDPOINTS.auth.register, { method: "POST", body: JSON.stringify(payload) }),

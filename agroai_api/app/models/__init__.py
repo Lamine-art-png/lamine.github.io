@@ -20,7 +20,7 @@ from app.models.forecast import Forecast
 from app.models.saas import (
     AccountRecoveryToken, BillingEvent, CommercialContract, Conversation,
     ConversationMessage, EmailVerificationToken, EntitlementOverride, ManagedEntity,
-    OnboardingState, Organization, OrganizationMembership, OrganizationVerificationProfile, QuotaReservation,
+    OnboardingState, Organization, OrganizationMembership, OrganizationVerificationProfile, PortalLegalAcceptance, QuotaReservation,
     SaaSRequest, SecurityAuditEvent, TeamInvitation, UsageEvent, User, UserPreference, Workspace
 )
 from app.models.operational_records import (
@@ -86,7 +86,7 @@ __all__ = [
     "ExecutionVerification", "Forecast", "AccountRecoveryToken", "BillingEvent",
     "CommercialContract", "Conversation", "ConversationMessage", "EmailVerificationToken",
     "EntitlementOverride", "ManagedEntity", "OnboardingState", "Organization",
-    "OrganizationMembership", "OrganizationVerificationProfile", "QuotaReservation", "SaaSRequest", "SecurityAuditEvent", "TeamInvitation",
+    "OrganizationMembership", "OrganizationVerificationProfile", "PortalLegalAcceptance", "QuotaReservation", "SaaSRequest", "SecurityAuditEvent", "TeamInvitation",
     "UsageEvent", "User", "UserPreference", "Workspace", "ConnectorConnection",
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
     "GeneratedArtifact", "ChatConversation", "ChatMessage",

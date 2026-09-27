@@ -12,7 +12,10 @@ const initialRegisterForm: RegisterPayload = {
   name: "", email: "", password: "", organization_name: "", organization_type: "",
   professional_role: "", phone_number: "", website_url: "", professional_profile_url: "",
   country: "", operating_region: "", acres_or_sites: "", primary_crops: "",
-  intended_use: "", planned_data_sources: "", workspace_name: "", crop: "", region: "",
+  intended_use: "", planned_data_sources: "", workspace_name: "",
+  terms_version: "2026-09-27", privacy_version: "2026-09",
+  terms_accepted: false, privacy_acknowledged: false, authority_confirmed: false,
+  crop: "", region: "",
 };
 
 const ACCESS_APPEAL_LABEL = "Access restricted? Submit an appeal.";
@@ -94,6 +97,10 @@ export function AuthScreen() {
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
     if (!registerForm.website_url?.trim() && !registerForm.professional_profile_url?.trim()) { setError("Add an organization website or a verifiable professional profile."); return; }
+    if (!registerForm.terms_accepted || !registerForm.privacy_acknowledged || !registerForm.authority_confirmed) {
+      setError("Accept the Terms of Service and acknowledge the Privacy Policy to create your account.");
+      return;
+    }
     setIsSubmitting(true);
     try { await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region }); }
     catch (err) { setError(err instanceof Error ? err.message : "Unable to create account."); }
@@ -181,11 +188,28 @@ export function AuthScreen() {
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Initial operation name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="North ranch operations" required /></Field><Field label="Systems or data sources to connect"><Input value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} placeholder="WiseConn, OpenET, John Deere, PDFs..." required /></Field></div>
               <Field label="What should AGRO-AI help your team do first?"><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} rows={4} className="w-full resize-y rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 text-[#10231B] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" placeholder="Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI." required /></Field>
               <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[12px] leading-5 text-[#52645A]">AGRO-AI screens the organization automatically before operational access is activated. Disposable inboxes, fabricated organizations, placeholder evidence, and non-agricultural use cases are rejected; legitimate personal inboxes remain eligible when the supporting evidence is strong.</div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D8DDD6] bg-white p-4 text-[12px] leading-5 text-[#52645A]">
+                <input
+                  type="checkbox"
+                  checked={registerForm.terms_accepted && registerForm.privacy_acknowledged && registerForm.authority_confirmed}
+                  onChange={(event) => setRegisterForm({
+                    ...registerForm,
+                    terms_accepted: event.target.checked,
+                    privacy_acknowledged: event.target.checked,
+                    authority_confirmed: event.target.checked,
+                  })}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#2D6A4F]"
+                  required
+                />
+                <span>
+                  I agree to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer" className="font-semibold text-[#2D6A4F] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href="https://agroai-pilot.com/privacy-policy" target="_blank" rel="noreferrer" className="font-semibold text-[#2D6A4F] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
+                </span>
+              </label>
             </> : null}
 
             <div className="flex gap-3">
               {registerStep > 1 ? <Button type="button" variant="outline" onClick={() => { setError(""); setRegisterStep((registerStep - 1) as 1 | 2 | 3); }} className="flex-1 border-[#D6DDD0] bg-white text-[#10231B] hover:bg-[#F6F4EE]">Back</Button> : null}
-              {registerStep < 3 ? <Button type="button" onClick={advanceRegisterStep} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">Continue</Button> : <Button type="submit" disabled={isSubmitting} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create account</Button>}
+              {registerStep < 3 ? <Button type="button" onClick={advanceRegisterStep} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">Continue</Button> : <Button type="submit" disabled={isSubmitting || !registerForm.terms_accepted || !registerForm.privacy_acknowledged || !registerForm.authority_confirmed} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create account</Button>}
             </div>
           </form></TabsContent>
       </Tabs>}

@@ -81,6 +81,9 @@ jobs:
             tests/unit/test_object_storage.py \
             tests/unit/test_runtime_origin_and_route_contract.py \
             tests/unit/test_platform_playground.py \
+            tests/unit/test_account_verification_security.py \
+            tests/unit/test_alembic_revision_contract.py \
+            tests/unit/test_schema_adoption_contract.py \
             tests/unit/test_production_readiness.py \
             tests/unit/test_i18n_catalog_contract.py
 

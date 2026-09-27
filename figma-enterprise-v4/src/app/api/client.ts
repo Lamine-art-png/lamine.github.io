@@ -285,6 +285,11 @@ export type RegisterPayload = {
   intended_use: string;
   planned_data_sources: string;
   workspace_name: string;
+  terms_version: string;
+  privacy_version: string;
+  terms_accepted: boolean;
+  privacy_acknowledged: boolean;
+  authority_confirmed: boolean;
   crop?: string;
   region?: string;
 };
