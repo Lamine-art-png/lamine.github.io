@@ -50,6 +50,11 @@ assert.ok(authSource.includes("No sales call or manual API-access review for eli
 assert.ok(authSource.includes("Automated screening protects the developer platform."), "organization verification must remain a security boundary");
 assert.ok(authSource.includes("Account creation does not enable LIVE projects"), "registration must deny implied LIVE activation");
 assert.ok(authSource.includes("accept the current developer agreements"), "onboarding must state the legal acceptance boundary");
+assert.ok(authSource.includes("AGRO-AI Terms of Service"), "developer signup must present the customer Terms link");
+assert.ok(authSource.includes("Privacy Policy"), "developer signup must present the privacy link");
+assert.ok(authSource.includes("authorized to bind my organization"), "developer signup must capture organizational authority");
+assert.ok(clientSource.includes("terms_accepted: boolean"), "registration payload must carry explicit terms acceptance");
+assert.ok(clientSource.includes("terms_version: string"), "registration payload must carry a versioned Terms identifier");
 
 assert.ok(selfServiceSource.includes('apiClient.get("/v1/platform/terms")'), "self-service must load the effective legal catalog from the server");
 assert.ok(/legal_review_status\s*!==\s*"approved_effective"/.test(selfServiceSource), "self-service must fail closed on unapproved legal documents");
