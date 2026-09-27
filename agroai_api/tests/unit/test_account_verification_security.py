@@ -31,6 +31,11 @@ STRONG_APPLICATION = {
     "workspace_name": "Central Valley operations",
     "crop": "Almonds and pistachios",
     "region": "California Central Valley",
+    "terms_version": "2026-07-03",
+    "privacy_version": "2026-07-03",
+    "accepted_terms": True,
+    "acknowledged_privacy": True,
+    "authority_confirmed": True,
 }
 
 
@@ -138,6 +143,11 @@ def test_login_lockout_and_server_side_organization_gate(client, db, monkeypatch
             "workspace_name": "Evaluation workspace",
             "crop": "Grapes",
             "region": "California",
+            "terms_version": "2026-07-03",
+            "privacy_version": "2026-07-03",
+            "accepted_terms": True,
+            "acknowledged_privacy": True,
+            "authority_confirmed": True,
         },
     )
     assert registration.status_code == 201, registration.text
