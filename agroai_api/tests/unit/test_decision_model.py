@@ -66,7 +66,9 @@ def _state():
 def _configure(monkeypatch):
     monkeypatch.setenv("AGROAI_DECISION_MODEL_ENABLED", "true")
     monkeypatch.setenv("AGROAI_DECISION_MODEL_MODE", "shadow")
-    monkeypatch.setenv("TYPESAFE_API_KEY", "unit-test-value")
+    monkeypatch.setenv("AGROAI_DECISION_MODEL_API_KEY", "unit-test-value")
+    monkeypatch.setenv("AGROAI_DECISION_MODEL_BASE_URL", "https://decision.example.test")
+    monkeypatch.setenv("AGROAI_DECISION_MODEL_MODEL", "test-decision-model")
 
 
 def test_system_one_request_redacts_identifiers_and_keeps_operating_signal(monkeypatch):
@@ -82,7 +84,7 @@ def test_system_one_request_redacts_identifiers_and_keeps_operating_signal(monke
     assert "North Ranch" not in serialized
     assert "Low pressure after irrigation" in serialized
     assert state["candidates"][0]["ref"] == "item_1"
-    assert request["model"] == "jev-latest"
+    assert request["model"] == "test-decision-model"
     assert set(request["questions"]) == {
         "focus_item",
         "urgency",
