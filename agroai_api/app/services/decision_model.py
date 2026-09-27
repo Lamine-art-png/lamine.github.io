@@ -130,14 +130,22 @@ def _candidate_rows(command_state: dict[str, Any]) -> list[dict[str, Any]]:
     for index, row in enumerate(list(command_state.get("field_queue") or [])[:8]):
         ref = f"item_{index + 1}"
         missing = list(row.get("missing_evidence") or [])
+        field_name = _safe_text(row.get("field_name"), limit=120)
+
+        def redact_field_name(value: Any, *, limit: int = 220) -> str:
+            text = _safe_text(value, limit=limit)
+            if field_name:
+                text = re.sub(re.escape(field_name), "[field]", text, flags=re.IGNORECASE)
+            return text
+
         rows.append(
             {
                 "ref": ref,
                 "priority": row.get("priority") if row.get("priority") in _PRIORITY_ORDER else "low",
-                "status": _safe_text(row.get("status"), limit=40),
-                "issue": _safe_text(row.get("issue")),
-                "recommended_action": _safe_text(row.get("recommended_action")),
-                "latest_signal": _safe_text(row.get("latest_signal")),
+                "status": redact_field_name(row.get("status"), limit=40),
+                "issue": redact_field_name(row.get("issue")),
+                "recommended_action": redact_field_name(row.get("recommended_action")),
+                "latest_signal": redact_field_name(row.get("latest_signal")),
                 "missing_evidence_count": len(missing),
                 "has_next_operator_task": bool(row.get("next_operator_task")),
             }
