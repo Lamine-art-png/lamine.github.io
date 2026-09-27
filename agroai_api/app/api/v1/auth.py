@@ -38,6 +38,7 @@ from app.services.email_verification import confirm_verification, create_verific
 from app.services.entitlements import serialize_entitlements
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
+from app.services.customer_legal import record_acceptance, validate_clickwrap
 from app.services.password_policy import password_policy_error
 from app.services.security_audit import record_security_event
 
@@ -74,6 +75,11 @@ class RegisterRequest(BaseModel):
     primary_crops: str | None = None
     intended_use: str | None = None
     planned_data_sources: str | None = None
+    terms_version: str = Field(min_length=1, max_length=80)
+    privacy_version: str = Field(min_length=1, max_length=80)
+    accepted_terms: bool
+    acknowledged_privacy: bool
+    authority_confirmed: bool
 
     @field_validator("email")
     @classmethod
@@ -296,6 +302,14 @@ def _register_failure(
     score: int | None = None,
 ) -> None:
     ip_address, user_agent = _request_metadata(request)
+    legal_acceptance = record_acceptance(
+        db,
+        request=request,
+        organization_id=org.id,
+        user_id=user.id,
+        subject_email=user.email,
+        event_type="signup",
+    )
     record_security_event(
         db,
         event_type="registration_verification",
@@ -311,6 +325,13 @@ def _register_failure(
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_RATE_LIMIT)
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    validate_clickwrap(
+        terms_version=payload.terms_version,
+        privacy_version=payload.privacy_version,
+        accepted_terms=payload.accepted_terms,
+        acknowledged_privacy=payload.acknowledged_privacy,
+        authority_confirmed=payload.authority_confirmed,
+    )
     email = payload.email.lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user with that email already exists")
@@ -481,6 +502,12 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         },
         "current_organization": _organization_payload(org, membership.role),
         "entitlements": serialize_entitlements(org),
+        "legal_acceptance": {
+            "id": legal_acceptance.id,
+            "terms_version": legal_acceptance.terms_version,
+            "privacy_version": legal_acceptance.privacy_version,
+            "accepted_at": legal_acceptance.accepted_at.isoformat(),
+        },
     }
 
 
