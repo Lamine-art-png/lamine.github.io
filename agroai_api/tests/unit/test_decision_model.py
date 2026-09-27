@@ -171,3 +171,33 @@ def test_low_confidence_cannot_change_command_center():
         should_act_now=0.8,
     )
     assert apply_command_center_assessment(state, assessment, min_confidence=0.85) is state
+
+
+def test_unconfigured_layer_stays_off(monkeypatch):
+    for name in (
+        "AGROAI_DECISION_MODEL_ENABLED",
+        "AGROAI_DECISION_MODEL_MODE",
+        "AGROAI_DECISION_MODEL_API_KEY",
+        "AGROAI_DECISION_MODEL_BASE_URL",
+        "AGROAI_DECISION_MODEL_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    assert decision_model.shadow_enabled() is False
+    assert decision_model.assist_enabled() is False
+
+
+def test_assist_provider_failure_falls_back_to_deterministic_state(monkeypatch):
+    _configure(monkeypatch)
+    monkeypatch.setenv("AGROAI_DECISION_MODEL_MODE", "assist")
+    state = _state()
+
+    def unavailable(*args, **kwargs):
+        raise decision_model.httpx.ConnectError("unavailable")
+
+    monkeypatch.setattr(decision_model.httpx, "post", unavailable)
+    result = decision_model.command_center_with_decision_layer(state)
+
+    assert result is state
+    assert result["today_priority"]["title"] == state["today_priority"]["title"]
+    assert result["field_queue"][0]["field_name"] == state["field_queue"][0]["field_name"]
