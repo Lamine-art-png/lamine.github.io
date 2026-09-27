@@ -442,6 +442,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     legal_acceptance = PortalLegalAcceptance(
         organization_id=org.id,
         user_id=user.id,
+        organization_name=org.name,
         email=email,
         terms_version=PORTAL_TERMS_VERSION,
         terms_url=PORTAL_TERMS_URL,
