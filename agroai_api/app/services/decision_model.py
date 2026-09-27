@@ -59,7 +59,7 @@ class DecisionModelConfig:
 class CommandCenterAssessment:
     focus_ref: str | None
     focus_confidence: float
-    urgency: str | None
+    urgency_score: float
     urgency_confidence: float
     needs_human_review: float
     data_sufficient: float
@@ -199,14 +199,14 @@ def _command_center_questions(candidate_count: int) -> dict[str, Any]:
             "criteria": criteria,
         },
         "urgency": {
-            "type": "choice",
-            "instructions": "What is the overall operational urgency of the supplied state?",
-            "criteria": {
-                "critical": "Immediate attention is needed to avoid material operational harm or a safety issue.",
-                "high": "Action or review should happen soon because a meaningful operating issue is open.",
-                "normal": "Routine follow-through is appropriate; no urgent intervention is indicated.",
-                "low": "Little or no action is needed now beyond ordinary monitoring.",
-            },
+            "type": "score",
+            "instructions": "How urgent is the overall operational state?",
+            "criteria": [
+                "Little or no action is needed now beyond ordinary monitoring.",
+                "Routine follow-through is appropriate; no urgent intervention is indicated.",
+                "Action or review should happen soon because a meaningful operating issue is open.",
+                "Immediate attention is needed to avoid material operational harm or a safety issue.",
+            ],
         },
         "needs_human_review": {
             "type": "noul",
@@ -260,14 +260,15 @@ def _parse_assessment(payload: dict[str, Any]) -> CommandCenterAssessment | None
     focus_ref = focus.get("choice")
     if focus_ref is not None:
         focus_ref = str(focus_ref)
-    urgency_value = urgency.get("choice")
-    if urgency_value is not None:
-        urgency_value = str(urgency_value)
+    try:
+        urgency_score = max(0.0, min(1.0, float(urgency.get("score", 0.0)) / 3.0))
+    except (TypeError, ValueError):
+        urgency_score = 0.0
 
     return CommandCenterAssessment(
         focus_ref=focus_ref,
         focus_confidence=_bounded_probability(focus.get("confidence")),
-        urgency=urgency_value,
+        urgency_score=urgency_score,
         urgency_confidence=_bounded_probability(urgency.get("confidence")),
         needs_human_review=_bounded_probability(human.get("noul")),
         data_sufficient=_bounded_probability(sufficient.get("noul")),
@@ -400,7 +401,7 @@ def shadow_command_center(command_state: dict[str, Any]) -> None:
         extra={
             "focus_ref": assessment.focus_ref,
             "focus_confidence": round(assessment.focus_confidence, 4),
-            "urgency": assessment.urgency,
+            "urgency_score": round(assessment.urgency_score, 4),
             "urgency_confidence": round(assessment.urgency_confidence, 4),
             "needs_human_review": round(assessment.needs_human_review, 4),
             "data_sufficient": round(assessment.data_sufficient, 4),
