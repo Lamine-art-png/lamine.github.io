@@ -1052,7 +1052,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
 
   return (
     <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.compose")}</div>
           <div className="mt-1 flex items-center gap-2 text-[12px] text-[#65736A]">
@@ -1180,7 +1180,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       {location && <p className="mt-2 flex items-center gap-1 text-[12px] text-[#1B5E3F]"><Navigation className="h-4 w-4" />{location.lat.toFixed(5)}, {location.lon.toFixed(5)} · {t("fieldIntel.accuracy")}: {Math.round(location.acc)}m</p>}
       {locError && <p className="mt-2 text-[12px] text-[#B23B2E]">{locError}</p>}
 
-      {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+      {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {imagePreviews.map((preview, index) => <div key={preview.url} className="relative">
           <img src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />
           <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== attachments.indexOf(preview.file)))}
