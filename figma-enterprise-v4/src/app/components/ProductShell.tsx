@@ -173,11 +173,11 @@ function safe(value: unknown, fallback = "Not available") {
 function Page({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+      <header className="px-4 py-5 sm:px-8 sm:py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
         <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>{title}</h1>
         {subtitle ? <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>{subtitle}</p> : null}
       </header>
-      <main className="space-y-5 px-8 py-6" style={{ maxWidth: 1240 }}>{children}</main>
+      <main className="space-y-4 px-4 py-4 sm:space-y-5 sm:px-8 sm:py-6" style={{ maxWidth: 1240 }}>{children}</main>
     </div>
   );
 }
@@ -185,7 +185,7 @@ function Page({ title, subtitle, children }: { title: string; subtitle?: string;
 function Panel({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
     <section className="rounded-xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <h2 className="text-[18px] font-semibold" style={{ color: TEXT }}>{title}</h2>
         {action}
       </div>
