@@ -19,6 +19,11 @@ def _register(client, db, email="owner@example.com", org="Owner Farms"):
             "workspace_name": "Evaluation workspace",
             "crop": "Grapes",
             "region": "California",
+            "terms_version": "2026-09-27",
+            "privacy_version": "2026-09",
+            "terms_accepted": True,
+            "privacy_acknowledged": True,
+            "authority_confirmed": True,
         },
     )
     assert response.status_code == 201, response.text
