@@ -36,7 +36,6 @@ import { useLocale } from "../hooks/useLocale";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
-import { OperatingStatusBar } from "./OperatingStatusBar";
 import { ProductTour, replayProductTour } from "./ProductTour";
 import { UploadStatusToast } from "./UploadStatusToast";
 import { VoiceAssistantDock } from "./voice/VoiceAssistantDock";
@@ -263,7 +262,6 @@ export function MainLayout() {
           <div className="flex justify-end px-3 pt-2" data-sync-center>
             <SyncCenter />
           </div>
-          <OperatingStatusBar />
           <Outlet />
         </main>
       </div>
