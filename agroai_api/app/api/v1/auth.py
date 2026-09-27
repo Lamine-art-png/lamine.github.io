@@ -359,7 +359,14 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user with that email already exists")
 
-    if (
+    legal_enforcement = _PRODUCTION_RATE_LIMITS or any(
+        value is not None
+        for value in (
+            payload.terms_version,
+            payload.privacy_version,
+        )
+    ) or payload.terms_accepted or payload.authority_confirmed
+    if legal_enforcement and (
         payload.terms_accepted is not True
         or payload.authority_confirmed is not True
         or payload.terms_version != SELF_SERVICE_TERMS_VERSION
