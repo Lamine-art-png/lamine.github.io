@@ -89,6 +89,11 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "onboarding_states": {"id", "organization_id", "workspace_id", "user_id", "current_step", "created_at", "updated_at"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
+    "portal_legal_acceptances": {
+        "id", "organization_id", "user_id", "email", "terms_version", "privacy_version",
+        "acceptance_text_hash", "document_bundle_hash", "authority_confirmed", "ip_hash",
+        "user_agent_hash", "accepted_at",
+    },
     "account_access_appeals": {
         "id",
         "user_id",
