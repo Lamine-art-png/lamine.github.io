@@ -17,6 +17,7 @@ from app.models.water_state import WaterState
 from app.models.decision_run import DecisionRun
 from app.models.execution_verification import ExecutionVerification
 from app.models.forecast import Forecast
+from app.models.legal import CustomerLegalAcceptance
 from app.models.saas import (
     AccountRecoveryToken, BillingEvent, CommercialContract, Conversation,
     ConversationMessage, EmailVerificationToken, EntitlementOverride, ManagedEntity,
@@ -83,7 +84,7 @@ __all__ = [
     "Tenant", "Client", "Block", "Telemetry", "Event", "Recommendation",
     "Schedule", "Webhook", "UsageMetering", "AuditLog", "IngestionRun",
     "APIKey", "ModelRun", "InvitationToken", "WaterState", "DecisionRun",
-    "ExecutionVerification", "Forecast", "AccountRecoveryToken", "BillingEvent",
+    "ExecutionVerification", "Forecast", "CustomerLegalAcceptance", "AccountRecoveryToken", "BillingEvent",
     "CommercialContract", "Conversation", "ConversationMessage", "EmailVerificationToken",
     "EntitlementOverride", "ManagedEntity", "OnboardingState", "Organization",
     "OrganizationMembership", "OrganizationVerificationProfile", "QuotaReservation", "SaaSRequest", "SecurityAuditEvent", "TeamInvitation",
