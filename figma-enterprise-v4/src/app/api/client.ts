@@ -14,7 +14,7 @@ const LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 const uploadStateEvent = "agroai:upload-state";
 
 export type ApiError = Error & { status?: number; details?: unknown; code?: string };
-type RequestOptions = RequestInit & { token?: string | null };
+type RequestOptions = RequestInit & { token?: string | null; suppressUnauthorizedEvent?: boolean };
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -107,25 +107,26 @@ function requestTimeoutMs(path: string, method?: string): number {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const token = options.token ?? localStorage.getItem(tokenKey);
-  const headers = new Headers(options.headers);
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-  if (!headers.has("Content-Type") && options.body && !isFormData) headers.set("Content-Type", "application/json");
+  const { token: explicitToken, suppressUnauthorizedEvent = false, ...fetchOptions } = options;
+  const token = explicitToken ?? localStorage.getItem(tokenKey);
+  const headers = new Headers(fetchOptions.headers);
+  const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
+  if (!headers.has("Content-Type") && fetchOptions.body && !isFormData) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const controller = new AbortController();
-  const upstreamSignal = options.signal;
+  const upstreamSignal = fetchOptions.signal;
   const forwardAbort = () => controller.abort(upstreamSignal?.reason);
   if (upstreamSignal?.aborted) forwardAbort();
   else upstreamSignal?.addEventListener("abort", forwardAbort, { once: true });
   const timeout = window.setTimeout(
     () => controller.abort("agroai_request_timeout"),
-    requestTimeoutMs(path, options.method),
+    requestTimeoutMs(path, fetchOptions.method),
   );
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
+    response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers, signal: controller.signal });
   } catch (cause) {
     if (upstreamSignal?.aborted) throw cause;
     if (controller.signal.aborted) {
@@ -145,7 +146,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
   const data = await parseResponse(response);
   if (!response.ok) {
-    if (response.status === 401) window.dispatchEvent(new Event("agroai:unauthorized"));
+    if (response.status === 401 && !suppressUnauthorizedEvent) window.dispatchEvent(new Event("agroai:unauthorized"));
     throw apiErrorFromResponse(data, response, path);
   }
   return data as T;
@@ -389,7 +390,7 @@ export const apiClient = {
   },
   platformDeveloper: {
     health: () => get("/v1/platform/health"),
-    overview: () => get("/v1/platform/developer/overview"),
+    overview: () => request("/v1/platform/developer/overview", { suppressUnauthorizedEvent: true }),
     projects: () => get("/v1/platform/developer/projects"),
     project: (projectId: string) => get(`/v1/platform/developer/projects/${encodeURIComponent(projectId)}`),
     createProject: (payload: unknown) => post("/v1/platform/developer/projects", payload),

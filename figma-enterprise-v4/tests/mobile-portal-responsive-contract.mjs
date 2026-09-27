@@ -17,6 +17,7 @@ const integrations = read("../src/app/components/IntegrationsV3.tsx");
 const billing = read("../src/app/components/BillingPageV2.tsx");
 const productShell = read("../src/app/components/ProductShell.tsx");
 const support = read("../src/app/components/SupportPage.tsx");
+const apiClient = read("../src/app/api/client.ts");
 const globals = read("../src/styles/globals.css");
 const styleEntry = read("../src/styles/index.css");
 const htmlEntry = read("../index.html");
@@ -63,6 +64,10 @@ assert.match(syncCenter, /w-\[min\(calc\(100vw-24px\),380px\)\]/, "sync recovery
 assert.match(syncCenter, /fieldIntel\.offline/, "global sync control must expose offline state");
 assert.match(syncCenter, /setInterval\(resumeSync, 30_000\)/, "queued field work must retry while the portal stays open");
 assert.match(syncCenter, /visibilitychange/, "queued field work must resume when a mobile browser becomes active again");
+
+assert.match(apiClient, /suppressUnauthorizedEvent\?: boolean/, "noncritical API probes must be able to avoid clearing a valid portal session");
+assert.match(apiClient, /response\.status === 401 && !suppressUnauthorizedEvent/, "only session-authoritative 401 responses may clear the portal session");
+assert.match(apiClient, /platform\/developer\/overview"[\s\S]*suppressUnauthorizedEvent: true/, "Platform developer entitlement probing must never invalidate Enterprise Portal login");
 
 assert.match(operatorCockpit, /px-4 py-5 sm:px-8 sm:py-7/, "operational cockpit headers must use phone spacing");
 assert.match(operatorCockpit, /w-full overflow-auto p-4 sm:w-\[460px\]/, "operational detail drawers must become full-width on phones");
