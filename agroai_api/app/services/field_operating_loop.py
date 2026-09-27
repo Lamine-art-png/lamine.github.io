@@ -685,7 +685,7 @@ def _field_name_from_context(ctx: FieldOpsContext, message: str) -> str | None:
         reverse=True,
     )
     for field_name in candidates:
-        if re.search(rf"(?<!\\w){re.escape(field_name.lower())}(?!\\w)", lower):
+        if re.search(rf"(?<!\w){re.escape(field_name.lower())}(?!\w)", lower):
             return field_name
     return None
 
