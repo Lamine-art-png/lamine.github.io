@@ -302,14 +302,6 @@ def _register_failure(
     score: int | None = None,
 ) -> None:
     ip_address, user_agent = _request_metadata(request)
-    legal_acceptance = record_acceptance(
-        db,
-        request=request,
-        organization_id=org.id,
-        user_id=user.id,
-        subject_email=user.email,
-        event_type="signup",
-    )
     record_security_event(
         db,
         event_type="registration_verification",
@@ -452,6 +444,14 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.add_all([membership, workspace])
     db.flush()
     ensure_evaluation_context(db, org, workspace)
+    legal_acceptance = record_acceptance(
+        db,
+        request=request,
+        organization_id=org.id,
+        user_id=user.id,
+        subject_email=user.email,
+        event_type="signup",
+    )
     ip_address, user_agent = _request_metadata(request)
     record_security_event(
         db,
