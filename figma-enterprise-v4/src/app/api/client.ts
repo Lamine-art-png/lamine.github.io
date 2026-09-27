@@ -287,6 +287,10 @@ export type RegisterPayload = {
   workspace_name: string;
   crop?: string;
   region?: string;
+  terms_accepted: boolean;
+  authority_confirmed: boolean;
+  terms_version: string;
+  privacy_version: string;
 };
 export type LoginPayload = { email: string; password: string };
 export type CreateWorkspacePayload = { name: string; crop?: string; region?: string };
