@@ -12,6 +12,11 @@ const operations = read("../src/app/components/Operations.tsx");
 const intelligence = read("../src/app/components/intelligence/IntelligenceView.tsx");
 const fieldIntelligence = read("../src/app/components/FieldIntelligenceV2.tsx");
 const syncCenter = read("../src/app/fieldIntelligence/SyncCenter.tsx");
+const operatorCockpit = read("../src/app/components/OperatorCockpit.tsx");
+const integrations = read("../src/app/components/IntegrationsV3.tsx");
+const billing = read("../src/app/components/BillingPageV2.tsx");
+const productShell = read("../src/app/components/ProductShell.tsx");
+const support = read("../src/app/components/SupportPage.tsx");
 const globals = read("../src/styles/globals.css");
 const styleEntry = read("../src/styles/index.css");
 const htmlEntry = read("../index.html");
@@ -58,6 +63,15 @@ assert.match(syncCenter, /w-\[min\(calc\(100vw-24px\),380px\)\]/, "sync recovery
 assert.match(syncCenter, /fieldIntel\.offline/, "global sync control must expose offline state");
 assert.match(syncCenter, /setInterval\(resumeSync, 30_000\)/, "queued field work must retry while the portal stays open");
 assert.match(syncCenter, /visibilitychange/, "queued field work must resume when a mobile browser becomes active again");
+
+assert.match(operatorCockpit, /px-4 py-5 sm:px-8 sm:py-7/, "operational cockpit headers must use phone spacing");
+assert.match(operatorCockpit, /w-full overflow-auto p-4 sm:w-\[460px\]/, "operational detail drawers must become full-width on phones");
+assert.match(operatorCockpit, /grid-cols-1 gap-4 lg:grid-cols-\[1\.1fr_0\.9fr\]/, "operational split panels must stack on phones");
+assert.match(integrations, /grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3/, "connector cards must stack before wider screens");
+assert.match(integrations, /w-full overflow-y-auto shadow-2xl sm:w-\[740px\]/, "connector setup drawer must be full-width on phones");
+assert.match(billing, /space-y-5 px-4 py-4 sm:space-y-6 sm:px-8 sm:py-6/, "billing must use compact phone spacing");
+assert.match(productShell, /space-y-4 px-4 py-4 sm:space-y-5 sm:px-8 sm:py-6/, "shared account and onboarding shell must use phone spacing");
+assert.match(support, /grid gap-4 px-4 py-4/, "support workflow must use phone spacing");
 
 assert.match(globals, /@media \(max-width: 767px\)/, "mobile layout baseline missing");
 assert.match(globals, /\[data-portal-content\] \[style\*="grid-template-columns"\]/, "legacy fixed grids need a mobile fallback");
