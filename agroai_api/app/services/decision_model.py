@@ -116,6 +116,19 @@ def shadow_enabled() -> bool:
     return config.configured and config.mode == "shadow"
 
 
+def log_decision_model_configuration() -> None:
+    config = decision_model_config()
+    logger.info(
+        "decision_model_config enabled=%s mode=%s configured=%s api_key_set=%s base_url_set=%s model_set=%s",
+        config.enabled,
+        config.mode,
+        config.configured,
+        bool(config.api_key),
+        bool(config.base_url),
+        bool(config.model),
+    )
+
+
 def assist_enabled() -> bool:
     config = decision_model_config()
     return config.configured and config.mode == "assist"
@@ -397,19 +410,17 @@ def shadow_command_center(command_state: dict[str, Any]) -> None:
     assessment = assess_command_center(command_state)
     if assessment is None:
         logger.info(
-            "decision_model_shadow_no_assessment",
-            extra={"queue_size": len(list(command_state.get("field_queue") or []))},
+            "decision_model_shadow_no_assessment queue_size=%s",
+            len(list(command_state.get("field_queue") or [])),
         )
         return
     logger.info(
-        "decision_model_shadow_evaluation",
-        extra={
-            "focus_ref": assessment.focus_ref,
-            "focus_confidence": round(assessment.focus_confidence, 4),
-            "urgency_score": round(assessment.urgency_score, 4),
-            "urgency_confidence": round(assessment.urgency_confidence, 4),
-            "needs_human_review": round(assessment.needs_human_review, 4),
-            "data_sufficient": round(assessment.data_sufficient, 4),
-            "should_act_now": round(assessment.should_act_now, 4),
-        },
+        "decision_model_shadow_evaluation focus_ref=%s focus_confidence=%.4f urgency_score=%.4f urgency_confidence=%.4f needs_human_review=%.4f data_sufficient=%.4f should_act_now=%.4f",
+        assessment.focus_ref,
+        assessment.focus_confidence,
+        assessment.urgency_score,
+        assessment.urgency_confidence,
+        assessment.needs_human_review,
+        assessment.data_sufficient,
+        assessment.should_act_now,
     )
