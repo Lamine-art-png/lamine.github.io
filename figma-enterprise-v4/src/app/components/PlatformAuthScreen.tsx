@@ -8,6 +8,9 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
+const SELF_SERVICE_TERMS_VERSION = "2026-09-27";
+const SELF_SERVICE_PRIVACY_VERSION = "2026-09";
+
 const initialRegisterForm: RegisterPayload = {
   name: "",
   email: "",
@@ -27,6 +30,10 @@ const initialRegisterForm: RegisterPayload = {
   workspace_name: "",
   crop: "",
   region: "",
+  terms_accepted: false,
+  authority_confirmed: false,
+  terms_version: SELF_SERVICE_TERMS_VERSION,
+  privacy_version: SELF_SERVICE_PRIVACY_VERSION,
 };
 
 const PLATFORM_AUTH_LITERAL_COMPATIBILITY = [
@@ -164,6 +171,10 @@ export function PlatformAuthScreen() {
       setError("Add an organization website or a verifiable professional profile.");
       return;
     }
+    if (!registerForm.terms_accepted || !registerForm.authority_confirmed) {
+      setError("Accept the Terms of Service and confirm you are authorized to bind your organization.");
+      return;
+    }
     setWorking(true);
     try {
       await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region });
@@ -275,11 +286,17 @@ export function PlatformAuthScreen() {
                     <Field label="Planned data sources"><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} minLength={8} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="John Deere, WiseConn, files, weather, internal systems…" required /></Field>
                     <Field label="Initial workspace name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Developer evaluation workspace" required /></Field>
                     <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[11px] leading-5 text-[#52645A]">After email verification, eligible owners/admins can accept the current developer agreements and activate bounded TEST access automatically. Account creation does not enable LIVE projects, billing, provider credentials, production webhooks, or physical execution.</div>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D6DDD0] bg-white p-4">
+                      <input type="checkbox" checked={registerForm.terms_accepted && registerForm.authority_confirmed} onChange={(event) => setRegisterForm({ ...registerForm, terms_accepted: event.target.checked, authority_confirmed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-[#9BA89F] accent-[#10231B]" required />
+                      <span className="text-[11px] leading-5 text-[#52645A]">
+                        I agree to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href="https://agroai-pilot.com/privacy-policy" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
+                      </span>
+                    </label>
                   </> : null}
 
                   <div className="flex gap-3">
                     {registerStep > 1 ? <Button type="button" variant="outline" onClick={() => { setError(""); setRegisterStep((registerStep - 1) as 1 | 2 | 3); }} className="flex-1 border-[#D6DDD0] bg-white text-[#10231B]">Back</Button> : null}
-                    {registerStep < 3 ? <Button type="button" onClick={advanceRegisterStep} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">Continue</Button> : <Button type="submit" disabled={working} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">{working ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create developer account</Button>}
+                    {registerStep < 3 ? <Button type="button" onClick={advanceRegisterStep} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">Continue</Button> : <Button type="submit" disabled={working || (registerStep === 3 && (!registerForm.terms_accepted || !registerForm.authority_confirmed))} className="flex-1 bg-[#10231B] text-white hover:bg-[#183528]">{working ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create developer account</Button>}
                   </div>
                 </form>
               </TabsContent>
