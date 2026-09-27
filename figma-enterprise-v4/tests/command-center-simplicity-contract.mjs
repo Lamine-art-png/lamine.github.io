@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const overview = fs.readFileSync(new URL("../src/app/components/Overview.tsx", import.meta.url), "utf8");
 
-assert.match(overview, />Now</);
+assert.match(overview, />\s*Now\s*</);
 assert.match(overview, /Next best action/);
 assert.match(overview, /Needs attention/);
 assert.match(overview, /Active work/);
