@@ -111,13 +111,13 @@ export function SyncCenter() {
   if (!indexedDbAvailable()) return null;
 
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={t("syncCenter.indicator")}
-        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#D6DDD0] bg-white px-2.5 text-[12px] font-semibold text-[#10231B]"
+        className="inline-flex min-h-[44px] w-full items-center justify-between gap-2 rounded-xl border border-[#D6DDD0] bg-white px-3 text-[12px] font-semibold text-[#10231B] shadow-[0_6px_20px_rgba(16,35,27,0.05)] sm:w-auto sm:justify-center"
       >
         {online ? (
           summary.attention > 0
@@ -126,15 +126,16 @@ export function SyncCenter() {
               ? <Loader2 className="h-4 w-4 animate-spin text-[#2D6A4F]" aria-hidden />
               : <RefreshCw className="h-4 w-4 text-[#2D6A4F]" aria-hidden />
         ) : <CloudOff className="h-4 w-4 text-[#B7950B]" aria-hidden />}
+        <span className="min-w-0 truncate">{online ? t("fieldIntel.online") : t("fieldIntel.offline")}</span>
         {pendingBadge > 0 && (
-          <span className={`rounded-full px-1.5 text-[11px] text-white ${summary.attention > 0 ? "bg-[#B23B2E]" : "bg-[#2D6A4F]"}`}>
+          <span className={`shrink-0 rounded-full px-1.5 text-[11px] text-white ${summary.attention > 0 ? "bg-[#B23B2E]" : "bg-[#2D6A4F]"}`}>
             {pendingBadge}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[340px] rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
+        <div className="absolute right-0 z-50 mt-2 max-h-[min(72dvh,560px)] w-[min(calc(100vw-24px),380px)] overflow-y-auto overscroll-contain rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
           role="dialog" aria-label={t("syncCenter.title")}>
           <div className="flex items-center justify-between">
             <h3 className="text-[14px] font-semibold text-[#10231B]">{t("syncCenter.title")}</h3>
@@ -150,7 +151,7 @@ export function SyncCenter() {
             {user?.email && <div>{t("syncCenter.account")}: {user.email}</div>}
           </div>
 
-          <dl className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+          <dl className="mt-2 grid grid-cols-2 gap-1 text-center text-[11px] sm:grid-cols-3">
             {([["queued", summary.queued], ["syncing", summary.syncing], ["processing", summary.processing],
                ["failed", summary.failed], ["conflict", summary.conflict], ["manualRecovery", summary.manualRecovery]] as const)
               .map(([key, value]) => (
@@ -180,20 +181,20 @@ export function SyncCenter() {
                   <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] font-semibold">
                     <button type="button" disabled={busyId === record.clientCaptureId}
                       onClick={() => { void retry(record); }}
-                      className="rounded border border-[#D6DDD0] px-2 py-0.5 text-[#10231B] disabled:opacity-40">
+                      className="min-h-[36px] rounded-lg border border-[#D6DDD0] px-2 py-1 text-[#10231B] disabled:opacity-40">
                       {t("syncCenter.retry")}
                     </button>
                     <button type="button" onClick={() => setInspecting(record)}
-                      className="rounded border border-[#D6DDD0] px-2 py-0.5 text-[#10231B]">
+                      className="min-h-[36px] rounded-lg border border-[#D6DDD0] px-2 py-1 text-[#10231B]">
                       {t("syncCenter.inspect")}
                     </button>
                     <button type="button" onClick={() => exportRecovery(record)}
-                      className="rounded border border-[#D6DDD0] px-2 py-0.5 text-[#10231B]">
+                      className="min-h-[36px] rounded-lg border border-[#D6DDD0] px-2 py-1 text-[#10231B]">
                       {t("syncCenter.export")}
                     </button>
                     <button type="button" disabled={busyId === record.clientCaptureId}
                       onClick={() => { void discard(record); }}
-                      className="rounded border border-[#E4C7C2] px-2 py-0.5 text-[#B23B2E] disabled:opacity-40">
+                      className="min-h-[36px] rounded-lg border border-[#E4C7C2] px-2 py-1 text-[#B23B2E] disabled:opacity-40">
                       {t("syncCenter.discard")}
                     </button>
                   </div>
