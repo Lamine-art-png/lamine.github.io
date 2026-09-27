@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger("agroai.decision_model")
+logger.setLevel(logging.INFO)
 
 _DEFAULT_BASE_URL = ""
 _DEFAULT_MODEL = ""
@@ -395,6 +396,10 @@ def shadow_command_center(command_state: dict[str, Any]) -> None:
         return
     assessment = assess_command_center(command_state)
     if assessment is None:
+        logger.info(
+            "decision_model_shadow_no_assessment",
+            extra={"queue_size": len(list(command_state.get("field_queue") or []))},
+        )
         return
     logger.info(
         "decision_model_shadow_evaluation",
