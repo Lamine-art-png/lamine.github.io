@@ -20,8 +20,9 @@ def upgrade() -> None:
     op.create_table(
         "portal_legal_acceptances",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("user_id", sa.String(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("user_id", sa.String(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("organization_name", sa.String(), nullable=False),
         sa.Column("email", sa.String(), nullable=False),
         sa.Column("terms_version", sa.String(), nullable=False),
         sa.Column("terms_url", sa.String(), nullable=False),
