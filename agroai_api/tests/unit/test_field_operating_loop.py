@@ -177,6 +177,27 @@ def test_field_message_parser_extracts_values(client, db):
     assert extracted["block"] == "Block A"
 
 
+def test_field_message_matches_known_field_and_escalates_low_pressure(client, db):
+    org, workspace, headers = _auth_workspace(db, org_id="org-loop-natural-message", workspace_id="workspace-loop-natural-message")
+    _seed_loop_data(db, org.id, workspace.id)
+    response = client.post(
+        "/v1/field-ops/field-message",
+        headers=headers,
+        json={
+            "workspace_id": workspace.id,
+            "message": "North Ranch had low pressure after the morning irrigation. Check the filter before the next set.",
+            "sender_role": "operator",
+            "channel": "portal",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["extracted_fields"]["field_name"] == "North Ranch"
+    assert body["extracted_fields"]["event_type"] == "issue"
+    assert len(body["created_tasks"]) == 1
+    assert body["created_tasks"][0]["field"] == "North Ranch"
+
+
 def test_autopilot_report_returns_structured_report(client, db):
     org, workspace, headers = _auth_workspace(db, org_id="org-loop-report", workspace_id="workspace-loop-report")
     _seed_loop_data(db, org.id, workspace.id)

@@ -294,7 +294,8 @@ def create_field_update(
 
 
 def field_message(ctx: FieldOpsContext, *, message: str, sender_role: str, channel: str, field_hint: str | None = None) -> dict[str, Any]:
-    parsed = _parse_message(message, field_hint=field_hint)
+    resolved_field_hint = field_hint or _field_name_from_context(ctx, message)
+    parsed = _parse_message(message, field_hint=resolved_field_hint)
     update_result = create_field_update(
         ctx,
         field_id=parsed.get("field_id"),
@@ -672,6 +673,23 @@ def _display_field_name(block_row: Block | None, fallback: str) -> str:
     return block_row.name if block_row else fallback.replace("-", " ").title()
 
 
+def _field_name_from_context(ctx: FieldOpsContext, message: str) -> str | None:
+    lower = message.lower()
+    candidates = sorted(
+        {
+            str(field.get("field_name")).strip()
+            for field in ctx.fields
+            if field.get("field_name")
+        },
+        key=len,
+        reverse=True,
+    )
+    for field_name in candidates:
+        if re.search(rf"(?<!\w){re.escape(field_name.lower())}(?!\w)", lower):
+            return field_name
+    return None
+
+
 def _parse_message(message: str, *, field_hint: str | None = None) -> dict[str, Any]:
     lower = message.lower()
     gallons = _float_match(r"([0-9][0-9,\.]*)\s*gallons?", lower)
@@ -681,9 +699,10 @@ def _parse_message(message: str, *, field_hint: str | None = None) -> dict[str, 
     field_match = re.search(r"\b(field|ranch|parcel)\s+([a-z0-9][a-z0-9\s-]+)", message, flags=re.IGNORECASE)
     crop = "Almonds" if "almond" in lower else "Pistachios" if "pistachio" in lower else None
     issue = None
-    if "stress" in lower:
-        issue = "Crop stress observed"
-    elif "missing" in lower or "not working" in lower:
+    issue_terms = ("stress", "stressed", "low pressure", "leak", "broken", "clogged", "failed", "failure", "not working", "problem", "wilting")
+    if any(term in lower for term in issue_terms):
+        issue = "Field issue reported"
+    elif "missing" in lower:
         issue = "Follow-up required"
     event_type = "operator_note"
     if gallons or duration:
@@ -692,7 +711,7 @@ def _parse_message(message: str, *, field_hint: str | None = None) -> dict[str, 
         event_type = "meter_reading"
     elif "photo" in lower:
         event_type = "photo_note"
-    elif "issue" in lower or "stressed" in lower:
+    elif issue:
         event_type = "issue"
     field_name = field_hint or (field_match.group(2).strip().title() if field_match else None)
     block = block_match.group(0).title() if block_match else None
@@ -703,7 +722,7 @@ def _parse_message(message: str, *, field_hint: str | None = None) -> dict[str, 
         summary += f" at {block}"
     summary += "."
     follow_up_tasks = []
-    if issue or "meter" in lower:
+    if (issue and event_type != "issue") or ("meter" in lower and event_type != "meter_reading"):
         follow_up_tasks.append({
             "title": "Verify field observation",
             "priority": "medium",

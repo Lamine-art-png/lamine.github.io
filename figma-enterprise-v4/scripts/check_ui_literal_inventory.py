@@ -113,7 +113,7 @@ def write_delta(target: Path) -> int:
     if changed or extra:
         raise SystemExit(
             "Existing literal catalog parts conflict with source. "
-            f"extra={extra[:8]} changed={changed[:8]}"
+            f"extra={extra} changed={changed}"
         )
     delta = {key: expected[key] for key in sorted(set(expected) - set(current))}
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -145,10 +145,10 @@ def main() -> int:
 
     if args.check:
         if current != expected:
-            missing_keys = sorted(set(expected) - set(current))[:8]
+            missing_keys = sorted(set(expected) - set(current))
             missing = {key: expected[key] for key in missing_keys}
-            extra = sorted(set(current) - set(expected))[:8]
-            changed = sorted(key for key in set(current).intersection(expected) if current[key] != expected[key])[:8]
+            extra = sorted(set(current) - set(expected))
+            changed = sorted(key for key in set(current).intersection(expected) if current[key] != expected[key])
             raise SystemExit(
                 "UI literal inventory is stale. "
                 f"missing={missing} extra={extra} changed={changed}"

@@ -36,7 +36,8 @@ assert.match(evidence, /md:hidden/, "Evidence must provide a mobile record view"
 assert.match(evidence, /hidden md:block/, "Evidence desktop table must be isolated from mobile");
 assert.match(evidence, /w-full cursor-pointer.*sm:min-w-\[260px\]/s, "Evidence upload target must fit phone width");
 
-assert.match(overview, /grid-cols-1 gap-3 min-\[420px\]:grid-cols-2 xl:grid-cols-5/, "Command Center metrics must stack responsively");
+assert.match(overview, /grid-cols-1 gap-4 xl:grid-cols-\[1\.55fr_0\.75fr\]/, "Command Center priority and compact metrics must stack before wide screens");
+assert.match(overview, /grid grid-cols-2 gap-3/, "Command Center compact metrics must stay scannable on mobile");
 assert.match(overview, /xl:grid-cols-\[1\.2fr_0\.8fr\]/, "Command Center split panels must wait for wide screens");
 assert.match(operations, /grid-cols-2 gap-3 lg:grid-cols-4/, "Decision cards must adapt on mobile");
 
