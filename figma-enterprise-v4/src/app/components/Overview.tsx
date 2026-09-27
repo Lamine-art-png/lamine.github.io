@@ -49,6 +49,9 @@ function go(path: string) {
 export function Overview() {
   const { currentWorkspace } = useAuth();
   const workspaceId = currentWorkspace?.id;
+  const pathname = window.location.pathname;
+  const showFullQueue = pathname === "/field-queue";
+  const showAllActiveTasks = pathname === "/tasks";
 
   // One authoritative Command Center request keeps the first paint fast and
   // prevents the same field context from being rebuilt in parallel.
@@ -78,7 +81,11 @@ export function Overview() {
     [queue],
   );
 
-  const queueForDisplay = attentionQueue.length ? attentionQueue.slice(0, 4) : queue.slice(0, 3);
+  const queueForDisplay = showFullQueue
+    ? queue
+    : attentionQueue.length
+      ? attentionQueue.slice(0, 4)
+      : queue.slice(0, 3);
   const primaryQueueItem = queueForDisplay[0] || queue[0] || {};
   const fieldsNeedAttention = attentionQueue.length;
   const openTasks = activeTasks.length;
@@ -255,7 +262,7 @@ export function Overview() {
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:gap-5">
           <Panel
             title="Needs attention"
-            action={<PortalButton variant="secondary" onClick={() => go("/field-queue")}>View full queue</PortalButton>}
+            action={showFullQueue ? undefined : <PortalButton variant="secondary" onClick={() => go("/field-queue")}>View full queue</PortalButton>}
           >
             <div className="space-y-3">
               {queueForDisplay.length ? queueForDisplay.map((item, index) => {
@@ -275,10 +282,10 @@ export function Overview() {
 
           <Panel
             title="Active work"
-            action={<PortalButton variant="secondary" onClick={() => go("/tasks")}>View all tasks</PortalButton>}
+            action={showAllActiveTasks ? undefined : <PortalButton variant="secondary" onClick={() => go("/tasks")}>View all tasks</PortalButton>}
           >
             <div className="space-y-3">
-              {activeTasks.length ? activeTasks.slice(0, 4).map((task, index) => (
+              {activeTasks.length ? (showAllActiveTasks ? activeTasks : activeTasks.slice(0, 4)).map((task, index) => (
                 <TaskCard
                   key={task.id || index}
                   task={task}
