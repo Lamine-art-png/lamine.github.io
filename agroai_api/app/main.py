@@ -80,6 +80,13 @@ async def lifespan(app: FastAPI):
         logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
     scheduler_started = False
 
+    try:
+        from app.services.decision_model import log_decision_model_configuration
+
+        log_decision_model_configuration()
+    except Exception:
+        logger.exception("Decision model configuration telemetry failed; API startup will continue")
+
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
         try:
             from app.core.scheduler import start_scheduler
