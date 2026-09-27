@@ -126,7 +126,7 @@ def test_assessment_parses_typed_response(monkeypatch):
     assert assessment is not None
     assert assessment.focus_ref == "item_2"
     assert assessment.focus_confidence == 0.93
-    assert assessment.urgency_score == 0.8
+    assert abs(assessment.urgency_score - 0.8) < 1e-9
     assert assessment.needs_human_review == 0.91
     assert seen["url"].endswith("/v1/systemone")
 
