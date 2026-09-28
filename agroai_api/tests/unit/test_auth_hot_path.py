@@ -166,3 +166,26 @@ def test_registration_rejects_stale_or_incomplete_clickwrap(client):
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "legal_acceptance_required"
+
+
+@pytest.mark.parametrize("legal_fields", [
+    {},
+    {"terms_accepted": False, "authority_confirmed": True, "terms_version": "2026-07-03", "privacy_version": "2026-07-03"},
+    {"terms_accepted": True, "authority_confirmed": False, "terms_version": "2026-07-03", "privacy_version": "2026-07-03"},
+    {"terms_accepted": True, "authority_confirmed": True, "terms_version": "2026-09-27", "privacy_version": "2026-07-03"},
+    {"terms_accepted": True, "authority_confirmed": True, "terms_version": "2026-07-03", "privacy_version": "2026-09"},
+])
+def test_production_registration_rejects_missing_or_mixed_consent(client, db, monkeypatch, legal_fields):
+    monkeypatch.setattr("app.api.v1.auth._PRODUCTION_RATE_LIMITS", True)
+    email = "missing-consent@example.com"
+    response = client.post("/v1/auth/register", json={
+        "email": email,
+        "password": "strong-password",
+        "name": "Consent Check",
+        "organization_name": "Consent Check Farms",
+        "workspace_name": "Evaluation workspace",
+        **legal_fields,
+    })
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "legal_acceptance_required"
+    assert db.query(User).filter(User.email == email).count() == 0
