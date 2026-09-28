@@ -1,4 +1,5 @@
 name: Brazilian Portuguese legal snapshots
+# retry: authoring translation-mode contract aligned
 
 on:
   push:
