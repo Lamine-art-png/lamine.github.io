@@ -138,9 +138,10 @@ def chunks(source):
     if current: out.append(current)
     return out
 
-def localize_document(slug, locale, endpoint, outdir):
+def localize_document(slug, locale, endpoint, outdir, source_dir=None):
     canonical_url = DOCS[slug]
-    raw = fetch_html(canonical_url)
+    source_path = Path(source_dir) / f"{slug}.html" if source_dir else None
+    raw = source_path.read_text(encoding="utf-8") if source_path and source_path.exists() else fetch_html(canonical_url)
     source_hash = hashlib.sha256(raw.encode()).hexdigest()
     tokens, source, locations = split_visible_text(raw)
     translated = {}
@@ -183,10 +184,11 @@ def main():
     parser.add_argument("--locale", default="pt-BR")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--outdir", default=str(ROOT/"platform-api/legal/localized"))
+    parser.add_argument("--source-dir", default="")
     args = parser.parse_args()
     outdir = Path(args.outdir)
     for slug in DOCS:
-        localize_document(slug, args.locale, args.endpoint, outdir)
+        localize_document(slug, args.locale, args.endpoint, outdir, args.source_dir or None)
 
 if __name__ == "__main__":
     main()
