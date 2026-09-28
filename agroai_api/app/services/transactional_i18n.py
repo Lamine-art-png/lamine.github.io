@@ -9,6 +9,7 @@ from hashlib import sha256
 
 from app.services.language_registry import canonical_ui_locale, family_name, locale_specs
 from app.services.model_router import ModelRouter
+from app.services.static_transactional_i18n import localize_static_transactional_strings
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,11 @@ def localize_transactional_strings(locale: str | None, source: dict[str, str]) -
     if canonical in {"auto", "en"}:
         return dict(source)
 
+    static_copy = localize_static_transactional_strings(canonical, source)
+    if static_copy is not None:
+        return _validate(source, static_copy)
+
+    logger.error("transactional_static_catalog_missing locale=%s", canonical)
     key = _cache_key(canonical, source)
     with _CACHE_LOCK:
         cached = _CACHE.get(key)
