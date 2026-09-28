@@ -20,6 +20,12 @@ ENDPOINT = os.environ.get("I18N_TRANSACTIONAL_AUTHORING_ENDPOINT", "http://127.0
 MAX_ATTEMPTS = 4
 MAX_KEYS = 8
 MAX_CHARS = 900
+CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+CLOUDFLARE_MODELS = (
+    os.environ.get("I18N_CLOUDFLARE_MODEL", "@cf/meta/llama-3.1-8b-instruct-fast").strip(),
+    os.environ.get("I18N_CLOUDFLARE_FALLBACK_MODEL", "@cf/qwen/qwen3-30b-a3b-fp8").strip(),
+)
 
 def stable_fingerprint(catalog: dict[str, str]) -> str:
     payload = json.dumps(catalog, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -61,6 +67,63 @@ def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
         raise ValueError(f"insufficient_translation_progress:{changed}")
     return out
 
+def cloudflare_rest_available() -> bool:
+    return bool(CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)
+
+
+def call_cloudflare_rest(locale: str, source: dict[str,str]) -> dict[str,str]:
+    system=(
+        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI account-verification email. "
+        "Return exactly one JSON object with identical keys. Preserve {product} exactly. Preserve AGRO-AI, API, TEST, LIVE, URLs and numeric values. "
+        "For pt-BR use natural Brazilian Portuguese. Do not add or remove legal/security claims. No markdown or explanation."
+    )
+    messages=[
+        {"role":"system","content":system},
+        {"role":"user","content":json.dumps(source,ensure_ascii=False,separators=(",",":"))},
+    ]
+    failures=[]
+    for model in CLOUDFLARE_MODELS:
+        if not model:
+            continue
+        url=f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model}"
+        body={"messages":messages,"temperature":0,"max_tokens":1200}
+        try:
+            req=urllib.request.Request(
+                url,
+                data=json.dumps(body,ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "authorization":f"Bearer {CLOUDFLARE_API_TOKEN}",
+                    "content-type":"application/json",
+                    "accept":"application/json",
+                    "user-agent":"AGRO-AI-Localization-Release/2.0",
+                },
+            )
+            with urllib.request.urlopen(req,timeout=70) as response:
+                payload=json.load(response)
+            if payload.get("success") is not True:
+                raise RuntimeError(f"cloudflare_rest_unsuccessful:{payload.get('errors')}")
+            result=payload.get("result") or {}
+            raw=result.get("response") or result.get("result",{}).get("response") or result.get("choices",[{}])[0].get("message",{}).get("content") or ""
+            if not isinstance(raw,str) or not raw.strip():
+                raise RuntimeError("cloudflare_rest_empty_response")
+            parsed=clean_json(raw)
+            out={}
+            for key, original in source.items():
+                value=parsed.get(key)
+                if not isinstance(value,str) or not value.strip() or value.strip().lower()=="[object object]":
+                    raise ValueError(f"invalid_value:{key}")
+                value=value.strip()
+                if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
+                    raise ValueError(f"placeholder_mismatch:{key}")
+                out[key]=value
+            if set(out) != set(source):
+                raise ValueError("transactional_key_mismatch")
+            return out
+        except Exception as exc:
+            failures.append(f"{model}:{type(exc).__name__}:{str(exc)[:240]}")
+    raise RuntimeError("cloudflare_rest_models_failed:"+"|".join(failures))
+
+
 def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     system=(
         f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI account-verification email. "
@@ -76,6 +139,8 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     last=None
     for attempt in range(1,MAX_ATTEMPTS+1):
         try:
+            if cloudflare_rest_available():
+                return call_cloudflare_rest(locale, source)
             req=urllib.request.Request(ENDPOINT,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"content-type":"application/json","accept":"application/json","user-agent":"Mozilla/5.0 AGRO-AI-Localization-Release/1.0"})
             with urllib.request.urlopen(req,timeout=55) as response:
                 payload=json.load(response)
