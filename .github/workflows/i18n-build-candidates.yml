@@ -1,43 +1,129 @@
-name: Offline locale catalog candidates
+name: Deterministic locale catalog build
+
 on:
   workflow_dispatch:
-    inputs:
-      locales:
-        description: BCP-47 locales to author (candidates only)
-        default: pt-BR,ja,ar,de,my,fr-FR
-        required: true
   push:
     branches: [fix/deterministic-localization-release]
     paths:
       - scripts/i18n-generate-catalogs.py
+      - scripts/i18n-build-source.mjs
+      - shared/localization/source.json
       - .github/workflows/i18n-build-candidates.yml
+
 permissions:
-  contents: read
+  contents: write
+
 concurrency:
-  group: i18n-offline-authoring
-  cancel-in-progress: false
+  group: deterministic-i18n-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  author:
+  prepare:
     runs-on: ubuntu-latest
-    environment: production
+    outputs:
+      locales: ${{ steps.matrix.outputs.locales }}
+      locales_csv: ${{ steps.matrix.outputs.locales_csv }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        name: Resolve production locale matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          manifest=json.load(open("shared/supported-locales.json"))
+          locales=[]
+          for code in manifest["enabledUiLocales"]:
+              if code in ("auto","en"):
+                  continue
+              code="pt-BR" if code=="pt" else code
+              if code not in locales:
+                  locales.append(code)
+          print("locales="+json.dumps(locales,separators=(",",":")))
+          print("locales_csv="+",".join(locales))
+          PY
+      - name: Verify build-time authoring path
+        run: python3 scripts/i18n-generate-catalogs.py --locales pt-BR --preflight
+
+  author:
+    needs: prepare
+    runs-on: ubuntu-latest
     timeout-minutes: 120
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CANDIDATE_LOCALES: ${{ inputs.locales || 'pt-BR,ja,ar,de,my,fr-FR' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Verify authenticated authoring provider before bulk generation
-        run: python scripts/i18n-generate-catalogs.py --locales pt-BR --preflight
-      - name: Generate source-fingerprinted candidates offline
-        run: python scripts/i18n-generate-catalogs.py --locales "$CANDIDATE_LOCALES"
+      - name: Generate complete source-fingerprinted catalog
+        run: |
+          python3 scripts/i18n-generate-catalogs.py \
+            --locales "${{ matrix.locale }}" \
+            --outdir locale-out
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: locale-candidates-${{ github.sha }}
-          path: shared/localization/candidates
-          if-no-files-found: ignore
-          retention-days: 7
+          name: locale-${{ matrix.locale }}
+          path: locale-out/${{ matrix.locale }}.json
+          if-no-files-found: error
+          retention-days: 3
+
+  validate-and-promote:
+    if: github.event_name == 'push'
+    needs: [prepare, author]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: locale-*
+          path: shared/localization/catalogs
+          merge-multiple: true
+      - name: Validate every advertised catalog before enabling it
+        run: |
+          python3 scripts/i18n-generate-catalogs.py \
+            --locales "${{ needs.prepare.outputs.locales_csv }}" \
+            --validate-dir shared/localization/catalogs
+      - name: Promote only the complete deterministic matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path=Path("shared/supported-locales.json")
+          manifest=json.loads(path.read_text())
+          enabled=[]
+          for code in manifest["enabledUiLocales"]:
+              code="pt-BR" if code=="pt" else code
+              if code not in enabled:
+                  enabled.append(code)
+          manifest["enabledUiLocales"]=enabled
+          complete=[code for code in enabled if code!="auto"]
+          manifest["catalogCompleteLocales"]=complete
+          manifest["dynamicCatalogLocales"]=[]
+          qa=manifest.setdefault("qa",{})
+          qa["staticCompleteLocales"]=complete
+          qa["linguisticCompleteLocales"]=complete
+          qa["browserCompleteLocales"]=complete
+          manifest["uiTranslationPolicy"]="versioned-static-complete-catalogs"
+          path.write_text(json.dumps(manifest,ensure_ascii=False,separators=(",",":"))+"\n")
+          PY
+
+          git config user.name "AGRO-AI Release Bot"
+          git config user.email "release-bot@agroai-pilot.com"
+          git add shared/localization/catalogs shared/supported-locales.json
+          if git diff --cached --quiet; then
+            echo "Catalogs already current"
+            exit 0
+          fi
+          git commit -m "Generate complete deterministic locale catalogs"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
