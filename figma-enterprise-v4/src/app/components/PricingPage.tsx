@@ -71,7 +71,7 @@ function CardBadge({ plan, requestedUpgrade, billingPeriod, highlighted, tx }: {
 
 export function PricingPage() {
   const { isAuthenticated, currentOrganization } = useAuth();
-  const { t } = useLocale();
+  const { t, effectiveLocale } = useLocale();
   const { tx, tf } = usePortalCopy(["pricing", "shared"]);
   const [params] = useSearchParams();
   const requestedUpgrade = isPlanId(params.get("upgrade")) ? params.get("upgrade") as PlanId : undefined;
@@ -89,7 +89,7 @@ export function PricingPage() {
       if (plan.id === "free") { if (!isAuthenticated) { localStorage.setItem("agroai_selected_plan", "free"); window.location.href = "/?mode=register"; return; } setMessage(tx("Free workspace is already available on your account.")); return; }
       if (plan.id === "enterprise") { window.location.assign(DEMO_BOOKING_URL); return; }
       if (!isAuthenticated) { localStorage.setItem("agroai_selected_plan", plan.id); localStorage.setItem("agroai_selected_billing_period", billingPeriod); setMessage(tf("Create an account first, then Stripe checkout will open for {plan}.", { plan: tx(plan.name) })); window.location.href = "/?mode=register"; return; }
-      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod } as ProductCheckoutPayload) as Record<string, unknown>;
+      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod, locale: effectiveLocale } as ProductCheckoutPayload) as Record<string, unknown>;
       if (typeof response.checkout_url === "string" && response.checkout_url) { window.location.assign(response.checkout_url); return; }
       setMessage(String(response.message || tx("Upgrade request received. Stripe checkout was not returned by the backend.")));
     } catch (error) { setMessage(error instanceof Error ? error.message : tx("Could not start checkout. Please try again.")); }
