@@ -48,11 +48,10 @@ def clean_json(raw: str) -> dict:
         raise ValueError("translation_not_object")
     return parsed
 
-def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
+def validate_chunk(source: dict[str, str], translated: dict) -> dict[str, str]:
     if set(translated) != set(source):
         raise ValueError("transactional_key_mismatch")
     out={}
-    changed=0
     for key, original in source.items():
         value=translated.get(key)
         if not isinstance(value,str) or not value.strip() or value.strip().lower()=="[object object]":
@@ -62,8 +61,11 @@ def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
             raise ValueError(f"placeholder_mismatch:{key}")
         value.encode("utf-8",errors="strict")
         out[key]=value
-        if value != original:
-            changed += 1
+    return out
+
+def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
+    out=validate_chunk(source, translated)
+    changed=sum(1 for key, original in source.items() if out[key] != original)
     if changed < max(8, len(source)//3):
         raise ValueError(f"insufficient_translation_progress:{changed}")
     return out
@@ -142,7 +144,7 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     for attempt in range(1,MAX_ATTEMPTS+1):
         try:
             try:
-                return validate(source, public_translate_catalog(locale, source))
+                return validate_chunk(source, public_translate_catalog(locale, source))
             except Exception as public_exc:
                 last=public_exc
             # CI/release starts an isolated authoring worker. Prefer it whenever
