@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: Cloudflare authoring request identity fixed
+# release retry: structured output parsing hardened
 
 on:
   push:
