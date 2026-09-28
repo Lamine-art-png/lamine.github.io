@@ -9,9 +9,11 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
   async function changeLanguage(nextLocale: string) {
     try {
       const canonical = await activateLocale(nextLocale);
-      void apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
-        // Preference sync is best effort. The activated local switch remains authoritative for this session.
-      });
+      if (window.localStorage.getItem("agroai_access_token")) {
+        void apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
+          // Preference sync is best effort. The activated local switch remains authoritative for this session.
+        });
+      }
     } catch {
       // Unexpected activation errors are fail-safe. Provider/catalog outages
       // are handled inside activateLocale while preserving the chosen locale.
