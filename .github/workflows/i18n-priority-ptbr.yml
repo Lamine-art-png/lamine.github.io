@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: rebase-safe artifact promotion and global target preservation
+# release retry: durable process-level resume after transient Workers AI outages
 
 on:
   push:
@@ -51,12 +51,34 @@ jobs:
           exit 1
 
       - name: Generate complete Brazilian Portuguese UI catalog
+        shell: bash
         run: |
-          python3 scripts/i18n-generate-catalogs.py --locales pt-BR --outdir shared/localization/catalogs
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 10); do
+            if python3 scripts/i18n-generate-catalogs.py --locales pt-BR --outdir shared/localization/catalogs; then
+              ok=1
+              break
+            fi
+            echo "pt-BR authoring interrupted (attempt $attempt/10); resuming durable progress in 12s..."
+            sleep 12
+          done
+          test "$ok" = "1"
 
       - name: Generate Brazilian Portuguese verification catalog
+        shell: bash
         run: |
-          python3 scripts/i18n-generate-transactional-catalogs.py --locales pt-BR --outdir shared/localization/transactional-catalogs
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 6); do
+            if python3 scripts/i18n-generate-transactional-catalogs.py --locales pt-BR --outdir shared/localization/transactional-catalogs; then
+              ok=1
+              break
+            fi
+            echo "pt-BR transactional authoring interrupted (attempt $attempt/6); retrying in 10s..."
+            sleep 10
+          done
+          test "$ok" = "1"
 
       - name: Stop authoring preview
         if: always()
