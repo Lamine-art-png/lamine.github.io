@@ -1,0 +1,61 @@
+name: Exact Production I18n Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/exact-production-i18n-proof.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: b7732f889836c0f23bd09e1fc1acf91c15047ad5
+    steps:
+      - name: Show exact production matrix run
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS 'https://api.github.com/repos/Lamine-art-png/lamine.github.io/actions/workflows/production-i18n-matrix.yml/runs?event=push&branch=main&per_page=50' -o matrix-runs.json
+          jq --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,status,conclusion,head_sha,created_at,updated_at,html_url}] | sort_by(.created_at) | reverse | .[0] // null' matrix-runs.json | tee matrix-run.json
+      - name: Show exact production release run
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS 'https://api.github.com/repos/Lamine-art-png/lamine.github.io/actions/runs?event=push&branch=main&per_page=100' -o release-runs.json
+          jq --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .name == "Cloudflare Production Release") | {id,name,status,conclusion,head_sha,created_at,updated_at,html_url}] | sort_by(.created_at) | reverse | .[0] // null' release-runs.json | tee release-run.json
+      - name: Show live production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://app.agroai-pilot.com/v1/edge-health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/readiness | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/i18n/languages | jq '{status,count}'
+
+  live-canary-sample:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Prove representative real production generations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for locale in de ar ja; do
+            started="$(date +%s)"
+            curl --fail --silent --show-error --max-time 150 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json' \
+              -H 'User-Agent: AGRO-AI-Exact-Live-Canary/1.0' \
+              --data "{\"locale\":\"${locale}\"}" \
+              https://app.agroai-pilot.com/v1/i18n/internal/canary \
+              -o "${locale}.json"
+            jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .key_count == 4 and .changed_count >= 2 and (.catalog_sha256 | length == 64) and (.providers | length > 0) and (.models | length > 0)' "${locale}.json"
+            jq '{status,locale,changed_count,key_count,providers,models,catalog_sha256}' "${locale}.json"
+            echo "locale=${locale} elapsed=$(( $(date +%s) - started ))s"
+          done
