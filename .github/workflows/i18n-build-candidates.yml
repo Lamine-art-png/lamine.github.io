@@ -130,38 +130,15 @@ jobs:
           python3 scripts/i18n-generate-catalogs.py \
             --locales "${{ needs.prepare.outputs.locales_csv }}" \
             --validate-dir shared/localization/catalogs
-      - name: Promote only the complete deterministic matrix
+      - name: Commit complete deterministic UI matrix
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path=Path("shared/supported-locales.json")
-          manifest=json.loads(path.read_text())
-          enabled=[]
-          for code in manifest.get("targetUiLocales") or manifest["enabledUiLocales"]:
-              code="pt-BR" if code=="pt" else code
-              if code not in enabled:
-                  enabled.append(code)
-          manifest["enabledUiLocales"]=enabled
-          complete=[code for code in enabled if code!="auto"]
-          manifest["catalogCompleteLocales"]=complete
-          manifest["dynamicCatalogLocales"]=[]
-          qa=manifest.setdefault("qa",{})
-          qa["staticCompleteLocales"]=complete
-          qa["linguisticCompleteLocales"]=complete
-          qa["browserCompleteLocales"]=complete
-          manifest["uiTranslationPolicy"]="versioned-static-complete-catalogs"
-          path.write_text(json.dumps(manifest,ensure_ascii=False,separators=(",",":"))+"\n")
-          PY
-
           git config user.name "AGRO-AI Release Bot"
           git config user.email "release-bot@agroai-pilot.com"
-          git add shared/localization/catalogs shared/supported-locales.json
+          git add shared/localization/catalogs
           if git diff --cached --quiet; then
-            echo "Catalogs already current"
+            echo "UI catalogs already current"
             exit 0
           fi
           git commit -m "Generate complete deterministic locale catalogs"
