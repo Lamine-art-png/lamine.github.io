@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient, ApiError, LoginPayload, RegisterPayload } from "../api/client";
+import { getStoredLocale, setStoredLocale } from "../i18n";
 
 const tokenKey = "agroai_access_token";
 const activeWorkspaceKeyPrefix = "agroai_active_operation_v1:";
@@ -64,7 +65,7 @@ type AuthContextValue = {
   selectWorkspace: (workspaceId: string) => void;
   createWorkspace: (payload: CreateOperationPayload) => Promise<Workspace>;
   updateWorkspace: (workspaceId: string, payload: { name: string }) => Promise<Workspace>;
-  requestVerification: (email?: string) => Promise<string>;
+  requestVerification: (email?: string, locale?: string) => Promise<string>;
   confirmVerification: (token: string) => Promise<void>;
   clearVerification: () => void;
 };
@@ -321,6 +322,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return workspace;
   }, []);
 
+  const syncLocalePreference = useCallback(async () => {
+    const localLocale = getStoredLocale();
+    if (localLocale !== "auto") {
+      await apiClient.patch("/v1/settings/preferences", { locale: localLocale }).catch(() => null);
+      return;
+    }
+    const response = await apiClient.get("/v1/settings/preferences").catch(() => null) as Record<string, any> | null;
+    const preferred = response?.preferences?.locale;
+    if (typeof preferred === "string" && preferred.trim()) setStoredLocale(preferred);
+  }, []);
+
   const handleVerificationRequired = useCallback((error: ApiError, fallbackEmail?: string) => {
     clearSession();
     setVerification({
@@ -339,6 +351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       applyToken(nextToken);
       setVerification(null);
+      await syncLocalePreference();
       await refreshMe();
     } catch (error) {
       const apiError = error as ApiError;
@@ -347,7 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw error;
     }
-  }, [applyToken, handleVerificationRequired, refreshMe]);
+  }, [applyToken, handleVerificationRequired, refreshMe, syncLocalePreference]);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await apiClient.register(payload) as Record<string, unknown>;
@@ -364,8 +377,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSession();
   }, [clearSession]);
 
-  const requestVerification = useCallback(async (email?: string) => {
-    const response = await apiClient.auth.requestEmailVerification(email ? { email } : undefined) as Record<string, unknown>;
+  const requestVerification = useCallback(async (email?: string, locale?: string) => {
+    const payload = email || locale ? { ...(email ? { email } : {}), ...(locale ? { locale } : {}) } : undefined;
+    const response = await apiClient.auth.requestEmailVerification(payload) as Record<string, unknown>;
     const message = String(response.message || "If an account exists, we sent a verification email.");
     setVerification((current) => ({ ...(current || {}), email: email || current?.email, message }));
     return message;
@@ -387,6 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalized = normalizeMe(response);
     applyToken(nextToken);
+    await syncLocalePreference();
     setUser(normalized.user);
     setOrganizations(normalized.organizations);
     setCurrentOrganization(normalized.currentOrganization);
@@ -398,7 +413,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await refreshMe().catch(() => null);
     setVerification(null);
-  }, [applyToken, refreshMe]);
+  }, [applyToken, refreshMe, syncLocalePreference]);
 
   useEffect(() => {
     window.addEventListener("agroai:unauthorized", clearSession);

@@ -286,6 +286,7 @@ export type RegisterPayload = {
   intended_use: string;
   planned_data_sources: string;
   workspace_name: string;
+  locale?: string;
   crop?: string;
   region?: string;
 };
@@ -307,10 +308,10 @@ export type FieldUpdatePayload = { field_id?: string; field_name?: string; block
 export type FieldMessagePayload = { message: string; sender_role: "operator" | "manager" | "agency" | "advisor"; channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams"; field_hint?: string; workspace_id?: string };
 export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
 function providerForUpload(file: File) { const name = file.name.toLowerCase(); if (name.endsWith(".csv")) return "manual_csv"; return "chat_upload"; }
-export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual" };
+export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual"; locale?: string };
 export type BillingCheckoutSessionPayload = { organization_id: string; offer?: string; plan?: string };
-export type BillingPortalPayload = { organization_id: string };
-export type EmailVerificationRequestPayload = { email?: string };
+export type BillingPortalPayload = { organization_id: string; locale?: string };
+export type EmailVerificationRequestPayload = { email?: string; locale?: string };
 export type EmailVerificationConfirmPayload = { token: string };
 export type TeamInvitationPayload = { email: string; role: "owner" | "admin" | "manager" | "operator" | "viewer" };
 export type SupportTicketPayload = { category: "support" | "integration" | "issue" | "onboarding" | "sales"; subject: string; message: string; priority?: "low" | "medium" | "high" | "urgent"; name?: string; email?: string; company?: string; role?: string; workspace_id?: string; source_page?: string };

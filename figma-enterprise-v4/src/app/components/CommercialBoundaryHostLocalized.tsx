@@ -136,7 +136,7 @@ function CommercialBoundaryDialog({
   target: PlanId;
   onClose: () => void;
 }) {
-  const { t } = useLocale();
+  const { t, effectiveLocale } = useLocale();
   const { tx } = usePortalCopy(["paywall", "shared"]);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
@@ -172,7 +172,7 @@ function CommercialBoundaryDialog({
         // Checkout does not depend on local storage; preference persistence is best-effort.
       }
 
-      const response = await apiClient.billing.checkout({ plan_id: target, billing_period: billingPeriod }) as Record<string, unknown>;
+      const response = await apiClient.billing.checkout({ plan_id: target, billing_period: billingPeriod, locale: effectiveLocale }) as Record<string, unknown>;
       const checkoutUrl = typeof response.checkout_url === "string" ? response.checkout_url.trim() : "";
       if (!checkoutUrl) {
         throw new Error(typeof response.message === "string" && response.message.trim() ? response.message : t("commercialBoundary.body.unavailable"));

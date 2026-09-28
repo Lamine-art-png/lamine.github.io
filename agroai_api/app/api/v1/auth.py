@@ -27,6 +27,7 @@ from app.models.saas import (
     OrganizationMembership,
     OrganizationVerificationProfile,
     User,
+    UserPreference,
     Workspace,
 )
 from app.services.account_verification import (
@@ -35,6 +36,7 @@ from app.services.account_verification import (
     verification_enforcement_enabled,
 )
 from app.services.email_verification import confirm_verification, create_verification_token, send_or_log_verification
+from app.services.verification_email_localization import normalize_verification_locale
 from app.services.entitlements import serialize_entitlements
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
@@ -74,6 +76,7 @@ class RegisterRequest(BaseModel):
     primary_crops: str | None = None
     intended_use: str | None = None
     planned_data_sources: str | None = None
+    locale: str | None = Field(default=None, max_length=40)
 
     @field_validator("email")
     @classmethod
@@ -99,6 +102,7 @@ class LoginRequest(BaseModel):
 
 class EmailVerificationRequest(BaseModel):
     email: str | None = None
+    locale: str | None = Field(default=None, max_length=40)
 
     @field_validator("email")
     @classmethod
@@ -227,12 +231,18 @@ def _verification_payload(user: User) -> dict:
     }
 
 
-def _best_effort_send_verification(db: Session, user: User, *, product_surface: str = "enterprise_portal") -> dict:
+def _best_effort_send_verification(
+    db: Session,
+    user: User,
+    *,
+    product_surface: str = "enterprise_portal",
+    locale: str | None = None,
+) -> dict:
     """Create/send a verification token without letting delivery issues break auth UX."""
 
     try:
         token = create_verification_token(db, user)
-        delivery = send_or_log_verification(db, user, token, product_surface=product_surface)
+        delivery = send_or_log_verification(db, user, token, product_surface=product_surface, locale=locale)
         db.commit()
         return delivery
     except Exception:
@@ -360,6 +370,8 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(user)
     db.flush()
+    if payload.locale:
+        db.add(UserPreference(user_id=user.id, locale=normalize_verification_locale(payload.locale)))
 
     now = datetime.utcnow()
     org = Organization(
@@ -461,6 +473,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         db,
         user,
         product_surface=_verification_product_surface(request),
+        locale=payload.locale,
     )
     db.refresh(user)
     db.refresh(org)
@@ -638,6 +651,7 @@ def request_email_verification(
                 db,
                 target,
                 product_surface=_verification_product_surface(request),
+                locale=payload.locale,
             )
     except (SQLAlchemyError, Exception):
         db.rollback()
