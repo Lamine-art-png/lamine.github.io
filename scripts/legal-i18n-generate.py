@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import time
 import urllib.request
+from i18n_public_translate import translate_catalog as public_translate_catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENDPOINT = "http://127.0.0.1:8787/api/chat"
@@ -98,6 +99,10 @@ def call(locale, source, endpoint):
     last = None
     for attempt in range(1, ATTEMPTS + 1):
         try:
+            try:
+                return validate(source, public_translate_catalog(locale, source))
+            except Exception as public_exc:
+                last = public_exc
             req = urllib.request.Request(endpoint, data=json.dumps(body, ensure_ascii=False).encode(), headers={
                 "content-type": "application/json",
                 "accept": "application/json",
