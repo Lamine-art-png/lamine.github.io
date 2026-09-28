@@ -6,6 +6,8 @@ on:
     branches: [fix/deterministic-localization-release]
     paths:
       - .github/workflows/i18n-build-candidates.yml
+      - scripts/i18n-generate-catalogs.py
+      - shared/localization/source.json
 
 permissions:
   contents: write
