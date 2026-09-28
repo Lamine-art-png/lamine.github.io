@@ -20,6 +20,7 @@ from app.services.entitlements import require_owner_or_admin, serialize_entitlem
 from app.services.non_customer_access import access_profile_metadata, activate_configured_profile
 from app.services.product_plans import public_plans, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
+from app.services.verification_email_localization import normalize_verification_locale
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -28,10 +29,29 @@ class CheckoutRequest(BaseModel):
     organization_id: str
     offer: str | None = None
     plan: str | None = None
+    locale: str | None = None
 
 
 class PortalRequest(BaseModel):
     organization_id: str
+    locale: str | None = None
+
+_STRIPE_LOCALES = {
+    "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fil", "fr", "hr", "hu",
+    "id", "it", "ja", "ko", "lt", "lv", "ms", "mt", "nb", "nl", "pl", "pt", "pt-BR",
+    "ro", "ru", "sk", "sl", "sv", "th", "tr", "vi", "zh", "zh-HK", "zh-TW",
+}
+
+
+def _stripe_locale(value: str | None) -> str:
+    canonical = normalize_verification_locale(value)
+    if canonical == "pt":
+        return "pt-BR"
+    if canonical == "tl":
+        return "fil"
+    if canonical == "no":
+        return "nb"
+    return canonical if canonical in _STRIPE_LOCALES else "auto"
 
 
 def _billing_unavailable() -> HTTPException:
@@ -221,6 +241,7 @@ def create_checkout_session(
             "cancel_url": f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
             "client_reference_id": org.id,
             "metadata": metadata,
+            "locale": _stripe_locale(payload.locale),
         }
         if offer_config["mode"] == "subscription":
             session_kwargs["subscription_data"] = {"metadata": metadata}
@@ -260,6 +281,7 @@ def create_portal_session(
         session = stripe.billing_portal.Session.create(
             customer=org.stripe_customer_id,
             return_url=f"{settings.APP_URL}/billing",
+            locale=_stripe_locale(payload.locale),
         )
     except stripe.error.StripeError:
         raise _billing_unavailable()
