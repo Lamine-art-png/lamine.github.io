@@ -1,0 +1,86 @@
+name: Adaptive live intelligence verification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - name: Install backend runtime and focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r agroai_api/requirements.txt
+          python -m pip install pytest==7.4.4 pytest-asyncio==0.23.3
+      - name: Compile backend
+        run: python -m py_compile $(find agroai_api/app agroai_api/alembic -name '*.py')
+      - name: Import FastAPI application
+        working-directory: agroai_api
+        env:
+          ENABLE_SCHEDULER: 'false'
+          DATABASE_URL: sqlite:///./ci-import.db
+        run: python -c "from app.main import app; print('backend import ok', app.title)"
+      - name: Run focused AI tests when present
+        shell: bash
+        run: |
+          tests=()
+          for file in \
+            agroai_api/tests/unit/test_adaptive_live_intelligence.py \
+            agroai_api/tests/unit/test_ai_foundation.py \
+            agroai_api/tests/unit/test_intelligence_core.py \
+            agroai_api/tests/unit/test_product_shell.py; do
+            if [[ -f "$file" ]]; then tests+=("$file"); fi
+          done
+          if (( ${#tests[@]} )); then
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging "${tests[@]}" -q
+          else
+            echo 'No focused test files found; compile/import checks completed.'
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci
+      - name: Build portal
+        working-directory: figma-enterprise-v4
+        run: npm run build
+
+  integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject unresolved merge conflicts
+        shell: bash
+        run: |
+          if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' agroai_api figma-enterprise-v4/src/app; then
+            echo 'Unresolved conflict markers found.'
+            exit 1
+          fi
+      - name: Reject canned customer inference fallbacks
+        shell: bash
+        run: |
+          if grep -RInE '_question_aware_local_fallback|localized_safe_fallback|I can help\. Give me a field' agroai_api/app figma-enterprise-v4/src/app; then
+            echo 'Canned customer inference fallback found.'
+            exit 1
+          fi
