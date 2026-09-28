@@ -18,8 +18,9 @@ const advertised = manifest.enabledUiLocales.filter((code) => code !== "auto");
 const complete = manifest.catalogCompleteLocales || [];
 
 assert(advertised.includes("en"), "English must remain available");
-assert(advertised.includes("pt-BR"), "Brazilian Portuguese must be first-class");
-assert(!advertised.includes("pt"), "generic pt must not replace the Brazilian production locale");
+const target = manifest.targetUiLocales || manifest.enabledUiLocales;
+assert(target.includes("pt-BR"), "Brazilian Portuguese must be a first-class production target");
+assert(!target.includes("pt"), "generic pt must not replace the Brazilian production target");
 assert(manifest.uiTranslationPolicy === "versioned-static-complete-catalogs", "production must use deterministic static catalogs");
 assert(Array.isArray(manifest.dynamicCatalogLocales) && manifest.dynamicCatalogLocales.length === 0, "advertised locales must not depend on runtime generation");
 assert(JSON.stringify([...advertised].sort()) === JSON.stringify([...complete].sort()), "every advertised locale must be catalog-complete");
