@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
 import hashlib
 import json
@@ -17,6 +16,8 @@ SOURCE_PATH = ROOT / "shared/localization/transactional-source.json"
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 ENDPOINT = os.environ.get("I18N_TRANSACTIONAL_AUTHORING_ENDPOINT", "http://127.0.0.1:8787/api/chat")
 MAX_ATTEMPTS = 4
+MAX_KEYS = 8
+MAX_CHARS = 900
 
 def stable_fingerprint(catalog: dict[str, str]) -> str:
     payload = json.dumps(catalog, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -51,7 +52,7 @@ def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
         raise ValueError(f"insufficient_translation_progress:{changed}")
     return out
 
-def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
+def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     system=(
         f"Translate every JSON string value into {locale} for professional AGRO-AI account-verification email. "
         "Return exactly one JSON object with identical keys. Preserve {product} exactly. Preserve AGRO-AI, API, TEST, LIVE, URLs and numeric values. "
@@ -61,7 +62,7 @@ def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
         "model":"transactional-localization-authoring",
         "messages":[{"role":"system","content":system},{"role":"user","content":"QUESTION: "+json.dumps(source,ensure_ascii=False,separators=(",",":"))}],
         "stream":False,
-        "options":{"temperature":0,"num_predict":2600},
+        "options":{"temperature":0,"num_predict":1200},
     }
     last=None
     for attempt in range(1,MAX_ATTEMPTS+1):
@@ -72,12 +73,58 @@ def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
             raw=payload.get("message",{}).get("content") or payload.get("response") or ""
             if payload.get("done") is not True or not isinstance(raw,str) or not raw.strip():
                 raise ValueError("invalid_provider_response")
-            return validate(source,clean_json(raw))
+            parsed=clean_json(raw)
+            if set(parsed) != set(source):
+                raise ValueError("transactional_key_mismatch")
+            out={}
+            for key, original in source.items():
+                value=parsed.get(key)
+                if not isinstance(value,str) or not value.strip() or value.strip().lower()=="[object object]":
+                    raise ValueError(f"invalid_value:{key}")
+                value=value.strip()
+                if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
+                    raise ValueError(f"placeholder_mismatch:{key}")
+                out[key]=value
+            return out
         except Exception as exc:
             last=exc
             if attempt<MAX_ATTEMPTS:
                 time.sleep(attempt*1.2)
-    raise RuntimeError(f"transactional_locale_failed:{locale}:{last}")
+    raise RuntimeError(f"transactional_chunk_failed:{locale}:{type(last).__name__ if last else 'unknown'}:{str(last)[:300] if last else ''}")
+
+
+def split_source(source: dict[str,str]) -> list[dict[str,str]]:
+    groups=[]
+    current={}
+    chars=0
+    for key,value in source.items():
+        cost=len(key)+len(value)+12
+        if current and (len(current)>=MAX_KEYS or chars+cost>MAX_CHARS):
+            groups.append(current); current={}; chars=0
+        current[key]=value; chars+=cost
+    if current: groups.append(current)
+    return groups
+
+
+def translate_resilient(locale: str, source: dict[str,str]) -> dict[str,str]:
+    try:
+        return call_translate(locale,source)
+    except RuntimeError:
+        if len(source)<=1:
+            raise
+        items=list(source.items())
+        mid=max(1,len(items)//2)
+        out={}
+        out.update(translate_resilient(locale,dict(items[:mid])))
+        out.update(translate_resilient(locale,dict(items[mid:])))
+        return out
+
+
+def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
+    out={}
+    for chunk in split_source(source):
+        out.update(translate_resilient(locale,chunk))
+    return validate(source,out)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -98,16 +145,13 @@ def main():
         return locale
 
     failures=[]
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        futures={pool.submit(one,locale):locale for locale in locales}
-        for future in as_completed(futures):
-            locale=futures[future]
-            try:
-                future.result()
-                print(f"PASS {locale}",flush=True)
-            except Exception as exc:
-                failures.append((locale,str(exc)))
-                print(f"FAIL {locale}: {exc}",flush=True)
+    for locale in locales:
+        try:
+            one(locale)
+            print(f"PASS {locale}",flush=True)
+        except Exception as exc:
+            failures.append((locale,str(exc)))
+            print(f"FAIL {locale}: {exc}",flush=True)
     if failures:
         raise SystemExit(json.dumps({"status":"failure","failures":failures},ensure_ascii=False))
     print(json.dumps({"status":"ok","locales":len(locales),"sourceFingerprint":fingerprint}))
