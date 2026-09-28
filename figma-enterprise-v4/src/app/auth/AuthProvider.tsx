@@ -64,7 +64,7 @@ type AuthContextValue = {
   selectWorkspace: (workspaceId: string) => void;
   createWorkspace: (payload: CreateOperationPayload) => Promise<Workspace>;
   updateWorkspace: (workspaceId: string, payload: { name: string }) => Promise<Workspace>;
-  requestVerification: (email?: string) => Promise<string>;
+  requestVerification: (email?: string, locale?: string) => Promise<string>;
   confirmVerification: (token: string) => Promise<void>;
   clearVerification: () => void;
 };
@@ -364,8 +364,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSession();
   }, [clearSession]);
 
-  const requestVerification = useCallback(async (email?: string) => {
-    const response = await apiClient.auth.requestEmailVerification(email ? { email } : undefined) as Record<string, unknown>;
+  const requestVerification = useCallback(async (email?: string, locale?: string) => {
+    const payload = email || locale ? { ...(email ? { email } : {}), ...(locale ? { locale } : {}) } : undefined;
+    const response = await apiClient.auth.requestEmailVerification(payload) as Record<string, unknown>;
     const message = String(response.message || "If an account exists, we sent a verification email.");
     setVerification((current) => ({ ...(current || {}), email: email || current?.email, message }));
     return message;
