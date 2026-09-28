@@ -6,6 +6,10 @@ on:
     branches: [fix/deterministic-localization-release]
     paths:
       - ".github/workflows/i18n-priority-ptbr.yml"
+      - "scripts/i18n-generate-catalogs.py"
+      - "scripts/i18n-generate-transactional-catalogs.py"
+      - "shared/localization/source.json"
+      - "shared/localization/transactional-source.json"
   workflow_dispatch:
 
 permissions:
