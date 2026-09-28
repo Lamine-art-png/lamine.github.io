@@ -198,7 +198,7 @@ def _portuguese_product_copy(product_surface: str) -> dict[str, str]:
 
 def _product_copy(product_surface: str, locale: str | None = None) -> dict[str, str]:
     canonical = _verification_locale(locale)
-    if canonical == "pt":
+    if canonical in {"pt", "pt-BR"}:
         return _portuguese_product_copy(product_surface)
     english = _english_product_copy(product_surface)
     if canonical == "en":
