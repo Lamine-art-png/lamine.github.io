@@ -1,6 +1,6 @@
 """Add self-service clickwrap acceptance ledger.
 
-Revision ID: 035_self_service_legal_acceptance
+Revision ID: 035_self_service_legal_accept
 Revises: 034_intelligence_wallet_commerce
 Create Date: 2026-09-27
 """
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "035_self_service_legal_acceptance"
+revision = "035_self_service_legal_accept"
 down_revision = "034_intelligence_wallet_commerce"
 branch_labels = None
 depends_on = None
