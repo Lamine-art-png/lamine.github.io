@@ -1,0 +1,43 @@
+name: Offline locale catalog candidates
+on:
+  workflow_dispatch:
+    inputs:
+      locales:
+        description: BCP-47 locales to author (candidates only)
+        default: pt-BR,ja,ar,de,my,fr-FR
+        required: true
+  push:
+    branches: [fix/deterministic-localization-release]
+    paths:
+      - scripts/i18n-generate-catalogs.py
+      - .github/workflows/i18n-build-candidates.yml
+permissions:
+  contents: read
+concurrency:
+  group: i18n-offline-authoring
+  cancel-in-progress: false
+jobs:
+  author:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CANDIDATE_LOCALES: ${{ inputs.locales || 'pt-BR,ja,ar,de,my,fr-FR' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify authenticated authoring provider before bulk generation
+        run: python scripts/i18n-generate-catalogs.py --locales pt-BR --preflight
+      - name: Generate source-fingerprinted candidates offline
+        run: python scripts/i18n-generate-catalogs.py --locales "$CANDIDATE_LOCALES"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: locale-candidates-${{ github.sha }}
+          path: shared/localization/candidates
+          if-no-files-found: ignore
+          retention-days: 7
