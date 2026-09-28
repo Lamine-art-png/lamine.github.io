@@ -17,6 +17,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from i18n_public_translate import translate_catalog as public_translate_catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -206,9 +207,15 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
     explicit_authoring = endpoint.startswith("http://127.0.0.1:") or endpoint.startswith("http://localhost:")
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
+            # Deterministic release authoring starts with the same public batch
+            # translation path used by AGRO-AI's edge fast path, then validates
+            # exact keys/placeholders before accepting the chunk.
+            try:
+                return validate_chunk(source, public_translate_catalog(locale, source))
+            except Exception as public_exc:
+                last = public_exc
             # Release workflows deliberately start an isolated, production-equivalent
-            # authoring worker. When that endpoint is explicitly provided, use it
-            # first instead of burning latency/quota on legacy remote providers.
+            # authoring worker as a secondary fallback.
             if explicit_authoring:
                 try:
                     return call_edge(locale, source, endpoint)
