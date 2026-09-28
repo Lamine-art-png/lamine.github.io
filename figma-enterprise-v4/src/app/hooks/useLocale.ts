@@ -169,26 +169,27 @@ export function useLocale() {
 
     primeKnownLocale(canonical);
     const targetLocale = normalizeLocale(canonical);
-    if (targetLocale !== "en" && !hasCriticalLocaleCatalog(canonical)) {
+    if (targetLocale !== "en" && !hasCompleteLocaleCatalog(canonical)) {
       setCatalogLoading(true);
       try {
-        await ensureLocaleCatalog(canonical, "critical");
-        if (!hasCriticalLocaleCatalog(canonical)) {
-          throw new Error(`Critical UI translation incomplete for ${canonical}`);
+        // Atomic language activation: the requested locale becomes visible only
+        // after the complete source catalog is available. Production-advertised
+        // locales are bundled, so this is normally synchronous/instant. The
+        // dynamic path remains a recovery/authoring fallback only.
+        await ensureLocaleCatalog(canonical, "full");
+        if (!hasCompleteLocaleCatalog(canonical)) {
+          throw new Error(`Full UI translation incomplete for ${canonical}`);
         }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "UI translation unavailable";
         console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, { locale: canonical, phase: "activation", error: message });
-        // Preserve the customer's explicit language choice even when the
-        // translation provider is temporarily unavailable. Missing keys fail
-        // open to English per-key and the background hydration effect retries
-        // the selected locale without trapping or reverting the selector.
-        const activated = setStoredLocale(canonical);
-        setSelectedLocaleState(activated);
+        // Never claim a locale is active while rendering English fallbacks.
+        // Keep the previously complete locale selected and recoverable.
+        setSelectedLocaleState(current);
         setCatalogError(message);
         setCatalogLoading(false);
         notifyLocaleRuntime();
-        return activated;
+        return current;
       }
     }
 
