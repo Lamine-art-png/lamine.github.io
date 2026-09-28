@@ -91,7 +91,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
     "self_service_legal_acceptances": {
         "id", "organization_id", "user_id", "terms_version", "privacy_version",
-        "terms_url", "privacy_url", "acceptance_text", "authority_confirmed",
+        "terms_url", "privacy_url", "locale", "acceptance_text", "authority_confirmed",
         "ip_hash", "user_agent_hash", "accepted_at",
     },
     "account_access_appeals": {
