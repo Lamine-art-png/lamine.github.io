@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 
-export type StartRecoveryPayload = { email: string };
-export type CompleteRecoveryPayload = { token: string; replacement_credential: string };
+export type StartRecoveryPayload = { email: string; locale?: string };
+export type CompleteRecoveryPayload = { token: string; replacement_credential: string; locale?: string };
 export type RecoveryResponse = { message?: string; status?: string };
 
 export const recoveryClient = {
