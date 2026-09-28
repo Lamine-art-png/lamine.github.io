@@ -6,6 +6,8 @@ on:
     paths:
       - "shared/localization/transactional-source.json"
       - "scripts/i18n-generate-transactional-catalogs.py"
+      - "cloudflare/ollama-compat/src/index.js"
+      - "wrangler.i18n-authoring.toml"
       - ".github/workflows/transactional-locale-catalogs.yml"
   workflow_dispatch:
 

@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/legal-locale-snapshots.yml"
       - "scripts/legal-i18n-generate.py"
+      - "cloudflare/ollama-compat/src/index.js"
+      - "wrangler.i18n-authoring.toml"
       - "shared/supported-locales.json"
   workflow_dispatch:
 

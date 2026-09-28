@@ -7,6 +7,8 @@ on:
     paths:
       - ".github/workflows/i18n-priority-ptbr.yml"
       - "scripts/i18n-generate-catalogs.py"
+      - "cloudflare/ollama-compat/src/index.js"
+      - "wrangler.i18n-authoring.toml"
       - "scripts/i18n-generate-transactional-catalogs.py"
       - "shared/localization/source.json"
       - "shared/localization/transactional-source.json"
