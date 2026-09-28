@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "035_self_service_legal_accept"
+HEAD_ALEMBIC_REVISION = "036_legal_acceptance_locale"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
