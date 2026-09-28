@@ -67,9 +67,20 @@ const COPY = [
   "Saved.",
 ] as const;
 
-function cleanNumber(value: string, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function decimalInput(value: string, fallback?: string) {
+  const raw = value.trim() || fallback;
+  if (!raw || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
+    throw new Error("Enter a valid non-negative decimal value.");
+  }
+  if (raw.startsWith(".")) return `0${raw}`;
+  if (raw.endsWith(".")) return `${raw}0`;
+  return raw;
+}
+
+function observedAtIso(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("Enter a valid observation date and time.");
+  return date.toISOString();
 }
 
 function errorMessage(cause: unknown) {
@@ -203,11 +214,20 @@ export function MarketIntelligenceV2() {
     }
   };
 
+  const refreshPositionAfterWrite = async (positionId: string) => {
+    try {
+      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(positionId)}/refresh`, {});
+      return "";
+    } catch (cause) {
+      return errorMessage(cause);
+    }
+  };
+
   const createPosition = async () => {
     setError("");
-    const inventory = cleanNumber(positionForm.inventory_quantity);
+    const inventory = decimalInput(positionForm.inventory_quantity, "0");
     const metadata: Record<string, unknown> = { production_cost_behavior: "fixed_total_at_baseline_yield" };
-    if (inventory > 0 && positionForm.inventory_cost_per_unit.trim()) metadata.inventory_cost_per_unit = positionForm.inventory_cost_per_unit;
+    if (positionForm.inventory_cost_per_unit.trim()) metadata.inventory_cost_per_unit = decimalInput(positionForm.inventory_cost_per_unit);
     if (positionForm.usda_mmn_slug.trim()) metadata.usda_mmn_slug = positionForm.usda_mmn_slug.trim();
     const slug = `${positionForm.commodity}-${positionForm.season}-${Date.now().toString(36)}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
     try {
@@ -222,35 +242,21 @@ export function MarketIntelligenceV2() {
         local_currency: positionForm.local_currency.trim().toUpperCase(),
         reporting_currency: positionForm.reporting_currency.trim().toUpperCase(),
         quantity_unit: positionForm.quantity_unit,
-        expected_production: cleanNumber(positionForm.expected_production),
+        expected_production: decimalInput(positionForm.expected_production),
         inventory_quantity: inventory,
-        production_cost_per_unit: positionForm.production_cost_per_unit.trim() ? cleanNumber(positionForm.production_cost_per_unit) : null,
-        current_realizable_price: positionForm.current_realizable_price.trim() ? cleanNumber(positionForm.current_realizable_price) : null,
+        production_cost_per_unit: positionForm.production_cost_per_unit.trim() ? decimalInput(positionForm.production_cost_per_unit) : null,
+        current_realizable_price: positionForm.current_realizable_price.trim() ? decimalInput(positionForm.current_realizable_price) : null,
         price_currency: positionForm.price_currency.trim().toUpperCase(),
-        freight_per_unit: cleanNumber(positionForm.freight_per_unit),
-        storage_per_unit: cleanNumber(positionForm.storage_per_unit),
+        freight_per_unit: decimalInput(positionForm.freight_per_unit, "0"),
+        storage_per_unit: decimalInput(positionForm.storage_per_unit, "0"),
         metadata,
       });
-      if (positionForm.current_realizable_price.trim()) {
-        await apiClient.post("/v1/market-intelligence/observations", {
-          position_id: created.id,
-          evidence_id: `manual-price-${created.id}-${Date.now()}`,
-          observation_type: "cash_price",
-          provider: "customer",
-          source_name: "Customer entered market price",
-          source_status: "MANUAL",
-          value: cleanNumber(positionForm.current_realizable_price),
-          unit: `${positionForm.price_currency.trim().toUpperCase()}/${positionForm.quantity_unit}`,
-          currency: positionForm.price_currency.trim().toUpperCase(),
-          observed_at: new Date().toISOString(),
-          quality: { grade: "customer_entered" },
-          licensing: { display_allowed: true },
-          metadata: { entry_surface: "enterprise_portal" },
-        });
-      }
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(created.id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(created.id);
       setManageOpen(false);
-      await changed("Commercial position created and market sources refreshed.");
+      await changed(refreshError
+        ? "Commercial position created. Market-source refresh needs attention."
+        : "Commercial position created and market sources refreshed.");
+      if (refreshError) setError(`The position was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -264,14 +270,17 @@ export function MarketIntelligenceV2() {
         position_id: contractForm.position_id,
         contract_code: contractForm.contract_code.trim(),
         buyer: contractForm.buyer.trim() || null,
-        quantity: cleanNumber(contractForm.quantity),
+        quantity: decimalInput(contractForm.quantity),
         quantity_unit: contractForm.quantity_unit,
-        price: cleanNumber(contractForm.price),
+        price: decimalInput(contractForm.price),
         currency: contractForm.currency.trim().toUpperCase(),
       });
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(contractForm.position_id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(contractForm.position_id);
       setContractForm((current) => ({ ...current, contract_code: "", buyer: "", quantity: "", price: "" }));
-      await changed("Contract added and FX reconciled.");
+      await changed(refreshError
+        ? "Contract added. Market-source refresh needs attention."
+        : "Contract added and FX reconciled.");
+      if (refreshError) setError(`The contract was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -281,30 +290,20 @@ export function MarketIntelligenceV2() {
     if (!priceForm.position_id || !selectedForPrice) return;
     setError("");
     try {
-      const value = cleanNumber(priceForm.price);
+      const value = decimalInput(priceForm.price);
       const currency = priceForm.currency.trim().toUpperCase();
-      await apiClient.patch(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}`, {
-        current_realizable_price: value,
-        price_currency: currency,
-      });
-      await apiClient.post("/v1/market-intelligence/observations", {
-        position_id: priceForm.position_id,
-        evidence_id: `manual-price-${priceForm.position_id}-${Date.now()}`,
-        observation_type: "cash_price",
-        provider: "customer",
-        source_name: "Customer entered market price",
-        source_status: "MANUAL",
+      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}/manual-price`, {
         value,
-        unit: `${currency}/${selectedForPrice.quantity_unit}`,
         currency,
-        observed_at: new Date(priceForm.observed_at).toISOString(),
-        quality: { grade: "customer_entered" },
-        licensing: { display_allowed: true },
-        metadata: { entry_surface: "enterprise_portal" },
+        observed_at: observedAtIso(priceForm.observed_at),
+        source_name: "Customer entered market price",
       });
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(priceForm.position_id)}/refresh`, {});
+      const refreshError = await refreshPositionAfterWrite(priceForm.position_id);
       setPriceForm((current) => ({ ...current, price: "" }));
-      await changed("Market price updated and FX refreshed.");
+      await changed(refreshError
+        ? "Market price saved. FX refresh needs attention."
+        : "Market price updated and FX refreshed.");
+      if (refreshError) setError(`The market price was saved, but market data refresh did not complete: ${refreshError}`);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -353,16 +352,16 @@ export function MarketIntelligenceV2() {
                     <div><Label>{tx("Region / state")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.region} onChange={(e) => setPositionForm({ ...positionForm, region: e.target.value })} placeholder="Iowa" /></div>
                     <div><Label>{tx("Market structure")}</Label><select className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.market_structure} onChange={(e) => setPositionForm({ ...positionForm, market_structure: e.target.value })}><option value="physical">Physical</option><option value="hybrid">Physical + benchmark</option><option value="futures">Exchange-linked</option></select></div>
                     <div><Label>{tx("Quantity unit")}</Label><select className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.quantity_unit} onChange={(e) => setPositionForm({ ...positionForm, quantity_unit: e.target.value })}><option value="bushel">Bushel</option><option value="tonne">Metric tonne</option><option value="kg">Kilogram</option><option value="pound">Pound</option></select></div>
-                    <div><Label>{tx("Local currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.local_currency} onChange={(e) => setPositionForm({ ...positionForm, local_currency: e.target.value.toUpperCase() })} /></div>
+                    <div><Label>{tx("Local currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.local_currency} onChange={(e) => { const next = e.target.value.toUpperCase(); setPositionForm((current) => ({ ...current, local_currency: next, price_currency: !current.price_currency || current.price_currency === current.local_currency ? next : current.price_currency })); }} /></div>
                     <div><Label>{tx("Reporting currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.reporting_currency} onChange={(e) => setPositionForm({ ...positionForm, reporting_currency: e.target.value.toUpperCase() })} /></div>
                     <div><Label>{tx("Expected production")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.expected_production} onChange={(e) => setPositionForm({ ...positionForm, expected_production: e.target.value })} placeholder="100000" /></div>
                     <div><Label>{tx("Carry inventory")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.inventory_quantity} onChange={(e) => setPositionForm({ ...positionForm, inventory_quantity: e.target.value })} /></div>
-                    <div><Label>{tx("Production cost per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.production_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, production_cost_per_unit: e.target.value })} /></div>
-                    <div><Label>{tx("Inventory cost per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.inventory_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, inventory_cost_per_unit: e.target.value })} /></div>
+                    <div><Label>{tx("Production cost per unit")} ({positionForm.reporting_currency || "—"})</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.production_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, production_cost_per_unit: e.target.value })} /></div>
+                    <div><Label>{tx("Inventory cost per unit")} ({positionForm.reporting_currency || "—"})</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.inventory_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, inventory_cost_per_unit: e.target.value })} /></div>
                     <div><Label>{tx("Current realizable price")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.current_realizable_price} onChange={(e) => setPositionForm({ ...positionForm, current_realizable_price: e.target.value })} /></div>
                     <div><Label>{tx("Price currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.price_currency} onChange={(e) => setPositionForm({ ...positionForm, price_currency: e.target.value.toUpperCase() })} /></div>
-                    <div><Label>{tx("Freight per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.freight_per_unit} onChange={(e) => setPositionForm({ ...positionForm, freight_per_unit: e.target.value })} /></div>
-                    <div><Label>{tx("Storage per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.storage_per_unit} onChange={(e) => setPositionForm({ ...positionForm, storage_per_unit: e.target.value })} /></div>
+                    <div><Label>{tx("Freight per unit")} ({positionForm.reporting_currency || "—"})</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.freight_per_unit} onChange={(e) => setPositionForm({ ...positionForm, freight_per_unit: e.target.value })} /></div>
+                    <div><Label>{tx("Storage per unit")} ({positionForm.reporting_currency || "—"})</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.storage_per_unit} onChange={(e) => setPositionForm({ ...positionForm, storage_per_unit: e.target.value })} /></div>
                     <div className="md:col-span-2"><Label>{tx("USDA MyMarketNews report slug (optional)")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.usda_mmn_slug} onChange={(e) => setPositionForm({ ...positionForm, usda_mmn_slug: e.target.value })} placeholder="e.g. 2850" /></div>
                   </div>
                   <button onClick={() => void createPosition()} disabled={!positionForm.name.trim() || !positionForm.expected_production.trim()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#234224] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-4 w-4" />{tx("Create position")}</button>

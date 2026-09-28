@@ -104,6 +104,15 @@ def validate_numeric_grounding(payload: dict[str, Any], evidence: dict[str, str]
         if number not in global_claim_numbers:
             errors.append(f"unstructured_numeric_claim:summary:{number}")
 
+    # Actions are intentionally non-executing workflow suggestions and the
+    # schema does not carry numeric_claims for them. Any number in an action
+    # description is therefore ungrounded by construction and must fail closed.
+    for action_index, action in enumerate(payload.get("actions") or []):
+        if not isinstance(action, dict):
+            continue
+        for number in _text_numbers(action.get("description")):
+            errors.append(f"unstructured_numeric_claim:action_{action_index}:{number}")
+
     # Stable ordering and de-duplication keeps audit traces compact.
     return list(dict.fromkeys(errors))
 
@@ -132,6 +141,11 @@ def validate_decision_support_policy(payload: dict[str, Any]) -> list[str]:
             " ".join(str(insight.get(key) or "") for key in ("title", "explanation"))
             for insight in (payload.get("insights") or [])
             if isinstance(insight, dict)
+        ]
+        + [
+            str(action.get("description") or "")
+            for action in (payload.get("actions") or [])
+            if isinstance(action, dict)
         ]
     )
     if _DERIVATIVES_INSTRUCTION_RE.search(visible):

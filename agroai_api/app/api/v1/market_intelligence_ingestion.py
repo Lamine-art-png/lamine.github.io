@@ -7,7 +7,7 @@ live exchange data.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -20,6 +20,7 @@ from app.api.v1.market_intelligence import enforce_market_intelligence_release
 from app.db.base import get_db
 from app.models.market_intelligence import MarketContractPosition, MarketObservation, MarketPosition
 from app.models.saas import Workspace
+from app.services.market_intelligence import MarketCalculationError, convert_price_per_unit, convert_quantity
 
 router = APIRouter(
     prefix="/market-intelligence",
@@ -126,6 +127,29 @@ def create_position(payload: PositionInput, ctx: AuthContext = Depends(get_auth_
         metadata_json={**payload.metadata, "input_source": "customer_structured_input"},
     )
     db.add(row)
+    # A price supplied through this customer-input endpoint is a customer fact,
+    # not a governed live feed. Persist its provenance in the same transaction
+    # as the position so the economic baseline can never exist without evidence.
+    if payload.current_realizable_price is not None:
+        price_currency = payload.price_currency or payload.local_currency
+        db.add(MarketObservation(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            position_id=row.id,
+            evidence_id=f"manual-price-{row.id}-{uuid.uuid4().hex[:12]}",
+            observation_type="cash_price",
+            provider="customer",
+            source_name="Customer entered market price",
+            source_status="MANUAL",
+            value=payload.current_realizable_price,
+            unit=f"{price_currency}/{payload.quantity_unit}",
+            currency=price_currency,
+            observed_at=datetime.utcnow(),
+            retrieved_at=datetime.utcnow(),
+            quality_json={"grade": "customer_entered"},
+            licensing_json={"display_allowed": True},
+            metadata_json={"input_source": "customer_structured_input", "entry_surface": "position_create"},
+        ))
     db.commit()
     return {"id": row.id, "position_key": row.position_key, "status": "created"}
 
@@ -165,6 +189,14 @@ def create_contract(payload: ContractInput, ctx: AuthContext = Depends(get_auth_
     existing = db.query(MarketContractPosition).filter(MarketContractPosition.organization_id == org_id, MarketContractPosition.contract_code == payload.contract_code).first()
     if existing is not None:
         raise HTTPException(status_code=409, detail={"code": "contract_code_exists", "message": "A commercial contract already uses this code."})
+    try:
+        convert_quantity(payload.quantity, payload.quantity_unit, position.quantity_unit, position.commodity)
+        convert_price_per_unit(payload.price, payload.quantity_unit, position.quantity_unit, position.commodity)
+    except MarketCalculationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "contract_unit_incompatible", "message": str(exc)},
+        ) from exc
     if payload.delivery_start and payload.delivery_end and payload.delivery_end < payload.delivery_start:
         raise HTTPException(status_code=422, detail={"code": "invalid_delivery_window", "message": "delivery_end must not precede delivery_start"})
     row = MarketContractPosition(
@@ -233,7 +265,7 @@ def create_observation(payload: ObservationInput, ctx: AuthContext = Depends(get
         id=str(uuid.uuid4()), organization_id=org_id, position_id=payload.position_id, evidence_id=payload.evidence_id,
         observation_type=payload.observation_type, provider=payload.provider, source_name=payload.source_name,
         source_status=source_state, value=payload.value, unit=payload.unit, currency=payload.currency,
-        observed_at=payload.observed_at, retrieved_at=datetime.utcnow(), delay_minutes=payload.delay_minutes,
+        observed_at=(payload.observed_at.astimezone(timezone.utc).replace(tzinfo=None) if payload.observed_at.tzinfo else payload.observed_at), retrieved_at=datetime.utcnow(), delay_minutes=payload.delay_minutes,
         quality_json=payload.quality, licensing_json=payload.licensing,
         metadata_json={**payload.metadata, "input_source": "customer_structured_input", "requested_source_status": payload.source_status},
     )

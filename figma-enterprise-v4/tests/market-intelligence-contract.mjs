@@ -30,7 +30,7 @@ assert.match(managedPageSource, /\/v1\/market-intelligence\/providers/);
 assert.match(managedPageSource, /\/v1\/market-intelligence\/refresh/);
 assert.match(managedPageSource, /\/v1\/market-intelligence\/positions/);
 assert.match(managedPageSource, /\/v1\/market-intelligence\/contracts/);
-assert.match(managedPageSource, /\/v1\/market-intelligence\/observations/);
+assert.match(managedPageSource, /manual-price/);
 assert.match(managedPageSource, /ECB/);
 assert.match(managedPageSource, /USDA MyMarketNews/);
 assert.match(managedPageSource, /never presents manual or delayed data as live/);
