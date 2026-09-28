@@ -17,17 +17,52 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
-      - name: Prove direct Workers AI translation authoring
+      - name: Discover authorized localization authoring provider
         shell: bash
         run: |
-          set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai/run/@cf/meta/llama-3.1-8b-instruct-fast"
-          payload='{"messages":[{"role":"system","content":"Translate the JSON string values to Brazilian Portuguese. Return JSON only and preserve keys."},{"role":"user","content":"{\"create\":\"Create account\",\"continue\":\"Continue\"}"}],"temperature":0,"max_tokens":128}'
-          started=$(date +%s)
-          body=$(curl --fail-with-body --silent --show-error --max-time 40             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             --data "$payload" "$url")
-          elapsed=$(( $(date +%s) - started ))
-          echo "$body" | jq -e '.success == true and (.result.response | type == "string") and (.result.response | length > 2)' >/dev/null
-          echo "workers_ai_authoring_smoke=ok latency_seconds=$elapsed"
+          set -u
+          ok=0
+          if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            echo "openrouter_secret=present"
+            body=$(curl --silent --show-error --max-time 40               -H "Authorization: Bearer $OPENROUTER_API_KEY"               -H "Content-Type: application/json"               -H "HTTP-Referer: https://agroai-pilot.com"               --data '{"model":"z-ai/glm-5.2","messages":[{"role":"user","content":"Return exactly: OK"}],"max_tokens":8,"temperature":0}'               https://openrouter.ai/api/v1/chat/completions || true)
+            if echo "$body" | jq -e '.choices[0].message.content | type=="string"' >/dev/null 2>&1; then
+              echo "openrouter_authoring_smoke=ok"; ok=1
+            else
+              echo "openrouter_authoring_smoke=failed"
+            fi
+          else
+            echo "openrouter_secret=absent"
+          fi
+
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "openai_secret=present"
+            body=$(curl --silent --show-error --max-time 40               -H "Authorization: Bearer $OPENAI_API_KEY"               -H "Content-Type: application/json"               --data '{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"Return exactly: OK"}],"max_tokens":8,"temperature":0}'               https://api.openai.com/v1/chat/completions || true)
+            if echo "$body" | jq -e '.choices[0].message.content | type=="string"' >/dev/null 2>&1; then
+              echo "openai_authoring_smoke=ok"; ok=1
+            else
+              echo "openai_authoring_smoke=failed"
+            fi
+          else
+            echo "openai_secret=absent"
+          fi
+
+          if [ -n "${GEMINI_API_KEY:-}" ]; then
+            echo "gemini_secret=present"
+            body=$(curl --silent --show-error --max-time 40               -H "Content-Type: application/json"               --data '{"contents":[{"parts":[{"text":"Return exactly: OK"}]}],"generationConfig":{"temperature":0,"maxOutputTokens":8}}'               "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" || true)
+            if echo "$body" | jq -e '.candidates[0].content.parts[0].text | type=="string"' >/dev/null 2>&1; then
+              echo "gemini_authoring_smoke=ok"; ok=1
+            else
+              echo "gemini_authoring_smoke=failed"
+            fi
+          else
+            echo "gemini_secret=absent"
+          fi
+
+          if [ "$ok" -eq 0 ]; then
+            echo "no_authorized_hosted_authoring_provider=true"
+            exit 1
+          fi
