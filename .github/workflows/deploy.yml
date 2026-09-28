@@ -343,7 +343,7 @@ jobs:
           cat platform-smoke/assets/*.js > platform-smoke/all-js.txt
           grep -F 'platform.agroai-pilot.com' platform-smoke/all-js.txt >/dev/null
           grep -F 'Build on AGRO-AI.' platform-smoke/all-js.txt >/dev/null
-          grep -F 'Platform API enrollment remains a separate reviewed step after sign-in.' platform-smoke/all-js.txt >/dev/null
+          grep -F 'Verified developers can activate bounded TEST access after accepting the current developer agreements.' platform-smoke/all-js.txt >/dev/null
           grep -F 'Permanent API keys never enter browser JavaScript.' platform-smoke/all-js.txt >/dev/null
           curl --fail --silent --show-error --max-time 20 "${PLATFORM_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
           curl --fail --silent --show-error --max-time 30 "${PLATFORM_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
