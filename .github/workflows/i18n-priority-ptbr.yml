@@ -107,7 +107,6 @@ jobs:
           git config user.name "AGRO-AI Release Bot"
           git config user.email "release-bot@agroai-pilot.com"
           git add shared/localization/catalogs/pt-BR.json \
-                  shared/localization/transactional-catalogs/pt-BR.json \
                   shared/supported-locales.json
           git commit -m "Promote deterministic Brazilian Portuguese localization"
           git pull --rebase origin "${GITHUB_REF_NAME}"
