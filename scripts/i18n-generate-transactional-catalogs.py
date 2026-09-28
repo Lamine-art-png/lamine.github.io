@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ast
+
 import argparse
 import hashlib
 import json
@@ -31,7 +33,10 @@ def clean_json(raw: str) -> dict:
     end = value.rfind("}")
     if start >= 0 and end > start:
         value = value[start:end + 1]
-    parsed = json.loads(value)
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        parsed = ast.literal_eval(value)
     if not isinstance(parsed, dict):
         raise ValueError("translation_not_object")
     return parsed
