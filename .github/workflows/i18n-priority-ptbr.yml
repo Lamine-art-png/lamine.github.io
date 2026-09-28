@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: durable process-level resume after transient Workers AI outages
+# release retry: isolated Brazil authoring after pausing global matrices
 
 on:
   push:
