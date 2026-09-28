@@ -10,8 +10,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
-const SELF_SERVICE_TERMS_VERSION = "2026-09-27";
-const SELF_SERVICE_PRIVACY_VERSION = "2026-09";
+const SELF_SERVICE_TERMS_VERSION = "2026-07-03";
+const SELF_SERVICE_PRIVACY_VERSION = "2026-07-03";
 
 const initialRegisterForm: RegisterPayload = {
   name: "", email: "", password: "", organization_name: "", organization_type: "",
