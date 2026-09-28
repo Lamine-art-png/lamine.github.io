@@ -140,7 +140,14 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     for attempt in range(1,MAX_ATTEMPTS+1):
         try:
             if cloudflare_rest_available():
-                return call_cloudflare_rest(locale, source)
+                try:
+                    return call_cloudflare_rest(locale, source)
+                except Exception as rest_exc:
+                    # Deploy-capable Cloudflare credentials may not include
+                    # Workers AI REST permission. Fall through to AGRO-AI's
+                    # deployed edge authoring runtime instead of failing every
+                    # transactional locale on a REST 401.
+                    last=rest_exc
             req=urllib.request.Request(ENDPOINT,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"content-type":"application/json","accept":"application/json","user-agent":"Mozilla/5.0 AGRO-AI-Localization-Release/1.0"})
             with urllib.request.urlopen(req,timeout=55) as response:
                 payload=json.load(response)
