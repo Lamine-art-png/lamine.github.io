@@ -31,7 +31,14 @@ PROTECTED_EXACT = {"AGRO-AI", "GPT", "API", "OAuth", "CSV", "PDF", "JSON", "Open
 def clean_json_text(raw: str) -> str:
     value = raw.strip()
     value = re.sub(r"^\`\`\`(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*\`\`\`$", "", value)
+    value = re.sub(r"\s*\`\`\`$", "", value).strip()
+    # Structured-output models occasionally prepend/append a short sentence
+    # even when instructed not to. Accept exactly the outer JSON object while
+    # still letting json.loads fail closed on malformed content.
+    start = value.find("{")
+    end = value.rfind("}")
+    if start >= 0 and end > start:
+        value = value[start:end + 1]
     return value.strip()
 
 
