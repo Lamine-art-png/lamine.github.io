@@ -12,6 +12,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from i18n_public_translate import translate_catalog as public_translate_catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "shared/localization/transactional-source.json"
@@ -140,6 +141,10 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     explicit_authoring=ENDPOINT.startswith("http://127.0.0.1:") or ENDPOINT.startswith("http://localhost:")
     for attempt in range(1,MAX_ATTEMPTS+1):
         try:
+            try:
+                return validate(source, public_translate_catalog(locale, source))
+            except Exception as public_exc:
+                last=public_exc
             # CI/release starts an isolated authoring worker. Prefer it whenever
             # explicitly configured; REST chat models are fallback only.
             if cloudflare_rest_available() and not explicit_authoring:
