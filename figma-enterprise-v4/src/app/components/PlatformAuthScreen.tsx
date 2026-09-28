@@ -5,6 +5,7 @@ import { RegisterPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
+import { useLocale } from "../hooks/useLocale";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -131,6 +132,11 @@ function VerificationPanel() {
 }
 
 export function PlatformAuthScreen() {
+  const { effectiveLocale: legalLocale } = useLocale();
+  const legalLang = encodeURIComponent(legalLocale);
+  const termsUrl = `https://agroai-pilot.com/terms-of-service?lang=${legalLang}`;
+  const privacyUrl = `https://agroai-pilot.com/privacy-policy?lang=${legalLang}`;
+
   const { login, register, verification, confirmVerification } = useAuth();
   const [mode, setMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -291,7 +297,7 @@ export function PlatformAuthScreen() {
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D6DDD0] bg-white p-4">
                       <input type="checkbox" checked={registerForm.terms_accepted && registerForm.authority_confirmed} onChange={(event) => setRegisterForm({ ...registerForm, terms_accepted: event.target.checked, authority_confirmed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-[#9BA89F] accent-[#10231B]" required />
                       <span className="text-[11px] leading-5 text-[#52645A]">
-                        I agree to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href="https://agroai-pilot.com/privacy-policy" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
+                        I agree to the <a href={termsUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href={privacyUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
                       </span>
                     </label>
                   </> : null}
