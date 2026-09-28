@@ -26,6 +26,7 @@ from app.models.saas import (
     Organization,
     OrganizationMembership,
     OrganizationVerificationProfile,
+    SelfServiceLegalAcceptance,
     User,
     Workspace,
 )
@@ -39,7 +40,7 @@ from app.services.entitlements import serialize_entitlements
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
 from app.services.password_policy import password_policy_error
-from app.services.security_audit import record_security_event
+from app.services.security_audit import privacy_hash, record_security_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -53,6 +54,14 @@ VERIFICATION_REQUEST_RATE_LIMIT = "3/minute" if _PRODUCTION_RATE_LIMITS else "10
 VERIFICATION_CONFIRM_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 _ENTERPRISE_ORIGIN = "https://app.agroai-pilot.com"
 _PLATFORM_ORIGIN = "https://platform.agroai-pilot.com"
+SELF_SERVICE_TERMS_VERSION = "2026-09-27"
+SELF_SERVICE_PRIVACY_VERSION = "2026-09"
+SELF_SERVICE_TERMS_URL = "https://agroai-pilot.com/terms-of-service"
+SELF_SERVICE_PRIVACY_URL = "https://agroai-pilot.com/privacy-policy"
+SELF_SERVICE_ACCEPTANCE_TEXT = (
+    "I agree to the AGRO-AI Terms of Service, acknowledge the Privacy Policy, "
+    "and confirm that I am authorized to bind my organization."
+)
 
 
 class RegisterRequest(BaseModel):
@@ -74,6 +83,10 @@ class RegisterRequest(BaseModel):
     primary_crops: str | None = None
     intended_use: str | None = None
     planned_data_sources: str | None = None
+    terms_accepted: bool = False
+    authority_confirmed: bool = False
+    terms_version: str | None = None
+    privacy_version: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -315,6 +328,27 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user with that email already exists")
 
+    legal_enforcement = _PRODUCTION_RATE_LIMITS or any(
+        value is not None
+        for value in (
+            payload.terms_version,
+            payload.privacy_version,
+        )
+    ) or payload.terms_accepted or payload.authority_confirmed
+    if legal_enforcement and (
+        payload.terms_accepted is not True
+        or payload.authority_confirmed is not True
+        or payload.terms_version != SELF_SERVICE_TERMS_VERSION
+        or payload.privacy_version != SELF_SERVICE_PRIVACY_VERSION
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "legal_acceptance_required",
+                "message": "You must accept the current AGRO-AI Terms of Service and acknowledge the Privacy Policy to create an account.",
+            },
+        )
+
     policy_error = password_policy_error(payload.password, email=email)
     if policy_error:
         raise HTTPException(
@@ -432,6 +466,38 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.flush()
     ensure_evaluation_context(db, org, workspace)
     ip_address, user_agent = _request_metadata(request)
+    if legal_enforcement:
+        legal_acceptance = SelfServiceLegalAcceptance(
+            organization_id=org.id,
+            user_id=user.id,
+            terms_version=SELF_SERVICE_TERMS_VERSION,
+            privacy_version=SELF_SERVICE_PRIVACY_VERSION,
+            terms_url=SELF_SERVICE_TERMS_URL,
+            privacy_url=SELF_SERVICE_PRIVACY_URL,
+            acceptance_text=SELF_SERVICE_ACCEPTANCE_TEXT,
+            authority_confirmed=True,
+            ip_hash=privacy_hash(ip_address, "ip"),
+            user_agent_hash=privacy_hash(user_agent, "user-agent"),
+            accepted_at=now,
+        )
+        db.add(legal_acceptance)
+        record_security_event(
+            db,
+            event_type="legal.clickwrap.accepted",
+            outcome="accepted",
+            organization_id=org.id,
+            user_id=user.id,
+            subject=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={
+                "terms_version": SELF_SERVICE_TERMS_VERSION,
+                "privacy_version": SELF_SERVICE_PRIVACY_VERSION,
+                "terms_url": SELF_SERVICE_TERMS_URL,
+                "privacy_url": SELF_SERVICE_PRIVACY_URL,
+                "authority_confirmed": True,
+            },
+        )
     record_security_event(
         db,
         event_type="registration_verification",

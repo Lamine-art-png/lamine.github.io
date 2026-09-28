@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "034_intelligence_wallet_commerce"
+    assert HEAD_ALEMBIC_REVISION == "035_self_service_legal_accept"
     assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["market_positions"]
     )
@@ -49,6 +49,9 @@ def test_head_contract_covers_security_assurance_platform_field_launch_and_intel
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])
     assert {"provenance_json", "freshness_json"}.issubset(HEAD_SCHEMA_REQUIREMENTS["intelligence_runs"])
     assert {"access_restriction_reason", "access_restricted_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["users"])
+    assert {"organization_id", "user_id", "terms_version", "privacy_version", "accepted_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["self_service_legal_acceptances"]
+    )
     assert {
         "user_id",
         "token_hash",

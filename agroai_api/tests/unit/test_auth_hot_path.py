@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models.saas import OrganizationMembership, User
+from app.models.saas import OrganizationMembership, SelfServiceLegalAcceptance, User
 
 
 def _register_account(client, email):
@@ -114,3 +114,52 @@ def test_email_verification_confirm_keeps_one_time_activation_seed(client, db, m
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "verified"
     assert len(seed_calls) == 1
+
+
+def test_registration_clickwrap_is_versioned_and_persisted(client, db):
+    email = "clickwrap-evidence@example.com"
+    response = client.post(
+        "/v1/auth/register",
+        json={
+            "email": email,
+            "password": "strong-password",
+            "name": "Clickwrap Evidence",
+            "organization_name": "Clickwrap Evidence Farms",
+            "workspace_name": "Evaluation workspace",
+            "crop": "Grapes",
+            "region": "California",
+            "terms_accepted": True,
+            "authority_confirmed": True,
+            "terms_version": "2026-09-27",
+            "privacy_version": "2026-09",
+        },
+    )
+    assert response.status_code == 201, response.text
+    row = db.query(SelfServiceLegalAcceptance).filter(SelfServiceLegalAcceptance.user_id == response.json()["user"]["id"]).one()
+    assert row.terms_version == "2026-09-27"
+    assert row.privacy_version == "2026-09"
+    assert row.authority_confirmed is True
+    assert "authorized to bind my organization" in row.acceptance_text
+    assert row.ip_hash
+    assert row.user_agent_hash
+
+
+def test_registration_rejects_stale_or_incomplete_clickwrap(client):
+    response = client.post(
+        "/v1/auth/register",
+        json={
+            "email": "stale-clickwrap@example.com",
+            "password": "strong-password",
+            "name": "Stale Clickwrap",
+            "organization_name": "Stale Clickwrap Farms",
+            "workspace_name": "Evaluation workspace",
+            "crop": "Grapes",
+            "region": "California",
+            "terms_accepted": True,
+            "authority_confirmed": True,
+            "terms_version": "2026-08",
+            "privacy_version": "2026-09",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "legal_acceptance_required"

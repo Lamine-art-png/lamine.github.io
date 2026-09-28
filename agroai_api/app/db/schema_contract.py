@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "034_intelligence_wallet_commerce"
+HEAD_ALEMBIC_REVISION = "035_self_service_legal_accept"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -89,6 +89,11 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "onboarding_states": {"id", "organization_id", "workspace_id", "user_id", "current_step", "created_at", "updated_at"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
+    "self_service_legal_acceptances": {
+        "id", "organization_id", "user_id", "terms_version", "privacy_version",
+        "terms_url", "privacy_url", "acceptance_text", "authority_confirmed",
+        "ip_hash", "user_agent_hash", "accepted_at",
+    },
     "account_access_appeals": {
         "id",
         "user_id",
