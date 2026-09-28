@@ -163,6 +163,7 @@ def validate_full(source: dict[str, str], catalog: dict[str, str], locale: str) 
 
 
 def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: str) -> Path:
+    outdir.mkdir(parents=True, exist_ok=True)
     source: dict[str, str] = source_envelope["catalog"]
     locale = locale.strip()
     if locale == "en":
