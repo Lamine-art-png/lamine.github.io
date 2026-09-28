@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.saas import EmailVerificationToken, SaaSRequest, User
 from app.services.email_delivery import delivery_status, send_email
+from app.services.verification_email_localization import (
+    localized_verification_copy,
+    normalize_verification_locale,
+    preferred_verification_locale,
+)
 
 logger = logging.getLogger(__name__)
 _PRODUCT_SURFACES = {"enterprise_portal", "platform_api"}
@@ -91,9 +96,9 @@ def normalize_product_surface(value: str | None) -> str:
     return normalized if normalized in _PRODUCT_SURFACES else "enterprise_portal"
 
 
-def verification_url(token: str, *, product_surface: str = "enterprise_portal") -> str:
+def verification_url(token: str, *, product_surface: str = "enterprise_portal", locale: str = "en") -> str:
     surface = normalize_product_surface(product_surface)
-    query = urlencode({"token": token, "product": surface})
+    query = urlencode({"token": token, "product": surface, "locale": normalize_verification_locale(locale)})
     return f"{verification_base_url()}/verify-email?{query}"
 
 
@@ -127,12 +132,13 @@ def _product_copy(product_surface: str) -> dict[str, str]:
     }
 
 
-def _verification_email_html(*, url: str, product_surface: str) -> str:
+def _verification_email_html(*, url: str, copy: dict[str, str], locale: str) -> str:
     safe_url = escape(url, quote=True)
-    copy = {key: escape(value) for key, value in _product_copy(product_surface).items()}
+    copy = {key: escape(value) for key, value in copy.items()}
+    safe_locale = escape(normalize_verification_locale(locale), quote=True)
     return f"""
 <!doctype html>
-<html>
+<html lang="{safe_locale}">
   <body style="margin:0;background:#f6f3ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#10231b;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f3ea;padding:40px 16px;">
       <tr>
@@ -151,18 +157,18 @@ def _verification_email_html(*, url: str, product_surface: str) -> str:
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px auto;">
                   <tr>
                     <td align="center" style="border-radius:10px;background:#0b3326;">
-                      <a href="{safe_url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">Verify email</a>
+                      <a href="{safe_url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">{copy['verify_button']}</a>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#637267;">If the button does not work, copy and paste this link into your browser:</p>
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#637267;">{copy['fallback_instruction']}</p>
                 <p style="word-break:break-all;margin:0 0 24px;font-size:13px;line-height:1.6;"><a href="{safe_url}" style="color:#0b6b43;">{safe_url}</a></p>
-                <p style="margin:0;font-size:13px;line-height:1.6;color:#7a857d;">This verification link expires in 24 hours. If you did not create this account, you can safely ignore this email.</p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#7a857d;">{copy['expiry_notice']}</p>
               </td>
             </tr>
             <tr>
               <td style="padding:22px 32px;background:#faf8f1;border-top:1px solid #e5e0d6;color:#7a857d;font-size:12px;line-height:1.6;text-align:center;">
-                You received this email because a {copy['product']} account flow was started with this address.<br />
+                {copy['received_because'].replace("{product}", copy['product'])}<br />
                 {copy['footer']}
               </td>
             </tr>
@@ -220,16 +226,18 @@ def send_or_log_verification(
     token: str,
     *,
     product_surface: str = "enterprise_portal",
+    locale: str | None = None,
 ) -> dict:
     surface = normalize_product_surface(product_surface)
+    selected_locale = preferred_verification_locale(db, user, locale)
     status = delivery_status()
-    url = verification_url(token, product_surface=surface)
-    copy = _product_copy(surface)
+    url = verification_url(token, product_surface=surface, locale=selected_locale)
+    copy = localized_verification_copy(surface, _product_copy(surface), selected_locale)
     body = (
         f"{copy['intro']}\n\n"
-        f"Open this link: {url}\n\n"
+        f"{copy['open_link']} {url}\n\n"
         f"{copy['body']}\n\n"
-        "This link expires in 24 hours."
+        f"{copy['expires_short']}"
     )
     if not status["configured"]:
         logger.warning("Email verification requested but delivery is not configured. Missing=%s", status.get("missing_env"))
@@ -247,7 +255,7 @@ def send_or_log_verification(
         to_email=user.email,
         subject=copy["subject"],
         text_body=body,
-        html_body=_verification_email_html(url=url, product_surface=surface),
+        html_body=_verification_email_html(url=url, copy=copy, locale=selected_locale),
     )
     if result.get("ok"):
         return {
