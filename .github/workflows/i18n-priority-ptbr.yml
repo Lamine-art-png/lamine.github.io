@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: structured output parsing hardened
+# release retry: Python-style structured output safely supported
 
 on:
   push:
