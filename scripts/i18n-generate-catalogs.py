@@ -19,9 +19,9 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 DEFAULT_ENDPOINT = "https://local-ai.agroai-pilot.com/api/chat"
-MAX_KEYS = 64
-MAX_SOURCE_CHARS = 3600
-MAX_ATTEMPTS = 6
+MAX_KEYS = 16
+MAX_SOURCE_CHARS = 1200
+MAX_ATTEMPTS = 4
 PARALLELISM = 1
 
 RTL_ROOTS = {"ar", "fa", "ur"}
@@ -64,7 +64,7 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
         "model": "locale-catalog-authoring",
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "stream": False,
-        "options": {"temperature": 0, "num_predict": 2200},
+        "options": {"temperature": 0, "num_predict": 1400},
     }
     request = urllib.request.Request(
         endpoint,
@@ -97,7 +97,29 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
             last = exc
             if attempt < MAX_ATTEMPTS:
                 time.sleep(min(6, attempt * 1.25))
-    raise RuntimeError(f"locale_chunk_failed:{locale}:{type(last).__name__ if last else 'unknown'}") from None
+    detail = str(last)[:500] if last else "unknown"
+    raise RuntimeError(f"locale_chunk_failed:{locale}:{type(last).__name__ if last else 'unknown'}:{detail}") from None
+
+
+def translate_resilient(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
+    """Translate a chunk, recursively bisecting failures down to one source string.
+
+    A single malformed model response must never discard an otherwise healthy
+    locale build. Smaller repair chunks also reduce structured-output pressure.
+    """
+    try:
+        return translate_chunk(locale, source, endpoint)
+    except RuntimeError:
+        if len(source) <= 1:
+            raise
+        entries = list(source.items())
+        midpoint = max(1, len(entries) // 2)
+        left = dict(entries[:midpoint])
+        right = dict(entries[midpoint:])
+        merged: dict[str, str] = {}
+        merged.update(translate_resilient(locale, left, endpoint))
+        merged.update(translate_resilient(locale, right, endpoint))
+        return merged
 
 
 def chunks(source: dict[str, str]) -> list[dict[str, str]]:
@@ -140,16 +162,36 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
             keys[0]: value for value, keys in aliases_by_value.items()
         }
         work = chunks(representative_source)
-        with ThreadPoolExecutor(max_workers=PARALLELISM) as executor:
-            future_map = {executor.submit(translate_chunk, locale, chunk, endpoint): index for index, chunk in enumerate(work)}
-            completed = 0
-            for future in as_completed(future_map):
-                translated = future.result()
-                for key, value in translated.items():
-                    for alias in aliases_by_value[source[key]]:
-                        catalog[alias] = value
+        progress_path = outdir / f".{locale}.progress.json"
+        if progress_path.exists():
+            try:
+                progress = json.loads(progress_path.read_text(encoding="utf-8"))
+                if progress.get("sourceFingerprint") == source_envelope["sourceFingerprint"]:
+                    prior = progress.get("catalog") or {}
+                    if isinstance(prior, dict):
+                        for key, value in prior.items():
+                            if key in source and isinstance(value, str) and value.strip():
+                                catalog[key] = value
+            except Exception:
+                pass
+
+        completed = 0
+        for chunk in work:
+            missing = {key: value for key, value in chunk.items() if key not in catalog}
+            if not missing:
                 completed += 1
-                print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
+                continue
+            translated = translate_resilient(locale, missing, endpoint)
+            for key, value in translated.items():
+                for alias in aliases_by_value[source[key]]:
+                    catalog[alias] = value
+            progress_path.write_text(json.dumps({
+                "sourceFingerprint": source_envelope["sourceFingerprint"],
+                "locale": locale,
+                "catalog": catalog,
+            }, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+            completed += 1
+            print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
     validate_full(source, catalog, locale)
     root = locale.split("-", 1)[0].lower()
     envelope = {
@@ -166,6 +208,9 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
     tmp = dest.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     tmp.replace(dest)
+    progress_path = outdir / f".{locale}.progress.json"
+    if progress_path.exists():
+        progress_path.unlink()
     print(json.dumps({"status": "ok", "locale": locale, "keys": len(catalog), "sourceFingerprint": source_envelope["sourceFingerprint"]}))
     return dest
 
