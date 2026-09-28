@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nohup npx --yes wrangler@4.107.0 dev --remote --config wrangler.local-ai.toml --port 8787 > /tmp/i18n-authoring.log 2>&1 &
+          nohup npx --yes wrangler@4.107.0 dev --remote --config wrangler.i18n-authoring.toml --port 8787 > /tmp/i18n-authoring.log 2>&1 &
           echo $! > /tmp/i18n-authoring.pid
           for attempt in $(seq 1 40); do
             if curl -fsS --max-time 5 http://127.0.0.1:8787/health \
