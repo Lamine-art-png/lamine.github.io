@@ -77,7 +77,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "035_self_service_legal_accept (head)"
+          test "$(alembic heads)" = "036_legal_acceptance_locale (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
