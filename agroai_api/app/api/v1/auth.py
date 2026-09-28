@@ -525,6 +525,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
             privacy_version=SELF_SERVICE_PRIVACY_VERSION,
             terms_url=SELF_SERVICE_TERMS_URL,
             privacy_url=SELF_SERVICE_PRIVACY_URL,
+            locale=payload.locale,
             acceptance_text=SELF_SERVICE_ACCEPTANCE_TEXT,
             authority_confirmed=True,
             ip_hash=privacy_hash(ip_address, "ip"),
@@ -546,6 +547,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
                 "privacy_version": SELF_SERVICE_PRIVACY_VERSION,
                 "terms_url": SELF_SERVICE_TERMS_URL,
                 "privacy_url": SELF_SERVICE_PRIVACY_URL,
+                "locale": payload.locale,
                 "authority_confirmed": True,
             },
         )
