@@ -1,4 +1,5 @@
 import currentHandler from "./emergency";
+import localeManifest from "../../../shared/supported-locales.json";
 
 interface Env {
   ASSETS: Fetcher;
@@ -121,10 +122,23 @@ async function withTrustLegalIntegration(upstream: Response, request: Request): 
   return new Response(html, { status: upstream.status, statusText: upstream.statusText, headers });
 }
 
+const TARGET_LEGAL_LOCALES = new Map(
+  ((localeManifest as { targetUiLocales?: string[]; enabledUiLocales?: string[] }).targetUiLocales
+    || (localeManifest as { enabledUiLocales?: string[] }).enabledUiLocales
+    || ["auto", "en"])
+    .filter((code) => code !== "auto")
+    .map((code) => [code.toLowerCase(), code]),
+);
+
 function requestedLegalLocale(incoming: URL): string {
-  const raw = String(incoming.searchParams.get("lang") || "").trim().replace("_", "-").toLowerCase();
-  if (raw === "pt" || raw === "pt-br") return "pt-BR";
-  return "en";
+  const raw = String(incoming.searchParams.get("lang") || "").trim().replace(/_/g, "-").toLowerCase();
+  if (!raw) return "en";
+  if (raw === "pt") return TARGET_LEGAL_LOCALES.get("pt-br") || TARGET_LEGAL_LOCALES.get("pt") || "en";
+  if (raw === "fr") return TARGET_LEGAL_LOCALES.get("fr-fr") || TARGET_LEGAL_LOCALES.get("fr") || "en";
+  const exact = TARGET_LEGAL_LOCALES.get(raw);
+  if (exact) return exact;
+  const root = raw.split("-", 1)[0];
+  return TARGET_LEGAL_LOCALES.get(root) || "en";
 }
 
 function localizedLegalAssetPath(pathname: string, locale: string): string | null {
