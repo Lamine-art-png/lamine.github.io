@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       locales: ${{ steps.matrix.outputs.locales }}
@@ -88,7 +87,6 @@ jobs:
           retention-days: 3
 
   validate-and-promote:
-    if: github.event_name == 'push'
     needs: [prepare, author]
     runs-on: ubuntu-latest
     timeout-minutes: 30
