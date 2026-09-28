@@ -67,7 +67,7 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     last=None
     for attempt in range(1,MAX_ATTEMPTS+1):
         try:
-            req=urllib.request.Request(ENDPOINT,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"content-type":"application/json","accept":"application/json"})
+            req=urllib.request.Request(ENDPOINT,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"content-type":"application/json","accept":"application/json","user-agent":"Mozilla/5.0 AGRO-AI-Localization-Release/1.0"})
             with urllib.request.urlopen(req,timeout=55) as response:
                 payload=json.load(response)
             raw=payload.get("message",{}).get("content") or payload.get("response") or ""
