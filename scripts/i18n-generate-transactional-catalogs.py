@@ -63,7 +63,7 @@ def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
 
 def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     system=(
-        f"Translate every JSON string value into {locale} for professional AGRO-AI account-verification email. "
+        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI account-verification email. "
         "Return exactly one JSON object with identical keys. Preserve {product} exactly. Preserve AGRO-AI, API, TEST, LIVE, URLs and numeric values. "
         "For pt-BR use natural Brazilian Portuguese. Do not add or remove legal/security claims. No markdown or explanation."
     )
