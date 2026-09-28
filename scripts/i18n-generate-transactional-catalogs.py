@@ -27,6 +27,10 @@ def clean_json(raw: str) -> dict:
     value = raw.strip()
     value = re.sub(r"^\`\`\`(?:json)?\s*", "", value, flags=re.I)
     value = re.sub(r"\s*\`\`\`$", "", value).strip()
+    start = value.find("{")
+    end = value.rfind("}")
+    if start >= 0 and end > start:
+        value = value[start:end + 1]
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
         raise ValueError("translation_not_object")
