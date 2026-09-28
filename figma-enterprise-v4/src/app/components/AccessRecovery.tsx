@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { recoveryClient } from "../api/recoveryClient";
 import { useLocale } from "../hooks/useLocale";
