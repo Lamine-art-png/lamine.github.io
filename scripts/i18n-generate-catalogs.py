@@ -6,6 +6,8 @@ catalog that must pass the release validator before the locale is advertised.
 """
 from __future__ import annotations
 
+import ast
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -92,7 +94,12 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
     raw = body.get("message", {}).get("content") or body.get("response") or ""
     if not isinstance(raw, str) or not raw.strip():
         raise RuntimeError("edge_authoring_empty_response")
-    return validate_chunk(source, json.loads(clean_json_text(raw)))
+    cleaned = clean_json_text(raw)
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        parsed = ast.literal_eval(cleaned)
+    return validate_chunk(source, parsed)
 
 
 def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
