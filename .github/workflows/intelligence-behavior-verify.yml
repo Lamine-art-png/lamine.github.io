@@ -1,0 +1,37 @@
+name: Intelligence behavior verification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  behavior:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install -q -r agroai_api/requirements.txt
+      - name: Verify language precedence and model profiles
+        working-directory: agroai_api
+        run: |
+          python - <<'PY'
+          from app.services.language import resolve_language
+          from app.services.live_intelligence import LiveIntelligence
+
+          assert resolve_language('es', "combien d'eau dois-je apporter ?").response_code == 'fr'
+          assert resolve_language('es', 'do you have access to all my data so you can analyze them?').response_code == 'en'
+          assert resolve_language('es', 'Please answer in French and explain the data access boundary.').response_code == 'fr'
+
+          engine = LiveIntelligence()
+          assert engine.profile('chat', 'hello') == 'fast'
+          assert engine.profile('chat', 'Do you have access to all my data so you can analyze them?') == 'reasoning'
+          assert engine.profile('chat', "combien d'eau dois-je apporter ?") == 'reasoning'
+          assert engine.profile('report_factory', 'create a customer report') == 'report'
+          print('adaptive intelligence behavior ok')
+          PY
