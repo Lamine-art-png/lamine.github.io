@@ -81,7 +81,7 @@ def validate(source, candidate):
 
 def call(locale, source, endpoint):
     prompt = (
-        f"Translate every JSON string value into {locale}. This is a faithful presentation translation of an existing "
+        f"Translate every JSON string value into the requested locale ({locale}). This is a faithful presentation translation of an existing "
         "AGRO-AI legal document, not new legal drafting. Preserve legal meaning, defined terms, company/product names, "
         "URLs, email addresses, numbers, section numbering and placeholders exactly. For pt-BR use natural Brazilian "
         "Portuguese legal/business language. Return one object with exactly the same keys and no explanation."
