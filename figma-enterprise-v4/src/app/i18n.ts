@@ -1,4 +1,5 @@
 import manifestData from "../../../shared/supported-locales.json";
+import { BUNDLED_LOCALE_CATALOGS } from "./bundledLocaleCatalogs";
 
 export type LocaleDirection = "ltr" | "rtl";
 export type LocaleOption = {
@@ -433,6 +434,10 @@ const pt: Record<string, string> = {
 };
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR, pt };
+
+for (const [locale, catalog] of Object.entries(BUNDLED_LOCALE_CATALOGS)) {
+  TRANSLATIONS[locale] = { ...(TRANSLATIONS[locale] || {}), ...catalog };
+}
 
 const EN_KEYS = Object.keys(en).sort();
 const FR_KEYS = Object.keys(frFR).sort();
