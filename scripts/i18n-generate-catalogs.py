@@ -21,6 +21,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 DEFAULT_ENDPOINT = "https://local-ai.agroai-pilot.com/api/chat"
+CATALOG_AUTHORING_ENDPOINT = os.environ.get("I18N_CATALOG_AUTHORING_ENDPOINT", "https://api.agroai-pilot.com/v1/i18n/catalog").strip()
 MAX_KEYS = 24
 MAX_SOURCE_CHARS = 2200
 MAX_ATTEMPTS = 4
@@ -127,6 +128,37 @@ def call_cloudflare_rest(locale: str, source: dict[str, str]) -> dict[str, str]:
     raise RuntimeError("cloudflare_rest_models_failed:" + "|".join(failures))
 
 
+def call_catalog_api(locale: str, source: dict[str, str]) -> dict[str, str]:
+    """Use the deployed validated i18n edge as a build-time authoring provider.
+
+    This is never a browser critical-path dependency. Canonical-source drift
+    returns 409 and the caller falls through to the dedicated authoring edge.
+    """
+    request = urllib.request.Request(
+        CATALOG_AUTHORING_ENDPOINT,
+        data=json.dumps({"locale": locale, "source": source}, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://app.agroai-pilot.com",
+            "User-Agent": "Mozilla/5.0 AGRO-AI-Localization-Release/3.0",
+            "X-Request-Id": f"catalog-authoring-{locale}-{int(time.time() * 1000)}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            body = json.load(response)
+    except urllib.error.HTTPError as error:
+        try:
+            diagnostic = error.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            diagnostic = ""
+        raise RuntimeError(f"catalog_api_http_{error.code}:{diagnostic}") from None
+    if body.get("status") != "ok" or body.get("locale") != locale:
+        raise RuntimeError(f"catalog_api_invalid_response:{str(body)[:300]}")
+    return validate_chunk(source, body.get("catalog"))
+
+
 def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
     system = (
         f"Translate every JSON string value into the customer's language ({locale}). "
@@ -177,12 +209,13 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
                 try:
                     return call_cloudflare_rest(locale, source)
                 except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as rest_exc:
-                    # A repository Cloudflare token may be valid for deploys but
-                    # lack Workers AI REST permission. Do not dead-end catalog
-                    # authoring on that narrower credential: fall through to the
-                    # already-deployed AGRO-AI edge authoring path, whose AI
-                    # binding is the production-authorized translation runtime.
+                    # Deploy-capable credentials can lack direct Workers AI REST
+                    # permission; continue through the validated provider chain.
                     last = rest_exc
+            try:
+                return call_catalog_api(locale, source)
+            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as catalog_exc:
+                last = catalog_exc
             return call_edge(locale, source, endpoint)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
             last = exc
