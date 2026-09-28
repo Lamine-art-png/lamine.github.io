@@ -34,17 +34,39 @@ function timeoutAfter(milliseconds, label) {
   });
 }
 
+function modelText(value) {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    const parts = value.map(modelText).filter(Boolean);
+    return parts.join("\n");
+  }
+  if (typeof value === "object") {
+    for (const key of ["content", "text", "response", "output_text", "message", "result"]) {
+      if (key in value) {
+        const nested = modelText(value[key]);
+        if (nested) return nested;
+      }
+    }
+    // Some Workers AI structured-output paths return the JSON object itself
+    // rather than a text field. Preserve it as JSON instead of coercing to the
+    // destructive string "[object Object]".
+    try { return JSON.stringify(value); } catch { return ""; }
+  }
+  return String(value);
+}
+
 async function runModel(env, model, input, timeoutMs) {
   const startedAt = Date.now();
   const result = await Promise.race([
     env.AI.run(model, input),
     timeoutAfter(timeoutMs, model),
   ]);
-  const raw = String(
+  const raw = modelText(
     result?.response ??
       result?.result?.response ??
       result?.choices?.[0]?.message?.content ??
-      "",
+      result,
   ).trim();
   return {
     raw,
