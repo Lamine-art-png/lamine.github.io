@@ -5,11 +5,7 @@ on:
   push:
     branches: [fix/deterministic-localization-release]
     paths:
-      - scripts/i18n-generate-catalogs.py
-      - scripts/i18n-build-source.mjs
-      - shared/localization/source.json
       - .github/workflows/i18n-build-candidates.yml
-      - cloudflare/ollama-compat/src/index.js
 
 permissions:
   contents: write
@@ -20,6 +16,7 @@ concurrency:
 
 jobs:
   prepare:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       locales: ${{ steps.matrix.outputs.locales }}
