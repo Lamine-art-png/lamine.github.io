@@ -28,6 +28,7 @@ from app.models.saas import (
     OrganizationVerificationProfile,
     SelfServiceLegalAcceptance,
     User,
+    UserPreference,
     Workspace,
 )
 from app.services.account_verification import (
@@ -39,6 +40,7 @@ from app.services.email_verification import confirm_verification, create_verific
 from app.services.entitlements import serialize_entitlements
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
+from app.services.language_registry import canonical_ui_locale
 from app.services.password_policy import password_policy_error
 from app.services.security_audit import privacy_hash, record_security_event
 
@@ -83,6 +85,7 @@ class RegisterRequest(BaseModel):
     primary_crops: str | None = None
     intended_use: str | None = None
     planned_data_sources: str | None = None
+    locale: str = Field(default="en", max_length=40)
     terms_accepted: bool = False
     authority_confirmed: bool = False
     terms_version: str | None = None
@@ -95,6 +98,14 @@ class RegisterRequest(BaseModel):
         if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
             raise ValueError("valid email required")
         return value
+
+    @field_validator("locale")
+    @classmethod
+    def valid_locale(cls, value: str) -> str:
+        try:
+            return canonical_ui_locale(value)
+        except ValueError as exc:
+            raise ValueError("supported AGRO-AI UI locale required") from exc
 
 
 class LoginRequest(BaseModel):
@@ -112,6 +123,7 @@ class LoginRequest(BaseModel):
 
 class EmailVerificationRequest(BaseModel):
     email: str | None = None
+    locale: str | None = Field(default=None, max_length=40)
 
     @field_validator("email")
     @classmethod
@@ -122,6 +134,16 @@ class EmailVerificationRequest(BaseModel):
         if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
             raise ValueError("valid email required")
         return value
+
+    @field_validator("locale")
+    @classmethod
+    def valid_optional_locale(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return canonical_ui_locale(value)
+        except ValueError as exc:
+            raise ValueError("supported AGRO-AI UI locale required") from exc
 
 
 class EmailVerificationConfirmRequest(BaseModel):
@@ -232,20 +254,48 @@ def _session_response(user: User, org: Organization, membership: OrganizationMem
     }
 
 
-def _verification_payload(user: User) -> dict:
+def _verification_payload(user: User, *, locale: str | None = None) -> dict:
     return {
         "email": user.email,
         "status": user.email_verification_status,
         "verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
+        **({"locale": locale} if locale else {}),
     }
 
 
-def _best_effort_send_verification(db: Session, user: User, *, product_surface: str = "enterprise_portal") -> dict:
+def _preferred_user_locale(db: Session, user: User, requested: str | None = None) -> str:
+    if requested:
+        try:
+            return canonical_ui_locale(requested)
+        except ValueError:
+            pass
+    preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
+    if preference and preference.locale:
+        try:
+            return canonical_ui_locale(preference.locale)
+        except ValueError:
+            pass
+    return "en"
+
+
+def _best_effort_send_verification(
+    db: Session,
+    user: User,
+    *,
+    product_surface: str = "enterprise_portal",
+    locale: str | None = None,
+) -> dict:
     """Create/send a verification token without letting delivery issues break auth UX."""
 
     try:
         token = create_verification_token(db, user)
-        delivery = send_or_log_verification(db, user, token, product_surface=product_surface)
+        delivery = send_or_log_verification(
+            db,
+            user,
+            token,
+            product_surface=product_surface,
+            locale=_preferred_user_locale(db, user, locale),
+        )
         db.commit()
         return delivery
     except Exception:
@@ -394,6 +444,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(user)
     db.flush()
+    db.add(UserPreference(user_id=user.id, locale=payload.locale))
 
     now = datetime.utcnow()
     org = Organization(
@@ -527,6 +578,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         db,
         user,
         product_surface=_verification_product_surface(request),
+        locale=payload.locale,
     )
     db.refresh(user)
     db.refresh(org)
@@ -535,7 +587,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         "message": "Your organization passed automated screening. Verify your email to activate the workspace."
         if strict_registration
         else "Verify your email to activate your AGRO-AI workspace.",
-        "verification": _verification_payload(user),
+        "verification": _verification_payload(user, locale=payload.locale),
         "organization_verification": _organization_verification_payload(org),
         "delivery": "verification_email_sent" if delivery.get("provider_configured") else "verification_request_received",
         "user": {
@@ -704,6 +756,7 @@ def request_email_verification(
                 db,
                 target,
                 product_surface=_verification_product_surface(request),
+                locale=payload.locale,
             )
     except (SQLAlchemyError, Exception):
         db.rollback()

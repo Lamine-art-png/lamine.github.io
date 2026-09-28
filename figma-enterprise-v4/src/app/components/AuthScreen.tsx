@@ -4,6 +4,7 @@ import logoImg from "../../imports/agro-ai-logo-1.png";
 import { RegisterPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { LanguageSelector } from "./LanguageSelector";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -149,7 +150,7 @@ export function AuthScreen() {
       </div>
     </section>
 
-    <main className="flex items-start justify-center px-5 py-8 lg:min-h-screen lg:px-8 lg:py-10"><div className={`w-full ${mode === "register" && !verification ? "max-w-[720px]" : "max-w-[460px]"} rounded-[20px] border border-[rgba(16,35,27,.1)] bg-[#FFFDF8] p-7 shadow-[0_24px_70px_rgba(16,35,27,.12)]`}>
+    <main className="flex items-start justify-center px-5 py-8 lg:min-h-screen lg:px-8 lg:py-10"><div className={`w-full ${mode === "register" && !verification ? "max-w-[720px]" : "max-w-[460px]"} rounded-[20px] border border-[rgba(16,35,27,.1)] bg-[#FFFDF8] p-7 shadow-[0_24px_70px_rgba(16,35,27,.12)]`}><div className="mb-4 flex justify-end"><div className="w-full max-w-[280px]"><LanguageSelector compact /></div></div>
       {verification ? <VerificationPanel /> : <Tabs value={mode} onValueChange={setMode} className="gap-5">
         <TabsList className="grid w-full grid-cols-2 rounded-xl bg-[#F3EFE5] p-1"><TabsTrigger value="login" className="rounded-lg text-[13px]">Login</TabsTrigger><TabsTrigger value="register" className="rounded-lg text-[13px]">Create account</TabsTrigger></TabsList>
         {error ? <div className="rounded-md border border-[#B94A48]/25 bg-[#B94A48]/8 px-3 py-2 text-sm text-[#7A2E2B]">{error}</div> : null}

@@ -131,6 +131,7 @@ def test_platform_verification_release_contract_uses_only_first_party_surfaces(m
     assert query == {
         "token": ["release-proof-token"],
         "product": ["platform_api"],
+        "lang": ["en"],
     }
     assert not ({"return", "redirect", "redirect_uri", "next"} & set(query))
 

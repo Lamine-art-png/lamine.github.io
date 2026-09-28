@@ -3,11 +3,13 @@ import { ArrowLeft, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { recoveryClient } from "../api/recoveryClient";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { LanguageSelector } from "./LanguageSelector";
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-10" style={{ background: "#EEE9DB" }}>
       <div className="w-full max-w-[460px] rounded-[20px] border border-[rgba(16,35,27,0.1)] bg-[#FFFDF8] p-7 shadow-[0_24px_70px_rgba(16,35,27,0.12)]">
+        <div className="mb-4 flex justify-end"><div className="w-full max-w-[280px]"><LanguageSelector compact /></div></div>
         {children}
       </div>
     </div>

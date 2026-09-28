@@ -112,6 +112,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers = new Headers(fetchOptions.headers);
   const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
   if (!headers.has("Content-Type") && fetchOptions.body && !isFormData) headers.set("Content-Type", "application/json");
+  if (!headers.has("Accept-Language")) {
+    let selectedLocale = "auto";
+    try { selectedLocale = localStorage.getItem("agroai_locale_v1") || "auto"; } catch { /* browser storage is optional */ }
+    const requestLocale = selectedLocale === "auto" ? (navigator.language || "en") : selectedLocale;
+    headers.set("Accept-Language", requestLocale);
+  }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const controller = new AbortController();
@@ -288,6 +294,7 @@ export type RegisterPayload = {
   workspace_name: string;
   crop?: string;
   region?: string;
+  locale?: string;
   terms_accepted: boolean;
   authority_confirmed: boolean;
   terms_version: string;
@@ -311,10 +318,10 @@ export type FieldUpdatePayload = { field_id?: string; field_name?: string; block
 export type FieldMessagePayload = { message: string; sender_role: "operator" | "manager" | "agency" | "advisor"; channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams"; field_hint?: string; workspace_id?: string };
 export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
 function providerForUpload(file: File) { const name = file.name.toLowerCase(); if (name.endsWith(".csv")) return "manual_csv"; return "chat_upload"; }
-export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual" };
-export type BillingCheckoutSessionPayload = { organization_id: string; offer?: string; plan?: string };
-export type BillingPortalPayload = { organization_id: string };
-export type EmailVerificationRequestPayload = { email?: string };
+export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual"; locale?: string };
+export type BillingCheckoutSessionPayload = { organization_id: string; offer?: string; plan?: string; locale?: string };
+export type BillingPortalPayload = { organization_id: string; locale?: string };
+export type EmailVerificationRequestPayload = { email?: string; locale?: string };
 export type EmailVerificationConfirmPayload = { token: string };
 export type TeamInvitationPayload = { email: string; role: "owner" | "admin" | "manager" | "operator" | "viewer" };
 export type SupportTicketPayload = { category: "support" | "integration" | "issue" | "onboarding" | "sales"; subject: string; message: string; priority?: "low" | "medium" | "high" | "urgent"; name?: string; email?: string; company?: string; role?: string; workspace_id?: string; source_page?: string };

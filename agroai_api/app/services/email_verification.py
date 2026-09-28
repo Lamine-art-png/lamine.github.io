@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.saas import EmailVerificationToken, SaaSRequest, User
 from app.services.email_delivery import delivery_status, send_email
+from app.services.language_registry import canonical_ui_locale
+from app.services.transactional_i18n import localize_transactional_strings
 
 logger = logging.getLogger(__name__)
 _PRODUCT_SURFACES = {"enterprise_portal", "platform_api"}
@@ -91,13 +93,26 @@ def normalize_product_surface(value: str | None) -> str:
     return normalized if normalized in _PRODUCT_SURFACES else "enterprise_portal"
 
 
-def verification_url(token: str, *, product_surface: str = "enterprise_portal") -> str:
+def _verification_locale(value: str | None) -> str:
+    try:
+        canonical = canonical_ui_locale(value or "en")
+    except ValueError:
+        canonical = "en"
+    return "en" if canonical == "auto" else canonical
+
+
+def verification_url(
+    token: str,
+    *,
+    product_surface: str = "enterprise_portal",
+    locale: str | None = None,
+) -> str:
     surface = normalize_product_surface(product_surface)
-    query = urlencode({"token": token, "product": surface})
+    query = urlencode({"token": token, "product": surface, "lang": _verification_locale(locale)})
     return f"{verification_base_url()}/verify-email?{query}"
 
 
-def _product_copy(product_surface: str) -> dict[str, str]:
+def _english_product_copy(product_surface: str) -> dict[str, str]:
     if normalize_product_surface(product_surface) == "platform_api":
         public_test_self_service = bool(getattr(settings, "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED", False))
         if public_test_self_service:
@@ -108,6 +123,10 @@ def _product_copy(product_surface: str) -> dict[str, str]:
                 "body": "After verification, sign in to review the current developer agreements and activate bounded TEST access. Eligible verified owners and admins do not need an API-access review. LIVE projects, production providers, billing, production webhooks, and physical actions remain separately controlled.",
                 "footer": "Verified account · versioned agreements · self-service TEST access",
                 "subject": "Confirm your AGRO-AI Platform API account",
+                "button": "Verify email",
+                "fallback_instruction": "If the button does not work, copy and paste this link into your browser:",
+                "expiry": "This verification link expires in 24 hours. If you did not create this account, you can safely ignore this email.",
+                "receipt": "You received this email because a {product} account flow was started with this address.",
             }
         return {
             "product": "AGRO-AI Platform API",
@@ -116,6 +135,10 @@ def _product_copy(product_surface: str) -> dict[str, str]:
             "body": "After verification, return to the Platform API application. API enrollment, test projects, keys, live access, billing, providers, and physical actions remain separately controlled.",
             "footer": "Verified account · reviewed API enrollment · controlled activation",
             "subject": "Confirm your AGRO-AI Platform API account",
+            "button": "Verify email",
+            "fallback_instruction": "If the button does not work, copy and paste this link into your browser:",
+            "expiry": "This verification link expires in 24 hours. If you did not create this account, you can safely ignore this email.",
+            "receipt": "You received this email because a {product} account flow was started with this address.",
         }
     return {
         "product": "AGRO-AI Enterprise Portal",
@@ -124,15 +147,75 @@ def _product_copy(product_surface: str) -> dict[str, str]:
         "body": "Thank you for creating an AGRO-AI account. To activate your workspace, confirm your email address.",
         "footer": "AGRO-AI · Secure agricultural intelligence workspace",
         "subject": "Confirm your AGRO-AI email address",
+        "button": "Verify email",
+        "fallback_instruction": "If the button does not work, copy and paste this link into your browser:",
+        "expiry": "This verification link expires in 24 hours. If you did not create this account, you can safely ignore this email.",
+        "receipt": "You received this email because a {product} account flow was started with this address.",
     }
 
 
-def _verification_email_html(*, url: str, product_surface: str) -> str:
+def _portuguese_product_copy(product_surface: str) -> dict[str, str]:
+    if normalize_product_surface(product_surface) == "platform_api":
+        public_test_self_service = bool(getattr(settings, "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED", False))
+        if public_test_self_service:
+            return {
+                "product": "API da Plataforma AGRO-AI",
+                "headline": "Confirme sua conta de desenvolvedor",
+                "intro": "Confirme seu e-mail para ativar a conta verificada da organização AGRO-AI usada na API da Plataforma.",
+                "body": "Após a verificação, entre para revisar os contratos atuais de desenvolvedor e ativar o acesso TEST limitado. Proprietários e administradores verificados elegíveis não precisam de uma revisão adicional de acesso à API. Projetos LIVE, provedores de produção, cobrança, webhooks de produção e ações físicas continuam sujeitos a controles separados.",
+                "footer": "Conta verificada · contratos versionados · acesso TEST de autoatendimento",
+                "subject": "Confirme sua conta da API da Plataforma AGRO-AI",
+                "button": "Confirmar e-mail",
+                "fallback_instruction": "Se o botão não funcionar, copie e cole este link no navegador:",
+                "expiry": "Este link de verificação expira em 24 horas. Se você não criou esta conta, pode ignorar este e-mail com segurança.",
+                "receipt": "Você recebeu este e-mail porque um fluxo de conta do {product} foi iniciado com este endereço.",
+            }
+        return {
+            "product": "API da Plataforma AGRO-AI",
+            "headline": "Confirme sua conta de desenvolvedor",
+            "intro": "Confirme seu e-mail para ativar a conta verificada da organização AGRO-AI usada no beta privado da API da Plataforma.",
+            "body": "Após a verificação, retorne ao aplicativo da API da Plataforma. Inscrição na API, projetos de teste, chaves, acesso LIVE, cobrança, provedores e ações físicas continuam sujeitos a controles separados.",
+            "footer": "Conta verificada · inscrição revisada na API · ativação controlada",
+            "subject": "Confirme sua conta da API da Plataforma AGRO-AI",
+            "button": "Confirmar e-mail",
+            "fallback_instruction": "Se o botão não funcionar, copie e cole este link no navegador:",
+            "expiry": "Este link de verificação expira em 24 horas. Se você não criou esta conta, pode ignorar este e-mail com segurança.",
+            "receipt": "Você recebeu este e-mail porque um fluxo de conta do {product} foi iniciado com este endereço.",
+        }
+    return {
+        "product": "Portal Empresarial AGRO-AI",
+        "headline": "Confirme seu endereço de e-mail",
+        "intro": "Ative o acesso seguro ao seu espaço de trabalho no Portal Empresarial AGRO-AI.",
+        "body": "Obrigado por criar uma conta AGRO-AI. Para ativar seu espaço de trabalho, confirme seu endereço de e-mail.",
+        "footer": "AGRO-AI · Espaço seguro de inteligência agrícola",
+        "subject": "Confirme seu endereço de e-mail da AGRO-AI",
+        "button": "Confirmar e-mail",
+        "fallback_instruction": "Se o botão não funcionar, copie e cole este link no navegador:",
+        "expiry": "Este link de verificação expira em 24 horas. Se você não criou esta conta, pode ignorar este e-mail com segurança.",
+        "receipt": "Você recebeu este e-mail porque um fluxo de conta do {product} foi iniciado com este endereço.",
+    }
+
+
+def _product_copy(product_surface: str, locale: str | None = None) -> dict[str, str]:
+    canonical = _verification_locale(locale)
+    if canonical == "pt":
+        return _portuguese_product_copy(product_surface)
+    english = _english_product_copy(product_surface)
+    if canonical == "en":
+        return english
+    return localize_transactional_strings(canonical, english)
+
+
+def _verification_email_html(*, url: str, product_surface: str, locale: str | None = None) -> str:
     safe_url = escape(url, quote=True)
-    copy = {key: escape(value) for key, value in _product_copy(product_surface).items()}
+    raw_copy = _product_copy(product_surface, locale)
+    receipt = raw_copy["receipt"].format(product=raw_copy["product"])
+    copy = {key: escape(value) for key, value in raw_copy.items()}
+    safe_receipt = escape(receipt)
+    lang = escape(_verification_locale(locale), quote=True)
     return f"""
 <!doctype html>
-<html>
+<html lang="{lang}">
   <body style="margin:0;background:#f6f3ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#10231b;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f3ea;padding:40px 16px;">
       <tr>
@@ -151,18 +234,18 @@ def _verification_email_html(*, url: str, product_surface: str) -> str:
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px auto;">
                   <tr>
                     <td align="center" style="border-radius:10px;background:#0b3326;">
-                      <a href="{safe_url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">Verify email</a>
+                      <a href="{safe_url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">{copy['button']}</a>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#637267;">If the button does not work, copy and paste this link into your browser:</p>
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#637267;">{copy['fallback_instruction']}</p>
                 <p style="word-break:break-all;margin:0 0 24px;font-size:13px;line-height:1.6;"><a href="{safe_url}" style="color:#0b6b43;">{safe_url}</a></p>
-                <p style="margin:0;font-size:13px;line-height:1.6;color:#7a857d;">This verification link expires in 24 hours. If you did not create this account, you can safely ignore this email.</p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#7a857d;">{copy['expiry']}</p>
               </td>
             </tr>
             <tr>
               <td style="padding:22px 32px;background:#faf8f1;border-top:1px solid #e5e0d6;color:#7a857d;font-size:12px;line-height:1.6;text-align:center;">
-                You received this email because a {copy['product']} account flow was started with this address.<br />
+                {safe_receipt}<br />
                 {copy['footer']}
               </td>
             </tr>
@@ -220,16 +303,18 @@ def send_or_log_verification(
     token: str,
     *,
     product_surface: str = "enterprise_portal",
+    locale: str | None = None,
 ) -> dict:
     surface = normalize_product_surface(product_surface)
+    canonical_locale = _verification_locale(locale)
     status = delivery_status()
-    url = verification_url(token, product_surface=surface)
-    copy = _product_copy(surface)
+    url = verification_url(token, product_surface=surface, locale=canonical_locale)
+    copy = _product_copy(surface, canonical_locale)
     body = (
         f"{copy['intro']}\n\n"
-        f"Open this link: {url}\n\n"
+        f"{copy['fallback_instruction']} {url}\n\n"
         f"{copy['body']}\n\n"
-        "This link expires in 24 hours."
+        f"{copy['expiry']}"
     )
     if not status["configured"]:
         logger.warning("Email verification requested but delivery is not configured. Missing=%s", status.get("missing_env"))
@@ -241,13 +326,14 @@ def send_or_log_verification(
             "reason": "email_provider_not_configured",
             "missing_env": status.get("missing_env", []),
             "product_surface": surface,
+            "locale": canonical_locale,
         }
 
     result = send_email(
         to_email=user.email,
         subject=copy["subject"],
         text_body=body,
-        html_body=_verification_email_html(url=url, product_surface=surface),
+        html_body=_verification_email_html(url=url, product_surface=surface, locale=canonical_locale),
     )
     if result.get("ok"):
         return {
@@ -257,6 +343,7 @@ def send_or_log_verification(
             "status_code": result.get("status_code"),
             "reason": "accepted",
             "product_surface": surface,
+            "locale": canonical_locale,
         }
 
     logger.warning("Email verification provider failed for user_id=%s result=%s", user.id, result)
@@ -268,6 +355,7 @@ def send_or_log_verification(
         "status_code": result.get("status_code"),
         "reason": result.get("reason") or "provider_failed",
         "product_surface": surface,
+        "locale": canonical_locale,
     }
 
 
