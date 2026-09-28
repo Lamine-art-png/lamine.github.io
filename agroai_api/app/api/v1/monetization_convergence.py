@@ -31,6 +31,7 @@ router = APIRouter(tags=["monetization-convergence"])
 class AuthoritativeCheckoutRequest(BaseModel):
     plan_id: Literal["free", "professional", "team", "network", "enterprise"]
     billing_period: Literal["monthly", "annual"] = "monthly"
+    locale: str | None = None
 
 
 def _require_org(ctx: AuthContext):
@@ -176,6 +177,7 @@ def checkout_authoritative(
     checkout_payload = billing_api.CheckoutRequest(
         organization_id=org.id,
         offer=_offer(selected["id"], payload.billing_period),
+        locale=payload.locale,
     )
     result = billing_api.create_checkout_session(checkout_payload, user=ctx.user, db=db)
     return {**result, "status": "checkout_ready", "plan": selected, "billing_period": payload.billing_period}
