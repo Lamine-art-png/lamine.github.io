@@ -1,0 +1,33 @@
+name: Localization authoring API smoke
+
+on:
+  push:
+    branches: [fix/deterministic-localization-release]
+    paths:
+      - ".github/workflows/i18n-authoring-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Prove direct Workers AI translation authoring
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai/run/@cf/meta/llama-3.1-8b-instruct-fast"
+          payload='{"messages":[{"role":"system","content":"Translate the JSON string values to Brazilian Portuguese. Return JSON only and preserve keys."},{"role":"user","content":"{\"create\":\"Create account\",\"continue\":\"Continue\"}"}],"temperature":0,"max_tokens":128}'
+          started=$(date +%s)
+          body=$(curl --fail-with-body --silent --show-error --max-time 40             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             --data "$payload" "$url")
+          elapsed=$(( $(date +%s) - started ))
+          echo "$body" | jq -e '.success == true and (.result.response | type == "string") and (.result.response | length > 2)' >/dev/null
+          echo "workers_ai_authoring_smoke=ok latency_seconds=$elapsed"
