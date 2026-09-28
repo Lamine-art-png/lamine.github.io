@@ -11,13 +11,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_org_membership
 from app.core.config import settings
 from app.db.base import get_db
-from app.models.saas import BillingEvent, Organization, User
+from app.models.saas import BillingEvent, Organization, User, UserPreference
 from app.services.commercial_billing_lifecycle import (
     apply_authoritative_billing_event,
     _commercial_checkout_metadata,
 )
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
 from app.services.non_customer_access import access_profile_metadata, activate_configured_profile
+from app.services.language_registry import canonical_ui_locale
 from app.services.product_plans import public_plans, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
 
@@ -28,10 +29,38 @@ class CheckoutRequest(BaseModel):
     organization_id: str
     offer: str | None = None
     plan: str | None = None
+    locale: str | None = None
 
 
 class PortalRequest(BaseModel):
     organization_id: str
+    locale: str | None = None
+
+
+_STRIPE_SUPPORTED_LOCALES = {
+    "bg", "cs", "da", "de", "el", "en", "en-GB", "es", "es-419", "et", "fi", "fil",
+    "fr", "fr-CA", "hr", "hu", "id", "it", "ja", "ko", "lt", "lv", "ms", "mt", "nb",
+    "nl", "pl", "pt", "pt-BR", "ro", "ru", "sk", "sl", "sv", "th", "tr", "vi", "zh",
+    "zh-HK", "zh-TW",
+}
+
+
+def _customer_locale(db: Session, user: User, requested: str | None = None) -> str:
+    value = requested
+    if not value:
+        preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
+        value = preference.locale if preference else None
+    try:
+        canonical = canonical_ui_locale(value or "auto")
+    except ValueError:
+        canonical = "auto"
+    if canonical == "pt":
+        return "pt-BR"
+    if canonical == "fr-FR":
+        return "fr"
+    if canonical == "auto":
+        return "auto"
+    return canonical if canonical in _STRIPE_SUPPORTED_LOCALES else "auto"
 
 
 def _billing_unavailable() -> HTTPException:
@@ -211,6 +240,8 @@ def create_checkout_session(
         db.commit()
 
     metadata = _commercial_checkout_metadata(org, offer, offer_config)
+    stripe_locale = _customer_locale(db, user, payload.locale)
+    metadata["preferred_locale"] = stripe_locale
     _stripe_ready()
     try:
         session_kwargs = {
@@ -221,6 +252,7 @@ def create_checkout_session(
             "cancel_url": f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
             "client_reference_id": org.id,
             "metadata": metadata,
+            "locale": stripe_locale,
         }
         if offer_config["mode"] == "subscription":
             session_kwargs["subscription_data"] = {"metadata": metadata}
@@ -260,6 +292,7 @@ def create_portal_session(
         session = stripe.billing_portal.Session.create(
             customer=org.stripe_customer_id,
             return_url=f"{settings.APP_URL}/billing",
+            locale=_customer_locale(db, user, payload.locale),
         )
     except stripe.error.StripeError:
         raise _billing_unavailable()

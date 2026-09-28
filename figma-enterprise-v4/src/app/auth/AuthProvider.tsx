@@ -1,5 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient, ApiError, LoginPayload, RegisterPayload } from "../api/client";
+import { currentLocale, getStoredLocale, setStoredLocale } from "../i18n";
+import { translatePortalLiteral } from "../portalLiteralCatalog";
 
 const tokenKey = "agroai_access_token";
 const activeWorkspaceKeyPrefix = "agroai_active_operation_v1:";
@@ -165,6 +167,27 @@ function platformDeveloperIsFirstPaintCritical() {
   return host === "platform.agroai-pilot.com" || path === "/platform" || path.startsWith("/platform/");
 }
 
+
+async function syncLocalePreferenceAfterAuth() {
+  const localLocale = getStoredLocale();
+  try {
+    const response = await apiClient.get("/v1/settings/preferences") as Record<string, unknown>;
+    const preferences = response.preferences && typeof response.preferences === "object"
+      ? response.preferences as Record<string, unknown>
+      : {};
+    const serverLocale = typeof preferences.locale === "string" ? preferences.locale : "auto";
+    if (localLocale === "auto" && serverLocale && serverLocale !== "auto") {
+      setStoredLocale(serverLocale);
+      return;
+    }
+    if (localLocale !== "auto" && serverLocale !== localLocale) {
+      await apiClient.patch("/v1/settings/preferences", { locale: localLocale });
+    }
+  } catch {
+    // Authentication must not fail because preference hydration is unavailable.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<User | null>(null);
@@ -326,7 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setVerification({
       email: fallbackEmail,
       status: "unverified",
-      message: error.message || "Verify your email to activate your AGRO-AI workspace.",
+      message: translatePortalLiteral(error.message || "Verify your email to activate your AGRO-AI workspace.", currentLocale()),
     });
   }, [clearSession]);
 
@@ -339,6 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       applyToken(nextToken);
       setVerification(null);
+      await syncLocalePreferenceAfterAuth();
       await refreshMe();
     } catch (error) {
       const apiError = error as ApiError;
@@ -350,11 +374,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyToken, handleVerificationRequired, refreshMe]);
 
   const register = useCallback(async (payload: RegisterPayload) => {
-    const response = await apiClient.register(payload) as Record<string, unknown>;
+    const locale = currentLocale();
+    const response = await apiClient.register({ ...payload, locale }) as Record<string, unknown>;
     setVerification({
       email: payload.email,
       status: String((response.verification as Record<string, unknown> | undefined)?.status || "unverified"),
-      message: String(response.message || "Verify your email to activate your AGRO-AI workspace."),
+      message: translatePortalLiteral(String(response.message || "Verify your email to activate your AGRO-AI workspace."), locale),
     });
     clearSession();
   }, [clearSession]);
@@ -365,8 +390,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession]);
 
   const requestVerification = useCallback(async (email?: string) => {
-    const response = await apiClient.auth.requestEmailVerification(email ? { email } : undefined) as Record<string, unknown>;
-    const message = String(response.message || "If an account exists, we sent a verification email.");
+    const locale = currentLocale();
+    const response = await apiClient.auth.requestEmailVerification({ ...(email ? { email } : {}), locale }) as Record<string, unknown>;
+    const message = translatePortalLiteral(String(response.message || "If an account exists, we sent a verification email."), locale);
     setVerification((current) => ({ ...(current || {}), email: email || current?.email, message }));
     return message;
   }, []);
@@ -380,13 +406,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setVerification({
         email: responseVerification?.email,
         status: "verified",
-        message: String(response.message || "Email verified. Sign in to continue."),
+        message: translatePortalLiteral(String(response.message || "Email verified. Sign in to continue."), currentLocale()),
       });
       return;
     }
 
     const normalized = normalizeMe(response);
     applyToken(nextToken);
+    await syncLocalePreferenceAfterAuth();
     setUser(normalized.user);
     setOrganizations(normalized.organizations);
     setCurrentOrganization(normalized.currentOrganization);

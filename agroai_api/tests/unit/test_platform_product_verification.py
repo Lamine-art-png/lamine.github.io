@@ -100,10 +100,21 @@ def test_verification_url_uses_only_the_trusted_app_origin(monkeypatch):
     assert parsed.scheme == "https"
     assert parsed.netloc == "app.agroai-pilot.com"
     assert parsed.path == "/verify-email"
-    assert query == {"token": ["single-use-token"], "product": ["platform_api"]}
+    assert query == {"token": ["single-use-token"], "product": ["platform_api"], "lang": ["en"]}
     assert "return" not in query
     assert "redirect" not in query
     assert "next" not in query
+
+
+def test_verification_url_canonicalizes_brazilian_portuguese_without_changing_trusted_origin(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "RESEND_APP_URL", "https://app.agroai-pilot.com")
+    parsed = urlsplit(verification_url("localized-token", product_surface="enterprise_portal", locale="pt-BR"))
+    query = parse_qs(parsed.query)
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "app.agroai-pilot.com"
+    assert parsed.path == "/verify-email"
+    assert query == {"token": ["localized-token"], "product": ["enterprise_portal"], "lang": ["pt"]}
 
 
 def test_production_verification_origin_fails_closed_on_external_or_lookalike_configuration(monkeypatch):

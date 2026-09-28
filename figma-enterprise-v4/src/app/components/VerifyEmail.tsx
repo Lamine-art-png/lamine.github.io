@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Code2, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
+import { canonicalizeSelectedLocale, setStoredLocale } from "../i18n";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import { LanguageSelector } from "./LanguageSelector";
 
 type VerificationState = "checking" | "success" | "error";
 
@@ -9,6 +11,11 @@ export function VerifyEmailPage() {
   const { confirmVerification } = useAuth();
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const token = useMemo(() => query.get("token") || "", [query]);
+  const linkLocale = useMemo(() => query.get("lang") || "", [query]);
+  useState(() => {
+    if (linkLocale) setStoredLocale(canonicalizeSelectedLocale(linkLocale));
+    return true;
+  });
   const platformFlow = useMemo(() => query.get("product") === "platform_api", [query]);
   const platformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
   const returnPath = platformFlow ? (platformHostname ? "/" : "/platform") : "/";
@@ -26,8 +33,11 @@ export function VerifyEmailPage() {
         setMessage(platformFlow
           ? "Your verified organization account is active. Continue to the Platform API application and access state."
           : "Your email and organization access have been verified. You are signed in.");
-        const nextSearch = platformFlow ? "?product=platform_api" : "";
-        window.history.replaceState({}, document.title, `${window.location.pathname}${nextSearch}`);
+        const nextSearch = new URLSearchParams();
+        if (platformFlow) nextSearch.set("product", "platform_api");
+        if (linkLocale) nextSearch.set("lang", canonicalizeSelectedLocale(linkLocale));
+        const suffix = nextSearch.toString() ? `?${nextSearch.toString()}` : "";
+        window.history.replaceState({}, document.title, `${window.location.pathname}${suffix}`);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -35,7 +45,7 @@ export function VerifyEmailPage() {
         setMessage(error instanceof Error ? error.message : "Verification link could not be processed.");
       });
     return () => { cancelled = true; };
-  }, [confirmVerification, platformFlow, token]);
+  }, [confirmVerification, linkLocale, platformFlow, token]);
 
   return (
     <div className="min-h-screen grid lg:grid-cols-[0.95fr_1.05fr]" style={{ background: BG }}>
@@ -65,6 +75,7 @@ export function VerifyEmailPage() {
 
       <main className="flex items-center justify-center px-6 py-10">
         <section className="w-full max-w-[460px] rounded-xl p-6 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="mb-4 flex justify-end"><div className="w-full max-w-[280px]"><LanguageSelector compact /></div></div>
           <StatusBadge label={state === "checking" ? "Checking" : state === "success" ? "Verified" : "Action needed"} tone={state === "error" ? "warn" : "good"} />
           <h2 className="mt-4 text-[24px] font-semibold tracking-tight" style={{ color: TEXT }}>
             {state === "checking" ? "Checking your link" : state === "success" ? "Email verified" : "Verification link unavailable"}

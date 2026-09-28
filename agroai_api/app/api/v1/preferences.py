@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
-from app.services.language_registry import enabled_ui_locales, locale_specs, normalize_bcp47
+from app.services.language_registry import canonical_ui_locale
 
 router = APIRouter(tags=["preferences"])
 
@@ -54,28 +54,13 @@ def _decode(value: Any, fallback: dict | None = None) -> dict:
 
 def _canonical_ui_locale(value: str | None) -> str:
     raw = (value or "auto").strip().replace("_", "-") or "auto"
-    enabled = {code.lower(): code for code in enabled_ui_locales()}
-    exact = enabled.get(raw.lower())
-    if exact:
-        return exact
-
-    normalized = normalize_bcp47(raw)
-    exact = enabled.get(normalized.lower())
-    if exact:
-        return exact
-
-    spec = locale_specs().get(normalized.lower()) or locale_specs().get(raw.lower())
-    language_code = spec.language_code if spec else normalized.split("-", 1)[0].lower()
-    for code in enabled_ui_locales():
-        enabled_spec = locale_specs().get(code.lower())
-        enabled_language = enabled_spec.language_code if enabled_spec else code.split("-", 1)[0].lower()
-        if enabled_language == language_code:
-            return code
-
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail={"code": "unsupported_ui_locale", "locale": raw},
-    )
+    try:
+        return canonical_ui_locale(raw)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "unsupported_ui_locale", "locale": raw},
+        ) from exc
 
 
 def _row_to_payload(row: Any | None, ctx: AuthContext) -> dict:
