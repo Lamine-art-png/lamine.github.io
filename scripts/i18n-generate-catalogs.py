@@ -203,20 +203,29 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
 
 def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
     last: Exception | None = None
+    explicit_authoring = endpoint.startswith("http://127.0.0.1:") or endpoint.startswith("http://localhost:")
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
+            # Release workflows deliberately start an isolated, production-equivalent
+            # authoring worker. When that endpoint is explicitly provided, use it
+            # first instead of burning latency/quota on legacy remote providers.
+            if explicit_authoring:
+                try:
+                    return call_edge(locale, source, endpoint)
+                except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as edge_exc:
+                    last = edge_exc
             if cloudflare_rest_available():
                 try:
                     return call_cloudflare_rest(locale, source)
                 except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as rest_exc:
-                    # Deploy-capable credentials can lack direct Workers AI REST
-                    # permission; continue through the validated provider chain.
                     last = rest_exc
             try:
                 return call_catalog_api(locale, source)
             except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as catalog_exc:
                 last = catalog_exc
-            return call_edge(locale, source, endpoint)
+            if not explicit_authoring:
+                return call_edge(locale, source, endpoint)
+            raise last or RuntimeError("local_authoring_unavailable")
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
             last = exc
             if attempt < MAX_ATTEMPTS:
