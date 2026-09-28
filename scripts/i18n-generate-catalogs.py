@@ -21,10 +21,10 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 DEFAULT_ENDPOINT = "https://local-ai.agroai-pilot.com/api/chat"
-MAX_KEYS = 16
-MAX_SOURCE_CHARS = 1200
+MAX_KEYS = 24
+MAX_SOURCE_CHARS = 2200
 MAX_ATTEMPTS = 4
-PARALLELISM = 1
+PARALLELISM = 4
 CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
 CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
 CLOUDFLARE_MODELS = (
@@ -259,23 +259,36 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
             except Exception:
                 pass
 
+        pending: list[tuple[int, dict[str, str]]] = []
         completed = 0
-        for chunk in work:
+        for index, chunk in enumerate(work):
             missing = {key: value for key, value in chunk.items() if key not in catalog}
             if not missing:
                 completed += 1
-                continue
-            translated = translate_resilient(locale, missing, endpoint)
-            for key, value in translated.items():
-                for alias in aliases_by_value[source[key]]:
-                    catalog[alias] = value
-            progress_path.write_text(json.dumps({
-                "sourceFingerprint": source_envelope["sourceFingerprint"],
-                "locale": locale,
-                "catalog": catalog,
-            }, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
-            completed += 1
-            print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
+            else:
+                pending.append((index, missing))
+
+        if pending:
+            with ThreadPoolExecutor(max_workers=PARALLELISM) as executor:
+                futures = {
+                    executor.submit(translate_resilient, locale, missing, endpoint): (index, missing)
+                    for index, missing in pending
+                }
+                for future in as_completed(futures):
+                    translated = future.result()
+                    for key, value in translated.items():
+                        for alias in aliases_by_value[source[key]]:
+                            catalog[alias] = value
+                    # Persist every validated completed chunk. A later provider
+                    # failure or workflow cancellation can resume without
+                    # discarding successful build-time translation work.
+                    progress_path.write_text(json.dumps({
+                        "sourceFingerprint": source_envelope["sourceFingerprint"],
+                        "locale": locale,
+                        "catalog": catalog,
+                    }, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+                    completed += 1
+                    print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
     validate_full(source, catalog, locale)
     root = locale.split("-", 1)[0].lower()
     envelope = {
