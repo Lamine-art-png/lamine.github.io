@@ -1,5 +1,5 @@
 name: Brazilian Portuguese legal snapshots
-# retry: isolated Playwright renderer dependency
+# retry: rebase-safe static legal artifact promotion
 
 on:
   push:
@@ -96,4 +96,5 @@ jobs:
           git config user.email "release-bot@agroai-pilot.com"
           git add platform-api/legal/localized/pt-BR
           git commit -m "Generate Brazilian Portuguese legal snapshots"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
