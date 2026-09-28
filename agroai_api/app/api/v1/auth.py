@@ -56,8 +56,15 @@ VERIFICATION_REQUEST_RATE_LIMIT = "3/minute" if _PRODUCTION_RATE_LIMITS else "10
 VERIFICATION_CONFIRM_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 _ENTERPRISE_ORIGIN = "https://app.agroai-pilot.com"
 _PLATFORM_ORIGIN = "https://platform.agroai-pilot.com"
-SELF_SERVICE_TERMS_VERSION = "2026-09-27"
-SELF_SERVICE_PRIVACY_VERSION = "2026-09"
+SELF_SERVICE_TERMS_VERSION = "2026-07-03"
+SELF_SERVICE_PRIVACY_VERSION = "2026-07-03"
+# The initial clickwrap release used deployment labels for the same July 3
+# documents. Accept that exact pair during cached-client rollout, but record
+# the actual document versions for every new acceptance. Never rewrite history.
+_SELF_SERVICE_ACCEPTED_VERSION_PAIRS = {
+    (SELF_SERVICE_TERMS_VERSION, SELF_SERVICE_PRIVACY_VERSION),
+    ("2026-09-27", "2026-09"),
+}
 SELF_SERVICE_TERMS_URL = "https://agroai-pilot.com/terms-of-service"
 SELF_SERVICE_PRIVACY_URL = "https://agroai-pilot.com/privacy-policy"
 SELF_SERVICE_ACCEPTANCE_TEXT = (
@@ -388,8 +395,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     if legal_enforcement and (
         payload.terms_accepted is not True
         or payload.authority_confirmed is not True
-        or payload.terms_version != SELF_SERVICE_TERMS_VERSION
-        or payload.privacy_version != SELF_SERVICE_PRIVACY_VERSION
+        or (payload.terms_version, payload.privacy_version) not in _SELF_SERVICE_ACCEPTED_VERSION_PAIRS
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

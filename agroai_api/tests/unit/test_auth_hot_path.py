@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from app.models.saas import OrganizationMembership, SelfServiceLegalAcceptance, User
 
 
@@ -116,7 +118,8 @@ def test_email_verification_confirm_keeps_one_time_activation_seed(client, db, m
     assert len(seed_calls) == 1
 
 
-def test_registration_clickwrap_is_versioned_and_persisted(client, db):
+@pytest.mark.parametrize("versions", [("2026-07-03", "2026-07-03"), ("2026-09-27", "2026-09")])
+def test_registration_clickwrap_is_versioned_and_persisted(client, db, versions):
     email = "clickwrap-evidence@example.com"
     response = client.post(
         "/v1/auth/register",
@@ -130,14 +133,14 @@ def test_registration_clickwrap_is_versioned_and_persisted(client, db):
             "region": "California",
             "terms_accepted": True,
             "authority_confirmed": True,
-            "terms_version": "2026-09-27",
-            "privacy_version": "2026-09",
+            "terms_version": versions[0],
+            "privacy_version": versions[1],
         },
     )
     assert response.status_code == 201, response.text
     row = db.query(SelfServiceLegalAcceptance).filter(SelfServiceLegalAcceptance.user_id == response.json()["user"]["id"]).one()
-    assert row.terms_version == "2026-09-27"
-    assert row.privacy_version == "2026-09"
+    assert row.terms_version == "2026-07-03"
+    assert row.privacy_version == "2026-07-03"
     assert row.authority_confirmed is True
     assert "authorized to bind my organization" in row.acceptance_text
     assert row.ip_hash
