@@ -82,10 +82,21 @@ jobs:
           cat /tmp/i18n-authoring.log
           exit 1
       - name: Generate complete source-fingerprinted catalog
+        shell: bash
         run: |
-          python3 scripts/i18n-generate-catalogs.py \
-            --locales "${{ matrix.locale }}" \
-            --outdir locale-out
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 10); do
+            if python3 scripts/i18n-generate-catalogs.py \
+              --locales "${{ matrix.locale }}" \
+              --outdir locale-out; then
+              ok=1
+              break
+            fi
+            echo "${{ matrix.locale }} authoring interrupted (attempt $attempt/10); resuming in 12s..."
+            sleep 12
+          done
+          test "$ok" = "1"
       - name: Stop authoring preview
         if: always()
         shell: bash
