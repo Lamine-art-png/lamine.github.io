@@ -69,7 +69,7 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
     request = urllib.request.Request(
         endpoint,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "Mozilla/5.0 AGRO-AI-Localization-Release/1.0"},
     )
     try:
         with urllib.request.urlopen(request, timeout=55) as response:
