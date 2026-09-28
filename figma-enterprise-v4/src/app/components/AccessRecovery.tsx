@@ -51,7 +51,7 @@ export function AccessRecoveryPage() {
     setError("");
     setWorking(true);
     try {
-      const response = await recoveryClient.start({ email, locale: effectiveLocale });
+      const response = await recoveryClient.start({ email, ...(effectiveLocale !== "en" ? { locale: effectiveLocale } : {}) });
       setMessage(response.message || "If an account exists, recovery instructions were sent.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request could not be processed.");
@@ -73,7 +73,7 @@ export function AccessRecoveryPage() {
     }
     setWorking(true);
     try {
-      const response = await recoveryClient.complete({ token, replacement_credential: credential, locale: effectiveLocale });
+      const response = await recoveryClient.complete({ token, replacement_credential: credential, ...(effectiveLocale !== "en" ? { locale: effectiveLocale } : {}) });
       setMessage(response.message || "Account access updated.");
       setDone(true);
     } catch (err) {
