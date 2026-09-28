@@ -1,0 +1,43 @@
+name: Translation Canary Artifact
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/translation-canary-artifact.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Capture exact canary result
+        shell: bash
+        run: |
+          set +e
+          curl --silent --show-error --max-time 25 \
+            -w '%{http_code}\n%{time_total}\n' \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"locale":"de"}' \
+            https://app.agroai-pilot.com/v1/i18n/internal/canary \
+            -o body.json > meta.txt 2> curl-error.txt
+          echo "$?" > exit-code.txt
+          cat meta.txt
+          cat curl-error.txt
+          cat body.json 2>/dev/null || true
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: translation-canary-artifact
+          path: |
+            body.json
+            meta.txt
+            curl-error.txt
+            exit-code.txt
+          if-no-files-found: warn
+          retention-days: 1
