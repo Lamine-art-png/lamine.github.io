@@ -121,16 +121,64 @@ async function withTrustLegalIntegration(upstream: Response, request: Request): 
   return new Response(html, { status: upstream.status, statusText: upstream.statusText, headers });
 }
 
+function requestedLegalLocale(incoming: URL): string {
+  const raw = String(incoming.searchParams.get("lang") || "").trim().replace("_", "-").toLowerCase();
+  if (raw === "pt" || raw === "pt-br") return "pt-BR";
+  return "en";
+}
+
+function localizedLegalAssetPath(pathname: string, locale: string): string | null {
+  const normalized = pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
+  const slug = normalized === "/terms-of-service"
+    ? "terms-of-service"
+    : normalized === "/privacy-policy"
+      ? "privacy-policy"
+      : null;
+  return slug && locale !== "en" ? `/legal/localized/${locale}/${slug}.html` : null;
+}
+
 async function legalPage(request: Request, env: Env): Promise<Response> {
   const incoming = new URL(request.url);
+  const locale = requestedLegalLocale(incoming);
+  const localizedPath = localizedLegalAssetPath(incoming.pathname, locale);
+  if (localizedPath) {
+    const assetUrl = new URL(localizedPath, "https://agroai-trust-assets.invalid");
+    const localized = await env.ASSETS.fetch(new Request(assetUrl, {
+      method: request.method,
+      headers: { accept: "text/html,*/*;q=0.8" },
+      redirect: "manual",
+    }));
+    if (localized.ok) {
+      const integrated = await withTrustLegalIntegration(localized, request);
+      const headers = new Headers(integrated.headers);
+      headers.set("content-language", locale);
+      headers.set("vary", "Accept-Language");
+      headers.set("x-agroai-legal-localization", "static-versioned-snapshot");
+      return new Response(request.method === "HEAD" ? null : integrated.body, {
+        status: integrated.status,
+        statusText: integrated.statusText,
+        headers,
+      });
+    }
+  }
+
   const origin = safeMarketingOrigin(env.MARKETING_ORIGIN);
-  const target = new URL(incoming.pathname + incoming.search, origin);
+  // Canonical English is always the source of legal truth. Do not forward a
+  // locale query to the marketing origin and pretend it translated anything.
+  const target = new URL(incoming.pathname, origin);
   const upstream = await fetch(new Request(target, {
     method: request.method,
     headers: { accept: request.headers.get("accept") || "text/html,*/*;q=0.8" },
     redirect: "follow",
   }));
-  return withTrustLegalIntegration(upstream, request);
+  const integrated = await withTrustLegalIntegration(upstream, request);
+  const headers = new Headers(integrated.headers);
+  headers.set("content-language", "en");
+  return new Response(request.method === "HEAD" ? null : integrated.body, {
+    status: integrated.status,
+    statusText: integrated.statusText,
+    headers,
+  });
 }
 
 export default {
