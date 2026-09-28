@@ -25,6 +25,12 @@ MAX_KEYS = 16
 MAX_SOURCE_CHARS = 1200
 MAX_ATTEMPTS = 4
 PARALLELISM = 1
+CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+CLOUDFLARE_MODELS = (
+    os.environ.get("I18N_CLOUDFLARE_MODEL", "@cf/meta/llama-3.1-8b-instruct-fast").strip(),
+    os.environ.get("I18N_CLOUDFLARE_FALLBACK_MODEL", "@cf/qwen/qwen3-30b-a3b-fp8").strip(),
+)
 
 RTL_ROOTS = {"ar", "fa", "ur"}
 PROTECTED_EXACT = {"AGRO-AI", "GPT", "API", "OAuth", "CSV", "PDF", "JSON", "OpenET", "WiseConn", "Talgil", "Stripe"}
@@ -58,6 +64,67 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
         value.encode("utf-8", errors="strict")
         out[key] = value
     return out
+
+
+def cloudflare_rest_available() -> bool:
+    return bool(CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)
+
+
+def call_cloudflare_rest(locale: str, source: dict[str, str]) -> dict[str, str]:
+    system = (
+        f"Translate every JSON string value into the customer's language ({locale}). "
+        "Return exactly one JSON object with the same keys. Preserve placeholders in braces, "
+        "URLs, AGRO-AI, product names, technical identifiers, units and numeric values. "
+        "Use natural enterprise-agriculture language for the requested locale. "
+        "For pt-BR use Brazilian Portuguese. No explanations."
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": json.dumps(source, ensure_ascii=False, separators=(",", ":"))},
+    ]
+    failures: list[str] = []
+    for model in CLOUDFLARE_MODELS:
+        if not model:
+            continue
+        url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model}"
+        payload = {
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": 1400,
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "AGRO-AI-Localization-Release/2.0",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=70) as response:
+                body = json.load(response)
+            if body.get("success") is not True:
+                raise RuntimeError(f"cloudflare_rest_unsuccessful:{body.get('errors')}")
+            result = body.get("result") or {}
+            raw = (
+                result.get("response")
+                or result.get("result", {}).get("response")
+                or result.get("choices", [{}])[0].get("message", {}).get("content")
+                or ""
+            )
+            if not isinstance(raw, str) or not raw.strip():
+                raise RuntimeError("cloudflare_rest_empty_response")
+            cleaned = clean_json_text(raw)
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                parsed = ast.literal_eval(cleaned)
+            return validate_chunk(source, parsed)
+        except Exception as exc:
+            failures.append(f"{model}:{type(exc).__name__}:{str(exc)[:240]}")
+    raise RuntimeError("cloudflare_rest_models_failed:" + "|".join(failures))
 
 
 def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
@@ -106,6 +173,8 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
     last: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
+            if cloudflare_rest_available():
+                return call_cloudflare_rest(locale, source)
             return call_edge(locale, source, endpoint)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
             last = exc
