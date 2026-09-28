@@ -143,6 +143,10 @@ def localize_document(slug, locale, endpoint, outdir, source_dir=None):
     source_path = Path(source_dir) / f"{slug}.html" if source_dir else None
     raw = source_path.read_text(encoding="utf-8") if source_path and source_path.exists() else fetch_html(canonical_url)
     source_hash = hashlib.sha256(raw.encode()).hexdigest()
+    # The localized legal artifact is a static presentation snapshot. Remove
+    # executable application scripts so client-side hydration cannot repaint
+    # the translated DOM back into English after load.
+    raw = re.sub(r"(?is)<script\b.*?</script\s*>", "", raw)
     tokens, source, locations = split_visible_text(raw)
     translated = {}
     for chunk in chunks(source):
