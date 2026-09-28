@@ -174,7 +174,15 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             if cloudflare_rest_available():
-                return call_cloudflare_rest(locale, source)
+                try:
+                    return call_cloudflare_rest(locale, source)
+                except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as rest_exc:
+                    # A repository Cloudflare token may be valid for deploys but
+                    # lack Workers AI REST permission. Do not dead-end catalog
+                    # authoring on that narrower credential: fall through to the
+                    # already-deployed AGRO-AI edge authoring path, whose AI
+                    # binding is the production-authorized translation runtime.
+                    last = rest_exc
             return call_edge(locale, source, endpoint)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
             last = exc
