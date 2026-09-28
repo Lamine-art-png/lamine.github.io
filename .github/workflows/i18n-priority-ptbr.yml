@@ -93,34 +93,12 @@ jobs:
             kill "$(cat /tmp/ptbr-authoring.pid)" 2>/dev/null || true
           fi
 
-      - name: Validate pt-BR artifacts and make advertised set truthful
+      - name: Validate pt-BR artifacts and reconcile advertised locales
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/i18n-generate-catalogs.py --locales pt-BR --validate-dir shared/localization/catalogs
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          path=Path("shared/supported-locales.json")
-          m=json.loads(path.read_text(encoding="utf-8"))
-          # Preserve the intended global language matrix even while production
-          # temporarily advertises only locales with complete static artifacts.
-          target=[]
-          for code in m.get("targetUiLocales") or m.get("enabledUiLocales") or []:
-              code="pt-BR" if code=="pt" else code
-              if code not in target:
-                  target.append(code)
-          m["targetUiLocales"]=target
-          m["enabledUiLocales"]=["auto","en","pt-BR"]
-          m["catalogCompleteLocales"]=["en","pt-BR"]
-          m["dynamicCatalogLocales"]=[]
-          qa=m.setdefault("qa",{})
-          qa["staticCompleteLocales"]=["en","pt-BR"]
-          qa["linguisticCompleteLocales"]=["en","pt-BR"]
-          qa["browserCompleteLocales"]=["en","pt-BR"]
-          m["uiTranslationPolicy"]="versioned-static-complete-catalogs"
-          path.write_text(json.dumps(m,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")
-          PY
+          python3 scripts/i18n-reconcile-production-locales.py
           cd figma-enterprise-v4
           node tests/static-locale-catalog-contract.mjs
 
@@ -131,6 +109,7 @@ jobs:
           git config user.name "AGRO-AI Release Bot"
           git config user.email "release-bot@agroai-pilot.com"
           git add shared/localization/catalogs/pt-BR.json \
+                  shared/localization/transactional-catalogs/pt-BR.json \
                   shared/supported-locales.json
           git commit -m "Promote deterministic Brazilian Portuguese localization"
           git pull --rebase origin "${GITHUB_REF_NAME}"
