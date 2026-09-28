@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: output-directory ordering fixed
+# release retry: rebase-safe artifact promotion and global target preservation
 
 on:
   push:
@@ -76,6 +76,14 @@ jobs:
           from pathlib import Path
           path=Path("shared/supported-locales.json")
           m=json.loads(path.read_text(encoding="utf-8"))
+          # Preserve the intended global language matrix even while production
+          # temporarily advertises only locales with complete static artifacts.
+          target=[]
+          for code in m.get("targetUiLocales") or m.get("enabledUiLocales") or []:
+              code="pt-BR" if code=="pt" else code
+              if code not in target:
+                  target.append(code)
+          m["targetUiLocales"]=target
           m["enabledUiLocales"]=["auto","en","pt-BR"]
           m["catalogCompleteLocales"]=["en","pt-BR"]
           m["dynamicCatalogLocales"]=[]
@@ -99,4 +107,5 @@ jobs:
                   shared/localization/transactional-catalogs/pt-BR.json \
                   shared/supported-locales.json
           git commit -m "Promote deterministic Brazilian Portuguese localization"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
