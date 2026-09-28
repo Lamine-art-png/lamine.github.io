@@ -125,7 +125,7 @@ def localized_verification_copy(product_surface: str, base_copy: dict[str, str],
             "role": "system",
             "content": (
                 f"Translate every JSON string value into {language} ({canonical}) for a professional AGRO-AI account-verification email. "
-                "Return one JSON object only. Preserve every key exactly. Preserve AGRO-AI, TEST, LIVE, URLs, and the {product} placeholder exactly. "
+                "Return one JSON object only. Preserve every key exactly. Preserve AGRO-AI, TEST, LIVE, URLs, and the {{product}} placeholder exactly. "
                 "Do not add claims or explanations."
             ),
         },
