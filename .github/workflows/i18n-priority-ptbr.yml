@@ -1,5 +1,5 @@
 name: Priority pt-BR deterministic localization
-# release retry: Workers AI structured response serialization fixed
+# release retry: output-directory ordering fixed
 
 on:
   push:
