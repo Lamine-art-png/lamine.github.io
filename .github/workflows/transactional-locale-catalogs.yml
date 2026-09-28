@@ -7,7 +7,6 @@ on:
       - "shared/localization/transactional-source.json"
       - "shared/supported-locales.json"
       - "scripts/i18n-generate-transactional-catalogs.py"
-      - "wrangler.i18n-authoring.toml"
       - ".github/workflows/transactional-locale-catalogs.yml"
   workflow_dispatch:
 
@@ -19,45 +18,74 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  generate:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    outputs:
+      locales: ${{ steps.matrix.outputs.locales }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        name: Resolve intended production locale set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          m=json.load(open("shared/supported-locales.json"))
+          out=[]
+          for code in m.get("targetUiLocales") or m["enabledUiLocales"]:
+              if code=="auto":
+                  continue
+              code="pt-BR" if code=="pt" else code
+              if code not in out:
+                  out.append(code)
+          print("locales="+json.dumps(out,separators=(",",":")))
+          PY
+
+  author:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Resolve production locale set
+      - name: Generate deterministic transactional catalog
         shell: bash
         run: |
           set -euo pipefail
-          locales="$(python3 - <<'PY'
-          import json
-          m=json.load(open("shared/supported-locales.json"))
-          out=[]
-          for code in m["enabledUiLocales"]:
-              if code=="auto": continue
-              code="pt-BR" if code=="pt" else code
-              if code not in out: out.append(code)
-          print(",".join(out))
-          PY
-          )"
-          echo "I18N_TRANSACTIONAL_LOCALES=$locales" >> "$GITHUB_ENV"
+          mkdir -p transactional-out
+          python3 scripts/i18n-generate-transactional-catalogs.py             --locales "${{ matrix.locale }}"             --outdir transactional-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transactional-${{ matrix.locale }}
+          path: transactional-out/${{ matrix.locale }}.json
+          if-no-files-found: error
+          retention-days: 3
 
-      - name: Generate all transactional catalogs
-        run: |
-          python3 scripts/i18n-generate-transactional-catalogs.py \
-            --locales "$I18N_TRANSACTIONAL_LOCALES"
-
-      - name: Commit complete transactional matrix
+  promote:
+    needs: [prepare, author]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: transactional-*
+          path: shared/localization/transactional-catalogs
+          merge-multiple: true
+      - name: Validate and commit complete transactional matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -69,4 +97,5 @@ jobs:
             exit 0
           fi
           git commit -m "Generate deterministic transactional locale catalogs"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
