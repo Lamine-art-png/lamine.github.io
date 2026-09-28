@@ -19,10 +19,10 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 DEFAULT_ENDPOINT = "https://local-ai.agroai-pilot.com/api/chat"
-MAX_KEYS = 20
-MAX_SOURCE_CHARS = 1200
-MAX_ATTEMPTS = 4
-PARALLELISM = 3
+MAX_KEYS = 64
+MAX_SOURCE_CHARS = 3600
+MAX_ATTEMPTS = 6
+PARALLELISM = 1
 
 RTL_ROOTS = {"ar", "fa", "ur"}
 PROTECTED_EXACT = {"AGRO-AI", "GPT", "API", "OAuth", "CSV", "PDF", "JSON", "OpenET", "WiseConn", "Talgil", "Stripe"}
@@ -71,8 +71,15 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=45) as response:
-        body = json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=55) as response:
+            body = json.load(response)
+    except urllib.error.HTTPError as error:
+        try:
+            diagnostic = error.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            diagnostic = ""
+        raise RuntimeError(f"edge_http_{error.code}:{diagnostic}") from None
     if body.get("done") is not True or body.get("provider") != "cloudflare-workers-ai":
         raise RuntimeError("edge_authoring_invalid_provider_response")
     raw = body.get("message", {}).get("content") or body.get("response") or ""
@@ -126,12 +133,21 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
         catalog = dict(source)
     else:
         catalog: dict[str, str] = {}
-        work = chunks(source)
+        aliases_by_value: dict[str, list[str]] = {}
+        for key, value in source.items():
+            aliases_by_value.setdefault(value, []).append(key)
+        representative_source = {
+            keys[0]: value for value, keys in aliases_by_value.items()
+        }
+        work = chunks(representative_source)
         with ThreadPoolExecutor(max_workers=PARALLELISM) as executor:
             future_map = {executor.submit(translate_chunk, locale, chunk, endpoint): index for index, chunk in enumerate(work)}
             completed = 0
             for future in as_completed(future_map):
-                catalog.update(future.result())
+                translated = future.result()
+                for key, value in translated.items():
+                    for alias in aliases_by_value[source[key]]:
+                        catalog[alias] = value
                 completed += 1
                 print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
     validate_full(source, catalog, locale)
