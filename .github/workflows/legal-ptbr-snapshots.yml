@@ -6,6 +6,8 @@ on:
     branches: [fix/deterministic-localization-release]
     paths:
       - ".github/workflows/legal-ptbr-snapshots.yml"
+      - "scripts/legal-i18n-generate.py"
+      - "scripts/i18n_public_translate.py"
       - "cloudflare/ollama-compat/src/index.js"
       - "wrangler.i18n-authoring.toml"
   workflow_dispatch:
