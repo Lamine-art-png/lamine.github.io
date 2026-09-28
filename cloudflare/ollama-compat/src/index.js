@@ -1,3 +1,5 @@
+import { translateWithPublicFallback } from "../../edge-gateway/src/i18n-public-translate-fallback";
+
 const TRANSLATION_MODEL = "@cf/meta/m2m100-1.2b";
 const TRANSLATION_PARALLELISM = 4;
 const PROTECTED_SPLIT_RE = /(\{[A-Za-z_][A-Za-z0-9_]*\}|https?:\/\/[^\s]+|AGRO-AI)/g;
@@ -195,13 +197,25 @@ export default {
     if (translation) {
       const startedAt = Date.now();
       try {
-        const catalog = await translateCatalog(env, translation.locale, translation.source);
+        let catalog;
+        let provider = "public_translation_provider_chain_v4";
+        let model = "public-translation";
+        let fallbackUsed = false;
+        try {
+          catalog = await translateWithPublicFallback(translation.locale, translation.source);
+        } catch (publicError) {
+          console.warn("public_translation_failed", String(publicError?.message || publicError));
+          catalog = await translateCatalog(env, translation.locale, translation.source);
+          provider = "cloudflare-workers-ai";
+          model = TRANSLATION_MODEL;
+          fallbackUsed = true;
+        }
         const content = JSON.stringify(catalog);
         return Response.json({
-          provider: "cloudflare-workers-ai",
-          model: TRANSLATION_MODEL,
+          provider,
+          model,
           requested_model: body.model ?? null,
-          fallback_used: false,
+          fallback_used: fallbackUsed,
           latency_ms: Date.now() - startedAt,
           translation_mode: true,
           message: { role: "assistant", content },
@@ -211,7 +225,7 @@ export default {
       } catch (error) {
         console.error("edge_translation_failed", String(error?.message || error));
         return Response.json(
-          { error: "edge_translation_unavailable", provider: "cloudflare-workers-ai", model: TRANSLATION_MODEL },
+          { error: "edge_translation_unavailable", provider: "localization-authoring" },
           { status: 503 },
         );
       }
