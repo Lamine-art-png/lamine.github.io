@@ -151,9 +151,9 @@ def stripe_locale(locale: str) -> str:
 def canonical_legal_hashes() -> dict[str, str] | None:
     """The canonical legal version is the one most localized snapshots translate.
 
-    Recorded explicitly in platform-api/legal/localized/canonical.json when present.
+    Recorded explicitly in shared/localization/legal-canonical/canonical.json.
     """
-    pinned = json_file(LEGAL_DIR / "canonical.json")
+    pinned = json_file(ROOT / "shared" / "localization" / "legal-canonical" / "canonical.json")
     if pinned and isinstance(pinned.get("sourceSha256"), dict):
         return {str(k): str(v) for k, v in pinned["sourceSha256"].items()}
     return None

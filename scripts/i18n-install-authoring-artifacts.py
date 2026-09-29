@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 UI_DIR = ROOT / "shared/localization/catalogs"
 TX_DIR = ROOT / "shared/localization/transactional-catalogs"
 LEGAL_DIR = ROOT / "platform-api/legal/localized"
+# Pinned canonical English legal DOM: an authoring input, not a served page.
+CANONICAL_DIR = ROOT / "shared/localization/legal-canonical"
 
 
 def sha256(path: Path) -> str:
@@ -38,14 +40,14 @@ def main() -> None:
 
     canonical_dom = downloaded / "canonical-legal-dom"
     canonical_hashes: dict[str, str] = {}
-    pinned_path = LEGAL_DIR / "canonical.json"
+    pinned_path = CANONICAL_DIR / "canonical.json"
     repin = "--repin-legal" in sys.argv
     if pinned_path.exists() and not repin:
         # Keep the pinned canonical legal source; snapshots from this run were
         # authored from the committed canonical DOM when one exists.
         canonical_hashes = json.loads(pinned_path.read_text(encoding="utf-8"))["sourceSha256"]
     elif canonical_dom.is_dir():
-        target = LEGAL_DIR / "canonical"
+        target = CANONICAL_DIR
         target.mkdir(parents=True, exist_ok=True)
         for slug in ("terms-of-service", "privacy-policy"):
             src = canonical_dom / f"{slug}.html"
@@ -80,7 +82,7 @@ def main() -> None:
                 installed["legal"].append(locale)
 
     if canonical_hashes and (repin or not pinned_path.exists()):
-        (LEGAL_DIR / "canonical.json").write_text(json.dumps({
+        (CANONICAL_DIR / "canonical.json").write_text(json.dumps({
             "schemaVersion": 1,
             "description": "Canonical English legal DOM translated by every localized snapshot",
             "sourceSha256": canonical_hashes,

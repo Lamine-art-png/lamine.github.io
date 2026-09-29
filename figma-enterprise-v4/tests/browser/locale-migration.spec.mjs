@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 const APP_URL = "http://127.0.0.1:4173/settings";
@@ -77,15 +79,23 @@ function languageSelector(page) {
   return page.locator("select").filter({ has: page.locator('option[value="fr-FR"]') }).first();
 }
 
+// The label for the "language" key comes from the shipped release catalog;
+// canonicalization must never trigger runtime catalog generation.
+function shippedLabel(locale) {
+  if (locale === "en") return "Language";
+  const file = path.join(path.resolve(process.cwd(), ".."), "shared", "localization", "catalogs", `${locale}.json`);
+  return JSON.parse(fs.readFileSync(file, "utf8")).catalog.language;
+}
+
 const cases = [
-  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", true],
-  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", true],
-  ["global de", "de", "de", "de", "de", "Sprache", true],
-  ["global ar", "ar", "ar", "ar", "ar", "اللغة", true],
-  ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", false],
+  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR"],
+  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR"],
+  ["global de", "de", "de", "de", "de"],
+  ["global ar", "ar", "ar", "ar", "ar"],
+  ["unknown locale", "nonsense-value", "auto", "en", "auto"],
 ];
 
-for (const [name, stored, selected, effective, rewritten, translatedLabel, expectsCatalogActivity] of cases) {
+for (const [name, stored, selected, effective, rewritten] of cases) {
   test(`${name} canonicalization`, async ({ browser }) => {
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();
@@ -95,19 +105,14 @@ for (const [name, stored, selected, effective, rewritten, translatedLabel, expec
     await expect(languageSelector(page)).toHaveValue(selected);
     await expect(page.locator("html")).toHaveAttribute("lang", effective);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe(rewritten);
-    await expect(page.getByText(translatedLabel, { exact: true }).first()).toBeVisible();
-    if (expectsCatalogActivity) {
-      await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
-      expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
-    } else {
-      expect(state.catalogs).toHaveLength(0);
-    }
+    await expect(page.getByText(shippedLabel(effective), { exact: true }).first()).toBeVisible();
+    expect(state.catalogs).toHaveLength(0);
     expect(state.patches).toBe(0);
     await context.close();
   });
 }
 
-test("malformed dynamic placeholder catalog is rejected and not cached", async ({ browser }) => {
+test("an advertised locale ignores a malformed runtime provider entirely", async ({ browser }) => {
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   const state = await prepare(page, "sw");
@@ -115,23 +120,10 @@ test("malformed dynamic placeholder catalog is rejected and not cached", async (
 
   await expect(languageSelector(page)).toHaveValue("sw");
   await expect(page.locator("html")).toHaveAttribute("lang", "sw");
-  await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
-  expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
-  await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
-  const malformedCached = await page.evaluate(() => {
-    for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith("agroai_ui_catalog_v7:sw:")) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed?.source?.["intelligence.reportEmailed"] || parsed?.catalog?.["intelligence.reportEmailed"]) return true;
-      } catch {
-        // Ignore unrelated/corrupt entries; they are not a valid malformed cache hit.
-      }
-    }
-    return false;
-  });
-  expect(malformedCached).toBe(false);
+  await expect(page.getByText(shippedLabel("sw"), { exact: true }).first()).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(state.catalogs).toHaveLength(0);
+  const cachedRuntimeCatalog = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v7:sw:")));
+  expect(cachedRuntimeCatalog).toBe(false);
   await context.close();
 });

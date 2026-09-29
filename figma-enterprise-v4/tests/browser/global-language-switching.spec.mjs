@@ -6,7 +6,6 @@ const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
 const repoRoot = path.resolve(process.cwd(), "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "supported-locales.json"), "utf8"));
-const REQUEST_CHUNK_SIZE = 48;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
@@ -57,7 +56,19 @@ function languageSelector(page) {
   return page.locator("select").filter({ has: page.locator('option[value="fr-FR"]') }).first();
 }
 
-test("every visible non-English UI locale hydrates core first and full literals progressively", async ({ browser }) => {
+const sourceCatalog = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "localization", "source.json"), "utf8")).catalog;
+function shipped(locale) {
+  return JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "localization", "catalogs", `${locale}.json`), "utf8")).catalog;
+}
+function sourceKey(value) {
+  const entry = Object.entries(sourceCatalog).find(([, text]) => text === value);
+  if (!entry) throw new Error(`missing source literal ${value}`);
+  return entry[0];
+}
+
+// Deterministic release contract: every advertised locale renders the value
+// shipped in its release catalog and never asks a translation provider.
+test("every advertised locale renders its shipped catalog without runtime generation", async ({ browser }) => {
   test.setTimeout(360_000);
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
@@ -68,44 +79,30 @@ test("every visible non-English UI locale hydrates core first and full literals 
   await expect(selector).toHaveValue("en");
   const locales = manifest.enabledUiLocales.filter((code) => code !== "auto" && code !== "en");
   expect(locales.length).toBeGreaterThanOrEqual(50);
+  const timezoneKey = sourceKey("Timezone");
+  const directions = new Map(manifest.locales.map((row) => [row.code, row.direction || "ltr"]));
 
   for (const locale of locales) {
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
     await expect(selector).toBeEnabled();
-    if (locale === "fr-FR") {
-      await expect(page.getByText("Paramètres", { exact: true }).first()).toBeVisible();
-    } else {
-      // Core strings may already be satisfied by a bundled/reused valid
-      // catalog. The literal below proves the dynamic catalog path hydrated.
-      await expect(page.locator("html")).toHaveAttribute("lang", locale);
-    }
-    await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
-    const expectedDir = ["ar", "fa", "ur"].includes(locale.split("-")[0]) ? "rtl" : "ltr";
-    await expect(page.locator("html")).toHaveAttribute("dir", expectedDir);
+    await expect(page.locator("html")).toHaveAttribute("lang", locale);
+    await expect(page.locator("html")).toHaveAttribute("dir", directions.get(locale) || "ltr");
+    await expect(page.getByText(shipped(locale)[timezoneKey], { exact: true }).first()).toBeVisible();
   }
 
-  expect(new Set(state.catalogs.map((item) => item.locale))).toEqual(new Set(locales));
-  for (const locale of locales) {
-    const requests = state.catalogs.filter((item) => item.locale === locale);
-    expect(requests.length).toBeGreaterThanOrEqual(4);
-    expect(requests.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
-  }
+  expect(state.catalogs, "advertised locales must not request runtime catalogs").toEqual([]);
   await context.close();
 });
 
-test("non-French locale visibly translates from core while full literal chunks are still pending", async ({ browser }) => {
+test("language switch is atomic and independent of a stalled translation provider", async ({ browser }) => {
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   await page.addInitScript((token) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", "en");
   }, qaToken());
-
-  let releaseFull;
-  const fullGate = new Promise((resolve) => { releaseFull = resolve; });
-  const requestScopes = [];
+  const providerCalls = [];
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -115,13 +112,8 @@ test("non-French locale visibly translates from core while full literal chunks a
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
     if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
-      const payload = req.postDataJSON();
-      const keys = Object.keys(payload.source || {});
-      const isFullLiteralChunk = keys.some((key) => key.startsWith("literal."));
-      requestScopes.push(isFullLiteralChunk ? "full" : "core");
-      if (isFullLiteralChunk) await fullGate;
-      const catalog = Object.fromEntries(Object.entries(payload.source).map(([key, value]) => [key, `⟦${payload.locale}⟧ ${value}`]));
-      return reply({ status: "ok", locale: payload.locale, catalog });
+      providerCalls.push(url.pathname);
+      return; // never answers: a stalled provider must not matter
     }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") return reply({ status: "saved" });
     return reply({});
@@ -133,14 +125,11 @@ test("non-French locale visibly translates from core while full literal chunks a
   await expect(selector).toHaveValue("de");
   await expect(selector).toBeEnabled();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByText("⟦de⟧ Settings", { exact: true }).first()).toBeVisible();
-  expect(requestScopes.includes("core")).toBeTruthy();
-
-  releaseFull();
-  await expect(page.getByText("⟦de⟧ Timezone", { exact: true }).first()).toBeVisible();
-  expect(requestScopes.includes("full")).toBeTruthy();
-  await expect(selector).toHaveValue("de");
-  await expect(selector).toBeEnabled();
+  const de = shipped("de");
+  await expect(page.getByText(de[sourceKey("Settings")], { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(de[sourceKey("Timezone")], { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Timezone", { exact: true })).toHaveCount(0);
+  expect(providerCalls).toEqual([]);
   await context.close();
 });
 

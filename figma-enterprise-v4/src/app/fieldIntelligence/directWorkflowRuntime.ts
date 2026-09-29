@@ -1,4 +1,5 @@
 import { apiClient } from "../api/client";
+import { translatePortalLiteral } from "../portalLiteralCatalog";
 import { t, currentLocale } from "../i18n";
 
 type AnyRecord = Record<string, any>;
@@ -265,9 +266,9 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
   panel.dataset.fiOperatingLoop = "true";
 
   const title = element("div", { color: "#10231B", fontSize: "12px", fontWeight: "800" });
-  title.textContent = "Observation to action";
+  title.textContent = translatePortalLiteral("Observation to action");
   const description = element("div", { color: "#65736A", fontSize: "11px", lineHeight: "1.5", marginTop: "4px" });
-  description.textContent = "Voice, video, AGRO-AI analysis, the decision, the task, and verification stay attached to this observation.";
+  description.textContent = translatePortalLiteral("Voice, video, AGRO-AI analysis, the decision, the task, and verification stay attached to this observation.");
   const steps = element("div", { display: "grid", gap: "5px", gridTemplateColumns: "repeat(5,minmax(0,1fr))", marginTop: "11px" });
   ["Capture", "Understand", "Decide", "Act", "Verify"].forEach((label, index) => {
     steps.append(workflowStep(label, stages[index], firstIncomplete === index, index));
@@ -287,7 +288,7 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
       padding: "10px",
     });
     const label = element("div", { color: "#2D6A4F", fontSize: "9px", fontWeight: "800", letterSpacing: "0.1em", textTransform: "uppercase" });
-    label.textContent = "Recommended next action";
+    label.textContent = translatePortalLiteral("Recommended next action");
     const body = element("div", { marginTop: "3px" });
     body.textContent = recommendation;
     next.append(label, body);
@@ -300,7 +301,7 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
     status.style.background = "#EDF7F1";
     status.style.border = "1px solid #BFD8C9";
     status.style.color = "#1B5E3F";
-    status.textContent = "Task created and linked to this observation.";
+    status.textContent = translatePortalLiteral("Task created and linked to this observation.");
   }
   panel.append(status);
 
@@ -315,7 +316,7 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
     create.addEventListener("click", async () => {
       create.disabled = true;
       create.style.opacity = "0.6";
-      create.textContent = "Creating task…";
+      create.textContent = translatePortalLiteral("Creating task…");
       status.style.display = "none";
       try {
         const response: AnyRecord = await (apiClient as any).fieldIntelligence.createTask(observationId, {});
@@ -330,7 +331,7 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
         status.style.background = "#EDF7F1";
         status.style.border = "1px solid #BFD8C9";
         status.style.color = "#1B5E3F";
-        status.textContent = "Task created and linked to this observation.";
+        status.textContent = translatePortalLiteral("Task created and linked to this observation.");
         renderWorkflowPanel(drawer, current);
         void refreshData();
       } catch (error) {

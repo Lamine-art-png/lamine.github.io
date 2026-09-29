@@ -143,7 +143,7 @@ jobs:
           # Translate the committed canonical English legal DOM when present so
           # every locale presents exactly the same pinned legal source.
           src=legal-rendered
-          if [ -f platform-api/legal/localized/canonical/terms-of-service.html ]; then src=platform-api/legal/localized/canonical; fi
+          if [ -f shared/localization/legal-canonical/terms-of-service.html ]; then src=shared/localization/legal-canonical; fi
           for attempt in 1 2; do
             if python3 scripts/legal-i18n-generate.py --locale "$LOCALE" --endpoint http://127.0.0.1:8787/api/chat --source-dir "$src" --outdir out/legal; then exit 0; fi
             sleep 10

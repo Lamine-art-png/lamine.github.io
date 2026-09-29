@@ -18,10 +18,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0017,
+    "identicalShare": 0.0016,
     "identicalToEnglish": 4,
-    "nativeScriptShare": 0.9929,
-    "translatable": 2398
+    "nativeScriptShare": 0.9928,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -43,10 +43,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0013,
+    "identicalShare": 0.0012,
     "identicalToEnglish": 3,
-    "nativeScriptShare": 0.9946,
-    "translatable": 2398
+    "nativeScriptShare": 0.9944,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -68,10 +68,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0038,
+    "identicalShare": 0.0036,
     "identicalToEnglish": 9,
-    "nativeScriptShare": 0.9967,
-    "translatable": 2398
+    "nativeScriptShare": 0.9964,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -93,10 +93,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0029,
+    "identicalShare": 0.0028,
     "identicalToEnglish": 7,
-    "nativeScriptShare": 0.9937,
-    "translatable": 2398
+    "nativeScriptShare": 0.9936,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -118,9 +118,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.025,
-    "identicalToEnglish": 60,
-    "translatable": 2398
+    "identicalShare": 0.0004,
+    "identicalToEnglish": 1,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -142,9 +142,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0042,
+    "identicalShare": 0.004,
     "identicalToEnglish": 10,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -166,9 +166,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0113,
+    "identicalShare": 0.0109,
     "identicalToEnglish": 27,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -190,9 +190,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0196,
+    "identicalShare": 0.0189,
     "identicalToEnglish": 47,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -214,9 +214,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0071,
-    "identicalToEnglish": 17,
-    "translatable": 2398
+    "identicalShare": 0.0072,
+    "identicalToEnglish": 18,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -238,10 +238,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0092,
+    "identicalShare": 0.0089,
     "identicalToEnglish": 22,
-    "nativeScriptShare": 0.9954,
-    "translatable": 2398
+    "nativeScriptShare": 0.9952,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -282,9 +282,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0029,
+    "identicalShare": 0.0028,
     "identicalToEnglish": 7,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -306,9 +306,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0067,
+    "identicalShare": 0.0064,
     "identicalToEnglish": 16,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -330,10 +330,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0046,
+    "identicalShare": 0.0044,
     "identicalToEnglish": 11,
-    "nativeScriptShare": 0.9946,
-    "translatable": 2398
+    "nativeScriptShare": 0.9944,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -355,9 +355,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0104,
+    "identicalShare": 0.0101,
     "identicalToEnglish": 25,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -379,9 +379,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0046,
+    "identicalShare": 0.0044,
     "identicalToEnglish": 11,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -403,10 +403,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0021,
+    "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "nativeScriptShare": 0.9933,
-    "translatable": 2398
+    "nativeScriptShare": 0.9932,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -428,10 +428,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0013,
+    "identicalShare": 0.0012,
     "identicalToEnglish": 3,
-    "nativeScriptShare": 0.9942,
-    "translatable": 2398
+    "nativeScriptShare": 0.994,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -453,9 +453,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0071,
+    "identicalShare": 0.0068,
     "identicalToEnglish": 17,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -477,9 +477,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0117,
+    "identicalShare": 0.0113,
     "identicalToEnglish": 28,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -501,10 +501,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0054,
+    "identicalShare": 0.0052,
     "identicalToEnglish": 13,
-    "nativeScriptShare": 0.9958,
-    "translatable": 2398
+    "nativeScriptShare": 0.9956,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -526,9 +526,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0033,
+    "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -550,9 +550,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0088,
-    "identicalToEnglish": 21,
-    "translatable": 2398
+    "identicalShare": 0.0089,
+    "identicalToEnglish": 22,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -574,9 +574,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0033,
+    "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -598,10 +598,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0033,
-    "identicalToEnglish": 8,
-    "nativeScriptShare": 0.9921,
-    "translatable": 2398
+    "identicalShare": 0.0024,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.9919,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -623,10 +623,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0054,
+    "identicalShare": 0.0052,
     "identicalToEnglish": 13,
-    "nativeScriptShare": 0.9962,
-    "translatable": 2398
+    "nativeScriptShare": 0.9964,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -648,10 +648,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0054,
+    "identicalShare": 0.0052,
     "identicalToEnglish": 13,
-    "nativeScriptShare": 0.9962,
-    "translatable": 2398
+    "nativeScriptShare": 0.996,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -673,10 +673,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0,
-    "identicalToEnglish": 0,
-    "nativeScriptShare": 0.9946,
-    "translatable": 2398
+    "identicalShare": 0.0004,
+    "identicalToEnglish": 1,
+    "nativeScriptShare": 0.996,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -698,10 +698,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0021,
+    "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "nativeScriptShare": 0.9892,
-    "translatable": 2398
+    "nativeScriptShare": 0.9887,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -723,9 +723,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0058,
+    "identicalShare": 0.0056,
     "identicalToEnglish": 14,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -747,9 +747,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0058,
+    "identicalShare": 0.0056,
     "identicalToEnglish": 14,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -771,10 +771,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0046,
+    "identicalShare": 0.0044,
     "identicalToEnglish": 11,
-    "nativeScriptShare": 0.9962,
-    "translatable": 2398
+    "nativeScriptShare": 0.996,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -796,10 +796,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0025,
+    "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.9954,
-    "translatable": 2398
+    "nativeScriptShare": 0.9952,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -821,10 +821,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0033,
+    "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "nativeScriptShare": 0.9975,
-    "translatable": 2398
+    "nativeScriptShare": 0.9972,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -848,8 +848,8 @@
    "uiQuality": {
     "identicalShare": 0.0008,
     "identicalToEnglish": 2,
-    "nativeScriptShare": 0.9946,
-    "translatable": 2398
+    "nativeScriptShare": 0.9944,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -871,9 +871,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0042,
+    "identicalShare": 0.004,
     "identicalToEnglish": 10,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -895,10 +895,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0075,
+    "identicalShare": 0.0072,
     "identicalToEnglish": 18,
-    "nativeScriptShare": 0.9837,
-    "translatable": 2398
+    "nativeScriptShare": 0.9835,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -920,9 +920,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0067,
+    "identicalShare": 0.0064,
     "identicalToEnglish": 16,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -944,9 +944,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.015,
+    "identicalShare": 0.0145,
     "identicalToEnglish": 36,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -968,10 +968,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0029,
+    "identicalShare": 0.0028,
     "identicalToEnglish": 7,
-    "nativeScriptShare": 0.9929,
-    "translatable": 2398
+    "nativeScriptShare": 0.9928,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -993,9 +993,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0021,
+    "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1017,9 +1017,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0042,
+    "identicalShare": 0.004,
     "identicalToEnglish": 10,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1041,9 +1041,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0108,
+    "identicalShare": 0.0105,
     "identicalToEnglish": 26,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1065,10 +1065,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0025,
+    "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.9967,
-    "translatable": 2398
+    "nativeScriptShare": 0.9964,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1090,9 +1090,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0104,
+    "identicalShare": 0.0101,
     "identicalToEnglish": 25,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1114,9 +1114,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0058,
+    "identicalShare": 0.0056,
     "identicalToEnglish": 14,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1140,7 +1140,7 @@
    "uiQuality": {
     "identicalShare": 0.0004,
     "identicalToEnglish": 1,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1162,9 +1162,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0054,
+    "identicalShare": 0.0052,
     "identicalToEnglish": 13,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1181,10 +1181,16 @@
    "intelligence": {
     "preferredLanguage": "sr"
    },
-   "legal": false,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "legal": true,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0012,
+    "identicalToEnglish": 3,
+    "nativeScriptShare": 0.994,
+    "translatable": 2483
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sr",
@@ -1205,9 +1211,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.015,
+    "identicalShare": 0.0145,
     "identicalToEnglish": 36,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1229,9 +1235,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0033,
+    "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1253,10 +1259,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0025,
+    "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.995,
-    "translatable": 2398
+    "nativeScriptShare": 0.9948,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1278,10 +1284,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0025,
+    "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.9933,
-    "translatable": 2398
+    "nativeScriptShare": 0.9932,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1303,10 +1309,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0021,
+    "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "nativeScriptShare": 0.9946,
-    "translatable": 2398
+    "nativeScriptShare": 0.9948,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1328,9 +1334,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0325,
-    "identicalToEnglish": 78,
-    "translatable": 2398
+    "identicalShare": 0.0322,
+    "identicalToEnglish": 80,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1352,9 +1358,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0042,
+    "identicalShare": 0.004,
     "identicalToEnglish": 10,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1376,10 +1382,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0063,
+    "identicalShare": 0.006,
     "identicalToEnglish": 15,
-    "nativeScriptShare": 0.9967,
-    "translatable": 2398
+    "nativeScriptShare": 0.9964,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1401,10 +1407,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0025,
+    "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.9958,
-    "translatable": 2398
+    "nativeScriptShare": 0.9956,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1426,9 +1432,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0021,
+    "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "translatable": 2398
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1450,10 +1456,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0013,
+    "identicalShare": 0.0012,
     "identicalToEnglish": 3,
-    "nativeScriptShare": 0.9762,
-    "translatable": 2398
+    "nativeScriptShare": 0.9754,
+    "translatable": 2483
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1462,9 +1468,9 @@
    }
   }
  },
- "releaseEligible": 59,
+ "releaseEligible": 60,
  "schemaVersion": 1,
  "target": 60,
  "transactionalSourceVersion": "2026-09-28.auth-transactional-v2",
- "uiSourceFingerprint": "721d48345d9a17a75c9579aa7547f1c0b9fcb5b532a5c8edd208e4ebcef05dd1"
+ "uiSourceFingerprint": "bf9baf3e1469f1c89211b00274cfd83c8d2c5e785e8bc1bb8b065664604d1d29"
 }

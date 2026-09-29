@@ -30,7 +30,7 @@ and production releases MUST keep `dynamicCatalogLocales` empty.
 
 ### Legal presentation
 
-Localized Terms of Service and Privacy Policy are translations of one pinned canonical English DOM (`platform-api/legal/localized/canonical.json`). Each snapshot records the clickwrap version (`SELF_SERVICE_*_VERSION`) it presents; readiness requires that version to equal the version customers accept, so acceptance evidence always refers to one canonical legal version regardless of display language.
+Localized Terms of Service and Privacy Policy are translations of one pinned canonical English DOM (`shared/localization/legal-canonical/`). Each snapshot records the clickwrap version (`SELF_SERVICE_*_VERSION`) it presents; readiness requires that version to equal the version customers accept, so acceptance evidence always refers to one canonical legal version regardless of display language.
 
 Runtime AI translation is not the critical path for an advertised locale. The legacy `POST /v1/i18n/catalog` path may remain for recovery, authoring, diagnostics, or non-production experimentation, but a production user must not depend on it in order to see the language shown in the selector.
 
