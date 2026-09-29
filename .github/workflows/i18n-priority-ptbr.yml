@@ -1,19 +1,10 @@
 name: Priority pt-BR deterministic localization
 # release retry: direct Workers AI REST authoring; no remote-dev proxy
 
+# Manual-only while localization authoring is under active development.
+# Ordinary branch pushes must never launch external authoring traffic.
 on:
-  push:
-    branches: [fix/deterministic-localization-release]
-    paths:
-      - ".github/workflows/i18n-priority-ptbr.yml"
-      - "scripts/i18n-generate-catalogs.py"
-      - "cloudflare/ollama-compat/src/index.js"
-      - "wrangler.i18n-authoring.toml"
-      - "scripts/i18n-generate-transactional-catalogs.py"
-      - "shared/localization/source.json"
-      - "shared/localization/transactional-source.json"
   workflow_dispatch:
-
 permissions:
   contents: write
 
@@ -61,13 +52,13 @@ jobs:
         run: |
           set -euo pipefail
           ok=0
-          for attempt in $(seq 1 10); do
+          for attempt in $(seq 1 3); do
             if python3 scripts/i18n-generate-catalogs.py --locales pt-BR --outdir shared/localization/catalogs; then
               ok=1
               break
             fi
-            echo "pt-BR authoring interrupted (attempt $attempt/10); resuming durable progress in 12s..."
-            sleep 12
+            echo "pt-BR authoring interrupted (attempt $attempt/3); resuming durable progress in 8s..."
+            sleep 8
           done
           test "$ok" = "1"
 
@@ -76,13 +67,13 @@ jobs:
         run: |
           set -euo pipefail
           ok=0
-          for attempt in $(seq 1 6); do
+          for attempt in $(seq 1 3); do
             if python3 scripts/i18n-generate-transactional-catalogs.py --locales pt-BR --outdir shared/localization/transactional-catalogs; then
               ok=1
               break
             fi
-            echo "pt-BR transactional authoring interrupted (attempt $attempt/6); retrying in 10s..."
-            sleep 10
+            echo "pt-BR transactional authoring interrupted (attempt $attempt/3); retrying in 8s..."
+            sleep 8
           done
           test "$ok" = "1"
 
