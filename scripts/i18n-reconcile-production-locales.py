@@ -255,7 +255,7 @@ def main() -> None:
     missing = [locale for locale, state in matrix.items() if not state["ready"]]
     print(json.dumps({
         "status": "ok",
-        "target": len([x for x in target if x != "auto"]),
+        "target": len(matrix),
         "advertised": len(ready),
         "ready": ready,
         "missing": missing,

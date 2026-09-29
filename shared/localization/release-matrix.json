@@ -1,0 +1,1153 @@
+{
+ "legalCanonicalSha256": {
+  "privacy-policy": "5ae902c188c71c66baee8c9c21a0cc57d58e3964d6566d34a9face2db6f4084a",
+  "terms-of-service": "bd748e365fc84328469881d3a47c94b9c9c9c06b02481e2295676808b63d8f25"
+ },
+ "locales": {
+  "am": {
+   "billing": {
+    "agroaiBillingUi": "am",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "am"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "am",
+    "responseLanguage": "am"
+   }
+  },
+  "ar": {
+   "billing": {
+    "agroaiBillingUi": "ar",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "rtl",
+   "intelligence": {
+    "preferredLanguage": "ar"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ar",
+    "responseLanguage": "ar"
+   }
+  },
+  "bg": {
+   "billing": {
+    "agroaiBillingUi": "bg",
+    "stripeCheckoutLocale": "bg"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "bg"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "bg",
+    "responseLanguage": "bg"
+   }
+  },
+  "bn": {
+   "billing": {
+    "agroaiBillingUi": "bn",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "bn"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "bn",
+    "responseLanguage": "bn"
+   }
+  },
+  "bs": {
+   "billing": {
+    "agroaiBillingUi": "bs",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "bs"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "bs",
+    "responseLanguage": "bs"
+   }
+  },
+  "ca": {
+   "billing": {
+    "agroaiBillingUi": "ca",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ca"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ca",
+    "responseLanguage": "ca"
+   }
+  },
+  "cs": {
+   "billing": {
+    "agroaiBillingUi": "cs",
+    "stripeCheckoutLocale": "cs"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "cs"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "cs",
+    "responseLanguage": "cs"
+   }
+  },
+  "da": {
+   "billing": {
+    "agroaiBillingUi": "da",
+    "stripeCheckoutLocale": "da"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "da"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "da",
+    "responseLanguage": "da"
+   }
+  },
+  "de": {
+   "billing": {
+    "agroaiBillingUi": "de",
+    "stripeCheckoutLocale": "de"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "de"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "de",
+    "responseLanguage": "de"
+   }
+  },
+  "el": {
+   "billing": {
+    "agroaiBillingUi": "el",
+    "stripeCheckoutLocale": "el"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "el"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "el",
+    "responseLanguage": "el"
+   }
+  },
+  "en": {
+   "billing": {
+    "agroaiBillingUi": "en",
+    "stripeCheckoutLocale": "en"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "en"
+   },
+   "legal": true,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "en",
+    "responseLanguage": "en"
+   }
+  },
+  "es": {
+   "billing": {
+    "agroaiBillingUi": "es",
+    "stripeCheckoutLocale": "es"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "es"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "es",
+    "responseLanguage": "es"
+   }
+  },
+  "et": {
+   "billing": {
+    "agroaiBillingUi": "et",
+    "stripeCheckoutLocale": "et"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "et"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "et",
+    "responseLanguage": "et"
+   }
+  },
+  "fa": {
+   "billing": {
+    "agroaiBillingUi": "fa",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "rtl",
+   "intelligence": {
+    "preferredLanguage": "fa"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "fa",
+    "responseLanguage": "fa"
+   }
+  },
+  "fi": {
+   "billing": {
+    "agroaiBillingUi": "fi",
+    "stripeCheckoutLocale": "fi"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "fi"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "fi",
+    "responseLanguage": "fi"
+   }
+  },
+  "fr-FR": {
+   "billing": {
+    "agroaiBillingUi": "fr-FR",
+    "stripeCheckoutLocale": "fr"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "fr-FR"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "fr-FR",
+    "responseLanguage": "fr-FR"
+   }
+  },
+  "gu": {
+   "billing": {
+    "agroaiBillingUi": "gu",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "gu"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "gu",
+    "responseLanguage": "gu"
+   }
+  },
+  "hi": {
+   "billing": {
+    "agroaiBillingUi": "hi",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "hi"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "hi",
+    "responseLanguage": "hi"
+   }
+  },
+  "hr": {
+   "billing": {
+    "agroaiBillingUi": "hr",
+    "stripeCheckoutLocale": "hr"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "hr"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "hr",
+    "responseLanguage": "hr"
+   }
+  },
+  "hu": {
+   "billing": {
+    "agroaiBillingUi": "hu",
+    "stripeCheckoutLocale": "hu"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "hu"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "hu",
+    "responseLanguage": "hu"
+   }
+  },
+  "hy": {
+   "billing": {
+    "agroaiBillingUi": "hy",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "hy"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "hy",
+    "responseLanguage": "hy"
+   }
+  },
+  "id": {
+   "billing": {
+    "agroaiBillingUi": "id",
+    "stripeCheckoutLocale": "id"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "id"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "id",
+    "responseLanguage": "id"
+   }
+  },
+  "is": {
+   "billing": {
+    "agroaiBillingUi": "is",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "is"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "is",
+    "responseLanguage": "is"
+   }
+  },
+  "it": {
+   "billing": {
+    "agroaiBillingUi": "it",
+    "stripeCheckoutLocale": "it"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "it"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "it",
+    "responseLanguage": "it"
+   }
+  },
+  "ja": {
+   "billing": {
+    "agroaiBillingUi": "ja",
+    "stripeCheckoutLocale": "ja"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ja"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ja",
+    "responseLanguage": "ja"
+   }
+  },
+  "ka": {
+   "billing": {
+    "agroaiBillingUi": "ka",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ka"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ka",
+    "responseLanguage": "ka"
+   }
+  },
+  "kk": {
+   "billing": {
+    "agroaiBillingUi": "kk",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "kk"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "kk",
+    "responseLanguage": "kk"
+   }
+  },
+  "kn": {
+   "billing": {
+    "agroaiBillingUi": "kn",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "kn"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "kn",
+    "responseLanguage": "kn"
+   }
+  },
+  "ko": {
+   "billing": {
+    "agroaiBillingUi": "ko",
+    "stripeCheckoutLocale": "ko"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ko"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ko",
+    "responseLanguage": "ko"
+   }
+  },
+  "lt": {
+   "billing": {
+    "agroaiBillingUi": "lt",
+    "stripeCheckoutLocale": "lt"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "lt"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "lt",
+    "responseLanguage": "lt"
+   }
+  },
+  "lv": {
+   "billing": {
+    "agroaiBillingUi": "lv",
+    "stripeCheckoutLocale": "lv"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "lv"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "lv",
+    "responseLanguage": "lv"
+   }
+  },
+  "mk": {
+   "billing": {
+    "agroaiBillingUi": "mk",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "mk"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "mk",
+    "responseLanguage": "mk"
+   }
+  },
+  "ml": {
+   "billing": {
+    "agroaiBillingUi": "ml",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ml"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ml",
+    "responseLanguage": "ml"
+   }
+  },
+  "mn": {
+   "billing": {
+    "agroaiBillingUi": "mn",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "mn"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "mn",
+    "responseLanguage": "mn"
+   }
+  },
+  "mr": {
+   "billing": {
+    "agroaiBillingUi": "mr",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "mr"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "mr",
+    "responseLanguage": "mr"
+   }
+  },
+  "ms": {
+   "billing": {
+    "agroaiBillingUi": "ms",
+    "stripeCheckoutLocale": "ms"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ms"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ms",
+    "responseLanguage": "ms"
+   }
+  },
+  "my": {
+   "billing": {
+    "agroaiBillingUi": "my",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "my"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "my",
+    "responseLanguage": "my"
+   }
+  },
+  "nl": {
+   "billing": {
+    "agroaiBillingUi": "nl",
+    "stripeCheckoutLocale": "nl"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "nl"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "nl",
+    "responseLanguage": "nl"
+   }
+  },
+  "no": {
+   "billing": {
+    "agroaiBillingUi": "no",
+    "stripeCheckoutLocale": "nb"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "no"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "no",
+    "responseLanguage": "no"
+   }
+  },
+  "pa": {
+   "billing": {
+    "agroaiBillingUi": "pa",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "pa"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "pa",
+    "responseLanguage": "pa"
+   }
+  },
+  "pl": {
+   "billing": {
+    "agroaiBillingUi": "pl",
+    "stripeCheckoutLocale": "pl"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "pl"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "pl",
+    "responseLanguage": "pl"
+   }
+  },
+  "pt-BR": {
+   "billing": {
+    "agroaiBillingUi": "pt-BR",
+    "stripeCheckoutLocale": "pt-BR"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "pt-BR"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "pt-BR",
+    "responseLanguage": "pt-BR"
+   }
+  },
+  "ro": {
+   "billing": {
+    "agroaiBillingUi": "ro",
+    "stripeCheckoutLocale": "ro"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ro"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ro",
+    "responseLanguage": "ro"
+   }
+  },
+  "ru": {
+   "billing": {
+    "agroaiBillingUi": "ru",
+    "stripeCheckoutLocale": "ru"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ru"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ru",
+    "responseLanguage": "ru"
+   }
+  },
+  "sk": {
+   "billing": {
+    "agroaiBillingUi": "sk",
+    "stripeCheckoutLocale": "sk"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sk"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sk",
+    "responseLanguage": "sk"
+   }
+  },
+  "sl": {
+   "billing": {
+    "agroaiBillingUi": "sl",
+    "stripeCheckoutLocale": "sl"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sl"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sl",
+    "responseLanguage": "sl"
+   }
+  },
+  "so": {
+   "billing": {
+    "agroaiBillingUi": "so",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "so"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "so",
+    "responseLanguage": "so"
+   }
+  },
+  "sq": {
+   "billing": {
+    "agroaiBillingUi": "sq",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sq"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sq",
+    "responseLanguage": "sq"
+   }
+  },
+  "sr": {
+   "billing": {
+    "agroaiBillingUi": "sr",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sr"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sr",
+    "responseLanguage": "sr"
+   }
+  },
+  "sv": {
+   "billing": {
+    "agroaiBillingUi": "sv",
+    "stripeCheckoutLocale": "sv"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sv"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sv",
+    "responseLanguage": "sv"
+   }
+  },
+  "sw": {
+   "billing": {
+    "agroaiBillingUi": "sw",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "sw"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "sw",
+    "responseLanguage": "sw"
+   }
+  },
+  "ta": {
+   "billing": {
+    "agroaiBillingUi": "ta",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "ta"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ta",
+    "responseLanguage": "ta"
+   }
+  },
+  "te": {
+   "billing": {
+    "agroaiBillingUi": "te",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "te"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "te",
+    "responseLanguage": "te"
+   }
+  },
+  "th": {
+   "billing": {
+    "agroaiBillingUi": "th",
+    "stripeCheckoutLocale": "th"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "th"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "th",
+    "responseLanguage": "th"
+   }
+  },
+  "tl": {
+   "billing": {
+    "agroaiBillingUi": "tl",
+    "stripeCheckoutLocale": "fil"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "tl"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "tl",
+    "responseLanguage": "tl"
+   }
+  },
+  "tr": {
+   "billing": {
+    "agroaiBillingUi": "tr",
+    "stripeCheckoutLocale": "tr"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "tr"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "tr",
+    "responseLanguage": "tr"
+   }
+  },
+  "uk": {
+   "billing": {
+    "agroaiBillingUi": "uk",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "uk"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "uk",
+    "responseLanguage": "uk"
+   }
+  },
+  "ur": {
+   "billing": {
+    "agroaiBillingUi": "ur",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "rtl",
+   "intelligence": {
+    "preferredLanguage": "ur"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "ur",
+    "responseLanguage": "ur"
+   }
+  },
+  "vi": {
+   "billing": {
+    "agroaiBillingUi": "vi",
+    "stripeCheckoutLocale": "vi"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "vi"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "vi",
+    "responseLanguage": "vi"
+   }
+  },
+  "zh": {
+   "billing": {
+    "agroaiBillingUi": "zh",
+    "stripeCheckoutLocale": "zh"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "zh"
+   },
+   "legal": true,
+   "ready": false,
+   "transactional": true,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "zh",
+    "responseLanguage": "zh"
+   }
+  }
+ },
+ "releaseEligible": 1,
+ "schemaVersion": 1,
+ "target": 60,
+ "transactionalSourceVersion": "2026-09-28.auth-transactional-v2",
+ "uiSourceFingerprint": "0757b7deda116b44e141d8593484ff999406e464a22569d47f3eb8c16b1e934f"
+}
