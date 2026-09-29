@@ -22,11 +22,15 @@ from i18n_public_translate import translate_catalog as public_translate_catalog
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 DEFAULT_ENDPOINT = "https://local-ai.agroai-pilot.com/api/chat"
-CATALOG_AUTHORING_ENDPOINT = os.environ.get("I18N_CATALOG_AUTHORING_ENDPOINT", "https://api.agroai-pilot.com/v1/i18n/catalog").strip()
+# The customer API is never an implicit build-time fallback. Using it requires
+# an explicitly configured endpoint plus bearer token so release authoring
+# cannot accidentally hammer the authenticated production catalog route.
+CATALOG_AUTHORING_ENDPOINT = os.environ.get("I18N_CATALOG_AUTHORING_ENDPOINT", "").strip()
+CATALOG_AUTHORING_TOKEN = os.environ.get("I18N_CATALOG_AUTHORING_TOKEN", "").strip()
 MAX_KEYS = 24
 MAX_SOURCE_CHARS = 2200
-MAX_ATTEMPTS = 4
-PARALLELISM = 4
+MAX_ATTEMPTS = 2
+PARALLELISM = 2
 CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
 CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
 CLOUDFLARE_MODELS = (
@@ -70,6 +74,10 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
 
 def cloudflare_rest_available() -> bool:
     return bool(CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)
+
+
+def catalog_api_available() -> bool:
+    return bool(CATALOG_AUTHORING_ENDPOINT and CATALOG_AUTHORING_TOKEN)
 
 
 def call_cloudflare_rest(locale: str, source: dict[str, str]) -> dict[str, str]:
@@ -130,11 +138,9 @@ def call_cloudflare_rest(locale: str, source: dict[str, str]) -> dict[str, str]:
 
 
 def call_catalog_api(locale: str, source: dict[str, str]) -> dict[str, str]:
-    """Use the deployed validated i18n edge as a build-time authoring provider.
-
-    This is never a browser critical-path dependency. Canonical-source drift
-    returns 409 and the caller falls through to the dedicated authoring edge.
-    """
+    """Use an explicitly authorized catalog endpoint as an optional provider."""
+    if not catalog_api_available():
+        raise RuntimeError("catalog_api_not_configured")
     request = urllib.request.Request(
         CATALOG_AUTHORING_ENDPOINT,
         data=json.dumps({"locale": locale, "source": source}, ensure_ascii=False).encode("utf-8"),
@@ -142,7 +148,8 @@ def call_catalog_api(locale: str, source: dict[str, str]) -> dict[str, str]:
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Origin": "https://app.agroai-pilot.com",
-            "User-Agent": "Mozilla/5.0 AGRO-AI-Localization-Release/3.0",
+            "Authorization": f"Bearer {CATALOG_AUTHORING_TOKEN}",
+            "User-Agent": "AGRO-AI-Localization-Release/4.0",
             "X-Request-Id": f"catalog-authoring-{locale}-{int(time.time() * 1000)}",
         },
     )
@@ -226,10 +233,11 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
                     return call_cloudflare_rest(locale, source)
                 except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as rest_exc:
                     last = rest_exc
-            try:
-                return call_catalog_api(locale, source)
-            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as catalog_exc:
-                last = catalog_exc
+            if catalog_api_available():
+                try:
+                    return call_catalog_api(locale, source)
+                except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as catalog_exc:
+                    last = catalog_exc
             if not explicit_authoring:
                 return call_edge(locale, source, endpoint)
             raise last or RuntimeError("local_authoring_unavailable")
