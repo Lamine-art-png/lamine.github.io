@@ -12,6 +12,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const main = readFileSync(join(root, "src", "main.tsx"), "utf8");
 const sw = readFileSync(join(root, "public", "sw.js"), "utf8");
 const headers = readFileSync(join(root, "public", "_headers"), "utf8");
+const htmlEntry = readFileSync(join(root, "index.html"), "utf8");
+const viteConfig = readFileSync(join(root, "vite.config.ts"), "utf8");
 
 assert.match(main, /agroai_frontend_cache_recovery_attempted/);
 assert.match(main, /isStaleFrontendAssetError/);
@@ -31,5 +33,14 @@ assert.doesNotMatch(sw, /cache\.put\(request, response\.clone\(\)\)[\s\S]*return
 assert.match(headers, /\/index\.html[\s\S]*Cache-Control: no-store/);
 assert.match(headers, /\/sw\.js[\s\S]*Cache-Control: no-store/);
 assert.match(headers, /\/assets\/\*[\s\S]*max-age=31536000, immutable/);
+
+assert.match(viteConfig, /target:\s*\['es2020', 'safari15\.6'\]/, "production JS target must include Safari 15.6");
+assert.match(viteConfig, /cssTarget:\s*'safari15\.6'/, "production CSS target must include Safari 15.6");
+assert.match(htmlEntry, /agroai_entry_boot_recovery_v1/, "entry-module recovery watchdog missing");
+assert.match(htmlEntry, /navigator\.serviceWorker\.getRegistrations\(\)/, "entry recovery must clear stale service workers");
+assert.match(htmlEntry, /window\.caches\.keys\(\)/, "entry recovery must clear stale AGRO-AI shell caches");
+assert.match(htmlEntry, /frontend_recovery", "entry"/, "entry recovery reload marker missing");
+assert.match(main, /__AGROAI_ENTRY_LOADED__\?: boolean/, "entry module must signal successful execution");
+assert.match(main, /removeItem\("agroai_entry_boot_recovery_v1"\)/, "successful boot must reset the one-shot recovery guard");
 
 console.log("Frontend runtime recovery contract passed");
