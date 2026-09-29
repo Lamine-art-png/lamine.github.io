@@ -1,16 +1,9 @@
 name: Transactional locale catalog build
 
+# Manual-only while localization authoring is under active development.
+# Ordinary branch pushes must not launch high-volume external authoring jobs.
 on:
-  push:
-    branches: [fix/deterministic-localization-release]
-    paths:
-      - "shared/localization/transactional-source.json"
-      - "scripts/i18n-generate-transactional-catalogs.py"
-      - "cloudflare/ollama-compat/src/index.js"
-      - "wrangler.i18n-authoring.toml"
-      - ".github/workflows/transactional-locale-catalogs.yml"
   workflow_dispatch:
-
 permissions:
   contents: write
 
@@ -49,7 +42,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 2
       matrix:
         locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
     env:
