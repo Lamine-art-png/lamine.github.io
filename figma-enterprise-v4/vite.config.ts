@@ -34,4 +34,13 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  // The portal must remain executable on Safari 15.6, which is the newest
+  // Safari available on macOS Catalina. Vite 6's default target starts at
+  // Safari 16, so leaving this implicit can produce a completely blank page
+  // before our React/runtime recovery code has a chance to run.
+  build: {
+    target: ['es2020', 'safari15.6'],
+    cssTarget: 'safari15.6',
+  },
 })
