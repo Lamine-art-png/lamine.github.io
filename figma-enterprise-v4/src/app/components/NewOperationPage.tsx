@@ -32,7 +32,7 @@ function Field({ label, detail, children }: { label: string; detail?: string; ch
   return (
     <label className="block">
       <span className="text-[12px] font-semibold" style={{ color: TEXT }}>{label}</span>
-      {detail ? <span className="ml-2 text-[11px]" style={{ color: MUTED }}>{detail}</span> : null}
+      {detail ? <span className="ms-2 text-[11px]" style={{ color: MUTED }}>{detail}</span> : null}
       <div className="mt-2">{children}</div>
     </label>
   );
@@ -199,18 +199,18 @@ export function NewOperationPage() {
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <Field label="Crop or portfolio type" detail="Optional">
-                    <div className="relative"><Leaf className="pointer-events-none absolute left-3 top-3.5 h-4 w-4" style={{ color: MUTED }} /><input value={crop} onChange={(event) => setCrop(event.target.value)} placeholder="Avocados, almonds, mixed crops" className={`${inputClass} pl-10`} style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div>
+                    <div className="relative"><Leaf className="pointer-events-none absolute start-3 top-3.5 h-4 w-4" style={{ color: MUTED }} /><input value={crop} onChange={(event) => setCrop(event.target.value)} placeholder="Avocados, almonds, mixed crops" className={`${inputClass} ps-10`} style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div>
                   </Field>
                   <Field label="Region" detail="Optional">
-                    <div className="relative"><MapPin className="pointer-events-none absolute left-3 top-3.5 h-4 w-4" style={{ color: MUTED }} /><input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="Ventura County, California" className={`${inputClass} pl-10`} style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div>
+                    <div className="relative"><MapPin className="pointer-events-none absolute start-3 top-3.5 h-4 w-4" style={{ color: MUTED }} /><input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="Ventura County, California" className={`${inputClass} ps-10`} style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div>
                   </Field>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <button type="button" onClick={() => setMode("evaluation")} className="rounded-xl p-4 text-left" style={{ background: mode === "evaluation" ? "#EEF8E8" : BG, border: `1px solid ${mode === "evaluation" ? "#8DBD76" : BORDER}` }}>
+                  <button type="button" onClick={() => setMode("evaluation")} className="rounded-xl p-4 text-start" style={{ background: mode === "evaluation" ? "#EEF8E8" : BG, border: `1px solid ${mode === "evaluation" ? "#8DBD76" : BORDER}` }}>
                     <div className="flex items-center justify-between gap-3"><span className="text-[13px] font-semibold" style={{ color: TEXT }}>Evaluation operation</span>{mode === "evaluation" ? <Check className="h-4 w-4" style={{ color: "#207044" }} /> : null}</div>
                     <p className="mt-2 text-[12px] leading-5" style={{ color: MUTED }}>A clean workspace for uploads, evidence review, analysis, tasks, and reports.</p>
                   </button>
-                  <button type="button" onClick={() => setMode("live")} className="rounded-xl p-4 text-left" style={{ background: mode === "live" ? "#EEF8E8" : BG, border: `1px solid ${mode === "live" ? "#8DBD76" : BORDER}` }}>
+                  <button type="button" onClick={() => setMode("live")} className="rounded-xl p-4 text-start" style={{ background: mode === "live" ? "#EEF8E8" : BG, border: `1px solid ${mode === "live" ? "#8DBD76" : BORDER}` }}>
                     <div className="flex items-center justify-between gap-3"><span className="text-[13px] font-semibold" style={{ color: TEXT }}>Live operation</span>{mode === "live" ? <Check className="h-4 w-4" style={{ color: "#207044" }} /> : null}</div>
                     <p className="mt-2 text-[12px] leading-5" style={{ color: MUTED }}>For connected systems and ongoing field operations. Requires plan access to live connectors.</p>
                   </button>
@@ -249,7 +249,7 @@ export function NewOperationPage() {
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
                   <PortalButton type="submit" disabled={busy || !name.trim()} data-create-operation-button>
-                    {busy ? "Creating operation…" : <>Create operation <ArrowRight className="ml-2 inline h-4 w-4" /></>}
+                    {busy ? "Creating operation…" : <>Create operation <ArrowRight className="ms-2 inline h-4 w-4" /></>}
                   </PortalButton>
                   <Link to="/"><PortalButton type="button" variant="secondary">Cancel</PortalButton></Link>
                 </div>

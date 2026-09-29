@@ -5,6 +5,8 @@ import { RegisterPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
+import { LocalizedTemplate } from "./LocalizedTemplate";
+import { useLocale } from "../hooks/useLocale";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -109,7 +111,7 @@ function VerificationPanel() {
           <div>
             <div className="text-[14px] font-semibold text-[#10231B]">Your organization passed automated screening.</div>
             <p className="mt-1 text-[12px] leading-6 text-[#617068]">
-              Verify the email sent to <span className="font-semibold text-[#10231B]">{verification?.email || "your email"}</span>. After sign-in, an owner or admin can accept the current developer agreements and activate bounded TEST access without an API-access review.
+              <LocalizedTemplate template="Verify the email sent to {email}." values={{ email: <span className="font-semibold text-[#10231B]">{verification?.email || "your email"}</span> }} /> After sign-in, an owner or admin can accept the current developer agreements and activate bounded TEST access without an API-access review.
             </p>
           </div>
         </div>
@@ -131,6 +133,13 @@ function VerificationPanel() {
 }
 
 export function PlatformAuthScreen() {
+  const { effectiveLocale: legalLocale } = useLocale();
+  const legalLang = encodeURIComponent(legalLocale);
+  const termsUrl = `https://agroai-pilot.com/terms-of-service?lang=${legalLang}`;
+  const privacyUrl = `https://agroai-pilot.com/privacy-policy?lang=${legalLang}`;
+  const termsLink = <a href={termsUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>;
+  const privacyLink = <a href={privacyUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>;
+
   const { login, register, verification, confirmVerification } = useAuth();
   const [mode, setMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -271,7 +280,7 @@ export function PlatformAuthScreen() {
                   </div>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#718078]">Step {registerStep} of 3 · {registerStep === 1 ? "Account" : registerStep === 2 ? "Agricultural context" : "Developer workflow"}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#718078]"><LocalizedTemplate template="Step {step} of {total}" values={{ step: registerStep, total: 3 }} /> · {registerStep === 1 ? "Account" : registerStep === 2 ? "Agricultural context" : "Developer workflow"}</div>
                       <h2 className="mt-2 text-[20px] font-semibold">{registerStep === 1 ? "Create your developer account" : registerStep === 2 ? "Verify the agricultural operation" : "Set up your first API workflow"}</h2>
                       <p className="mt-1 max-w-xl text-[12px] leading-6 text-[#65736A]">{registerStep === 1 ? "Automated screening protects the developer platform. No sales call or manual API-access review for eligible TEST developers." : registerStep === 2 ? "AGRO-AI uses real operating context to keep the developer platform agricultural and protect organization boundaries." : "Tell us what you are building so the initial workspace and TEST developer context are grounded in a real use case."}</p>
                     </div>
@@ -289,7 +298,10 @@ export function PlatformAuthScreen() {
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D6DDD0] bg-white p-4">
                       <input type="checkbox" checked={registerForm.terms_accepted && registerForm.authority_confirmed} onChange={(event) => setRegisterForm({ ...registerForm, terms_accepted: event.target.checked, authority_confirmed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-[#9BA89F] accent-[#10231B]" required />
                       <span className="text-[11px] leading-5 text-[#52645A]">
-                        I agree to the <a href="https://agroai-pilot.com/terms-of-service" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href="https://agroai-pilot.com/privacy-policy" target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
+                        <LocalizedTemplate
+                          template="I agree to the {terms}, acknowledge the {privacy}, and confirm that I am authorized to bind my organization."
+                          values={{ terms: termsLink, privacy: privacyLink }}
+                        />
                       </span>
                     </label>
                   </> : null}

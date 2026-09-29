@@ -1,0 +1,49 @@
+name: Reconcile production localization readiness
+
+on:
+  push:
+    branches: [fix/deterministic-localization-release]
+    paths:
+      - "shared/localization/catalogs/**"
+      - "shared/localization/transactional-catalogs/**"
+      - "platform-api/legal/localized/**"
+      - "scripts/i18n-reconcile-production-locales.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: i18n-readiness-reconcile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compute truthful production locale set
+        run: python3 scripts/i18n-reconcile-production-locales.py
+      - name: Validate advertised static catalog contract
+        working-directory: figma-enterprise-v4
+        run: node tests/static-locale-catalog-contract.mjs
+      - name: Commit readiness manifest if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "AGRO-AI Release Bot"
+          git config user.email "release-bot@agroai-pilot.com"
+          git add shared/supported-locales.json
+          if git diff --cached --quiet; then
+            echo "Production locale readiness unchanged"
+            exit 0
+          fi
+          git commit -m "Reconcile production-complete locale set"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

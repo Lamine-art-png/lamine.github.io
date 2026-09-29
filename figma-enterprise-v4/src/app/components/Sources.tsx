@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import { currentLocale } from "../i18n";
 
 type SourceItem = {
   id: string;
@@ -240,8 +241,8 @@ export function Sources() {
                 </div>
               </div>
               <div className="flex flex-shrink-0 gap-2">
-                <PortalButton variant="secondary" disabled={Boolean(deletingId)} onClick={() => setDeleteCandidate(null)}><X className="mr-2 inline h-4 w-4" />Cancel</PortalButton>
-                <PortalButton disabled={Boolean(deletingId)} onClick={() => void confirmDelete()}><Trash2 className="mr-2 inline h-4 w-4" />{deletingId ? "Deleting…" : deleteCandidate.pending ? "Cancel & delete" : "Delete permanently"}</PortalButton>
+                <PortalButton variant="secondary" disabled={Boolean(deletingId)} onClick={() => setDeleteCandidate(null)}><X className="me-2 inline h-4 w-4" />Cancel</PortalButton>
+                <PortalButton disabled={Boolean(deletingId)} onClick={() => void confirmDelete()}><Trash2 className="me-2 inline h-4 w-4" />{deletingId ? "Deleting…" : deleteCandidate.pending ? "Cancel & delete" : "Delete permanently"}</PortalButton>
               </div>
             </div>
           </section>
@@ -330,7 +331,7 @@ export function Sources() {
                   <MobileDatum label="Intelligence" value={source.intelligence_ready ? "Ready" : "Pending"} />
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="text-[11px]" style={{ color: MUTED }}>{source.created_at ? new Date(source.created_at).toLocaleString() : "time pending"}</span>
+                  <span className="text-[11px]" style={{ color: MUTED }}>{source.created_at ? new Date(source.created_at).toLocaleString(currentLocale()) : "time pending"}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[12px] font-semibold" style={{ color: source.pending ? MUTED : "#16533C" }}>{source.pending ? "Processing" : "View"}</span>
                     {canManageSources ? <button type="button" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(source); }} className="text-[12px] font-semibold" style={{ color: "#A12A2A" }}>{source.pending ? "Cancel" : "Delete"}</button> : null}

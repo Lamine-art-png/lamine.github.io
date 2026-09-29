@@ -3,7 +3,7 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 export function PlatformSafetyNotice() {
   return (
     <aside
-      className="pointer-events-none fixed bottom-4 right-4 z-[90] hidden max-w-[390px] rounded-2xl border border-[#BFD0B9]/80 bg-[#F9FCF6]/95 p-3 shadow-[0_18px_55px_rgba(7,31,22,0.18)] backdrop-blur-xl xl:block"
+      className="pointer-events-none fixed bottom-4 end-4 z-[90] hidden max-w-[390px] rounded-2xl border border-[#BFD0B9]/80 bg-[#F9FCF6]/95 p-3 shadow-[0_18px_55px_rgba(7,31,22,0.18)] backdrop-blur-xl xl:block"
       aria-label="Platform API private beta safety state"
     >
       <div className="flex items-start gap-3">

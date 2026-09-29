@@ -58,7 +58,7 @@ export function IntelligencePlanControls() {
             const Icon = item.icon;
             const active = item.id === mode;
             return (
-              <button key={item.id} type="button" onClick={() => selectMode(item.id)} className="min-w-0 rounded-xl px-2.5 py-2 text-left sm:min-w-[112px] sm:px-3" style={{ background: active ? "#0D2B1E" : "#F6F4EE", color: active ? "white" : TEXT, border: `1px solid ${active ? "#0D2B1E" : BORDER}` }}>
+              <button key={item.id} type="button" onClick={() => selectMode(item.id)} className="min-w-0 rounded-xl px-2.5 py-2 text-start sm:min-w-[112px] sm:px-3" style={{ background: active ? "#0D2B1E" : "#F6F4EE", color: active ? "white" : TEXT, border: `1px solid ${active ? "#0D2B1E" : BORDER}` }}>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold sm:gap-2 sm:text-[12px]"><Icon size={14} />{item.name}</div>
                 <div className="mt-1 hidden text-[10px] sm:block" style={{ color: active ? "rgba(255,255,255,0.68)" : MUTED }}>{item.text}</div>
               </button>

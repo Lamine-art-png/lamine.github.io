@@ -1,4 +1,5 @@
 import { apiClient } from "../api/client";
+import { translatePortalLiteral } from "../portalLiteralCatalog";
 import { t } from "../i18n";
 
 type AnyRecord = Record<string, any>;
@@ -320,12 +321,12 @@ function showTaskToast(detail: AnyRecord, isError = false): void {
   const description = createElement("div", { color: "#536158", fontSize: "12px", lineHeight: "1.55", marginTop: "5px" });
   description.textContent = isError
     ? text(detail?.message, "Please retry from the observation.")
-    : text(detail?.task?.title, "The observation is now accountable work in Tasks.");
+    : text(detail?.task?.title, translatePortalLiteral("The observation is now accountable work in Tasks."));
   copy.append(title, description);
 
   const close = createElement("button", { background: "transparent", border: "0", color: "#65736A", cursor: "pointer", fontSize: "20px", lineHeight: "1", padding: "0" });
   close.type = "button";
-  close.setAttribute("aria-label", "Close");
+  close.setAttribute("aria-label", translatePortalLiteral("Close"));
   close.textContent = "×";
   close.addEventListener("click", () => toast.remove());
   header.append(copy, close);
@@ -383,9 +384,9 @@ function enhanceObservationDrawer(): void {
     });
     container.dataset.fiOperatingLoop = "true";
     const heading = createElement("div", { color: "#10231B", fontSize: "12px", fontWeight: "800" });
-    heading.textContent = "One observation. One operating loop.";
+    heading.textContent = translatePortalLiteral("One observation. One operating loop.");
     const body = createElement("div", { color: "#65736A", fontSize: "11px", lineHeight: "1.5", marginTop: "4px" });
-    body.textContent = "The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.";
+    body.textContent = translatePortalLiteral("The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.");
     const steps = createElement("div", { display: "grid", gap: "5px", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginTop: "11px" });
     const vision = observation?.structured?.vision || {};
     const taskId = String(observation?.task_ids?.[0] || observation?.task_ids_json?.[0] || "");
@@ -548,7 +549,7 @@ function enhanceOperatingRoom(): void {
   if (window.location.pathname === "/tasks") {
     heading.textContent = t("tasks");
   } else if (window.location.pathname === "/field-queue") {
-    heading.textContent = "Field Queue";
+    heading.textContent = t("fieldQueue");
   }
 
   if (!content.querySelector("[data-fi-portal-loop]")) {

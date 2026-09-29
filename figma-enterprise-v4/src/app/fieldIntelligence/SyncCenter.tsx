@@ -7,6 +7,7 @@ import {
   allCaptures, configureIdentity, deleteUnsyncedRecord, flushQueue, getLastSyncedAt,
   indexedDbAvailable, retryRecord, subscribe, type CaptureRecord, type SyncState,
 } from "./offlineQueue";
+import { currentLocale } from "../i18n";
 
 /**
  * Portal-shell synchronization center.
@@ -157,7 +158,7 @@ export function SyncCenter() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 max-h-[min(72dvh,560px)] w-[min(calc(100vw-24px),380px)] overflow-y-auto overscroll-contain rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
+        <div className="absolute end-0 z-50 mt-2 max-h-[min(72dvh,560px)] w-[min(calc(100vw-24px),380px)] overflow-y-auto overscroll-contain rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
           role="dialog" aria-label={t("syncCenter.title")}>
           <div className="flex items-center justify-between">
             <h3 className="text-[14px] font-semibold text-[#10231B]">{t("syncCenter.title")}</h3>
@@ -168,7 +169,7 @@ export function SyncCenter() {
           </div>
           <div className="mt-1 space-y-0.5 text-[12px] text-[#65736A]">
             <div>{online ? t("fieldIntel.online") : t("fieldIntel.offline")}</div>
-            <div>{t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleString() : t("fieldIntel.never")}</div>
+            <div>{t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleString(currentLocale()) : t("fieldIntel.never")}</div>
             {currentWorkspace?.name && <div>{t("syncCenter.workspace")}: {currentWorkspace.name}</div>}
             {user?.email && <div>{t("syncCenter.account")}: {user.email}</div>}
           </div>

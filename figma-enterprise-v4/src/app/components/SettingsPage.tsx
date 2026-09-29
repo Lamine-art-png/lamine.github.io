@@ -78,7 +78,7 @@ function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 
 function Toggle({ checked, onChange, label, detail }: { checked: boolean; onChange: (value: boolean) => void; label: string; detail: string }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 rounded-xl p-3 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+    <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 rounded-xl p-3 text-start" style={{ background: BG, border: `1px solid ${BORDER}` }}>
       <span><span className="block text-[13px] font-semibold" style={{ color: TEXT }}>{label}</span><span className="mt-1 block text-[12px] leading-5" style={{ color: MUTED }}>{detail}</span></span>
       <span className="relative h-6 w-11 shrink-0 rounded-full" style={{ background: checked ? GREEN : "#CBD5D1" }}><span className="absolute top-1 h-4 w-4 rounded-full bg-white transition-all" style={{ left: checked ? 23 : 4 }} /></span>
     </button>

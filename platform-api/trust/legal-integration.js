@@ -3,6 +3,18 @@
   const OLD_EMAIL="agroaicontact@gmail.com";
   const CURRENT_EMAIL="contact@agroai-pilot.com";
   const LEGAL_PATHS=new Set(["/terms-of-service","/privacy-policy","/pilot-agreement"]);
+  // Localized legal snapshots embed their locale and translated navigation
+  // labels (see scripts/legal-i18n-generate.py). The canonical English page
+  // carries neither and keeps the English labels below.
+  const localeMeta=document.querySelector('meta[name="agroai-legal-locale"]');
+  const legalLocale=(localeMeta&&localeMeta.getAttribute("content"))||"en";
+  let I18N=null;
+  try{
+    const chrome=document.getElementById("agroai-legal-chrome");
+    if(chrome&&legalLocale!=="en") I18N=JSON.parse(chrome.textContent||"null");
+  }catch(_){I18N=null;}
+  const L=(key,fallback)=>(I18N&&typeof I18N[key]==="string"&&I18N[key].trim())?I18N[key]:fallback;
+  const localizedHref=(href)=>legalLocale!=="en"&&LEGAL_PATHS.has(href)?`${href}?lang=${encodeURIComponent(legalLocale)}`:href;
   const cleanPath=(value)=>value!=="/"?value.replace(/\/+$/,""):value;
 
   function replaceLegacyEmail(){
@@ -25,7 +37,7 @@
   function legalListItem(href,label){
     const li=document.createElement("li");
     const a=document.createElement("a");
-    a.href=href;
+    a.href=localizedHref(href);
     a.textContent=label;
     a.className="text-gray-400 hover:text-white transition-colors";
     li.appendChild(a);
@@ -36,12 +48,12 @@
     const legalSection=document.querySelector('[data-testid="footer-legal"]');
     if(!legalSection) return false;
     const heading=legalSection.querySelector("h2,h3,h4");
-    if(heading&&heading.textContent&&heading.textContent.trim()==="Legal") heading.textContent="Trust & Legal";
+    if(heading&&heading.textContent&&heading.textContent.trim()==="Legal") heading.textContent=L("footer","Trust & Legal");
     const list=legalSection.querySelector("ul");
     if(!list) return false;
-    if(!list.querySelector('a[href="/trust"]')) list.insertBefore(legalListItem("/trust","Trust Center"),list.firstChild);
+    if(!list.querySelector('a[href="/trust"]')) list.insertBefore(legalListItem("/trust",L("trustCenter","Trust Center")),list.firstChild);
     if(!list.querySelector('a[href="/trust/data-governance"]')){
-      const item=legalListItem("/trust/data-governance","Data Governance");
+      const item=legalListItem("/trust/data-governance",L("dataGovernance","Data Governance"));
       const trustLink=list.querySelector('a[href="/trust"]');
       const trustItem=trustLink&&trustLink.closest("li");
       if(trustItem) trustItem.insertAdjacentElement("afterend",item); else list.insertBefore(item,list.firstChild);
@@ -51,7 +63,7 @@
 
   function navLink(href,label){
     const a=document.createElement("a");
-    a.href=href;
+    a.href=localizedHref(href);
     a.textContent=label;
     if(cleanPath(location.pathname)===cleanPath(href)) a.setAttribute("aria-current","page");
     return a;
@@ -78,18 +90,18 @@
     const panel=document.createElement("aside");
     panel.id="agroai-trust-legal-nav";
     panel.className="agroai-trust-legal-nav";
-    panel.setAttribute("aria-label","AGRO-AI Trust and Legal");
+    panel.setAttribute("aria-label",L("trustLegalAria","AGRO-AI Trust and Legal"));
     const top=document.createElement("div");
     top.className="agroai-trust-legal-heading";
     const eyebrow=document.createElement("span");
-    eyebrow.textContent="AGRO-AI Trust & Legal";
+    eyebrow.textContent=L("trustLegal","AGRO-AI Trust & Legal");
     const copy=document.createElement("p");
-    copy.textContent="Contractual documents and the standards that explain how AGRO-AI governs agricultural, operational and personal data.";
+    copy.textContent=L("description","Contractual documents and the standards that explain how AGRO-AI governs agricultural, operational and personal data.");
     top.append(eyebrow,copy);
     panel.append(
       top,
-      navGroup("Trust & data governance",[["/trust","Trust Center"],["/trust/data-governance","Data Governance"],["/trust/ai-data-use","AI & Model Data Use"],["/trust/security","Security"]]),
-      navGroup("Legal documents",[["/terms-of-service","Terms of Service"],["/privacy-policy","Privacy Policy"],["/pilot-agreement","Pilot Agreement"]])
+      navGroup(L("trustData","Trust & data governance"),[["/trust",L("trustCenter","Trust Center")],["/trust/data-governance",L("dataGovernance","Data Governance")],["/trust/ai-data-use",L("aiData","AI & Model Data Use")],["/trust/security",L("security","Security")]]),
+      navGroup(L("legalDocuments","Legal documents"),[["/terms-of-service",L("terms","Terms of Service")],["/privacy-policy",L("privacy","Privacy Policy")],["/pilot-agreement",L("pilot","Pilot Agreement")]])
     );
     main.insertBefore(panel,main.firstChild);
     return true;

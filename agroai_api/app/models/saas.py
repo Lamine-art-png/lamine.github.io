@@ -158,6 +158,7 @@ class SelfServiceLegalAcceptance(Base):
     privacy_version = Column(String, nullable=False, index=True)
     terms_url = Column(String, nullable=False)
     privacy_url = Column(String, nullable=False)
+    locale = Column(String(40), nullable=False, default="en", index=True)
     acceptance_text = Column(Text, nullable=False)
     authority_confirmed = Column(Boolean, nullable=False, default=False)
     ip_hash = Column(String(64), nullable=True, index=True)

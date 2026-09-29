@@ -1,0 +1,51 @@
+name: Localization authoring API smoke
+
+# Manual-only while localization authoring is under active development.
+# Ordinary branch pushes must never launch external authoring traffic.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      I18N_AUTHORING_ENDPOINT: http://127.0.0.1:8787/api/chat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start isolated production-equivalent localization authoring worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx --yes wrangler@4.107.0 dev --remote --config wrangler.i18n-authoring.toml --port 8787 > /tmp/i18n-authoring-smoke.log 2>&1 &
+          echo $! > /tmp/i18n-authoring-smoke.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 5 http://127.0.0.1:8787/health | jq -e '.status=="ok" and .provider=="cloudflare-workers-ai"' >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/i18n-authoring-smoke.log
+          exit 1
+      - name: Prove Brazilian Portuguese authoring through the production-authorized provider chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/i18n-generate-catalogs.py --locales pt-BR --preflight --endpoint "$I18N_AUTHORING_ENDPOINT"
+      - name: Stop isolated authoring worker
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/i18n-authoring-smoke.pid ]; then
+            kill "$(cat /tmp/i18n-authoring-smoke.pid)" 2>/dev/null || true
+          fi

@@ -54,13 +54,31 @@ def _customer_locale(db: Session, user: User, requested: str | None = None) -> s
         canonical = canonical_ui_locale(value or "auto")
     except ValueError:
         canonical = "auto"
-    if canonical == "pt":
-        return "pt-BR"
-    if canonical == "fr-FR":
-        return "fr"
+    return stripe_checkout_locale(canonical)
+
+
+# AGRO-AI locale -> Stripe Checkout locale where the codes differ. Every other
+# AGRO-AI locale either matches a Stripe code exactly or is not offered by
+# Stripe, in which case Checkout uses "auto" (the customer's browser language,
+# English when Stripe lacks it). AGRO-AI's own billing UI, emails and stored
+# preference always keep the customer's AGRO-AI locale.
+_STRIPE_LOCALE_ALIASES = {
+    "pt": "pt-BR",
+    "fr-FR": "fr",
+    "tl": "fil",
+    "no": "nb",
+    "zh-CN": "zh",
+    "es-ES": "es",
+    "es-MX": "es-419",
+}
+
+
+def stripe_checkout_locale(agroai_locale: str | None) -> str:
+    canonical = (agroai_locale or "auto").strip()
     if canonical == "auto":
         return "auto"
-    return canonical if canonical in _STRIPE_SUPPORTED_LOCALES else "auto"
+    mapped = _STRIPE_LOCALE_ALIASES.get(canonical, canonical)
+    return mapped if mapped in _STRIPE_SUPPORTED_LOCALES else "auto"
 
 
 def _billing_unavailable() -> HTTPException:

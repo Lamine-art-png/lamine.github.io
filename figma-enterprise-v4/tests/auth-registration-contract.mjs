@@ -20,8 +20,20 @@ for (const [name, source] of flows) {
   assert.ok(stepOneStart >= 0 && stepTwoStart > stepOneStart, `${name}: registration step boundaries are missing`);
   const stepOne = source.slice(stepOneStart, stepTwoStart);
   assert.match(stepOne, /type="checkbox"/, `${name}: legal clickwrap must be visible on the account-creation step`);
-  assert.match(stepOne, /https:\/\/agroai-pilot\.com\/terms-of-service/, `${name}: Terms of Service link must be present on step one`);
-  assert.match(stepOne, /https:\/\/agroai-pilot\.com\/privacy-policy/, `${name}: Privacy Policy link must be present on step one`);
+  // Legal links may be inline or rendered through the localized clickwrap
+  // template; either way they must be on step one, and hoisted links must
+  // open the customer's language version of the canonical document.
+  const inlineTerms = /https:\/\/agroai-pilot\.com\/terms-of-service/.test(stepOne);
+  const inlinePrivacy = /https:\/\/agroai-pilot\.com\/privacy-policy/.test(stepOne);
+  const templated = /values=\{\{\s*terms: termsLink, privacy: privacyLink\s*\}\}/.test(stepOne);
+  if (templated) {
+    assert.match(source, /const termsUrl = `https:\/\/agroai-pilot\.com\/terms-of-service\?lang=\$\{legalLang\}`;/, `${name}: templated Terms link must carry the locale`);
+    assert.match(source, /const privacyUrl = `https:\/\/agroai-pilot\.com\/privacy-policy\?lang=\$\{legalLang\}`;/, `${name}: templated Privacy link must carry the locale`);
+    assert.match(source, /const termsLink = <a href=\{termsUrl\}/, `${name}: Terms link must use the localized Terms URL`);
+    assert.match(source, /const privacyLink = <a href=\{privacyUrl\}/, `${name}: Privacy link must use the localized Privacy URL`);
+  }
+  assert.ok(inlineTerms || templated, `${name}: Terms of Service link must be present on step one`);
+  assert.ok(inlinePrivacy || templated, `${name}: Privacy Policy link must be present on step one`);
   assert.match(stepOne, /terms_accepted: event\.target\.checked, authority_confirmed: event\.target\.checked/, `${name}: clickwrap must set both legal acceptance flags`);
 
   const stepThreeStart = source.indexOf("{registerStep === 3 ? <>");

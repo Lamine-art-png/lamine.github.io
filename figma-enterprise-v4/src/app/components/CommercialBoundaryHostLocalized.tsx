@@ -76,7 +76,7 @@ function planPrice(id: PlanId, t: Translate) {
 function CompactPlanPrice({ id, t }: { id: PlanId; t: Translate }) {
   const value = planPrice(id, t);
   const match = value.match(/^(\$[\d,]+)(\/(?:month|mois))$/i);
-  if (!match) return <span className="max-w-full break-words text-right text-[11px] font-semibold leading-4 text-[#2D6A4F]">{value}</span>;
+  if (!match) return <span className="max-w-full break-words text-end text-[11px] font-semibold leading-4 text-[#2D6A4F]">{value}</span>;
   return <span className="flex min-w-0 max-w-full flex-wrap items-baseline justify-end gap-x-1 text-[#2D6A4F]">
     <span className="text-[12px] font-semibold leading-4">{match[1]}</span>
     <span className="whitespace-nowrap text-[9px] font-semibold leading-4 opacity-80">{match[2]}</span>
@@ -187,7 +187,7 @@ function CommercialBoundaryDialog({
 
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#061D15]/80 px-4 py-8 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label={title}>
     <div className="relative w-full max-w-[880px] overflow-hidden rounded-[26px] border border-white/10 bg-[#FFFDF8] shadow-[0_32px_120px_rgba(0,0,0,0.42)]">
-      <button type="button" onClick={onClose} aria-label={t("commercialBoundary.close")} className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-[#D6DDD0] bg-white text-[#65736A]"><X className="h-4 w-4" /></button>
+      <button type="button" onClick={onClose} aria-label={t("commercialBoundary.close")} className="absolute end-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-[#D6DDD0] bg-white text-[#65736A]"><X className="h-4 w-4" /></button>
       <div className="grid md:grid-cols-[0.92fr_1.08fr]">
         <section className="flex flex-col justify-between bg-[#0D2B1E] p-7 text-white md:p-9">
           <div>

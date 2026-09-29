@@ -34,7 +34,11 @@ def test_workers_ai_wrapper_supports_origin_auth_and_translation_json_shape():
     assert 'Response.json({ error: "unauthorized" }, { status: 401 })' in source
     assert "translated" in source
     assert "JSON.stringify({ answer: inference.raw })" in source
-    assert "translation_mode: Boolean(translated)" in source
+    # Translation requests take a dedicated catalog path; chat inference never
+    # reports translation mode.
+    assert "const translation = translationRequest(incoming);" in source
+    assert "translation_mode: true" in source
+    assert "translation_mode: false" in source
 
 
 def test_edge_and_local_runtime_settings_are_separate():

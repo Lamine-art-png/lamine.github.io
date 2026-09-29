@@ -224,7 +224,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function DecisionCard({ title, active, onClick }: { title: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="min-w-0 rounded-xl p-3 text-left transition-colors sm:p-4" style={{ background: active ? "#0D2B1E" : SURFACE, border: `1px solid ${active ? "#0D2B1E" : BORDER}`, color: active ? "white" : TEXT }}>
+    <button type="button" onClick={onClick} className="min-w-0 rounded-xl p-3 text-start transition-colors sm:p-4" style={{ background: active ? "#0D2B1E" : SURFACE, border: `1px solid ${active ? "#0D2B1E" : BORDER}`, color: active ? "white" : TEXT }}>
       <div className="break-words text-[12px] font-semibold sm:text-[13px]">{title}</div>
       <div className="mt-1 hidden text-[11px] sm:block" style={{ color: active ? "rgba(255,255,255,0.62)" : MUTED }}>Run current workspace decision</div>
     </button>

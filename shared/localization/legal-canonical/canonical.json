@@ -1,0 +1,8 @@
+{
+ "description": "Canonical English legal DOM translated by every localized snapshot",
+ "schemaVersion": 1,
+ "sourceSha256": {
+  "privacy-policy": "5ae902c188c71c66baee8c9c21a0cc57d58e3964d6566d34a9face2db6f4084a",
+  "terms-of-service": "bd748e365fc84328469881d3a47c94b9c9c9c06b02481e2295676808b63d8f25"
+ }
+}

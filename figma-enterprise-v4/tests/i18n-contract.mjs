@@ -30,16 +30,24 @@ function assert(condition, message) {
 assert(Array.isArray(manifest.enabledUiLocales), "manifest enabledUiLocales must be an array");
 assert(manifest.enabledUiLocales.includes("auto"), "global UI must include browser-default mode");
 assert(manifest.enabledUiLocales.includes("en"), "global UI must include English");
-assert(manifest.enabledUiLocales.length >= 50, "global UI registry must expose the broad language set");
+assert(manifest.enabledUiLocales.includes("pt-BR"), "Brazilian Portuguese must remain production-enabled");
+assert(Array.isArray(manifest.targetUiLocales), "manifest targetUiLocales must be an array");
+assert(manifest.targetUiLocales.length >= 50, "global UI target registry must retain the broad language set");
+assert(
+  manifest.enabledUiLocales
+    .filter((code) => code !== "auto")
+    .every((code) => manifest.catalogCompleteLocales.includes(code)),
+  "every production-visible locale must have a deterministic complete catalog",
+);
 
 const targetCodes = new Set(targets.families.map((item) => item.code));
-const enabledLanguageCodes = new Set(
+const targetLanguageCodes = new Set(
   manifest.locales
-    .filter((item) => manifest.enabledUiLocales.includes(item.code))
+    .filter((item) => manifest.targetUiLocales.includes(item.code))
     .map((item) => item.languageCode)
     .filter((code) => code !== "auto"),
 );
-for (const code of targetCodes) assert(enabledLanguageCodes.has(code), `AI language family ${code} must be visible in the UI registry`);
+for (const code of targetCodes) assert(targetLanguageCodes.has(code), `AI language family ${code} must remain in the global UI target registry`);
 
 assert(literalPaths.length >= 6, "split portal literal catalogs must be present");
 assert(Object.keys(literalCatalog).length >= 400, "portal literal inventory must cover the broad static UI surface");

@@ -76,7 +76,7 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
           <div className="fixed inset-0 z-[80] lg:hidden">
             <button type="button" className="absolute inset-0 bg-black/45" onClick={() => setSidebarOpen(false)} aria-label={t("intelligence.closeSidebar")} />
             <aside
-              className="absolute inset-y-0 left-0 flex w-[min(88vw,340px)] flex-col p-4 shadow-2xl"
+              className="absolute inset-y-0 start-0 flex w-[min(88vw,340px)] flex-col p-4 shadow-2xl"
               style={{ background: SURFACE, paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
             >
               <ConversationSidebar {...sidebarProps} />
@@ -115,7 +115,7 @@ export function IntelligenceView({ controller }: { controller: Controller }) {
                   <div className="text-[11px] font-semibold uppercase sm:text-[12px]" style={{ color: MUTED }}>{t("intelligence.startThread")}</div>
                   <h2 className="mt-3 text-[21px] font-semibold sm:text-[24px]" style={{ color: TEXT }}>{t("intelligence.askOrImport")}</h2>
                   <p className="mt-2 max-w-2xl text-[13px] leading-relaxed sm:text-[14px]" style={{ color: MUTED }}>{t("intelligence.liveEvidenceBody")}</p>
-                  <div className="mt-5 flex flex-wrap gap-2">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => send(prompt)} className="max-w-full rounded-full px-3 py-2 text-left text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{prompt}</button>)}</div>
+                  <div className="mt-5 flex flex-wrap gap-2">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => send(prompt)} className="max-w-full rounded-full px-3 py-2 text-start text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{prompt}</button>)}</div>
                 </section>
               ) : null}
 
@@ -263,7 +263,7 @@ function ArtifactPreviewInline({ artifact, onOpen }: { artifact: AnyRecord; onOp
     <button
       type="button"
       onClick={onOpen}
-      className="mt-3 block w-full overflow-hidden rounded-xl text-left"
+      className="mt-3 block w-full overflow-hidden rounded-xl text-start"
       style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
     >
       <div className="flex items-center justify-between gap-3 px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
@@ -365,8 +365,8 @@ function SlidePreview({ slide, compact = false }: { slide: AnyRecord; compact?: 
           ))}
         </div>
       ) : null}
-      {slide?.callout && !compact ? <div className="absolute bottom-6 right-7 max-w-[38%] text-right text-[11px] font-semibold" style={{ color: dark ? "#C2E84F" : "#2F6A4B" }}>{safeText(slide.callout)}</div> : null}
-      <div className="absolute bottom-2 left-3 h-[2px] w-7 rounded-full" style={{ background: "#C2E84F" }} />
+      {slide?.callout && !compact ? <div className="absolute bottom-6 end-7 max-w-[38%] text-end text-[11px] font-semibold" style={{ color: dark ? "#C2E84F" : "#2F6A4B" }}>{safeText(slide.callout)}</div> : null}
+      <div className="absolute bottom-2 start-3 h-[2px] w-7 rounded-full" style={{ background: "#C2E84F" }} />
     </div>
   );
 }
@@ -435,12 +435,12 @@ function ConversationSidebar({
         <input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder={t("intelligence.search")} className="w-full min-w-0 bg-transparent text-[16px] outline-none sm:text-[12px]" style={{ color: TEXT }} />
       </label>
       <div className="mt-5 text-[11px] font-semibold uppercase" style={{ color: MUTED }}>{t("intelligence.history")}</div>
-      <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="mt-3 flex-1 space-y-2 overflow-y-auto pe-1" style={{ WebkitOverflowScrolling: "touch" }}>
         {filteredConversations.map((row) => {
           const active = row.id === activeConversationId;
           return (
             <div key={row.id} className="group flex gap-2">
-              <button type="button" onClick={() => loadConversation(row.id)} className="min-w-0 flex-1 rounded-xl px-3 py-3 text-left" style={{ background: active ? "#EEF8E8" : BG, border: `1px solid ${active ? "rgba(13,43,30,0.32)" : BORDER}` }}>
+              <button type="button" onClick={() => loadConversation(row.id)} className="min-w-0 flex-1 rounded-xl px-3 py-3 text-start" style={{ background: active ? "#EEF8E8" : BG, border: `1px solid ${active ? "rgba(13,43,30,0.32)" : BORDER}` }}>
                 <div className="flex items-center gap-2"><MessageSquare size={13} style={{ color: active ? "#0D2B1E" : MUTED }} /><div className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{row.title || t("intelligence.newChat")}</div></div>
                 {row.preview ? <div className="mt-1 line-clamp-2 text-[11px] leading-4" style={{ color: MUTED }}>{row.preview}</div> : null}
               </button>

@@ -1,6 +1,8 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { recoveryClient } from "../api/recoveryClient";
+import { useLocale } from "../hooks/useLocale";
+import { canonicalizeSelectedLocale, setStoredLocale } from "../i18n";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { LanguageSelector } from "./LanguageSelector";
@@ -29,6 +31,11 @@ function Intro({ title, body }: { title: string; body: string }) {
 }
 
 export function AccessRecoveryPage() {
+  const { effectiveLocale } = useLocale();
+  const queryLocale = new URLSearchParams(window.location.search).get("lang") || "";
+  useEffect(() => {
+    if (queryLocale) setStoredLocale(canonicalizeSelectedLocale(queryLocale));
+  }, [queryLocale]);
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const token = params.get("token") || "";
   const [email, setEmail] = useState("");
@@ -44,7 +51,7 @@ export function AccessRecoveryPage() {
     setError("");
     setWorking(true);
     try {
-      const response = await recoveryClient.start({ email });
+      const response = await recoveryClient.start({ email, ...(effectiveLocale !== "en" ? { locale: effectiveLocale } : {}) });
       setMessage(response.message || "If an account exists, recovery instructions were sent.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request could not be processed.");
@@ -66,7 +73,7 @@ export function AccessRecoveryPage() {
     }
     setWorking(true);
     try {
-      const response = await recoveryClient.complete({ token, replacement_credential: credential });
+      const response = await recoveryClient.complete({ token, replacement_credential: credential, ...(effectiveLocale !== "en" ? { locale: effectiveLocale } : {}) });
       setMessage(response.message || "Account access updated.");
       setDone(true);
     } catch (err) {

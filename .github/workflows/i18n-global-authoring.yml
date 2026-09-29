@@ -1,0 +1,166 @@
+name: Global locale artifact authoring
+
+# Build-time authoring for the complete canonical locale matrix (UI catalog,
+# transactional email catalog, localized legal presentation).
+#
+# Runs only on dedicated i18n-authoring/* branches (or manual dispatch) and never
+# pushes: every locale uploads a validated artifact bundle that a maintainer
+# reviews and commits. This keeps GITHUB_TOKEN commits off release PRs (which
+# GitHub would hold at action_required) and keeps customer runtime free of any
+# translation-provider dependency.
+#
+# Restartable: locales whose committed artifacts already pass the release gate
+# are skipped; previously validated UI entries are reused via --seed-dir.
+on:
+  push:
+    branches: ["i18n-authoring/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: i18n-global-authoring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      locales: ${{ steps.matrix.outputs.locales }}
+      any: ${{ steps.matrix.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: matrix
+        name: Resolve locales whose artifacts are not yet release-ready
+        run: python3 scripts/i18n-reconcile-production-locales.py --pending-matrix >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.matrix.outputs.any == 'true'
+        with:
+          node-version: "22"
+      - name: Render canonical legal DOM once for every locale
+        if: steps.matrix.outputs.any == 'true'
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+          mkdir -p legal-rendered
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { chromium } from "playwright";
+          const browser = await chromium.launch({ headless: true });
+          for (const slug of ["terms-of-service", "privacy-policy"]) {
+            const page = await browser.newPage({ locale: "en-US" });
+            await page.goto(`https://agroai-pilot.com/${slug}`, { waitUntil: "networkidle", timeout: 60000 });
+            await page.waitForTimeout(1200);
+            fs.writeFileSync(`legal-rendered/${slug}.html`, await page.content());
+            await page.close();
+          }
+          await browser.close();
+          NODE
+          sha256sum legal-rendered/*.html
+      - uses: actions/upload-artifact@v4
+        if: steps.matrix.outputs.any == 'true'
+        with:
+          name: canonical-legal-dom
+          path: legal-rendered
+          retention-days: 7
+
+  author:
+    needs: prepare
+    if: needs.prepare.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      I18N_AUTHORING_ENDPOINT: http://127.0.0.1:8787/api/chat
+      I18N_TRANSACTIONAL_AUTHORING_ENDPOINT: http://127.0.0.1:8787/api/chat
+      LOCALE: ${{ matrix.locale }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: canonical-legal-dom
+          path: legal-rendered
+      - name: Start isolated Workers AI authoring fallback
+        run: |
+          set -euo pipefail
+          nohup npx --yes wrangler@4.107.0 dev --remote --config wrangler.i18n-authoring.toml --port 8787 > /tmp/authoring.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 5 http://127.0.0.1:8787/health | jq -e '.status=="ok"' >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/authoring.log
+          exit 1
+      - name: UI catalog
+        id: ui
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python3 scripts/i18n-generate-catalogs.py --locales "$LOCALE" --outdir out/ui --seed-dir shared/localization/catalogs; then exit 0; fi
+            echo "UI authoring attempt $attempt failed; resuming from durable progress"
+            sleep 10
+          done
+          exit 1
+      - name: Transactional catalog
+        id: tx
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if python3 scripts/i18n-reconcile-production-locales.py --check transactional --locale "$LOCALE"; then
+            echo "committed transactional catalog already ready"; exit 0
+          fi
+          for attempt in 1 2 3; do
+            if python3 scripts/i18n-generate-transactional-catalogs.py --locales "$LOCALE" --outdir out/transactional; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - name: Legal presentation snapshots
+        id: legal
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if python3 scripts/i18n-reconcile-production-locales.py --check legal --locale "$LOCALE"; then
+            echo "committed legal snapshots already ready"; exit 0
+          fi
+          # Translate the committed canonical English legal DOM when present so
+          # every locale presents exactly the same pinned legal source.
+          src=legal-rendered
+          if [ -f shared/localization/legal-canonical/terms-of-service.html ]; then src=shared/localization/legal-canonical; fi
+          for attempt in 1 2; do
+            if python3 scripts/legal-i18n-generate.py --locale "$LOCALE" --endpoint http://127.0.0.1:8787/api/chat --source-dir "$src" --outdir out/legal; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - name: Summarize
+        if: always()
+        run: |
+          echo "ui=${{ steps.ui.outcome }} transactional=${{ steps.tx.outcome }} legal=${{ steps.legal.outcome }}" | tee out-summary.txt
+          mkdir -p out && mv out-summary.txt out/summary-$LOCALE.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: i18n-${{ matrix.locale }}
+          path: out
+          retention-days: 7
+          include-hidden-files: true
+      - name: Fail visibly when any artifact for this locale is incomplete
+        if: steps.ui.outcome != 'success' || steps.tx.outcome != 'success' || steps.legal.outcome != 'success'
+        run: exit 1

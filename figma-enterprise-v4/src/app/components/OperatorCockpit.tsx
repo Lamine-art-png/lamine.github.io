@@ -97,7 +97,7 @@ export function Fields() {
       {state.data?.sample_mode ? <InlineState title="No field evidence yet." detail="The field view is showing a safe sample placeholder until data is uploaded or connected." /> : null}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {fields.map((field) => (
-          <button key={field.field_id} type="button" onClick={() => setSelected(field)} className="rounded-2xl p-5 text-left" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <button key={field.field_id} type="button" onClick={() => setSelected(field)} className="rounded-2xl p-5 text-start" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[17px] font-semibold" style={{ color: TEXT }}>{value(field.field_name)}</h2>

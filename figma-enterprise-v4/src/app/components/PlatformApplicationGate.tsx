@@ -14,6 +14,7 @@ import {
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { currentLocale } from "../i18n";
 
 type Row = Record<string, any>;
 type Application = {
@@ -73,7 +74,7 @@ function values(value: string) {
 function date(value?: string) {
   if (!value) return "—";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(currentLocale());
 }
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -403,7 +404,7 @@ export function PlatformApplicationGate() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F3F1E9]">
         <Loader2 className="h-5 w-5 animate-spin text-[#315D46]" />
-        <span className="ml-3 text-[12px] font-semibold">Loading Platform access…</span>
+        <span className="ms-3 text-[12px] font-semibold">Loading Platform access…</span>
       </div>
     );
   }

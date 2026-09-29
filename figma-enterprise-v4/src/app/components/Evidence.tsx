@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import { currentLocale } from "../i18n";
 
 type EvidenceItem = {
   id?: string;
@@ -298,7 +299,7 @@ export function Evidence() {
                   <EvidencePrimary row={row} />
                   <span className="text-[12px]" style={{ color: MUTED }}>{row.evidence_type || row.domain || "unknown"}</span>
                   <span className="text-[12px]" style={{ color: MUTED }}>{source?.filename || row.citation_label || row.source || "source"}</span>
-                  <span className="text-[12px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString() : "No timestamp"}</span>
+                  <span className="text-[12px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString(currentLocale()) : "No timestamp"}</span>
                   <StatusBadge label={row.quality_status || row.status || "usable"} tone={(row.quality_status || row.status) === "usable" ? "good" : "warn"} />
                 </div>
               );
@@ -318,7 +319,7 @@ export function Evidence() {
                     <MobileDatum label="Type" value={row.evidence_type || row.domain || "unknown"} />
                     <MobileDatum label="Source" value={source?.filename || row.citation_label || row.source || "source"} />
                   </div>
-                  <div className="mt-3 text-[11px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString() : "No timestamp"}</div>
+                  <div className="mt-3 text-[11px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString(currentLocale()) : "No timestamp"}</div>
                 </article>
               );
             }) : <div className="p-4"><InlineState title="No derived evidence records yet." detail="A source file can still be securely stored even when it produces no structured evidence rows. Check Uploaded source files above." /></div>}

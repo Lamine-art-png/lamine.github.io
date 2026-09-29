@@ -15,6 +15,7 @@ import {
 } from "../fieldIntelligence/offlineQueue";
 import { FieldMapV2 } from "../fieldIntelligence/FieldMapV2";
 import { MediaViewer } from "../fieldIntelligence/MediaViewer";
+import { currentLocale } from "../i18n";
 
 const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 const EVENT_TYPES = [
@@ -218,9 +219,9 @@ export function FieldIntelligenceV2() {
         <section className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="relative w-full min-w-0 flex-1 sm:min-w-[220px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" />
+              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("fieldIntel.searchPlaceholder")}
-                className="w-full rounded-lg border border-[#D6DDD0] py-2 pl-9 pr-3 text-[13px]" />
+                className="w-full rounded-lg border border-[#D6DDD0] py-2 ps-9 pe-3 text-[13px]" />
             </div>
             <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}
               className="min-h-[44px] flex-1 rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px] sm:flex-none" aria-label={t("fieldIntel.filterSeverity")}>
@@ -1184,8 +1185,8 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
         {imagePreviews.map((preview, index) => <div key={preview.url} className="relative">
           <img src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />
           <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== attachments.indexOf(preview.file)))}
-            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X className="h-3 w-3" /></button>
-          {index === 0 && <span className="absolute bottom-1 left-1 rounded bg-[#10231B]/85 px-2 py-0.5 text-[10px] font-semibold text-white">{t("askAgroAi")}</span>}
+            className="absolute end-1 top-1 rounded-full bg-black/70 p-1 text-white"><X className="h-3 w-3" /></button>
+          {index === 0 && <span className="absolute bottom-1 start-1 rounded bg-[#10231B]/85 px-2 py-0.5 text-[10px] font-semibold text-white">{t("askAgroAi")}</span>}
         </div>)}
       </div>}
 
@@ -1232,7 +1233,7 @@ function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDel
       const hasVision = Boolean(vision.summary || vision.observations?.length);
       const step = pipelineStep(observation.status, Boolean(observation.transcript), hasVision);
       return <button key={observation.id} type="button" onClick={() => onSelect(observation)}
-        className="w-full rounded-xl border border-[#D6DDD0] bg-white p-4 text-left transition hover:border-[#2D6A4F] hover:shadow-[0_10px_30px_rgba(16,35,27,0.08)]">
+        className="w-full rounded-xl border border-[#D6DDD0] bg-white p-4 text-start transition hover:border-[#2D6A4F] hover:shadow-[0_10px_30px_rgba(16,35,27,0.08)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -1243,7 +1244,7 @@ function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDel
             </div>
             <p className="mt-2 line-clamp-2 text-[13px] leading-6 text-[#3B4A41]">{observation.summary || observation.transcript || "—"}</p>
           </div>
-          <span className="shrink-0 text-[11px] text-[#9AA79E]">{observation.occurred_at ? new Date(observation.occurred_at).toLocaleString() : ""}</span>
+          <span className="shrink-0 text-[11px] text-[#9AA79E]">{observation.occurred_at ? new Date(observation.occurred_at).toLocaleString(currentLocale()) : ""}</span>
         </div>
         <div className="mt-3 grid grid-cols-4 gap-1">
           {[1, 2, 3, 4].map((value) => <span key={value} className="h-1.5 rounded-full" style={{ background: value <= step ? "#2D6A4F" : "#E2E7E1" }} />)}
@@ -1314,7 +1315,7 @@ function ObservationDrawer({ t, observation, onClose, onReload }: any) {
           {Array.isArray(vision.visible_facts) && vision.visible_facts.length > 0 && <div className="mt-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.visibleFacts")}</div>
             <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
-              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ml-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
+              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ms-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
             </ul>
           </div>}
           {Array.isArray(vision.hypotheses) && vision.hypotheses.length > 0 && <div className="mt-3">
