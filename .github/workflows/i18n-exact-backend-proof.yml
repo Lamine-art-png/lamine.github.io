@@ -1,12 +1,9 @@
 name: I18n Exact Backend Proof
 
+# Internal diagnostic for the runtime translation backend used by localization
+# authoring and recovery tooling. Customers use deterministic catalogs, so this
+# is run on demand and is not a release gate.
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "agroai_api/app/services/hosted_ui_translation.py"
-      - "agroai_api/app/services/local_ui_translation.py"
-      - "agroai_api/app/services/model_router.py"
   workflow_dispatch:
 
 permissions:

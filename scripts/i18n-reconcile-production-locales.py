@@ -148,6 +148,15 @@ def stripe_locale(locale: str) -> str:
     return mapped if mapped in _STRIPE_SUPPORTED else "auto"
 
 
+def representative_browser_locales() -> list[str]:
+    """The locales the production browser proof exercises (single source: the suite)."""
+    support = ROOT / "figma-enterprise-v4" / "tests" / "browser" / "support" / "localeLeakScan.mjs"
+    match = re.search(r"REPRESENTATIVE_LOCALES = \[([^\]]*)\]", support.read_text(encoding="utf-8"))
+    if not match:
+        raise SystemExit("REPRESENTATIVE_LOCALES not found in browser proof support")
+    return re.findall(r'"([A-Za-z-]+)"', match.group(1))
+
+
 def canonical_legal_hashes() -> dict[str, str] | None:
     """The canonical legal version is the one most localized snapshots translate.
 
@@ -221,10 +230,27 @@ def main() -> None:
     manifest["catalogCompleteLocales"] = ready
     manifest["dynamicCatalogLocales"] = []
     manifest["uiTranslationPolicy"] = "versioned-static-complete-catalogs"
-    qa = manifest.setdefault("qa", {})
-    qa["staticCompleteLocales"] = ready
-    qa["linguisticCompleteLocales"] = ready
-    qa["browserCompleteLocales"] = ready
+    # QA metadata states exactly what was executed, never more:
+    # - releaseGateValidatedLocales: every advertised locale passed the full
+    #   static release gate (keys, placeholders, fingerprint, quality rules,
+    #   transactional catalog, legal snapshots).
+    # - browserSwitchContractLocales: every advertised locale is switched in a
+    #   real Chromium against the built portal with no runtime generation
+    #   (figma-enterprise-v4/tests/browser/global-language-switching.spec.mjs).
+    # - productionBrowserProofLocales: the representative set exercised end to
+    #   end against production (production-global-localization.spec.mjs); it
+    #   is a sample, not a per-locale production walkthrough.
+    # - humanLinguisticReviewLocales: catalogs are machine-authored; none have
+    #   had native-speaker review yet.
+    representative = representative_browser_locales()
+    manifest["qa"] = {
+        "releaseGateValidatedLocales": ready,
+        "browserSwitchContractLocales": ready,
+        "productionBrowserProofLocales": [code for code in representative if code in ready],
+        "productionBrowserProofScope": "representative",
+        "humanLinguisticReviewLocales": [],
+        "translationProvenance": "machine-authored-build-time",
+    }
     MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
 
     release_rows = {}

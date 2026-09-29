@@ -1,5 +1,9 @@
 name: I18n Edge Release
-# Browser-visible production proof gate.
+# Deploys the API edge i18n routes and proves the deterministic localization
+# release contract in production. Customers switch languages using catalogs
+# shipped with the portal; live translation generation is an internal
+# authoring/diagnostic path (I18n Exact Backend Proof, manual) and is not a
+# release gate.
 
 on:
   push:
@@ -14,6 +18,9 @@ on:
       - "agroai_api/app/services/model_router.py"
       - "shared/ui-*.json"
       - "shared/supported-locales.json"
+      - "shared/localization/**"
+      - "scripts/i18n-verify-production-catalogs.mjs"
+      - ".github/workflows/deploy-i18n-edge.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,13 +37,12 @@ env:
 
 jobs:
   deploy:
-    name: Deploy and prove representative dynamic locales
+    name: Deploy edge and prove deterministic locale release
     runs-on: ubuntu-latest
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,11 +65,6 @@ jobs:
           python -m py_compile \
             agroai_api/app/services/local_ui_translation.py \
             agroai_api/app/services/model_router.py
-
-      - name: Fail closed on missing canary credential
-        run: |
-          set -euo pipefail
-          test -n "${QUEUE_CONSUMER_TOKEN:-}"
 
       - name: Deploy exact edge bundle
         working-directory: cloudflare/edge-gateway
@@ -98,53 +99,22 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
 
-      - name: Prove representative live browser-readable locales
+      - name: Prove deterministic locale release contract
+        # Registry == release manifest; every advertised locale's shipped
+        # catalog chunk is deployed with the current source fingerprint; locale
+        # observability accepts events. Retries while Pages converges.
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' pt es ar zh hi sw > proof-locales.txt
-          : > locale-matrix.jsonl
-          : > first-failure.txt
-          passed=0
-
-          while IFS= read -r locale; do
-            headers="headers.txt"
-            body="body.json"
-            status="$(curl --silent --show-error --max-time 20 -D "$headers" -o "$body" -w '%{http_code}' \
-              -H "Origin: ${PORTAL_ORIGIN}" \
-              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d "{\"locale\":\"${locale}\"}" \
-              "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}" || true)"
-            marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
-            if [ "$status" != "200" ] || [ "$marker" != "$I18N_EDGE_RELEASE" ] || ! jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then
-              {
-                echo "locale=${locale}"
-                echo "http_status=${status}"
-                echo "release_marker=${marker:-missing}"
-                echo "body="
-                cat "$body"
-              } > first-failure.txt
-              cat first-failure.txt
-              exit 1
-            fi
-            jq -c . "$body" >> locale-matrix.jsonl
-            passed=$((passed + 1))
-            echo "PASS ${locale}"
-          done < proof-locales.txt
-
-          test "$passed" -eq 6
-          echo "representative_live_locale_matrix=6/6"
+          node scripts/i18n-verify-production-catalogs.mjs | tee locale-release-contract.json
 
       - name: Upload immutable locale evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-i18n-representative-${{ github.sha }}
+          name: i18n-release-contract-${{ github.sha }}
           path: |
-            proof-locales.txt
-            locale-matrix.jsonl
-            first-failure.txt
+            locale-release-contract.json
             release-headers.txt
             release-body.json
           if-no-files-found: ignore

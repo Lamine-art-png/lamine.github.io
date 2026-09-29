@@ -25,6 +25,19 @@ assert(manifest.uiTranslationPolicy === "versioned-static-complete-catalogs", "p
 assert(Array.isArray(manifest.dynamicCatalogLocales) && manifest.dynamicCatalogLocales.length === 0, "advertised locales must not depend on runtime generation");
 assert(JSON.stringify([...advertised].sort()) === JSON.stringify([...complete].sort()), "every advertised locale must be catalog-complete");
 
+// QA metadata must describe exactly what was executed.
+const qa = manifest.qa || {};
+for (const legacy of ["browserCompleteLocales", "linguisticCompleteLocales", "staticCompleteLocales"]) {
+  assert(!(legacy in qa), `ambiguous legacy QA field ${legacy} must not return`);
+}
+assert(JSON.stringify([...(qa.releaseGateValidatedLocales || [])].sort()) === JSON.stringify([...advertised].sort()), "release-gate validation must cover every advertised locale");
+assert(qa.productionBrowserProofScope === "representative", "production browser proof is representative and must say so");
+const supportSource = fs.readFileSync(path.join(root, "figma-enterprise-v4/tests/browser/support/localeLeakScan.mjs"), "utf8");
+const representative = (supportSource.match(/REPRESENTATIVE_LOCALES = \[([^\]]*)\]/)?.[1].match(/"([A-Za-z-]+)"/g) || []).map((v) => v.slice(1, -1));
+assert((qa.productionBrowserProofLocales || []).every((code) => representative.includes(code)), "production browser proof may only list locales the production suite exercises");
+assert((qa.productionBrowserProofLocales || []).length < advertised.length || representative.length >= advertised.length, "production browser proof must not claim more locales than the suite runs");
+assert(Array.isArray(qa.humanLinguisticReviewLocales), "human linguistic review status must be explicit");
+
 const source = sourceEnvelope.catalog;
 const sourceKeys = Object.keys(source).sort();
 assert(sourceKeys.length >= 2500, `canonical source unexpectedly small: ${sourceKeys.length}`);

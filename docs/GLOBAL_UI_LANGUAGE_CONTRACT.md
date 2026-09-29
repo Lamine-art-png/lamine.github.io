@@ -83,6 +83,17 @@ Ask AGRO-AI receives the effective locale as `preferred_language`: the answer de
 
 The portal reports `locale_switch_requested|completed|failed`, `locale_catalog_missing` and `locale_fallback_triggered` (an English fallback inside an advertised locale) to `POST /v1/i18n/events` with locale codes, catalog fingerprint, release SHA, surface and latency only — no identity or copy. Failure events are logged at ERROR.
 
+## QA metadata
+
+`shared/supported-locales.json` → `qa` records exactly what has been executed:
+
+- `releaseGateValidatedLocales` — every advertised locale passed the full static release gate.
+- `browserSwitchContractLocales` — every advertised locale is switched in real Chromium against the built portal with zero runtime catalog requests (`global-language-switching.spec.mjs`).
+- `productionBrowserProofLocales` + `productionBrowserProofScope: "representative"` — the sample exercised end to end against production (`production-global-localization.spec.mjs`); not one production journey per locale.
+- `humanLinguisticReviewLocales` — locales whose machine-authored catalogs have had native-speaker review (none yet).
+
+`static-locale-catalog-contract.mjs` fails if these fields overclaim.
+
 ## Release proof
 
 Mocked translation-provider tests are useful unit coverage but are not production proof.
