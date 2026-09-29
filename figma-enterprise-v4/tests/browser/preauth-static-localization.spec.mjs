@@ -32,7 +32,14 @@ function selector(page) {
   return page.locator("select").filter({ has: page.locator('option[value="en"]') }).first();
 }
 
-for (const locale of ["pt-BR", "ja", "ar", "de", "my", "fr-FR"]) {
+const productionEnabled = new Set(manifest.enabledUiLocales || []);
+const representativeLocales = ["pt-BR", "ar", "de", "zh", "fr-FR", "ko", "ja", "my"]
+  .filter((locale) => productionEnabled.has(locale));
+if (!representativeLocales.includes("pt-BR")) {
+  throw new Error("Brazilian Portuguese must remain a production-complete pre-auth locale");
+}
+
+for (const locale of representativeLocales) {
   test(`fresh anonymous signup switches atomically to ${locale}`, async ({ browser }) => {
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.api.v1 import i18n
-from app.services.language_registry import enabled_ui_locales
+from app.services.language_registry import enabled_ui_locales, target_ui_locales
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -39,7 +39,9 @@ def test_decision_memory_source_drift_fails_closed():
 
 def test_every_enabled_portal_locale_is_accepted_by_backend_registry():
     locales = enabled_ui_locales()
-    assert len(locales) >= 50
+    assert "en" in locales
+    assert "pt-BR" in locales
+    assert len(target_ui_locales()) >= 50
     for locale in locales:
         assert i18n._canonical_enabled_locale(locale) == locale
 

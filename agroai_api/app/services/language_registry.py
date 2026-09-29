@@ -130,6 +130,12 @@ def enabled_ui_locales() -> tuple[str, ...]:
     return tuple(str(code) for code in manifest().get("enabledUiLocales", []))
 
 
+def target_ui_locales() -> tuple[str, ...]:
+    """Locales targeted once UI, transactional, legal, and browser contracts are complete."""
+    values = manifest().get("targetUiLocales") or manifest().get("enabledUiLocales", [])
+    return tuple(str(code) for code in values)
+
+
 def canonical_ui_locale(value: str | None, *, default: str = "auto") -> str:
     """Resolve a browser/account locale to one visible AGRO-AI UI locale.
 

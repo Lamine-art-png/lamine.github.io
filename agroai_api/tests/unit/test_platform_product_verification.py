@@ -114,7 +114,7 @@ def test_verification_url_canonicalizes_brazilian_portuguese_without_changing_tr
     assert parsed.scheme == "https"
     assert parsed.netloc == "app.agroai-pilot.com"
     assert parsed.path == "/verify-email"
-    assert query == {"token": ["localized-token"], "product": ["enterprise_portal"], "lang": ["pt"]}
+    assert query == {"token": ["localized-token"], "product": ["enterprise_portal"], "lang": ["pt-BR"]}
 
 
 def test_production_verification_origin_fails_closed_on_external_or_lookalike_configuration(monkeypatch):

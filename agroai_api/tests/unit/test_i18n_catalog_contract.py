@@ -14,13 +14,17 @@ from app.api.v1.i18n import (
     requested_source_catalog,
 )
 from app.core.config import settings
-from app.services.language_registry import enabled_ui_locales
+from app.services.language_registry import enabled_ui_locales, target_ui_locales
 
 
 def test_language_discovery_exposes_every_enabled_ui_locale():
     payloads = _enabled_locale_payloads()
     assert [item["code"] for item in payloads] == list(enabled_ui_locales())
-    assert len(payloads) >= 50
+    assert "en" in enabled_ui_locales()
+    assert "pt-BR" in enabled_ui_locales()
+    assert len(target_ui_locales()) >= 50
+    assert "de" in target_ui_locales()
+    assert "fr-FR" in target_ui_locales()
 
 
 def test_canonical_catalog_is_accepted_by_request_contract():
@@ -81,8 +85,11 @@ def test_canary_source_is_small_canonical_ui_subset():
 
 
 def test_canary_locale_canonicalization_uses_enabled_registry():
-    assert _canonical_enabled_locale("de") == "de"
-    assert _canonical_enabled_locale("fr_fr") == "fr-FR"
+    assert _canonical_enabled_locale("pt-BR") == "pt-BR"
+    assert _canonical_enabled_locale("pt_br") == "pt-BR"
+    with pytest.raises(HTTPException) as staged:
+        _canonical_enabled_locale("de")
+    assert staged.value.status_code == 422
     with pytest.raises(HTTPException) as exc:
         _canonical_enabled_locale("made-up-locale")
     assert exc.value.status_code == 422

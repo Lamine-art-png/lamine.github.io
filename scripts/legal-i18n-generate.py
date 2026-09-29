@@ -152,6 +152,16 @@ def localize_document(slug, locale, endpoint, outdir, source_dir=None):
     # executable application scripts so client-side hydration cannot repaint
     # the translated DOM back into English after load.
     raw = re.sub(r"(?is)<script\b.*?</script\s*>", "", raw)
+    if not re.search(r'class=["\'][^"\']*\bskip-link\b', raw, flags=re.I):
+        raw = re.sub(
+            r"(<body\b[^>]*>)",
+            r'\1<a class="skip-link" href="#main-content">Skip to main content</a>',
+            raw,
+            count=1,
+            flags=re.I,
+        )
+    if re.search(r"<main\b", raw, flags=re.I) and not re.search(r"<main\b[^>]*\bid=[\"\']main-content[\"\']", raw, flags=re.I):
+        raw = re.sub(r"<main\b", '<main id="main-content"', raw, count=1, flags=re.I)
     tokens, source, locations = split_visible_text(raw)
     translated = {}
     for chunk in chunks(source):
