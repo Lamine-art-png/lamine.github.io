@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from i18n_quality import quality_errors, quality_report  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "shared" / "supported-locales.json"
@@ -12,6 +18,8 @@ UI_DIR = ROOT / "shared" / "localization" / "catalogs"
 TX_SOURCE_PATH = ROOT / "shared" / "localization" / "transactional-source.json"
 TX_DIR = ROOT / "shared" / "localization" / "transactional-catalogs"
 LEGAL_DIR = ROOT / "platform-api" / "legal" / "localized"
+RELEASE_MATRIX_PATH = ROOT / "shared" / "localization" / "release-matrix.json"
+TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 
 
 def stable_fingerprint(catalog: dict[str, str]) -> str:
@@ -34,14 +42,23 @@ def ui_ready(locale: str, source: dict) -> bool:
     if not envelope:
         return False
     catalog = envelope.get("catalog")
-    return bool(
+    source_catalog = source.get("catalog") or {}
+    if not (
         envelope.get("schemaVersion") == 2
         and envelope.get("locale") == locale
         and envelope.get("status") == "complete-generated"
         and envelope.get("sourceFingerprint") == source.get("sourceFingerprint")
         and isinstance(catalog, dict)
-        and set(catalog) == set(source.get("catalog") or {})
-    )
+        and set(catalog) == set(source_catalog)
+    ):
+        return False
+    for key, original in source_catalog.items():
+        value = catalog[key]
+        if not isinstance(value, str) or not value.strip() or "[object Object]" in value or "\ufffd" in value:
+            return False
+        if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
+            return False
+    return not quality_errors(locale, source_catalog, catalog)
 
 
 def transactional_ready(locale: str, source: dict) -> bool:
@@ -63,9 +80,21 @@ def transactional_ready(locale: str, source: dict) -> bool:
     )
 
 
-def legal_ready(locale: str) -> bool:
+def legal_source_hashes(locale: str) -> dict[str, str]:
+    hashes = {}
+    for slug in ("terms-of-service", "privacy-policy"):
+        meta = json_file(LEGAL_DIR / locale / f"{slug}.meta.json") or {}
+        hashes[slug] = str(meta.get("sourceSha256") or "")
+    return hashes
+
+
+def legal_ready(locale: str, canonical_hashes: dict[str, str] | None = None) -> bool:
     if locale == "en":
         return True
+    if canonical_hashes and legal_source_hashes(locale) != canonical_hashes:
+        # Every localized presentation must translate the same canonical
+        # English legal version; a snapshot of an older version is not ready.
+        return False
     base = LEGAL_DIR / locale
     for slug in ("terms-of-service", "privacy-policy"):
         html = base / f"{slug}.html"
@@ -81,30 +110,71 @@ def legal_ready(locale: str) -> bool:
     return True
 
 
-def main() -> None:
-    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    ui_source = json.loads(UI_SOURCE_PATH.read_text(encoding="utf-8"))
-    tx_source = json.loads(TX_SOURCE_PATH.read_text(encoding="utf-8"))
+def canonical_legal_hashes() -> dict[str, str] | None:
+    """The canonical legal version is the one most localized snapshots translate.
+
+    Recorded explicitly in platform-api/legal/localized/canonical.json when present.
+    """
+    pinned = json_file(LEGAL_DIR / "canonical.json")
+    if pinned and isinstance(pinned.get("sourceSha256"), dict):
+        return {str(k): str(v) for k, v in pinned["sourceSha256"].items()}
+    return None
+
+
+def target_locales(manifest: dict) -> list[str]:
     target = list(manifest.get("targetUiLocales") or manifest.get("enabledUiLocales") or ["auto", "en"])
     if "auto" not in target:
         target.insert(0, "auto")
     if "en" not in target:
         target.insert(1 if target and target[0] == "auto" else 0, "en")
+    return target
 
-    ready = []
+
+def compute_matrix(manifest: dict, ui_source: dict, tx_source: dict) -> dict[str, dict]:
+    canonical = canonical_legal_hashes()
+    rows = {row.get("code"): row for row in manifest.get("locales") or []}
     matrix = {}
-    for locale in target:
+    for locale in target_locales(manifest):
         if locale == "auto":
             continue
         status = {
             "ui": ui_ready(locale, ui_source),
             "transactional": transactional_ready(locale, tx_source),
-            "legal": legal_ready(locale),
+            "legal": legal_ready(locale, canonical),
         }
         status["ready"] = all(status.values())
+        status["direction"] = (rows.get(locale) or {}).get("direction", "ltr")
         matrix[locale] = status
-        if status["ready"]:
-            ready.append(locale)
+    return matrix
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pending-matrix", action="store_true", help="print GitHub output for locales needing authoring")
+    parser.add_argument("--check", choices=["ui", "transactional", "legal"])
+    parser.add_argument("--locale")
+    args = parser.parse_args()
+
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    ui_source = json.loads(UI_SOURCE_PATH.read_text(encoding="utf-8"))
+    tx_source = json.loads(TX_SOURCE_PATH.read_text(encoding="utf-8"))
+
+    if args.check:
+        ok = {
+            "ui": lambda: ui_ready(args.locale, ui_source),
+            "transactional": lambda: transactional_ready(args.locale, tx_source),
+            "legal": lambda: legal_ready(args.locale, canonical_legal_hashes()),
+        }[args.check]()
+        raise SystemExit(0 if ok else 1)
+
+    matrix = compute_matrix(manifest, ui_source, tx_source)
+    if args.pending_matrix:
+        pending = [locale for locale, state in matrix.items() if locale != "en" and not state["ready"]]
+        print("locales=" + json.dumps(pending, separators=(",", ":")))
+        print("any=" + ("true" if pending else "false"))
+        return
+
+    ready = [locale for locale, state in matrix.items() if state["ready"]]
 
     if "en" not in ready:
         raise SystemExit("English baseline unexpectedly unavailable")
@@ -118,6 +188,24 @@ def main() -> None:
     qa["linguisticCompleteLocales"] = ready
     qa["browserCompleteLocales"] = ready
     MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    release_rows = {}
+    for locale, state in matrix.items():
+        row = dict(state)
+        if locale != "en" and state["ui"]:
+            envelope = json_file(UI_DIR / f"{locale}.json") or {}
+            report = quality_report(locale, ui_source["catalog"], envelope.get("catalog") or {})
+            row["uiQuality"] = {k: v for k, v in report.items() if k not in ("locale", "dntViolations")}
+        release_rows[locale] = row
+    RELEASE_MATRIX_PATH.write_text(json.dumps({
+        "schemaVersion": 1,
+        "uiSourceFingerprint": ui_source.get("sourceFingerprint"),
+        "transactionalSourceVersion": tx_source.get("version"),
+        "legalCanonicalSha256": canonical_legal_hashes(),
+        "target": len(matrix),
+        "releaseEligible": len(ready),
+        "locales": release_rows,
+    }, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
 
     missing = [locale for locale, state in matrix.items() if not state["ready"]]
     print(json.dumps({

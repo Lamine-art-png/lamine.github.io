@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
+from i18n_quality import do_not_translate, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -289,6 +290,9 @@ def chunks(source: dict[str, str]) -> list[dict[str, str]]:
 
 def validate_full(source: dict[str, str], catalog: dict[str, str], locale: str) -> None:
     validate_chunk(source, catalog)
+    errors = quality_errors(locale, source, catalog)
+    if errors:
+        raise ValueError(";".join(errors))
     if locale != "en":
         changed = sum(1 for key, original in source.items() if catalog[key].strip() != original.strip())
         minimum = max(25, len(source) // 20)
@@ -296,14 +300,71 @@ def validate_full(source: dict[str, str], catalog: dict[str, str], locale: str) 
             raise ValueError(f"translation_no_meaningful_progress:{locale}:{changed}<{minimum}")
 
 
-def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: str) -> Path:
+def seed_catalog(locale: str, source_envelope: dict, seed_dir: Path | None) -> dict[str, str]:
+    """Reuse a previously validated catalog, dropping only entries that need work."""
+    if not seed_dir:
+        return {}
+    path = seed_dir / f"{locale}.json"
+    if not path.exists():
+        return {}
+    try:
+        envelope = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if envelope.get("sourceFingerprint") != source_envelope["sourceFingerprint"] or envelope.get("locale") != locale:
+        return {}
+    source = source_envelope["catalog"]
+    prior = envelope.get("catalog") or {}
+    leaks = set(english_leak_keys(locale, source, prior))
+    seeded: dict[str, str] = {}
+    for key, original in source.items():
+        value = prior.get(key)
+        if key in leaks or not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            seeded.update(validate_chunk({key: original}, {key: value}))
+        except ValueError:
+            continue
+    print(f"{locale} seeded {len(seeded)}/{len(source)} keys; {len(leaks)} flagged for re-translation", flush=True)
+    return seeded
+
+
+def repair_english_leaks(locale: str, source: dict[str, str], catalog: dict[str, str], endpoint: str) -> None:
+    """Second pass for strings a provider returned untranslated."""
+    leaks = english_leak_keys(locale, source, catalog)
+    if not leaks:
+        return
+    print(f"{locale} repairing {len(leaks)} untranslated strings", flush=True)
+    for group in chunks({key: source[key] for key in leaks}):
+        candidates: list[dict[str, str]] = []
+        if cloudflare_rest_available():
+            try:
+                candidates.append(call_cloudflare_rest(locale, group))
+            except Exception as exc:  # repair is best-effort; the release gate decides
+                print(f"{locale} repair model pass failed: {type(exc).__name__}", flush=True)
+        try:
+            candidates.append(translate_chunk(locale, group, endpoint))
+        except Exception as exc:
+            print(f"{locale} repair provider pass failed: {type(exc).__name__}", flush=True)
+        for candidate in candidates:
+            for key, value in candidate.items():
+                if key in group and not english_leak_keys(locale, {key: source[key]}, {key: value}):
+                    catalog[key] = value
+                    group = {k: v for k, v in group.items() if k != key}
+
+
+def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: str, seed_dir: Path | None = None) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
     source: dict[str, str] = source_envelope["catalog"]
     locale = locale.strip()
     if locale == "en":
         catalog = dict(source)
     else:
-        catalog: dict[str, str] = {}
+        catalog: dict[str, str] = seed_catalog(locale, source_envelope, seed_dir)
+        # Code samples and wire-protocol literals are never translated.
+        for key, value in source.items():
+            if do_not_translate(value):
+                catalog[key] = value
         aliases_by_value: dict[str, list[str]] = {}
         for key, value in source.items():
             aliases_by_value.setdefault(value, []).append(key)
@@ -354,6 +415,13 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
                     }, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
                     completed += 1
                     print(f"{locale} chunks {completed}/{len(work)} keys={len(catalog)}/{len(source)}", flush=True)
+        for key, value in source.items():
+            if key not in catalog:
+                sibling = next((catalog[alias] for alias in aliases_by_value[value] if alias in catalog), None)
+                if sibling is not None:
+                    catalog[key] = sibling
+        repair_english_leaks(locale, source, catalog, endpoint)
+    print(json.dumps({"quality": quality_report(locale, source, catalog)}), flush=True)
     validate_full(source, catalog, locale)
     root = locale.split("-", 1)[0].lower()
     envelope = {
@@ -408,6 +476,7 @@ def main() -> None:
     parser.add_argument("--validate-dir")
     parser.add_argument("--outdir", default=str(ROOT / "shared/localization/catalogs"))
     parser.add_argument("--endpoint", default=os.environ.get("I18N_AUTHORING_ENDPOINT", DEFAULT_ENDPOINT))
+    parser.add_argument("--seed-dir", default="", help="reuse validated entries from an existing catalog directory")
     args = parser.parse_args()
 
     locales = parse_locales(args.locales)
@@ -424,7 +493,7 @@ def main() -> None:
 
     outdir = Path(args.outdir)
     for locale in locales:
-        generate_locale(locale, source, outdir, args.endpoint)
+        generate_locale(locale, source, outdir, args.endpoint, Path(args.seed_dir) if args.seed_dir else None)
 
 
 if __name__ == "__main__":
