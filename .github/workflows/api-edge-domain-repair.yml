@@ -48,34 +48,42 @@ jobs:
           zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zone.json)"
           echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
 
-      - name: Inspect current Worker custom domains
+      # Keep the existing origin and activate the route declared in wrangler.toml.
+      - name: Verify existing API Worker route and inspect DNS
         shell: bash
         run: |
           set -euo pipefail
-          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-          code="$(curl --silent --show-error -o worker-domains-before.json -w '%{http_code}' "${auth[@]}"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains?hostname=${API_HOST}" || true)"
-          echo "WORKER_DOMAINS_HTTP=${code}" >> "$GITHUB_ENV"
-          jq '{success,result:[(.result // [])[]|{id,hostname,service,zone_id,zone_name,environment}],errors}'             worker-domains-before.json > worker-domains-before.safe.json 2>/dev/null || true
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          curl --fail-with-body --silent --show-error "${auth[@]}" \
+            "$CF_API/zones/$ZONE_ID/workers/routes" -o routes.json
+          jq -e --arg pattern "$API_HOST/v1/*" --arg service "$WORKER_SERVICE" \
+            '.success == true and ([.result[] | select(.pattern == $pattern and .script == $service)] | length) == 1' routes.json >/dev/null
+          curl --fail-with-body --silent --show-error "${auth[@]}" \
+            "$CF_API/zones/$ZONE_ID/dns_records?name=$API_HOST&per_page=100" -o dns-before.json
+          jq -e --arg host "$API_HOST" \
+            '.success == true and (.result | length) > 0 and
+             all(.result[]; .name == $host) and
+             ([.result[] | select(.type == "A" or .type == "AAAA" or .type == "CNAME")] | length) > 0 and
+             all(.result[] | select(.type == "A" or .type == "AAAA" or .type == "CNAME"); .proxiable == true)' \
+            dns-before.json >/dev/null
+          jq '{success,result:[.result[]|{id,name,type,content,proxied,ttl}],errors}' dns-before.json > dns-before.safe.json
+          jq '{success,result:[.result[]|{id,pattern,script}],errors}' routes.json > routes.safe.json
 
-      - name: Attach API hostname as Worker Custom Domain if needed
-        id: attach
+      - name: Enable proxy on existing API address records
         shell: bash
         run: |
           set -euo pipefail
-          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-          existing="$(jq -r --arg host "${API_HOST}" --arg service "${WORKER_SERVICE}"             '.result // [] | map(select(.hostname==$host and .service==$service)) | length'             worker-domains-before.json 2>/dev/null || echo 0)"
-          if [ "$existing" = "1" ]; then
-            echo "already_attached=true" >> "$GITHUB_OUTPUT"
-            cp worker-domains-before.json worker-domain-attach.json
-            exit 0
-          fi
-
-          payload="$(jq -nc             --arg hostname "${API_HOST}"             --arg service "${WORKER_SERVICE}"             --arg zone_id "${ZONE_ID}"             --arg zone_name "${ZONE_NAME}"             '{hostname:$hostname,service:$service,zone_id:$zone_id,zone_name:$zone_name}')"
-
-          code="$(curl --silent --show-error -X PUT -o worker-domain-attach.json -w '%{http_code}'             "${auth[@]}" --data "$payload"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" || true)"
-          echo "ATTACH_HTTP=${code}" >> "$GITHUB_ENV"
-          jq '{success,result:{id:.result.id,hostname:.result.hostname,service:.result.service,zone_id:.result.zone_id,zone_name:.result.zone_name},errors,messages}'             worker-domain-attach.json > worker-domain-attach.safe.json 2>/dev/null || true
-          jq -e '.success == true and .result.hostname == env.API_HOST and .result.service == env.WORKER_SERVICE'             worker-domain-attach.json >/dev/null
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          touch changed-dns-ids.txt
+          while IFS= read -r record_id; do
+            # Record the attempt first so an interrupted response is reversible.
+            echo "$record_id" >> changed-dns-ids.txt
+            curl --fail-with-body --silent --show-error -X PATCH "${auth[@]}" \
+              --data '{"proxied":true}' \
+              "$CF_API/zones/$ZONE_ID/dns_records/$record_id" -o dns-patch.json
+            jq -e --arg id "$record_id" --arg host "$API_HOST" \
+              '.success == true and .result.id == $id and .result.name == $host and .result.proxied == true' dns-patch.json >/dev/null
+          done < <(jq -r '.result[] | select((.type == "A" or .type == "AAAA" or .type == "CNAME") and .proxied == false) | .id' dns-before.json)
 
       - name: Wait for edge routing to become authoritative
         shell: bash
@@ -94,13 +102,33 @@ jobs:
 
           curl --fail --silent --show-error --max-time 30 "https://${API_HOST}/v1/health"             | jq -e '.status=="ok"' >/dev/null
 
-      - name: Verify resulting Worker domain
+      - name: Verify DNS target preservation
         shell: bash
         run: |
           set -euo pipefail
-          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-          curl --fail --silent --show-error "${auth[@]}"             "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains?hostname=${API_HOST}"             | jq '{success,result:[(.result // [])[]|{id,hostname,service,zone_id,zone_name,environment}],errors}'             > worker-domains-after.safe.json
-          jq -e --arg host "${API_HOST}" --arg service "${WORKER_SERVICE}"             '.success == true and ([.result[]|select(.hostname==$host and .service==$service)]|length)==1'             worker-domains-after.safe.json >/dev/null
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$CF_API/zones/$ZONE_ID/dns_records?name=$API_HOST&per_page=100" -o dns-after.json
+          jq -e --slurpfile before dns-before.json \
+            '.success == true and
+             ([.result[]|{id,name,type,content}]|sort_by(.id)) ==
+             ([$before[0].result[]|{id,name,type,content}]|sort_by(.id)) and
+             all(.result[]|select(.type=="A" or .type=="AAAA" or .type=="CNAME"); .proxied==true)' dns-after.json >/dev/null
+          jq '{success,result:[.result[]|{id,name,type,content,proxied,ttl}],errors}' dns-after.json > dns-after.safe.json
+
+      - name: Restore previous proxy settings if verification fails
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s changed-dns-ids.txt ]; then exit 0; fi
+          while IFS= read -r record_id; do
+            payload="$(jq -ec --arg id "$record_id" '.result[]|select(.id==$id)|{proxied,ttl}' dns-before.json)"
+            curl --fail-with-body --silent --show-error -X PATCH \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+              --data "$payload" "$CF_API/zones/$ZONE_ID/dns_records/$record_id" -o dns-rollback.json
+            jq -e '.success == true' dns-rollback.json >/dev/null
+          done < changed-dns-ids.txt
 
       - name: Upload repair evidence
         if: always()
@@ -108,9 +136,9 @@ jobs:
         with:
           name: api-edge-domain-repair-${{ github.sha }}
           path: |
-            worker-domains-before.safe.json
-            worker-domain-attach.safe.json
-            worker-domains-after.safe.json
+            routes.safe.json
+            dns-before.safe.json
+            dns-after.safe.json
             edge-health.json
           if-no-files-found: warn
           retention-days: 90
@@ -130,6 +158,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          errors="$(jq -c '.errors // []' worker-domain-attach.json 2>/dev/null || echo '[]')"
-          body="$(printf 'API edge hostname repair blocked.\\n\\nCloudflare attach errors: %s\\nrun: %s\\nrelease: %s' "$errors" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          errors="$(jq -c '.errors // []' dns-patch.json 2>/dev/null || echo '[]')"
+          body="$(printf 'API edge hostname repair blocked.\\n\\nCloudflare DNS repair errors: %s\\nrun: %s\\nrelease: %s' "$errors" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
