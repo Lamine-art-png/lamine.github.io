@@ -1,16 +1,9 @@
 name: Deterministic locale catalog build
 
+# Manual-only while this authoring branch is experimental. Do not let ordinary
+# branch pushes launch a multi-locale production-facing translation job.
 on:
   workflow_dispatch:
-  push:
-    branches: [fix/deterministic-localization-release]
-    paths:
-      - .github/workflows/i18n-build-candidates.yml
-      - scripts/i18n-generate-catalogs.py
-      - cloudflare/ollama-compat/src/index.js
-      - wrangler.i18n-authoring.toml
-      - shared/localization/source.json
-
 permissions:
   contents: write
 
@@ -51,7 +44,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
     env:
@@ -87,15 +80,15 @@ jobs:
         run: |
           set -euo pipefail
           ok=0
-          for attempt in $(seq 1 10); do
+          for attempt in $(seq 1 3); do
             if python3 scripts/i18n-generate-catalogs.py \
               --locales "${{ matrix.locale }}" \
               --outdir locale-out; then
               ok=1
               break
             fi
-            echo "${{ matrix.locale }} authoring interrupted (attempt $attempt/10); resuming in 12s..."
-            sleep 12
+            echo "${{ matrix.locale }} authoring interrupted (attempt $attempt/3); resuming in 8s..."
+            sleep 8
           done
           test "$ok" = "1"
 
