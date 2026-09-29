@@ -1,5 +1,5 @@
 import { apiClient } from "../api/client";
-import { t } from "../i18n";
+import { t, currentLocale } from "../i18n";
 
 type AnyRecord = Record<string, any>;
 
@@ -130,7 +130,7 @@ function scoreObservation(observation: AnyRecord, sourceText: string): number {
   if (transcript.length >= 5 && haystack.includes(transcript.slice(0, 90))) score += 8;
   const occurred = observation?.occurred_at ? new Date(observation.occurred_at) : null;
   if (occurred && !Number.isNaN(occurred.getTime())) {
-    const local = normalize(occurred.toLocaleString());
+    const local = normalize(occurred.toLocaleString(currentLocale()));
     if (local && haystack.includes(local)) score += 5;
   }
   return score;

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
+import { currentLocale } from "../i18n";
 
 const COPY = [
   "Market Intelligence",
@@ -162,7 +163,7 @@ function money(value: string | null | undefined, currency: string, locale: strin
       maximumFractionDigits: Math.abs(number) >= 1000 ? 0 : 2,
     }).format(number);
   } catch {
-    return `${currency} ${number.toLocaleString()}`;
+    return `${currency} ${number.toLocaleString(currentLocale())}`;
   }
 }
 

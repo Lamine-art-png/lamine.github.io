@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clock3, LocateFixed, MapPin, Navigation, Sparkles, Loader2 } from "lucide-react";
 import { apiClient } from "../api/client";
+import { currentLocale } from "../i18n";
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "#B23B2E",
@@ -117,7 +118,7 @@ function formatWhen(observation: Observation): string {
   const value = observation.occurred_at || observation.observed_at || observation.created_at;
   if (!value) return "";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString(currentLocale());
 }
 
 export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId }: Props) {

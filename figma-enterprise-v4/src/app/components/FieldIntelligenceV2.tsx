@@ -15,6 +15,7 @@ import {
 } from "../fieldIntelligence/offlineQueue";
 import { FieldMapV2 } from "../fieldIntelligence/FieldMapV2";
 import { MediaViewer } from "../fieldIntelligence/MediaViewer";
+import { currentLocale } from "../i18n";
 
 const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 const EVENT_TYPES = [
@@ -1243,7 +1244,7 @@ function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDel
             </div>
             <p className="mt-2 line-clamp-2 text-[13px] leading-6 text-[#3B4A41]">{observation.summary || observation.transcript || "—"}</p>
           </div>
-          <span className="shrink-0 text-[11px] text-[#9AA79E]">{observation.occurred_at ? new Date(observation.occurred_at).toLocaleString() : ""}</span>
+          <span className="shrink-0 text-[11px] text-[#9AA79E]">{observation.occurred_at ? new Date(observation.occurred_at).toLocaleString(currentLocale()) : ""}</span>
         </div>
         <div className="mt-3 grid grid-cols-4 gap-1">
           {[1, 2, 3, 4].map((value) => <span key={value} className="h-1.5 rounded-full" style={{ background: value <= step ? "#2D6A4F" : "#E2E7E1" }} />)}

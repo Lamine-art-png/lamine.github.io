@@ -14,6 +14,7 @@ import {
 } from "../fieldIntelligence/offlineQueue";
 import { FieldMap } from "../fieldIntelligence/FieldMap";
 import { MediaViewer } from "../fieldIntelligence/MediaViewer";
+import { currentLocale } from "../i18n";
 
 const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 const EVENT_TYPES = [
@@ -191,7 +192,7 @@ function ShellHeader({ t, online, pending, lastSync, onSync, view, onView }: any
           {t("fieldIntel.pending")}: <strong className="text-[#10231B]">{pending}</strong>
         </span>
         <span className="hidden text-[12px] text-[#65736A] sm:inline">
-          {t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleTimeString() : t("fieldIntel.never")}
+          {t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleTimeString(currentLocale()) : t("fieldIntel.never")}
         </span>
         <button
           type="button" onClick={onSync}
@@ -615,7 +616,7 @@ function Timeline({ t, locals, observations, onRetry, onDelete, onSelect }: any)
                 <span className="text-[13px] font-semibold text-[#10231B]">{obs.field_name || t("fieldIntel.unassignedField")}</span>
                 <span className="text-[11px] text-[#65736A]">{obs.event_type ? t(`fieldIntel.evt.${obs.event_type}`) : ""}</span>
               </div>
-              <span className="text-[11px] text-[#9AA79E]">{obs.occurred_at ? new Date(obs.occurred_at).toLocaleString() : ""}</span>
+              <span className="text-[11px] text-[#9AA79E]">{obs.occurred_at ? new Date(obs.occurred_at).toLocaleString(currentLocale()) : ""}</span>
             </div>
             <p className="mt-1 line-clamp-2 text-[13px] text-[#3B4A41]">{obs.summary || obs.corrected_transcript || obs.transcript}</p>
             <div className="mt-1 flex items-center gap-3 text-[11px] text-[#65736A]">

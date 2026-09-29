@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { apiClient } from "../api/client";
 import { BG, BORDER, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import { currentLocale } from "../i18n";
 
 const HEADER = "Access appeals";
 const SUBHEADER = "Review suspended accounts that submitted stronger organization and agricultural-use evidence.";
@@ -83,7 +84,7 @@ export function AccessAppealsAdminPage() {
                 </div>
                 <p className="mt-1 text-[13px]" style={{ color: MUTED }}>{appeal.user?.email} · {appeal.organization_name || appeal.organization?.name || "No organization"}</p>
               </div>
-              <p className="text-[11px]" style={{ color: MUTED }}>{appeal.submitted_at ? new Date(appeal.submitted_at).toLocaleString() : "Link requested"}</p>
+              <p className="text-[11px]" style={{ color: MUTED }}>{appeal.submitted_at ? new Date(appeal.submitted_at).toLocaleString(currentLocale()) : "Link requested"}</p>
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">

@@ -14,6 +14,7 @@ import {
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { currentLocale } from "../i18n";
 
 type Row = Record<string, any>;
 type Application = {
@@ -73,7 +74,7 @@ function values(value: string) {
 function date(value?: string) {
   if (!value) return "—";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(currentLocale());
 }
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (

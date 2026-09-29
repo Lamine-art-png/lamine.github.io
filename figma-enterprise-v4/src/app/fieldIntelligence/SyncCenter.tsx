@@ -7,6 +7,7 @@ import {
   allCaptures, configureIdentity, deleteUnsyncedRecord, flushQueue, getLastSyncedAt,
   indexedDbAvailable, retryRecord, subscribe, type CaptureRecord, type SyncState,
 } from "./offlineQueue";
+import { currentLocale } from "../i18n";
 
 /**
  * Portal-shell synchronization center.
@@ -168,7 +169,7 @@ export function SyncCenter() {
           </div>
           <div className="mt-1 space-y-0.5 text-[12px] text-[#65736A]">
             <div>{online ? t("fieldIntel.online") : t("fieldIntel.offline")}</div>
-            <div>{t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleString() : t("fieldIntel.never")}</div>
+            <div>{t("fieldIntel.lastSync")}: {lastSync ? new Date(lastSync).toLocaleString(currentLocale()) : t("fieldIntel.never")}</div>
             {currentWorkspace?.name && <div>{t("syncCenter.workspace")}: {currentWorkspace.name}</div>}
             {user?.email && <div>{t("syncCenter.account")}: {user.email}</div>}
           </div>

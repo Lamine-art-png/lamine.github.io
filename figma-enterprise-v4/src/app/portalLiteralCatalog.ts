@@ -18,6 +18,9 @@ import literalCatalogPart17 from "../../../shared/ui-literals.en.17.json";
 import literalCatalogPart18 from "../../../shared/ui-literals.en.18.json";
 import literalCatalogPart19 from "../../../shared/ui-literals.en.19.json";
 import extractedLiteralCatalog from "../../../shared/localization/literals.json";
+// Customer-facing API messages (scripts/i18n-extract-api-messages.py) render
+// through the same literal runtime so server errors are localized too.
+import apiMessageCatalog from "../../../shared/ui-api-messages.en.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
@@ -51,6 +54,7 @@ const GENERIC_STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.ass
   literalCatalogPart18,
   literalCatalogPart19,
   extractedLiteralCatalog,
+  apiMessageCatalog,
 );
 
 export const DECISION_MEMORY_UI_CATALOG: Record<string, string> = {
