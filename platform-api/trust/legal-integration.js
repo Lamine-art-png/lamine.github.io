@@ -3,24 +3,18 @@
   const OLD_EMAIL="agroaicontact@gmail.com";
   const CURRENT_EMAIL="contact@agroai-pilot.com";
   const LEGAL_PATHS=new Set(["/terms-of-service","/privacy-policy","/pilot-agreement"]);
-  const requestedLang=new URLSearchParams(location.search).get("lang")||"";
-  const legalLocale=/^pt(?:-BR)?$/i.test(requestedLang)?"pt-BR":"en";
-  const PT=legalLocale==="pt-BR";
-  const I18N=PT?{
-    trustLegal:"Confiança e Jurídico da AGRO-AI",
-    description:"Documentos contratuais e padrões que explicam como a AGRO-AI administra dados agrícolas, operacionais e pessoais.",
-    trustData:"Confiança e governança de dados",
-    trustCenter:"Central de Confiança",
-    dataGovernance:"Governança de Dados",
-    aiData:"Uso de IA e Dados de Modelo",
-    security:"Segurança",
-    legalDocuments:"Documentos jurídicos",
-    terms:"Termos de Serviço",
-    privacy:"Política de Privacidade",
-    pilot:"Contrato de Piloto",
-    footer:"Confiança e Jurídico"
-  }:null;
-  const localizedHref=(href)=>PT&&LEGAL_PATHS.has(href)?`${href}?lang=pt-BR`:href;
+  // Localized legal snapshots embed their locale and translated navigation
+  // labels (see scripts/legal-i18n-generate.py). The canonical English page
+  // carries neither and keeps the English labels below.
+  const localeMeta=document.querySelector('meta[name="agroai-legal-locale"]');
+  const legalLocale=(localeMeta&&localeMeta.getAttribute("content"))||"en";
+  let I18N=null;
+  try{
+    const chrome=document.getElementById("agroai-legal-chrome");
+    if(chrome&&legalLocale!=="en") I18N=JSON.parse(chrome.textContent||"null");
+  }catch(_){I18N=null;}
+  const L=(key,fallback)=>(I18N&&typeof I18N[key]==="string"&&I18N[key].trim())?I18N[key]:fallback;
+  const localizedHref=(href)=>legalLocale!=="en"&&LEGAL_PATHS.has(href)?`${href}?lang=${encodeURIComponent(legalLocale)}`:href;
   const cleanPath=(value)=>value!=="/"?value.replace(/\/+$/,""):value;
 
   function replaceLegacyEmail(){
@@ -54,12 +48,12 @@
     const legalSection=document.querySelector('[data-testid="footer-legal"]');
     if(!legalSection) return false;
     const heading=legalSection.querySelector("h2,h3,h4");
-    if(heading&&heading.textContent&&heading.textContent.trim()==="Legal") heading.textContent=PT?I18N.footer:"Trust & Legal";
+    if(heading&&heading.textContent&&heading.textContent.trim()==="Legal") heading.textContent=L("footer","Trust & Legal");
     const list=legalSection.querySelector("ul");
     if(!list) return false;
-    if(!list.querySelector('a[href="/trust"]')) list.insertBefore(legalListItem("/trust",PT?I18N.trustCenter:"Trust Center"),list.firstChild);
+    if(!list.querySelector('a[href="/trust"]')) list.insertBefore(legalListItem("/trust",L("trustCenter","Trust Center")),list.firstChild);
     if(!list.querySelector('a[href="/trust/data-governance"]')){
-      const item=legalListItem("/trust/data-governance",PT?I18N.dataGovernance:"Data Governance");
+      const item=legalListItem("/trust/data-governance",L("dataGovernance","Data Governance"));
       const trustLink=list.querySelector('a[href="/trust"]');
       const trustItem=trustLink&&trustLink.closest("li");
       if(trustItem) trustItem.insertAdjacentElement("afterend",item); else list.insertBefore(item,list.firstChild);
@@ -96,18 +90,18 @@
     const panel=document.createElement("aside");
     panel.id="agroai-trust-legal-nav";
     panel.className="agroai-trust-legal-nav";
-    panel.setAttribute("aria-label",PT?I18N.trustLegal:"AGRO-AI Trust and Legal");
+    panel.setAttribute("aria-label",L("trustLegalAria","AGRO-AI Trust and Legal"));
     const top=document.createElement("div");
     top.className="agroai-trust-legal-heading";
     const eyebrow=document.createElement("span");
-    eyebrow.textContent=PT?I18N.trustLegal:"AGRO-AI Trust & Legal";
+    eyebrow.textContent=L("trustLegal","AGRO-AI Trust & Legal");
     const copy=document.createElement("p");
-    copy.textContent=PT?I18N.description:"Contractual documents and the standards that explain how AGRO-AI governs agricultural, operational and personal data.";
+    copy.textContent=L("description","Contractual documents and the standards that explain how AGRO-AI governs agricultural, operational and personal data.");
     top.append(eyebrow,copy);
     panel.append(
       top,
-      navGroup(PT?I18N.trustData:"Trust & data governance",[["/trust",PT?I18N.trustCenter:"Trust Center"],["/trust/data-governance",PT?I18N.dataGovernance:"Data Governance"],["/trust/ai-data-use",PT?I18N.aiData:"AI & Model Data Use"],["/trust/security",PT?I18N.security:"Security"]]),
-      navGroup(PT?I18N.legalDocuments:"Legal documents",[["/terms-of-service",PT?I18N.terms:"Terms of Service"],["/privacy-policy",PT?I18N.privacy:"Privacy Policy"],["/pilot-agreement",PT?I18N.pilot:"Pilot Agreement"]])
+      navGroup(L("trustData","Trust & data governance"),[["/trust",L("trustCenter","Trust Center")],["/trust/data-governance",L("dataGovernance","Data Governance")],["/trust/ai-data-use",L("aiData","AI & Model Data Use")],["/trust/security",L("security","Security")]]),
+      navGroup(L("legalDocuments","Legal documents"),[["/terms-of-service",L("terms","Terms of Service")],["/privacy-policy",L("privacy","Privacy Policy")],["/pilot-agreement",L("pilot","Pilot Agreement")]])
     );
     main.insertBefore(panel,main.firstChild);
     return true;

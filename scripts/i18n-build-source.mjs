@@ -16,7 +16,7 @@ const merge = entries => Object.assign(source, entries);
 for (const name of fs.readdirSync(path.join(root, 'shared')).sort()) {
   if (/^ui-.*\.en(?:\.\d+)?\.json$/.test(name)) merge(JSON.parse(fs.readFileSync(path.join(root, 'shared', name), 'utf8')));
 }
-const compiled = await build({stdin:{contents:`import { TRANSLATIONS } from './i18n'; import { installCommercialBoundaryBaseCatalogs } from './commercialBoundaryI18n'; installCommercialBoundaryBaseCatalogs(); globalThis.catalogs = TRANSLATIONS;`, resolveDir:app, loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',logLevel:'silent'});
+const compiled = await build({stdin:{contents:`import './commercialBoundaryConversionLabels'; import { TRANSLATIONS } from './i18n'; import { installCommercialBoundaryBaseCatalogs } from './commercialBoundaryI18n'; installCommercialBoundaryBaseCatalogs(); globalThis.catalogs = TRANSLATIONS;`, resolveDir:app, loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',logLevel:'silent'});
 const sandbox = {};
 vm.runInNewContext(compiled.outputFiles[0].text, sandbox);
 merge(sandbox.catalogs.en);

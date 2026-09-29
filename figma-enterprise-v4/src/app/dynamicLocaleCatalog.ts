@@ -1,6 +1,8 @@
 import { apiClient } from "./api/client";
+import { hasBundledLocale, loadBundledLocaleCatalog } from "./bundledLocaleCatalogs";
 import { installCommercialBoundaryBaseCatalogs } from "./commercialBoundaryI18n";
-import { normalizeLocale, TRANSLATIONS } from "./i18n";
+import { normalizeLocale, setLocaleFallbackReporter, TRANSLATIONS } from "./i18n";
+import { reportLocaleEvent } from "./localeTelemetry";
 import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
@@ -19,6 +21,13 @@ const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
 installCommercialBoundaryBaseCatalogs();
+
+// An English fallback inside an advertised, deterministic locale is a release
+// defect: report it once per locale (key names are not sent).
+setLocaleFallbackReporter((locale) => {
+  if (!hasBundledLocale(locale)) return;
+  reportLocaleEvent("locale_fallback_triggered", { selectedLocale: locale, effectiveLocale: locale, success: false }, { once: true });
+});
 const CORE_ENGLISH_SOURCE: Record<string, string> = { ...TRANSLATIONS.en };
 const CRITICAL_CORE_KEYS = [
   "app.loadingPortal", "language", "save", "saving", "newOperation", "workspace", "operate", "intelligence", "account",
@@ -83,9 +92,12 @@ function placeholderSignature(value: string): string[] | null {
 }
 
 function placeholderParity(candidate: string, source: string) {
-  const candidateSignature = placeholderSignature(candidate);
   const sourceSignature = placeholderSignature(source);
-  if (!candidateSignature || !sourceSignature || candidateSignature.length !== sourceSignature.length) return false;
+  // Literal braces that are not placeholders (e.g. a JSON request example) are
+  // do-not-translate code: the localized value must be byte-identical.
+  if (!sourceSignature) return candidate.trim() === source.trim();
+  const candidateSignature = placeholderSignature(candidate);
+  if (!candidateSignature || candidateSignature.length !== sourceSignature.length) return false;
   return sourceSignature.every((token, index) => token === candidateSignature[index]);
 }
 
@@ -403,6 +415,16 @@ async function ensureSourceCatalog(locale: string, source: Record<string, string
   }
   if (catalogCoversSource(current, source)) return false;
 
+  // Deterministic path: a release-validated catalog deployed with this build.
+  // Production-advertised locales always resolve here, without any provider.
+  if (hasBundledLocale(effectiveLocale)) {
+    const bundled = await loadBundledLocaleCatalog(effectiveLocale);
+    if (bundled) {
+      installLocaleCatalog(effectiveLocale, source, bundled, false);
+      if (catalogCoversSource(TRANSLATIONS[effectiveLocale], source)) return true;
+    }
+  }
+
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
   const retryAfter = RETRY_AFTER.get(requestKey) || 0;
   if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);
@@ -429,6 +451,21 @@ async function ensureSourceCatalog(locale: string, source: Record<string, string
 
 export async function ensureLocaleSourceCatalog(locale: string, source: Record<string, string>): Promise<boolean> {
   return ensureSourceCatalog(locale, source, true);
+}
+
+/** The complete English UI source a locale must cover to activate. */
+export function runtimeFullEnglishSource(): Record<string, string> {
+  return sourceForScope("full");
+}
+
+/** Install the deployed static catalog for a locale, if this build has one. */
+export async function preloadBundledLocaleCatalog(locale: string): Promise<boolean> {
+  const effectiveLocale = normalizeLocale(locale);
+  if (effectiveLocale === "en") return true;
+  const bundled = await loadBundledLocaleCatalog(effectiveLocale);
+  if (!bundled) return false;
+  installLocaleCatalog(effectiveLocale, bundled, bundled, false);
+  return hasCompleteLocaleCatalog(effectiveLocale);
 }
 
 export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = "full"): Promise<boolean> {

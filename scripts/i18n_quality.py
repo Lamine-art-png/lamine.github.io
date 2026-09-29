@@ -10,6 +10,12 @@ import re
 import unicodedata
 
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+# Residue of authoring-time protection markers must never reach customers.
+MARKER_RESIDUE = re.compile(r"AGROAI[_ ]?(?:KEEP|ITEM)|<<<|>>>", re.I)
+
+
+def has_marker_residue(value: str) -> bool:
+    return bool(MARKER_RESIDUE.search(value))
 
 # Copy-pasteable code and wire-protocol literals must stay byte-identical in
 # every locale (e.g. curl examples, HTTP verbs + paths, JSON request bodies).
@@ -92,6 +98,9 @@ def quality_errors(locale: str, source: dict[str, str], catalog: dict[str, str])
         return []
     report = quality_report(locale, source, catalog)
     errors: list[str] = []
+    residue = [key for key, value in catalog.items() if has_marker_residue(value) and not has_marker_residue(source.get(key, ""))]
+    if residue:
+        errors.append(f"authoring_marker_residue:{locale}:{','.join(residue[:5])}")
     if report["dntViolations"]:
         errors.append(f"do_not_translate_modified:{locale}:{','.join(report['dntViolations'][:5])}")
     if report["identicalShare"] > MAX_IDENTICAL_TO_ENGLISH:

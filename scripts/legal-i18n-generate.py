@@ -11,6 +11,7 @@ import re
 import time
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
+from i18n_quality import has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENDPOINT = "http://127.0.0.1:8787/api/chat"
@@ -107,6 +108,8 @@ def validate(source, candidate):
         value = value.strip()
         if sorted(PLACEHOLDER_RE.findall(original)) != sorted(PLACEHOLDER_RE.findall(value)):
             raise ValueError(f"legal_placeholder_mismatch:{key}")
+        if has_marker_residue(value) and not has_marker_residue(original):
+            raise ValueError(f"legal_marker_residue:{key}")
         out[key] = value
     return out
 
@@ -173,6 +176,41 @@ def chunks(source):
     if current: out.append(current)
     return out
 
+MARKETING_ORIGIN = "https://agroai-pilot.com"
+LEGAL_PAGE_PATHS = {"/terms-of-service", "/privacy-policy", "/pilot-agreement"}
+
+
+def finalize_links(rendered: str, locale: str) -> str:
+    """Make site links absolute and keep legal navigation in the same locale.
+
+    Snapshots are served on agroai-pilot.com; absolute links are unambiguous
+    wherever the static artifact is validated or served from.
+    """
+    def repl(match: re.Match) -> str:
+        attr, quote, href = match.group(1), match.group(2), match.group(3)
+        if not href.startswith("/") or href.startswith("//"):
+            return match.group(0)
+        path, _, fragment = href.partition("#")
+        path_only = path.split("?", 1)[0].rstrip("/") or "/"
+        target = MARKETING_ORIGIN + path
+        if path_only in LEGAL_PAGE_PATHS and "lang=" not in path:
+            target += ("&" if "?" in path else "?") + f"lang={locale}"
+        if fragment:
+            target += "#" + fragment
+        return f"{attr}={quote}{target}{quote}"
+    return re.sub(r'\b(href)=(["\'])([^"\']*)\2', repl, rendered)
+
+
+def finalize_dir(directory: Path) -> None:
+    for html_path in sorted(directory.glob("*/*.html")):
+        if html_path.parent.name == "canonical":
+            continue
+        raw = html_path.read_text(encoding="utf-8")
+        updated = finalize_links(raw, html_path.parent.name)
+        if updated != raw:
+            html_path.write_text(updated, encoding="utf-8")
+
+
 def localize_document(slug, locale, endpoint, outdir, source_dir=None):
     canonical_url = DOCS[slug]
     source_path = Path(source_dir) / f"{slug}.html" if source_dir else None
@@ -219,6 +257,7 @@ def localize_document(slug, locale, endpoint, outdir, source_dir=None):
         f'<link rel="canonical" href="{canonical_url}">'
     )
     rendered = rendered.replace("</head>", marker + "</head>", 1) if "</head>" in rendered else marker + rendered
+    rendered = finalize_links(rendered, locale)
     destdir = outdir / locale
     destdir.mkdir(parents=True, exist_ok=True)
     (destdir / f"{slug}.html").write_text(rendered, encoding="utf-8")
@@ -240,7 +279,11 @@ def main():
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--outdir", default=str(ROOT/"platform-api/legal/localized"))
     parser.add_argument("--source-dir", default="")
+    parser.add_argument("--finalize-dir", default="", help="post-process existing snapshots in place")
     args = parser.parse_args()
+    if args.finalize_dir:
+        finalize_dir(Path(args.finalize_dir))
+        return
     outdir = Path(args.outdir)
     for slug in DOCS:
         localize_document(slug, args.locale, args.endpoint, outdir, args.source_dir or None)

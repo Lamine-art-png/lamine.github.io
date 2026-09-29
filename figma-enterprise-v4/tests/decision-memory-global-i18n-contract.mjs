@@ -75,21 +75,25 @@ if (component.includes("function useMemoryCopy")) {
   throw new Error("Decision Memory must not contain a two-language copy hook");
 }
 
-const enabled = new Set((manifest.enabledUiLocales || []).filter((locale) => !["auto", "en", "fr-FR"].includes(locale)));
-const dynamic = new Set(manifest.dynamicCatalogLocales || []);
-const missingDynamic = [...enabled].filter((locale) => !dynamic.has(locale));
-if (missingDynamic.length) {
-  throw new Error(`Enabled UI locales missing dynamic translation support: ${missingDynamic.join(", ")}`);
+const enabled = new Set((manifest.enabledUiLocales || []).filter((locale) => !["auto", "en"].includes(locale)));
+const complete = new Set(manifest.catalogCompleteLocales || []);
+const notDeterministic = [...enabled].filter((locale) => !complete.has(locale));
+if (notDeterministic.length) {
+  throw new Error(`Enabled UI locales missing a deterministic complete catalog: ${notDeterministic.join(", ")}`);
+}
+if ((manifest.dynamicCatalogLocales || []).length) {
+  throw new Error("Decision Memory must not depend on runtime-generated locale catalogs");
 }
 const localeCodes = new Set((manifest.locales || []).map((locale) => locale.code));
 const missingMetadata = (manifest.enabledUiLocales || []).filter((locale) => !localeCodes.has(locale));
 if (missingMetadata.length) {
   throw new Error(`Enabled UI locales missing locale metadata: ${missingMetadata.join(", ")}`);
 }
+const target = new Set(manifest.targetUiLocales || manifest.enabledUiLocales || []);
 for (const rtlLocale of ["ar", "fa", "ur"]) {
   const row = (manifest.locales || []).find((locale) => locale.code === rtlLocale);
-  if (!row || row.direction !== "rtl" || !enabled.has(rtlLocale)) {
-    throw new Error(`Decision Memory global UI requires enabled RTL metadata for ${rtlLocale}`);
+  if (!row || row.direction !== "rtl" || !target.has(rtlLocale)) {
+    throw new Error(`Decision Memory global UI requires RTL metadata for target locale ${rtlLocale}`);
   }
 }
 

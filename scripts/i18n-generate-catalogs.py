@@ -18,7 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
-from i18n_quality import do_not_translate, english_leak_keys, quality_errors, quality_report
+from i18n_quality import do_not_translate, has_marker_residue, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -65,6 +65,8 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
         value = candidate[key]
         if not isinstance(value, str) or not value.strip() or "[object Object]" in value or "\ufffd" in value:
             raise ValueError(f"translation_invalid_value:{key}")
+        if has_marker_residue(value) and not has_marker_residue(original):
+            raise ValueError(f"translation_marker_residue:{key}")
         value = value.strip()
         if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
             raise ValueError(f"translation_placeholder_mismatch:{key}")
@@ -300,6 +302,36 @@ def validate_full(source: dict[str, str], catalog: dict[str, str], locale: str) 
             raise ValueError(f"translation_no_meaningful_progress:{locale}:{changed}<{minimum}")
 
 
+_HISTORY: dict[str, dict[str, str] | None] = {}
+
+
+def historical_source(fingerprint: str) -> dict[str, str] | None:
+    """Find the committed source.json that had this fingerprint (git history)."""
+    if not fingerprint:
+        return None
+    if fingerprint in _HISTORY:
+        return _HISTORY[fingerprint]
+    import subprocess
+    found = None
+    try:
+        shas = subprocess.run(
+            ["git", "log", "--format=%H", "-n", "200", "--", "shared/localization/source.json"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout.split()
+        for sha in shas:
+            raw = subprocess.run(["git", "show", f"{sha}:shared/localization/source.json"], cwd=ROOT, capture_output=True, text=True)
+            if raw.returncode != 0:
+                continue
+            candidate = json.loads(raw.stdout)
+            if candidate.get("sourceFingerprint") == fingerprint:
+                found = candidate.get("catalog") or {}
+                break
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        found = None
+    _HISTORY[fingerprint] = found
+    return found
+
+
 def seed_catalog(locale: str, source_envelope: dict, seed_dir: Path | None) -> dict[str, str]:
     """Reuse a previously validated catalog, dropping only entries that need work."""
     if not seed_dir:
@@ -311,10 +343,17 @@ def seed_catalog(locale: str, source_envelope: dict, seed_dir: Path | None) -> d
         envelope = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    if envelope.get("sourceFingerprint") != source_envelope["sourceFingerprint"] or envelope.get("locale") != locale:
+    if envelope.get("locale") != locale:
         return {}
     source = source_envelope["catalog"]
     prior = envelope.get("catalog") or {}
+    if envelope.get("sourceFingerprint") != source_envelope["sourceFingerprint"]:
+        # Reuse only entries whose English text is unchanged since the seed
+        # catalog was generated; everything else is translated fresh.
+        historical = historical_source(envelope.get("sourceFingerprint") or "")
+        if historical is None:
+            return {}
+        prior = {key: value for key, value in prior.items() if key in source and historical.get(key) == source[key]}
     leaks = set(english_leak_keys(locale, source, prior))
     seeded: dict[str, str] = {}
     for key, original in source.items():

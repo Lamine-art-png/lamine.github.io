@@ -1,10 +1,4 @@
-import sourceEnvelope from "../../../shared/localization/source.json";
-
-type SourceEnvelope = {
-  schemaVersion: number;
-  sourceFingerprint: string;
-  catalog: Record<string, string>;
-};
+import { sourceFingerprint as SOURCE_FINGERPRINT } from "../../../shared/localization/source.json";
 
 type CatalogEnvelope = {
   schemaVersion: number;
@@ -15,42 +9,64 @@ type CatalogEnvelope = {
   catalog: Record<string, string>;
 };
 
-const source = sourceEnvelope as SourceEnvelope;
-const sourceKeys = Object.keys(source.catalog).sort();
-
-const modules = import.meta.glob("../../../shared/localization/catalogs/*.json", {
-  eager: true,
+// Every release-validated locale catalog ships with the application as its own
+// lazily loaded, content-hashed chunk. Switching language loads a static asset
+// from the same deployment; it never calls a translation provider. Only locales
+// that the release gate enabled are advertised, so a customer can only select a
+// locale whose chunk exists in this build.
+const LOADERS = import.meta.glob("../../../shared/localization/catalogs/*.json", {
   import: "default",
-}) as Record<string, CatalogEnvelope>;
+}) as Record<string, () => Promise<CatalogEnvelope>>;
 
-function validCatalog(envelope: CatalogEnvelope): boolean {
-  if (!envelope || envelope.schemaVersion !== 2 || envelope.status !== "complete-generated") return false;
-  if (envelope.sourceFingerprint !== source.sourceFingerprint) return false;
-  if (!envelope.catalog || typeof envelope.catalog !== "object" || Array.isArray(envelope.catalog)) return false;
-
-  const keys = Object.keys(envelope.catalog).sort();
-  if (keys.length !== sourceKeys.length || keys.some((key, index) => key !== sourceKeys[index])) return false;
-
-  for (const [key, original] of Object.entries(source.catalog)) {
-    const value = envelope.catalog[key];
-    if (typeof value !== "string" || !value.trim() || value.trim().toLowerCase() === "[object object]") return false;
-    const sourceTokens = original.match(/\{[A-Za-z_][A-Za-z0-9_]*\}/g)?.sort() || [];
-    const translatedTokens = value.match(/\{[A-Za-z_][A-Za-z0-9_]*\}/g)?.sort() || [];
-    if (sourceTokens.length !== translatedTokens.length || sourceTokens.some((token, index) => token !== translatedTokens[index])) return false;
-  }
-  return true;
+const LOADER_BY_LOCALE: Record<string, () => Promise<CatalogEnvelope>> = {};
+for (const [path, loader] of Object.entries(LOADERS)) {
+  const match = /\/([A-Za-z0-9-]+)\.json$/.exec(path);
+  if (match) LOADER_BY_LOCALE[match[1]] = loader;
 }
 
-export const BUNDLED_LOCALE_CATALOGS: Record<string, Record<string, string>> = {};
+export const BUNDLED_LOCALE_CODES = Object.freeze(Object.keys(LOADER_BY_LOCALE).sort());
 
-for (const moduleValue of Object.values(modules)) {
-  const envelope = moduleValue as CatalogEnvelope;
-  if (!validCatalog(envelope)) continue;
-  BUNDLED_LOCALE_CATALOGS[envelope.locale] = envelope.catalog;
+const LOADED: Record<string, Record<string, string>> = {};
+const INFLIGHT = new Map<string, Promise<Record<string, string> | null>>();
+
+function validEnvelope(envelope: CatalogEnvelope | undefined, locale: string): envelope is CatalogEnvelope {
+  return Boolean(
+    envelope
+    && envelope.schemaVersion === 2
+    && envelope.status === "complete-generated"
+    && envelope.locale === locale
+    && envelope.sourceFingerprint === SOURCE_FINGERPRINT
+    && envelope.catalog
+    && typeof envelope.catalog === "object"
+    && !Array.isArray(envelope.catalog),
+  );
 }
 
-export const BUNDLED_LOCALE_CODES = Object.freeze(Object.keys(BUNDLED_LOCALE_CATALOGS).sort());
+export function hasBundledLocale(locale: string): boolean {
+  return Boolean(LOADER_BY_LOCALE[locale]);
+}
 
-export function hasBundledCompleteLocale(locale: string) {
-  return Boolean(BUNDLED_LOCALE_CATALOGS[locale]);
+export function loadedBundledLocaleCatalog(locale: string): Record<string, string> | null {
+  return LOADED[locale] || null;
+}
+
+/**
+ * Load the deployed static catalog for a locale. Resolves to null when the
+ * build has no valid catalog for it (the caller keeps the previous locale).
+ */
+export function loadBundledLocaleCatalog(locale: string): Promise<Record<string, string> | null> {
+  if (LOADED[locale]) return Promise.resolve(LOADED[locale]);
+  const loader = LOADER_BY_LOCALE[locale];
+  if (!loader) return Promise.resolve(null);
+  const existing = INFLIGHT.get(locale);
+  if (existing) return existing;
+  const pending = loader()
+    .then((envelope) => {
+      if (!validEnvelope(envelope, locale)) return null;
+      LOADED[locale] = envelope.catalog;
+      return envelope.catalog;
+    })
+    .finally(() => INFLIGHT.delete(locale));
+  INFLIGHT.set(locale, pending);
+  return pending;
 }

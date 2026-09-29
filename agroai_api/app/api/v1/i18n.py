@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import re
 import time
 from collections import Counter
@@ -20,6 +21,7 @@ from app.services.language_registry import enabled_ui_locales, family_direction,
 from app.services.model_router import ModelRouter
 
 router = APIRouter(tags=["i18n"])
+_EVENT_LOGGER = logging.getLogger("agroai.i18n.events")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
@@ -295,6 +297,65 @@ def _canonical_enabled_locale(requested: str) -> str:
     if canonical is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": normalized})
     return canonical
+
+
+_LOCALE_EVENT_NAMES = frozenset({
+    "locale_switch_requested",
+    "locale_switch_completed",
+    "locale_switch_failed",
+    "locale_catalog_missing",
+    "locale_catalog_version_mismatch",
+    "locale_fallback_triggered",
+    "locale_verification_opened",
+    "locale_recovery_opened",
+})
+_LOCALE_TOKEN_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$|^auto$")
+_SURFACE_RE = re.compile(r"^[a-z0-9_.:/-]{1,64}$")
+
+
+class LocaleEvent(BaseModel):
+    """Anonymous locale observability event. Carries no user identity or copy."""
+
+    event: str
+    selectedLocale: str = Field(max_length=24)
+    effectiveLocale: str = Field(max_length=24)
+    catalogVersion: str = Field(default="", max_length=80)
+    releaseSha: str = Field(default="", max_length=64)
+    surface: str = Field(default="", max_length=64)
+    success: bool = True
+    latencyMs: int | None = Field(default=None, ge=0, le=600_000)
+    missingKeys: int | None = Field(default=None, ge=0, le=100_000)
+
+    @field_validator("event")
+    @classmethod
+    def _known_event(cls, value: str) -> str:
+        if value not in _LOCALE_EVENT_NAMES:
+            raise ValueError("unknown_locale_event")
+        return value
+
+    @field_validator("selectedLocale", "effectiveLocale")
+    @classmethod
+    def _locale_token(cls, value: str) -> str:
+        if not _LOCALE_TOKEN_RE.match(value):
+            raise ValueError("invalid_locale_token")
+        return value
+
+    @field_validator("surface")
+    @classmethod
+    def _surface_token(cls, value: str) -> str:
+        if value and not _SURFACE_RE.match(value):
+            raise ValueError("invalid_surface")
+        return value
+
+
+@router.post("/i18n/events", status_code=status.HTTP_202_ACCEPTED)
+def record_locale_event(payload: LocaleEvent) -> dict[str, str]:
+    """Structured log line for locale switching/fallback health (pre-auth safe)."""
+    level = logging.INFO if payload.success and payload.event not in {
+        "locale_catalog_missing", "locale_catalog_version_mismatch", "locale_fallback_triggered", "locale_switch_failed",
+    } else logging.ERROR
+    _EVENT_LOGGER.log(level, "locale_event %s", json.dumps(payload.model_dump(), sort_keys=True, separators=(",", ":")))
+    return {"status": "accepted"}
 
 
 @router.get("/i18n/languages")

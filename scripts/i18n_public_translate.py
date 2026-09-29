@@ -30,9 +30,14 @@ def _keep_marker(index: int) -> str:
 
 
 def _normalize_markers(value: str) -> str:
-    value = re.sub(r"<\s*<\s*<\s*AGROAI_(ITEM|KEEP)_(\d{4})\s*>\s*>\s*>", r"<<<AGROAI_\1_\2>>>", value)
-    value = re.sub(r"＜\s*＜\s*＜\s*AGROAI_(ITEM|KEEP)_(\d{4})\s*＞\s*＞\s*＞", r"<<<AGROAI_\1_\2>>>", value)
-    return value
+    # Providers occasionally drop or widen bracket runs or use full-width
+    # brackets around protection markers; accept any 1-3 bracket variant.
+    return re.sub(
+        r"[<＜《〈]{1,3}\s*AGROAI[_ ]?(ITEM|KEEP)[_ ]?(\d{4})\s*[>＞》〉]{1,3}",
+        r"<<<AGROAI_\1_\2>>>",
+        value,
+        flags=re.I,
+    )
 
 
 def _pack(entries: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
@@ -109,7 +114,7 @@ def _translate_pack(locale: str, entries: list[tuple[str, str]]) -> dict[str, st
         value = translated[content_start:end].strip()
         for keep_index, original in enumerate(protected):
             value = value.replace(_keep_marker(keep_index), original)
-        if re.search(r"<<<AGROAI_KEEP_\d{4}>>>", value):
+        if re.search(r"AGROAI[_ ]?(?:KEEP|ITEM)", value, flags=re.I):
             raise RuntimeError(f"public_translation_unrestored_marker:{index}")
         if not value:
             raise RuntimeError(f"public_translation_empty_item:{index}")

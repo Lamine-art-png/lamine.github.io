@@ -1,5 +1,4 @@
 import manifestData from "../../../shared/supported-locales.json";
-import { BUNDLED_LOCALE_CATALOGS } from "./bundledLocaleCatalogs";
 
 export type LocaleDirection = "ltr" | "rtl";
 export type LocaleOption = {
@@ -435,9 +434,6 @@ const pt: Record<string, string> = {
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR, pt };
 
-for (const [locale, catalog] of Object.entries(BUNDLED_LOCALE_CATALOGS)) {
-  TRANSLATIONS[locale] = { ...(TRANSLATIONS[locale] || {}), ...catalog };
-}
 
 const EN_KEYS = Object.keys(en).sort();
 const FR_KEYS = Object.keys(frFR).sort();
@@ -525,11 +521,20 @@ function renderableTranslation(value: unknown): value is string {
   return Boolean(normalized) && normalized.toLowerCase() !== "[object object]";
 }
 
+type FallbackReporter = (locale: string, key: string) => void;
+let fallbackReporter: FallbackReporter | null = null;
+
+/** Observability hook: called when an advertised locale renders an English fallback. */
+export function setLocaleFallbackReporter(reporter: FallbackReporter | null) {
+  fallbackReporter = reporter;
+}
+
 export function t(key: string, locale = getStoredLocale()): string {
   const normalized = normalizeLocale(locale);
   const catalog = TRANSLATIONS[normalized] || TRANSLATIONS.en;
   const value = (catalog as Record<string, unknown>)[key];
   if (renderableTranslation(value)) return value;
+  if (normalized !== "en" && TRANSLATIONS[normalized] && fallbackReporter) fallbackReporter(normalized, key);
   if (normalized !== "en" && import.meta.env?.DEV) {
     console.error(`[i18n] Missing or invalid ${key} for ${normalized}`, value);
   }

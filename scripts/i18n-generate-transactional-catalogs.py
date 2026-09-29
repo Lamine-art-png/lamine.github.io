@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
+from i18n_quality import has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "shared/localization/transactional-source.json"
@@ -59,6 +60,8 @@ def validate_chunk(source: dict[str, str], translated: dict) -> dict[str, str]:
         value=value.strip()
         if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
             raise ValueError(f"placeholder_mismatch:{key}")
+        if has_marker_residue(value) and not has_marker_residue(original):
+            raise ValueError(f"marker_residue:{key}")
         value.encode("utf-8",errors="strict")
         out[key]=value
     return out

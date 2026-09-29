@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from i18n_quality import quality_errors, quality_report  # noqa: E402
+from i18n_quality import has_marker_residue, quality_errors, quality_report  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "shared" / "supported-locales.json"
@@ -69,6 +69,8 @@ def transactional_ready(locale: str, source: dict) -> bool:
         return False
     catalog = envelope.get("catalog")
     expected = stable_fingerprint(source.get("catalog") or {})
+    if isinstance(catalog, dict) and any(isinstance(v, str) and has_marker_residue(v) for v in catalog.values()):
+        return False
     return bool(
         envelope.get("schemaVersion") == 1
         and envelope.get("locale") == locale
@@ -101,6 +103,8 @@ def legal_ready(locale: str, canonical_hashes: dict[str, str] | None = None) -> 
         meta = json_file(base / f"{slug}.meta.json")
         if not html.exists() or html.stat().st_size < 1000 or not meta:
             return False
+        if has_marker_residue(re.sub(r"(?is)<script\b.*?</script\s*>", "", html.read_text(encoding="utf-8"))):
+            return False
         if meta.get("schemaVersion") != 1 or meta.get("locale") != locale or meta.get("status") != "complete-generated":
             return False
         if not isinstance(meta.get("sourceSha256"), str) or len(meta["sourceSha256"]) != 64:
@@ -122,6 +126,26 @@ def _canonical_legal_versions() -> dict[str, str]:
 
 
 CANONICAL_LEGAL_VERSIONS = _canonical_legal_versions()
+
+
+def _stripe_locale_table():
+    """Evaluate billing.py's locale tables without importing the API app."""
+    import ast
+    tree = ast.parse((ROOT / "agroai_api/app/api/v1/billing.py").read_text(encoding="utf-8"))
+    values = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if node.targets[0].id in ("_STRIPE_SUPPORTED_LOCALES", "_STRIPE_LOCALE_ALIASES"):
+                values[node.targets[0].id] = ast.literal_eval(node.value)
+    return values.get("_STRIPE_SUPPORTED_LOCALES", set()), values.get("_STRIPE_LOCALE_ALIASES", {})
+
+
+_STRIPE_SUPPORTED, _STRIPE_ALIASES = _stripe_locale_table()
+
+
+def stripe_locale(locale: str) -> str:
+    mapped = _STRIPE_ALIASES.get(locale, locale)
+    return mapped if mapped in _STRIPE_SUPPORTED else "auto"
 
 
 def canonical_legal_hashes() -> dict[str, str] | None:
@@ -210,6 +234,13 @@ def main() -> None:
             envelope = json_file(UI_DIR / f"{locale}.json") or {}
             report = quality_report(locale, ui_source["catalog"], envelope.get("catalog") or {})
             row["uiQuality"] = {k: v for k, v in report.items() if k not in ("locale", "dntViolations")}
+        row["billing"] = {"stripeCheckoutLocale": stripe_locale(locale), "agroaiBillingUi": locale}
+        # Voice: the effective locale is sent as the recognition hint and the
+        # realtime model answers in the resolved response language; spoken
+        # output quality is provider-dependent and the browser fallback voice
+        # is device-dependent. Recorded explicitly rather than implied.
+        row["voice"] = {"recognitionHint": locale, "responseLanguage": locale, "browserFallbackTts": "device-dependent"}
+        row["intelligence"] = {"preferredLanguage": locale}
         release_rows[locale] = row
     RELEASE_MATRIX_PATH.write_text(json.dumps({
         "schemaVersion": 1,

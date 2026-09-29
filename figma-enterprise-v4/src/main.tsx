@@ -127,8 +127,28 @@ const rootEl = document.getElementById("root");
 if (!rootEl) {
   bootFailure(new Error("Missing #root element"));
 } else {
-  import("./app/App.tsx")
-    .then(({ default: App }) => {
+  // Install the persisted locale's deployed catalog before the first render so
+  // a reload in any advertised language never paints English first. A missing
+  // catalog resolves false and the portal renders in its fallback locale.
+  // Signed verification/recovery links carry the locale the customer used when
+  // the email was issued, so another browser or device opens in that language.
+  // Elsewhere ?lang= only fills in when no explicit choice is stored.
+  const localeReady = Promise.all([import("./app/i18n"), import("./app/dynamicLocaleCatalog")])
+    .then(([{ getStoredLocale, setStoredLocale, canonicalizeSelectedLocale }, { preloadBundledLocaleCatalog }]) => {
+      const linkLocale = new URLSearchParams(window.location.search).get("lang");
+      const linkPath = ["/verify-email", "/recover-account", "/reset-password"].includes(window.location.pathname);
+      if (linkLocale && (linkPath || getStoredLocale() === "auto")) {
+        const requested = canonicalizeSelectedLocale(linkLocale);
+        return preloadBundledLocaleCatalog(requested).then((ready) => {
+          if (ready) setStoredLocale(requested);
+          return ready;
+        });
+      }
+      return preloadBundledLocaleCatalog(getStoredLocale());
+    })
+    .catch(() => false);
+  Promise.all([import("./app/App.tsx"), localeReady])
+    .then(([{ default: App }]) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
       // These modules are deliberately loaded after the portal has rendered.
