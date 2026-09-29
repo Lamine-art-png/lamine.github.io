@@ -144,3 +144,35 @@ def quality_errors(locale: str, source: dict[str, str], catalog: dict[str, str])
     if "nativeScriptShare" in report and report["nativeScriptShare"] < MIN_NATIVE_SCRIPT_SHARE:
         errors.append(f"native_script_share:{locale}:{report['nativeScriptShare']:.3f}<{MIN_NATIVE_SCRIPT_SHARE}")
     return errors
+
+
+# Serbian is digraphic. AGRO-AI presents Serbian in Cyrillic ("Српски"); some
+# provider outputs come back in Serbian Latin, so normalize deterministically.
+_SR_DIGRAPHS = {"Lj": "Љ", "LJ": "Љ", "lj": "љ", "Nj": "Њ", "NJ": "Њ", "nj": "њ", "Dž": "Џ", "DŽ": "Џ", "dž": "џ"}
+_SR_LETTERS = dict(zip(
+    "ABCČĆDĐEFGHIJKLMNOPRSŠTUVZŽabcčćdđefghijklmnoprsštuvzž",
+    "АБЦЧЋДЂЕФГХИЈКЛМНОПРСШТУВЗЖабцчћдђефгхијклмнопрсштувзж",
+))
+_WORD = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}|https?://\S+|[\w\u00C0-\u024F'’-]+")
+
+
+def serbian_latin_to_cyrillic(value: str, english_source: str) -> str:
+    """Transliterate Serbian-Latin words; keep tokens copied from the English source."""
+    keep = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9.+&/_-]*", english_source))
+
+    def convert(match: re.Match) -> str:
+        word = match.group(0)
+        if word.startswith("{") or word.startswith("http") or word in keep or not re.search(r"[A-Za-zČĆĐŠŽčćđšž]", word):
+            return word
+        if re.search(r"[A-Z]{2,}|\d", word):  # acronyms / identifiers
+            return word
+        out, index = [], 0
+        while index < len(word):
+            pair = word[index:index + 2]
+            if pair in _SR_DIGRAPHS:
+                out.append(_SR_DIGRAPHS[pair]); index += 2
+                continue
+            out.append(_SR_LETTERS.get(word[index], word[index])); index += 1
+        return "".join(out)
+
+    return _WORD.sub(convert, value)

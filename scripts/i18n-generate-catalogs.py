@@ -18,7 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
-from i18n_quality import do_not_translate, has_marker_residue, english_leak_keys, quality_errors, quality_report
+from i18n_quality import do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -459,6 +459,10 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
                 sibling = next((catalog[alias] for alias in aliases_by_value[value] if alias in catalog), None)
                 if sibling is not None:
                     catalog[key] = sibling
+        if locale.split("-", 1)[0] == "sr":
+            for key, value in list(catalog.items()):
+                if not do_not_translate(source[key]):
+                    catalog[key] = serbian_latin_to_cyrillic(value, source[key])
         repair_english_leaks(locale, source, catalog, endpoint)
     print(json.dumps({"quality": quality_report(locale, source, catalog)}), flush=True)
     validate_full(source, catalog, locale)
