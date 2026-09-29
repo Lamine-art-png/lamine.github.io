@@ -3,6 +3,13 @@ import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
+(window as typeof window & { __AGROAI_ENTRY_LOADED__?: boolean }).__AGROAI_ENTRY_LOADED__ = true;
+try {
+  window.sessionStorage.removeItem("agroai_entry_boot_recovery_v1");
+} catch {
+  // Safari private/restricted storage must never prevent the portal from booting.
+}
+
 const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal";
 const runtimeSurfaceName = standalonePlatformHost ? "developer platform" : "portal";
