@@ -107,7 +107,21 @@ def legal_ready(locale: str, canonical_hashes: dict[str, str] | None = None) -> 
             return False
         if int(meta.get("translatedTextNodes") or 0) < 10:
             return False
+        if meta.get("legalVersion") != CANONICAL_LEGAL_VERSIONS[slug]:
+            return False
     return True
+
+
+def _canonical_legal_versions() -> dict[str, str]:
+    auth = (ROOT / "agroai_api/app/api/v1/auth.py").read_text(encoding="utf-8")
+    out = {}
+    for slug, name in (("terms-of-service", "SELF_SERVICE_TERMS_VERSION"), ("privacy-policy", "SELF_SERVICE_PRIVACY_VERSION")):
+        match = re.search(rf'^{name}\s*=\s*"([^"]+)"', auth, flags=re.M)
+        out[slug] = match.group(1) if match else ""
+    return out
+
+
+CANONICAL_LEGAL_VERSIONS = _canonical_legal_versions()
 
 
 def canonical_legal_hashes() -> dict[str, str] | None:

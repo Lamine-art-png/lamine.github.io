@@ -21,7 +21,37 @@ DOCS = {
 TOKEN_RE = re.compile(r"(?is)(<!--.*?-->|<script\b.*?</script\s*>|<style\b.*?</style\s*>|<[^>]+>)")
 WORD_RE = re.compile(r"[A-Za-z]{2,}")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+# Navigation labels injected by platform-api/trust/legal-integration.js. They are
+# translated with the snapshot and embedded in it, so the chrome around a
+# localized legal document is in the same language as the document.
+LEGAL_CHROME = {
+    "trustLegal": "AGRO-AI Trust & Legal",
+    "trustLegalAria": "AGRO-AI Trust and Legal",
+    "description": "Contractual documents and the standards that explain how AGRO-AI governs agricultural, operational and personal data.",
+    "trustData": "Trust & data governance",
+    "trustCenter": "Trust Center",
+    "dataGovernance": "Data Governance",
+    "aiData": "AI & Model Data Use",
+    "security": "Security",
+    "legalDocuments": "Legal documents",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "pilot": "Pilot Agreement",
+    "footer": "Trust & Legal",
+}
 MAX_KEYS = 10
+
+
+def canonical_legal_versions() -> dict[str, str]:
+    """The legal version identifiers recorded at clickwrap acceptance."""
+    auth = (ROOT / "agroai_api/app/api/v1/auth.py").read_text(encoding="utf-8")
+    versions = {}
+    for slug, name in (("terms-of-service", "SELF_SERVICE_TERMS_VERSION"), ("privacy-policy", "SELF_SERVICE_PRIVACY_VERSION")):
+        match = re.search(rf'^{name}\s*=\s*"([^"]+)"', auth, flags=re.M)
+        if not match:
+            raise RuntimeError(f"canonical_legal_version_missing:{name}")
+        versions[slug] = match.group(1)
+    return versions
 MAX_CHARS = 1200
 ATTEMPTS = 4
 
@@ -179,8 +209,12 @@ def localize_document(slug, locale, endpoint, outdir, source_dir=None):
             rendered = re.sub(r'(<html\b[^>]*\blang=)(["\']).*?\2', rf'\1"{locale}"', rendered, count=1, flags=re.I)
         else:
             rendered = re.sub(r"<html\b", f'<html lang="{locale}"', rendered, count=1, flags=re.I)
+    chrome = resilient(locale, dict(LEGAL_CHROME), endpoint)
+    chrome_json = json.dumps(chrome, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     marker = (
+        f'<script type="application/json" id="agroai-legal-chrome">{chrome_json}</script>'
         f'<meta name="agroai-legal-locale" content="{locale}">'
+        f'<meta name="agroai-legal-version" content="{canonical_legal_versions()[slug]}">'
         f'<meta name="agroai-legal-source-sha256" content="{source_hash}">'
         f'<link rel="canonical" href="{canonical_url}">'
     )
@@ -193,6 +227,8 @@ def localize_document(slug, locale, endpoint, outdir, source_dir=None):
         "locale": locale,
         "canonicalUrl": canonical_url,
         "sourceSha256": source_hash,
+        "legalVersion": canonical_legal_versions()[slug],
+        "presentation": "translation-of-canonical-english",
         "visibleTextNodes": len(source),
         "translatedTextNodes": changed,
         "status": "complete-generated",
