@@ -55,7 +55,7 @@ for (const locale of locales) {
       expect(await englishLeaks(page, catalog), `${locale} signup step ${step} renders English`).toEqual([]);
       expect(await untranslatedEnglishProse(page), `${locale} signup step ${step} renders uninventoried English`).toEqual([]);
     });
-    expect(reachedLegal, `${locale} reached the legal acceptance step`).toBeTruthy();
+    expect(reachedLegal, `${locale} walked every signup step to the final submit`).toBeTruthy();
     await page.reload();
     await expect(languageSelect(page)).toHaveValue(locale);
 

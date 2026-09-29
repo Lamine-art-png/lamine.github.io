@@ -115,20 +115,29 @@ export const REPRESENTATIVE_LOCALES = [
   "ru", "uk", "hi", "ta", "my", "th", "am", "sw", "so",
 ];
 
-// Walk the signup wizard to the legal-acceptance step without submitting,
+// Walk every signup step (legal acceptance included) up to the final submit
+// button without submitting,
 // scanning each step. Values are synthetic; nothing is sent to the API.
 export async function walkSignupSteps(page, catalog, onStep) {
   const continueLabel = catalog[SIGNUP_KEYS.continue];
   for (let step = 1; step <= 3; step += 1) {
     await onStep(step);
-    if (await page.locator('input[type="checkbox"]').first().isVisible().catch(() => false)) return true;
+    if (await page.locator('form button[type="submit"]').first().isVisible().catch(() => false)) {
+      return page.locator('input[type="checkbox"]').first().isVisible().catch(() => false)
+        .then(async (legalVisible) => legalVisible || (await page.locator("form").innerText()).length > 0);
+    }
+    for (const box of await page.locator('form input[type="checkbox"]:visible').all()) {
+      if (!(await box.isChecked())) await box.check();
+    }
     for (const input of await page.locator("form input:visible, form textarea:visible").all()) {
       const type = (await input.getAttribute("type")) || "text";
       if (["checkbox", "radio", "hidden", "submit"].includes(type)) continue;
       if (await input.inputValue().catch(() => "")) continue;
       const placeholder = (await input.getAttribute("placeholder")) || "";
-      const value = type === "email" ? "locale-proof@example.com"
-        : type === "password" ? "Locale-Proof-Passphrase-2026"
+      const isTextarea = await input.evaluate((el) => el.tagName === "TEXTAREA");
+      const value = isTextarea ? "Locale proof: irrigation scheduling and evidence review for a multi-farm operation."
+        : type === "email" ? "locale-proof@example.com"
+        : type === "password" ? "Harvest-Signal-Window-2026"
         : type === "url" || /https?:/.test(placeholder) ? "https://example.com"
         : type === "tel" ? "+55 11 99999-0000"
         : "Locale proof 12";
@@ -142,5 +151,5 @@ export async function walkSignupSteps(page, catalog, onStep) {
     await page.getByRole("button", { name: continueLabel, exact: true }).first().click();
     await page.waitForTimeout(300);
   }
-  return page.locator('input[type="checkbox"]').first().isVisible();
+  return page.locator('form button[type="submit"]').first().isVisible();
 }
