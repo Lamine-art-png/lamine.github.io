@@ -24,6 +24,8 @@ jobs:
         run: npm install --no-save --no-package-lock @babel/parser@7.28.4
       - name: Generate and validate exact-head inventory
         run: node tests/i18n-inventory.mjs | tee i18n-inventory-summary.txt
+      - name: Validate signup registration contract
+        run: node tests/auth-registration-contract.mjs
       - name: Upload inventory evidence
         if: always()
         uses: actions/upload-artifact@v4
