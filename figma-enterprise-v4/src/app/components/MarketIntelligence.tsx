@@ -322,7 +322,7 @@ export function MarketIntelligence() {
                 <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: "#E7F4EC", color: "#1F6A45" }}>{selected.country_code}</span>
                 <span className="text-sm font-semibold" style={{ color: "#10231B" }}>{selected.commodity} · {selected.season}</span>
                 <span className="text-xs" style={{ color: "#7B877F" }}>{selected.region || ""}</span>
-                <span className="ml-auto rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: "#F1EFE8", color: "#59665E" }}>{selected.market_structure}</span>
+                <span className="ms-auto rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: "#F1EFE8", color: "#59665E" }}>{selected.market_structure}</span>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <SmallMetric label={tx("Expected production")} value={quantity(selected.expected_production, selected.quantity_unit, locale)} />
@@ -347,7 +347,7 @@ export function MarketIntelligence() {
           <div className="flex items-center gap-2"><TrendingUp className="h-5 w-5" style={{ color: "#B6E85B" }} /><h2 className="text-lg font-semibold">{tx("What needs attention")}</h2></div>
           <div className="mt-5 space-y-3">
             {overview.attention.length ? overview.attention.slice(0, 3).map((item, index) => (
-              <button key={`${item.title}-${index}`} onClick={() => item.position_id && setSelectedId(item.position_id)} className="w-full rounded-2xl border p-4 text-left transition hover:bg-white/[0.04]" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
+              <button key={`${item.title}-${index}`} onClick={() => item.position_id && setSelectedId(item.position_id)} className="w-full rounded-2xl border p-4 text-start transition hover:bg-white/[0.04]" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: item.importance === "high" ? "#F5BC9F" : "#DDEB8F" }}>{item.importance}</div>
                 <div className="mt-2 text-sm font-semibold">{item.title}</div>
                 <div className="mt-1 text-xs leading-5" style={{ color: "rgba(255,255,255,0.64)" }}>{item.summary}</div>

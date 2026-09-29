@@ -275,13 +275,13 @@ export function MainLayout() {
             aria-label="Close navigation"
           />
           <aside
-            className="absolute inset-y-0 left-0 flex h-[100dvh] w-[min(92vw,360px)] flex-col overflow-hidden shadow-2xl"
+            className="absolute inset-y-0 start-0 flex h-[100dvh] w-[min(92vw,360px)] flex-col overflow-hidden shadow-2xl"
             style={{ background: "#061D15", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <button
               type="button"
               onClick={() => setMobileNavOpen(false)}
-              className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-xl"
+              className="absolute end-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-xl"
               style={{ color: "white", background: "rgba(255,255,255,0.08)" }}
               aria-label="Close navigation"
             >
@@ -347,7 +347,7 @@ function SidebarContent({
             <ImageWithFallback src={logoImg} alt="AGRO-AI" className="h-full w-full object-contain" />
           </div>
           {!isCollapsed ? (
-            <div className="min-w-0 flex-1 pr-8">
+            <div className="min-w-0 flex-1 pe-8">
               <div className="text-[13px] font-semibold leading-tight tracking-tight text-white">AGRO-AI</div>
               <div className="truncate text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.38)" }}>{t("fieldOperatingRoom")}</div>
             </div>
@@ -356,7 +356,7 @@ function SidebarContent({
             <button
               type="button"
               onClick={onToggleCollapsed}
-              className={isCollapsed ? "flex h-9 w-9 items-center justify-center rounded-lg" : "absolute right-3 top-4 flex h-9 w-9 items-center justify-center rounded-lg"}
+              className={isCollapsed ? "flex h-9 w-9 items-center justify-center rounded-lg" : "absolute end-3 top-4 flex h-9 w-9 items-center justify-center rounded-lg"}
               style={{ color: "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.06)" }}
               aria-label={isCollapsed ? "Open sidebar" : "Close sidebar"}
               title={isCollapsed ? "Open sidebar" : "Close sidebar"}
@@ -435,10 +435,10 @@ function SidebarContent({
           {!isCollapsed ? <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>{t("account")}</div> : null}
           <div className="space-y-1">
             {accountItems.map((item) => <AccountNavItem key={item.path} item={item} onNavigate={onNavigate} collapsed={isCollapsed} />)}
-            <button type="button" onClick={() => { onNavigate(); replayProductTour(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? "Product tour" : undefined}>
+            <button type="button" onClick={() => { onNavigate(); replayProductTour(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-start text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? "Product tour" : undefined}>
               <HelpCircle className="h-4 w-4" /> {!isCollapsed ? "Product tour" : null}
             </button>
-            <button type="button" onClick={() => { onNavigate(); onLogout(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? t("logout") : undefined}>
+            <button type="button" onClick={() => { onNavigate(); onLogout(); }} className={isCollapsed ? "flex h-11 w-full items-center justify-center rounded-lg" : "flex h-11 w-full items-center gap-2 rounded-lg px-2 text-start text-[12px] transition-colors hover:bg-white/10"} style={{ color: "rgba(255,255,255,0.62)" }} title={isCollapsed ? t("logout") : undefined}>
               <LogOut className="h-4 w-4" /> {!isCollapsed ? t("logout") : null}
             </button>
           </div>
@@ -488,7 +488,7 @@ function NavSection({ title, items, onNavigate, collapsed = false }: { title: st
               aria-label={item.name}
             >
               {collapsed ? (
-                <span className="relative"><Icon className="h-[18px] w-[18px]" />{item.locked ? <Lock className="absolute -bottom-1 -right-1 h-2.5 w-2.5" /> : null}</span>
+                <span className="relative"><Icon className="h-[18px] w-[18px]" />{item.locked ? <Lock className="absolute -bottom-1 -end-1 h-2.5 w-2.5" /> : null}</span>
               ) : (
                 <span className="flex min-w-0 items-center gap-2.5"><Icon className="h-4 w-4 flex-shrink-0" /><span className="truncate">{item.name}</span>{item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}</span>
               )}

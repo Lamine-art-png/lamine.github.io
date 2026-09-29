@@ -53,7 +53,7 @@ export function Agents() {
 
       <div className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
         <div><h1 className="text-[28px] font-semibold mb-1" style={{ color: TEXT }}>Agents</h1><p className="text-[13px]" style={{ color: MUTED }}>Commercially controlled agent runs for the active workspace.</p></div>
-        {!canRunAgent ? <button type="button" onClick={showUpgrade} className="w-full text-left"><InlineState title="Agent execution requires Professional or above." detail="Open the upgrade path to unlock safe agent execution and plan-specific run capacity." /></button> : null}
+        {!canRunAgent ? <button type="button" onClick={showUpgrade} className="w-full text-start"><InlineState title="Agent execution requires Professional or above." detail="Open the upgrade path to unlock safe agent execution and plan-specific run capacity." /></button> : null}
         {runs.isLoading ? <InlineState title="Loading agent runs" /> : null}
         {runningTask ? <InlineState title={`Running ${runningTask.replaceAll("_", " ")}`} /> : null}
         {runs.isUnavailable ? <InlineState title="Agent orchestration endpoint not connected yet." /> : null}
@@ -68,7 +68,7 @@ export function Agents() {
 
           <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="px-6 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>Actions</div><h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Agent actions</h3></div>
-            <div className="grid gap-3 p-5">{["gap_analysis", "proof_draft", "readiness_refresh", "irrigation_recommendation", "integration_diagnosis"].map((task) => <button key={task} type="button" disabled={runs.isUnavailable || Boolean(runningTask)} onClick={() => canRunAgent ? runAgent(task) : showUpgrade()} className="text-left rounded-xl p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[13px] font-semibold mb-1" style={{ color: TEXT }}>{task.replaceAll("_", " ")}</div><div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>{!canRunAgent ? "Professional required — click to upgrade." : runningTask === task ? "Running against live AI gateway." : runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Send this action to the live agent endpoint."}</div></button>)}</div>
+            <div className="grid gap-3 p-5">{["gap_analysis", "proof_draft", "readiness_refresh", "irrigation_recommendation", "integration_diagnosis"].map((task) => <button key={task} type="button" disabled={runs.isUnavailable || Boolean(runningTask)} onClick={() => canRunAgent ? runAgent(task) : showUpgrade()} className="text-start rounded-xl p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[13px] font-semibold mb-1" style={{ color: TEXT }}>{task.replaceAll("_", " ")}</div><div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>{!canRunAgent ? "Professional required — click to upgrade." : runningTask === task ? "Running against live AI gateway." : runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Send this action to the live agent endpoint."}</div></button>)}</div>
           </section>
         </div>
       </div>

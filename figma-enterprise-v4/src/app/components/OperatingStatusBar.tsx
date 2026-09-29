@@ -85,7 +85,7 @@ export function OperatingStatusBar() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left sm:gap-3"
+            className="flex min-w-0 flex-1 items-center gap-2 text-start sm:gap-3"
           >
             <StatusBadge label={tx(brief.mode === "live" ? "Live operations" : "Evaluation sample")} tone={brief.mode === "live" ? "good" : "warn"} />
             <span className="max-w-[40vw] truncate text-[12px] font-medium sm:hidden" style={{ color: TEXT }}>
@@ -130,7 +130,7 @@ export function OperatingStatusBar() {
       {open ? (
         <div className="fixed inset-0 z-50">
           <button className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} aria-label={tx("Close intelligence drawer")} />
-          <aside className="absolute right-0 top-0 h-full w-full overflow-y-auto shadow-2xl sm:w-[560px] sm:max-w-[96vw]" style={{ background: SURFACE, paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <aside className="absolute end-0 top-0 h-full w-full overflow-y-auto shadow-2xl sm:w-[560px] sm:max-w-[96vw]" style={{ background: SURFACE, paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
             <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
               <div className="min-w-0">
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{tx("Operating intelligence")}</div>

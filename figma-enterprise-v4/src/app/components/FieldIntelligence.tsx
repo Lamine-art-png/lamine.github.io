@@ -434,7 +434,7 @@ function Composer({ t, workspaceId, onSaved }: any) {
                 <span className="truncate">{file.name}</span>
                 <button type="button" onClick={() => removeAttachment(index)}
                   aria-label={t("fieldIntel.removeAttachment")}
-                  className="ml-2 font-semibold text-[#B23B2E]">
+                  className="ms-2 font-semibold text-[#B23B2E]">
                   {t("fieldIntel.removeAttachment")}
                 </button>
               </li>
@@ -538,7 +538,7 @@ function Composer({ t, workspaceId, onSaved }: any) {
             <li key={`${file.name}-${index}`} className="flex items-center justify-between rounded border border-[#D6DDD0] px-2 py-1 text-[12px] text-[#3B4A41]">
               <span className="truncate">{file.name}</span>
               <button type="button" onClick={() => removeAttachment(index)}
-                aria-label={t("fieldIntel.removeAttachment")} className="ml-2 font-semibold text-[#B23B2E]">
+                aria-label={t("fieldIntel.removeAttachment")} className="ms-2 font-semibold text-[#B23B2E]">
                 {t("fieldIntel.removeAttachment")}
               </button>
             </li>
@@ -559,10 +559,10 @@ function FilterBar({ t, query, setQuery, severityFilter, setSeverityFilter, stat
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <div className="relative flex-1 min-w-[160px]">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" aria-hidden />
+        <Search className="pointer-events-none absolute start-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" aria-hidden />
         <input value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder={t("fieldIntel.searchPlaceholder")} aria-label={t("fieldIntel.searchPlaceholder")}
-          className="w-full rounded-lg border border-[#D6DDD0] py-2 pl-8 pr-3 text-[13px]" />
+          className="w-full rounded-lg border border-[#D6DDD0] py-2 ps-8 pe-3 text-[13px]" />
       </div>
       <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}
         aria-label={t("fieldIntel.filterSeverity")} className="rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px]">
@@ -608,7 +608,7 @@ function Timeline({ t, locals, observations, onRetry, onDelete, onSelect }: any)
       {observations.map((obs: Observation) => (
         <li key={obs.id}>
           <button type="button" onClick={() => onSelect(obs)}
-            className="w-full rounded-xl border border-[#D6DDD0] bg-white p-3 text-left hover:border-[#2D6A4F]">
+            className="w-full rounded-xl border border-[#D6DDD0] bg-white p-3 text-start hover:border-[#2D6A4F]">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <SeverityDot severity={obs.severity} />

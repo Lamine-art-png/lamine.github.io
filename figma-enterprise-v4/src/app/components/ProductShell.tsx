@@ -198,7 +198,7 @@ function Row({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="flex items-center justify-between gap-6 border-t py-3 text-[13px]" style={{ borderColor: BORDER }}>
       <span style={{ color: MUTED }}>{label}</span>
-      <span className="text-right font-medium" style={{ color: TEXT }}>{safe(value)}</span>
+      <span className="text-end font-medium" style={{ color: TEXT }}>{safe(value)}</span>
     </div>
   );
 }
@@ -215,7 +215,7 @@ function Banner({ message, tone = "good" }: { message: string; tone?: "good" | "
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <button type="button" onClick={() => setOpen((value) => !value)} className="w-full rounded-xl px-4 py-3 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+    <button type="button" onClick={() => setOpen((value) => !value)} className="w-full rounded-xl px-4 py-3 text-start" style={{ background: BG, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between gap-4">
         <span className="text-[14px] font-semibold" style={{ color: TEXT }}>{question}</span>
         <span className="text-[18px]" style={{ color: MUTED }}>{open ? "−" : "+"}</span>
@@ -358,7 +358,7 @@ export function PricingPage() {
             <table className="w-full min-w-[860px] border-collapse text-[13px]">
               <thead>
                 <tr style={{ color: MUTED }}>
-                  <th className="py-3 text-left font-medium">Capability</th>
+                  <th className="py-3 text-start font-medium">Capability</th>
                   {productPlans.plans.map((plan) => <th key={plan.id} className="py-3 text-center font-medium">{plan.name}</th>)}
                 </tr>
               </thead>
@@ -634,7 +634,7 @@ export function AdminRequestsPage() {
         <Panel title="Inbox">
           <div className="space-y-3">
             {requests.map((row) => (
-              <button key={row.id} type="button" onClick={() => setSelected(row)} className="w-full rounded-xl px-4 py-3 text-left" style={{ background: selected?.id === row.id ? "#EEF8E8" : BG, border: `1px solid ${BORDER}` }}>
+              <button key={row.id} type="button" onClick={() => setSelected(row)} className="w-full rounded-xl px-4 py-3 text-start" style={{ background: selected?.id === row.id ? "#EEF8E8" : BG, border: `1px solid ${BORDER}` }}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{safe(row.subject)}</div>
                   <StatusBadge label={safe(row.status)} tone="neutral" />

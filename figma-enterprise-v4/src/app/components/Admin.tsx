@@ -226,8 +226,8 @@ export function CustomerAccountsPage() {
         <section className="rounded-2xl p-4 md:p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_180px_160px_160px_170px]">
             <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4" style={{ color: MUTED }} />
-              <input value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} placeholder="Search email, name, or organization" className="h-10 w-full rounded-lg border bg-white pl-10 pr-3 text-[13px] outline-none" style={{ borderColor: BORDER, color: TEXT }} />
+              <Search className="pointer-events-none absolute start-3 top-3 h-4 w-4" style={{ color: MUTED }} />
+              <input value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} placeholder="Search email, name, or organization" className="h-10 w-full rounded-lg border bg-white ps-10 pe-3 text-[13px] outline-none" style={{ borderColor: BORDER, color: TEXT }} />
             </label>
             <FilterSelect value={verification} onChange={(value) => { setVerification(value as typeof verification); setOffset(0); }} options={[["all", "All verification"], ["verified", "Verified"], ["unverified", "Unverified"]]} />
             <FilterSelect value={active} onChange={(value) => { setActive(value as typeof active); setOffset(0); }} options={[["all", "All accounts"], ["active", "Active"], ["inactive", "Inactive"]]} />
@@ -245,7 +245,7 @@ export function CustomerAccountsPage() {
             <span className="text-[11px]" style={{ color: MUTED }}>{data?.generated_at ? `Updated ${displayDate(data.generated_at)}` : ""}</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] border-collapse text-left">
+            <table className="w-full min-w-[1120px] border-collapse text-start">
               <thead>
                 <tr style={{ background: BG }}>
                   {['Customer', 'Registered', 'Verification', 'Access', 'Last login', 'Organization', 'Plan', 'Workspaces', 'Activity'].map((label) => <th key={label} className="border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ borderColor: BORDER, color: MUTED }}>{label}</th>)}
@@ -326,7 +326,7 @@ export function SystemHealthPage() {
         </section>
 
         <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between text-left">
+          <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between text-start">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Technical details</div>
               <div className="mt-2 text-[18px] font-semibold" style={{ color: TEXT }}>Advanced system context</div>
@@ -354,7 +354,7 @@ function Card({ title, rows }: { title: string; rows: [string, string][] }) {
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-4 text-[13px]">
             <span style={{ color: MUTED }}>{label}</span>
-            <span className="text-right font-semibold" style={{ color: TEXT }}>{value}</span>
+            <span className="text-end font-semibold" style={{ color: TEXT }}>{value}</span>
           </div>
         ))}
       </div>

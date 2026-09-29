@@ -127,7 +127,7 @@ export function PlatformSelfServiceGate() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F3F1E9] text-[#10231B]">
         <Loader2 className="h-5 w-5 animate-spin text-[#315D46]" />
-        <span className="ml-3 text-[12px] font-semibold">Preparing your TEST developer workspace…</span>
+        <span className="ms-3 text-[12px] font-semibold">Preparing your TEST developer workspace…</span>
       </div>
     );
   }

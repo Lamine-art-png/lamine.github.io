@@ -157,7 +157,7 @@ export function SyncCenter() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 max-h-[min(72dvh,560px)] w-[min(calc(100vw-24px),380px)] overflow-y-auto overscroll-contain rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
+        <div className="absolute end-0 z-50 mt-2 max-h-[min(72dvh,560px)] w-[min(calc(100vw-24px),380px)] overflow-y-auto overscroll-contain rounded-2xl border border-[#D6DDD0] bg-white p-3 shadow-xl"
           role="dialog" aria-label={t("syncCenter.title")}>
           <div className="flex items-center justify-between">
             <h3 className="text-[14px] font-semibold text-[#10231B]">{t("syncCenter.title")}</h3>

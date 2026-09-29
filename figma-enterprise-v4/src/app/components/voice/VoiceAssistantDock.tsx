@@ -674,14 +674,14 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
   return <>
     {!open && (
       <button type="button" onClick={() => void connect()}
-        className="fixed bottom-6 right-6 z-[80] inline-flex min-h-[48px] items-center gap-2 rounded-full bg-[#10231B] px-5 text-[13px] font-semibold text-white shadow-[0_18px_50px_rgba(16,35,27,0.28)] hover:bg-[#17392A]"
+        className="fixed bottom-6 end-6 z-[80] inline-flex min-h-[48px] items-center gap-2 rounded-full bg-[#10231B] px-5 text-[13px] font-semibold text-white shadow-[0_18px_50px_rgba(16,35,27,0.28)] hover:bg-[#17392A]"
         aria-label={surface === "field" ? "Start Live AGRO-AI" : "Start AGRO-AI voice"}>
         <Mic className="h-4 w-4" /> {surface === "field" ? "Live AGRO-AI" : "Voice"}
       </button>
     )}
 
     {open && (
-      <aside className="fixed bottom-5 right-5 z-[90] w-[min(420px,calc(100vw-24px))] overflow-hidden rounded-[22px] border border-[#CAD6CE] bg-[#FFFDF8] shadow-[0_28px_80px_rgba(16,35,27,0.28)]" aria-label="AGRO-AI realtime voice">
+      <aside className="fixed bottom-5 end-5 z-[90] w-[min(420px,calc(100vw-24px))] overflow-hidden rounded-[22px] border border-[#CAD6CE] bg-[#FFFDF8] shadow-[0_28px_80px_rgba(16,35,27,0.28)]" aria-label="AGRO-AI realtime voice">
         <div className="bg-[#10231B] px-4 py-4 text-white">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -729,7 +729,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
             <div className="mt-1 max-w-[280px] text-[12px] leading-5 text-[#65736A]">Ask about the operation, field evidence, or request an AEP action. You can interrupt AGRO-AI while it is speaking.</div>
           </div>}
           <div className="space-y-3">
-            {rows.slice(-10).map((row) => <div key={row.id} className={row.role === "user" ? "ml-8" : "mr-8"}>
+            {rows.slice(-10).map((row) => <div key={row.id} className={row.role === "user" ? "ms-8" : "me-8"}>
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#819087]">{row.role === "user" ? "You" : "AGRO-AI"}</div>
               <div className={`rounded-xl px-3 py-2 text-[12px] leading-5 ${row.role === "user" ? "bg-[#10231B] text-white" : "border border-[#D6DDD0] bg-white text-[#263A30]"}`}>{row.content}</div>
             </div>)}
@@ -740,7 +740,7 @@ export function VoiceAssistantDock({ surface, onExchange }: Props) {
                 type="button"
                 onClick={() => void downloadVoiceArtifact(artifact)}
                 disabled={artifactBusyId === String(artifact.id || artifact.filename)}
-                className="flex w-full items-center gap-2 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-3 py-2 text-left text-[12px] font-semibold text-[#16533C] disabled:opacity-60"
+                className="flex w-full items-center gap-2 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-3 py-2 text-start text-[12px] font-semibold text-[#16533C] disabled:opacity-60"
                 aria-label={cleanText(artifact.filename)}
               >
                 <Download className="h-4 w-4 shrink-0" />

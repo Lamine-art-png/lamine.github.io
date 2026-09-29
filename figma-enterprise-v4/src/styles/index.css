@@ -3,3 +3,12 @@
 @import './theme.css';
 @import './agro-theme.css';
 @import './globals.css';
+
+/* Right-to-left locales (ar, fa, ur): mirror icons whose meaning is directional
+   (next/previous, forward/back). Layout mirrors through logical utilities. */
+[dir="rtl"] :is(.lucide-chevron-right, .lucide-chevron-left, .lucide-chevrons-right, .lucide-chevrons-left,
+  .lucide-arrow-right, .lucide-arrow-left, .lucide-arrow-up-right, .lucide-move-right, .lucide-move-left,
+  .lucide-corner-down-right, .lucide-corner-down-left, .lucide-log-out, .lucide-log-in,
+  .lucide-panel-left, .lucide-panel-right, .lucide-panel-left-close, .lucide-panel-left-open, .lucide-send) {
+  transform: scaleX(-1);
+}

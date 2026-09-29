@@ -403,7 +403,7 @@ export function PlatformApplicationGate() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F3F1E9]">
         <Loader2 className="h-5 w-5 animate-spin text-[#315D46]" />
-        <span className="ml-3 text-[12px] font-semibold">Loading Platform access…</span>
+        <span className="ms-3 text-[12px] font-semibold">Loading Platform access…</span>
       </div>
     );
   }

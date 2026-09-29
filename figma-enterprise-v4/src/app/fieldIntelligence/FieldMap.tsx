@@ -190,7 +190,7 @@ export function FieldMap({ t, observations, selectedId, onSelect, workspaceId }:
                   <button
                     type="button"
                     onClick={() => observation && onSelect?.(observation)}
-                    className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[12px] text-[#3B4A41] hover:bg-white"
+                    className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-start text-[12px] text-[#3B4A41] hover:bg-white"
                   >
                     <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full"
                       style={{ background: feature.properties.color }} />

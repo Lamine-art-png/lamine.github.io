@@ -51,7 +51,7 @@ export function UploadStatusToast() {
     const title = failed ? COPY.failed.label : complete ? COPY.complete.label : stored ? COPY.stored.label : COPY.uploading.label;
 
     return (
-      <div className="fixed right-6 top-6 z-[150] w-[390px] max-w-[calc(100vw-32px)] rounded-2xl p-4 shadow-2xl" style={{ background: "#FFFEFA", border: `1px solid ${failed ? "rgba(153,27,27,0.28)" : "rgba(16,35,27,0.18)"}` }} role="status" aria-live="polite">
+      <div className="fixed end-6 top-6 z-[150] w-[390px] max-w-[calc(100vw-32px)] rounded-2xl p-4 shadow-2xl" style={{ background: "#FFFEFA", border: `1px solid ${failed ? "rgba(153,27,27,0.28)" : "rgba(16,35,27,0.18)"}` }} role="status" aria-live="polite">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: failed ? "#FEF2F2" : complete ? "#ECFDF3" : "#EEF8E8", color: failed ? "#991B1B" : "#0D5B3D" }}>
             <Icon size={18} className={state.phase === "uploading" ? "animate-spin" : ""} />

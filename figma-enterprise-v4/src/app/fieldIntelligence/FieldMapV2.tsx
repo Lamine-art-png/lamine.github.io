@@ -396,7 +396,7 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
     return <div className="rounded-xl border border-[#D6DDD0] bg-[#F2F5F0] p-4" role="region" aria-label={t("fieldIntel.map")}>
       <div className="flex items-center gap-2 text-[13px] font-semibold text-[#10231B]"><MapPin className="h-4 w-4" />{t("fieldIntel.mapFallback")}</div>
       <div className="mt-3 space-y-2">
-        {recentPoints.slice(0, 8).map((point) => <button key={point.observation.id} type="button" onClick={() => onSelect?.(point.observation)} className="flex w-full items-start gap-2 rounded-lg border border-[#D6DDD0] bg-white p-3 text-left">
+        {recentPoints.slice(0, 8).map((point) => <button key={point.observation.id} type="button" onClick={() => onSelect?.(point.observation)} className="flex w-full items-start gap-2 rounded-lg border border-[#D6DDD0] bg-white p-3 text-start">
           <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: SEVERITY_COLORS[point.severity] || SEVERITY_COLORS.info }} />
           <span><span className="block text-[12px] font-semibold text-[#10231B]">{safeText(point.observation.field_name) || t("fieldIntel.unassignedField")}</span><span className="mt-1 block line-clamp-2 text-[11px] text-[#65736A]">{summaryFor(point.observation) || t("fieldIntel.needsReview")}</span></span>
         </button>)}
@@ -413,11 +413,11 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
       <div className="relative min-h-[420px] bg-[#E8ECE7] lg:min-h-[520px]">
         <div ref={containerRef} className="absolute inset-0" role="region" aria-label={t("fieldIntel.map")} />
         {!ready && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#F4F6F2]/75"><Loader2 className="h-6 w-6 animate-spin text-[#2D6A4F]" /></div>}
-        <div className="absolute left-3 top-3 flex gap-2">
+        <div className="absolute start-3 top-3 flex gap-2">
           <button type="button" onClick={focusActivity} title={t("fieldIntel.map")} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/80 bg-white/95 text-[#10231B] shadow"><Navigation className="h-4 w-4" /></button>
           <button type="button" onClick={() => { requestCurrentLocation(); if (currentLocation) mapRef.current?.easeTo?.({ center: currentLocation, zoom: 16 }); }} title={t("fieldIntel.captureLocation")} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/80 bg-white/95 text-[#10231B] shadow"><LocateFixed className="h-4 w-4" /></button>
         </div>
-        {!points.length && <div className="pointer-events-none absolute bottom-3 left-3 right-3 rounded-xl border border-white/70 bg-white/92 p-3 shadow-lg backdrop-blur">
+        {!points.length && <div className="pointer-events-none absolute bottom-3 start-3 end-3 rounded-xl border border-white/70 bg-white/92 p-3 shadow-lg backdrop-blur">
           <div className="flex items-center gap-2 text-[12px] font-semibold text-[#10231B]"><MapPin className="h-4 w-4 text-[#2D6A4F]" />{t("fieldIntel.noGeolocated")}</div>
         </div>}
       </div>
@@ -457,9 +457,9 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
           {recentPoints.slice(0, 5).map((point) => {
             const observation = point.observation;
             const active = String(observation.id) === focusedId;
-            return <button key={observation.id} type="button" onClick={() => setFocusedId(String(observation.id))} className={`w-full rounded-lg border p-2.5 text-left transition ${active ? "border-[#8FC3A6] bg-[#EDF7F1]" : "border-transparent bg-[#F8F9F6] hover:border-[#D6DDD0]"}`}>
-              <div className="flex items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: SEVERITY_COLORS[point.severity] || SEVERITY_COLORS.info }} /><span className="truncate text-[11px] font-semibold text-[#10231B]">{safeText(observation.field_name) || t("fieldIntel.unassignedField")}</span>{taskIds(observation).length > 0 && <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" />}</div>
-              <div className="mt-1 truncate pl-4 text-[10px] text-[#77847C]">{summaryFor(observation) || t("fieldIntel.needsReview")}</div>
+            return <button key={observation.id} type="button" onClick={() => setFocusedId(String(observation.id))} className={`w-full rounded-lg border p-2.5 text-start transition ${active ? "border-[#8FC3A6] bg-[#EDF7F1]" : "border-transparent bg-[#F8F9F6] hover:border-[#D6DDD0]"}`}>
+              <div className="flex items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: SEVERITY_COLORS[point.severity] || SEVERITY_COLORS.info }} /><span className="truncate text-[11px] font-semibold text-[#10231B]">{safeText(observation.field_name) || t("fieldIntel.unassignedField")}</span>{taskIds(observation).length > 0 && <CheckCircle2 className="ms-auto h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" />}</div>
+              <div className="mt-1 truncate ps-4 text-[10px] text-[#77847C]">{summaryFor(observation) || t("fieldIntel.needsReview")}</div>
             </button>;
           })}
         </div>}
@@ -474,6 +474,6 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
 function Metric({ value, label, wide = false }: { value: number; label: string; wide?: boolean }) {
   return <div className={`rounded-lg border border-[#E3E8E2] bg-[#FAFBF9] px-2.5 py-2 ${wide ? "flex items-center justify-between" : ""}`}>
     <div className="text-[15px] font-semibold text-[#10231B]">{value}</div>
-    <div className={`${wide ? "ml-3" : "mt-0.5"} truncate text-[9px] font-medium uppercase tracking-[0.08em] text-[#78857D]`}>{label}</div>
+    <div className={`${wide ? "ms-3" : "mt-0.5"} truncate text-[9px] font-medium uppercase tracking-[0.08em] text-[#78857D]`}>{label}</div>
   </div>;
 }

@@ -32,11 +32,11 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
         </span>
       ) : null}
       <span className="relative inline-flex w-full items-center">
-        {compact ? <Globe2 className="pointer-events-none absolute left-2 h-3.5 w-3.5" style={{ color: labelColor }} /> : null}
+        {compact ? <Globe2 className="pointer-events-none absolute start-2 h-3.5 w-3.5" style={{ color: labelColor }} /> : null}
         <select
           value={selectedLocale}
           onChange={(event) => changeLanguage(event.target.value)}
-          className={`h-9 w-full appearance-none rounded-md py-1 pr-8 text-[12px] outline-none ${compact ? "pl-8" : "pl-3"}`}
+          className={`h-9 w-full appearance-none rounded-md py-1 pe-8 text-[12px] outline-none ${compact ? "ps-8" : "ps-3"}`}
           style={{ background: selectBg, color: selectColor, border: `1px solid ${catalogError ? "#B42318" : border}` }}
           title={catalogError || t("language")}
           aria-label={t("language")}
@@ -48,7 +48,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
             </option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: labelColor }} />
+        <ChevronDown className="pointer-events-none absolute end-2 h-3.5 w-3.5" style={{ color: labelColor }} />
       </span>
     </label>
   );

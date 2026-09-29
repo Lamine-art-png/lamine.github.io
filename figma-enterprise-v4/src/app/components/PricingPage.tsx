@@ -127,7 +127,7 @@ export function PricingPage() {
 
       <section className="mt-10 rounded-[24px] p-5 md:p-7" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         <div className="mb-5 flex items-center gap-2"><ShieldCheck className="h-5 w-5" style={{ color: GREEN }} /><h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>{tx("Compare plans")}</h2></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[900px] border-collapse text-[13px]"><thead><tr style={{ color: MUTED }}><th className="py-3 text-left font-medium">{tx("Capability")}</th>{plans.map((plan) => <th key={plan.id} className="py-3 text-center font-medium">{tx(plan.name)}</th>)}</tr></thead><tbody>{COMPARISON.map((row) => <tr key={row[0]} style={{ borderTop: `1px solid ${BORDER}` }}>{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={`px-3 py-4 ${index ? "text-center" : "font-medium"}`} style={{ color: TEXT }}>{tx(cell)}</td>)}</tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[900px] border-collapse text-[13px]"><thead><tr style={{ color: MUTED }}><th className="py-3 text-start font-medium">{tx("Capability")}</th>{plans.map((plan) => <th key={plan.id} className="py-3 text-center font-medium">{tx(plan.name)}</th>)}</tr></thead><tbody>{COMPARISON.map((row) => <tr key={row[0]} style={{ borderTop: `1px solid ${BORDER}` }}>{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={`px-3 py-4 ${index ? "text-center" : "font-medium"}`} style={{ color: TEXT }}>{tx(cell)}</td>)}</tr>)}</tbody></table></div>
       </section>
     </main>
   </div>;
