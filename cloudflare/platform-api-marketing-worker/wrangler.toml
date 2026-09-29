@@ -37,28 +37,19 @@ zone_name = "agroai-pilot.com"
 pattern = "agroai-pilot.com/trust/*"
 zone_name = "agroai-pilot.com"
 
+# Trailing wildcard: Cloudflare route patterns only match URLs with a query
+# string (e.g. ?lang=pt-BR for localized legal pages) when they end in "*".
+
 [[routes]]
-pattern = "agroai-pilot.com/terms-of-service"
+pattern = "agroai-pilot.com/terms-of-service*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
-pattern = "agroai-pilot.com/terms-of-service/*"
+pattern = "agroai-pilot.com/privacy-policy*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
-pattern = "agroai-pilot.com/privacy-policy"
-zone_name = "agroai-pilot.com"
-
-[[routes]]
-pattern = "agroai-pilot.com/privacy-policy/*"
-zone_name = "agroai-pilot.com"
-
-[[routes]]
-pattern = "agroai-pilot.com/pilot-agreement"
-zone_name = "agroai-pilot.com"
-
-[[routes]]
-pattern = "agroai-pilot.com/pilot-agreement/*"
+pattern = "agroai-pilot.com/pilot-agreement*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
