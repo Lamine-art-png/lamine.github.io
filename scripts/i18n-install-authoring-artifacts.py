@@ -30,14 +30,21 @@ def sha256(path: Path) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    if len(args) != 1:
         raise SystemExit(__doc__)
-    downloaded = Path(sys.argv[1])
+    downloaded = Path(args[0])
     installed = {"ui": [], "transactional": [], "legal": []}
 
     canonical_dom = downloaded / "canonical-legal-dom"
     canonical_hashes: dict[str, str] = {}
-    if canonical_dom.is_dir():
+    pinned_path = LEGAL_DIR / "canonical.json"
+    repin = "--repin-legal" in sys.argv
+    if pinned_path.exists() and not repin:
+        # Keep the pinned canonical legal source; snapshots from this run were
+        # authored from the committed canonical DOM when one exists.
+        canonical_hashes = json.loads(pinned_path.read_text(encoding="utf-8"))["sourceSha256"]
+    elif canonical_dom.is_dir():
         target = LEGAL_DIR / "canonical"
         target.mkdir(parents=True, exist_ok=True)
         for slug in ("terms-of-service", "privacy-policy"):
@@ -72,7 +79,7 @@ def main() -> None:
                     shutil.copyfile(item, dest / item.name)
                 installed["legal"].append(locale)
 
-    if canonical_hashes:
+    if canonical_hashes and (repin or not pinned_path.exists()):
         (LEGAL_DIR / "canonical.json").write_text(json.dumps({
             "schemaVersion": 1,
             "description": "Canonical English legal DOM translated by every localized snapshot",

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import {
-  REPRESENTATIVE_LOCALES, SIGNUP_KEYS, directionByLocale, englishLeaks, languageSelect, loadCatalog, manifest, source,
+  REPRESENTATIVE_LOCALES, SIGNUP_KEYS, directionByLocale, englishLeaks, untranslatedEnglishProse, walkSignupSteps, languageSelect, loadCatalog, manifest, source,
 } from "./support/localeLeakScan.mjs";
 
 // Real browser, fresh anonymous context, no localization endpoint mocking:
@@ -45,14 +45,25 @@ for (const locale of locales) {
     await expect(page.locator("body")).not.toContainText("[object Object]");
     await expect(page.locator("body")).not.toContainText("AGROAI_KEEP");
     expect(await englishLeaks(page, catalog), `${locale} signup renders English source strings`).toEqual([]);
+    expect(await untranslatedEnglishProse(page), `${locale} signup renders uninventoried English prose`).toEqual([]);
 
     const terms = page.locator('a[href*="/terms-of-service"]').first();
     if (await terms.count()) await expect(terms).toHaveAttribute("href", new RegExp(`lang=${locale}`));
+
+    // Every signup step through legal acceptance is localized (no submission).
+    const reachedLegal = await walkSignupSteps(page, catalog, async (step) => {
+      expect(await englishLeaks(page, catalog), `${locale} signup step ${step} renders English`).toEqual([]);
+      expect(await untranslatedEnglishProse(page), `${locale} signup step ${step} renders uninventoried English`).toEqual([]);
+    });
+    expect(reachedLegal, `${locale} reached the legal acceptance step`).toBeTruthy();
+    await page.reload();
+    await expect(languageSelect(page)).toHaveValue(locale);
 
     // Continue with an empty form: validation copy must be localized too.
     await page.getByText(catalog[SIGNUP_KEYS.continue], { exact: true }).first().click().catch(() => undefined);
     await page.waitForTimeout(300);
     expect(await englishLeaks(page, catalog), `${locale} validation/next step renders English`).toEqual([]);
+    expect(await untranslatedEnglishProse(page), `${locale} validation/next step renders uninventoried English`).toEqual([]);
 
     await page.reload();
     await expect(languageSelect(page)).toHaveValue(locale);

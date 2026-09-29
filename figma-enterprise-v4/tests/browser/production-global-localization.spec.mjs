@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
-  REPRESENTATIVE_LOCALES, SIGNUP_KEYS, directionByLocale, englishLeaks, languageSelect, loadCatalog, manifest,
+  REPRESENTATIVE_LOCALES, SIGNUP_KEYS, directionByLocale, englishLeaks, untranslatedEnglishProse, languageSelect, loadCatalog, manifest,
 } from "./support/localeLeakScan.mjs";
 
 // Black-box production proof: a real Chromium against the deployed site with a
@@ -42,6 +42,7 @@ for (const locale of proofLocales) {
     await expect(page.locator("body")).not.toContainText("[object Object]");
     await expect(page.locator("body")).not.toContainText("AGROAI_KEEP");
     expect(await englishLeaks(page, catalog), `${locale} production signup renders English`).toEqual([]);
+    expect(await untranslatedEnglishProse(page), `${locale} production signup renders uninventoried English`).toEqual([]);
     await expect(page.locator('a[href*="/terms-of-service"]').first()).toHaveAttribute("href", new RegExp(`lang=${locale}`));
     await expect(page.locator('a[href*="/privacy-policy"]').first()).toHaveAttribute("href", new RegExp(`lang=${locale}`));
 

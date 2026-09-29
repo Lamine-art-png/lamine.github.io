@@ -21,8 +21,17 @@ const sandbox = {};
 vm.runInNewContext(compiled.outputFiles[0].text, sandbox);
 merge(sandbox.catalogs.en);
 const knownValues = new Set(Object.values(source).map(normalize));
+// JSX text is always rendered to customers, including lowercase fragments such
+// as "rows" or ", and confirm ..."; other string literals need a word-case
+// signal ("I verified ...", "A clean workspace ...") to exclude class names,
+// enum values and identifiers.
+function plausibleJsxText(text) {
+  return text.length > 1 && text.length < 2000 && /[A-Za-z]{2,}/.test(text)
+    && !/^(?:https?:|\/|#[0-9a-f]|@|\.\.)/i.test(text)
+    && !/(?:=>|className=|\b(?:const|import|export) |\b(?:rgba?|var)\(|\.[jt]sx?$)/.test(text);
+}
 function plausible(text) {
-  return text.length > 1 && text.length < 2000 && /[A-Z][a-z]/.test(text)
+  return text.length > 1 && text.length < 2000 && (/[A-Z][a-z]/.test(text) || /^(?:I|A) [a-z]/.test(text))
     && !/^(?:https?:|\/|#[0-9a-f]|@|\.\.)/i.test(text)
     && !/(?:=>|className=|\b(?:const|import|export) |\b(?:rgba?|var)\(|\.[jt]sx?$)/.test(text)
     && !/^[A-Za-z0-9_.:/-]+$/.test(text.replace(/^[A-Z][a-z]+$/, ''));
@@ -31,16 +40,21 @@ function walk(node) {
   if (!node || typeof node !== 'object') return;
   if (node.type === 'JSXText' || node.type === 'StringLiteral') {
     const value = normalize(node.value);
-    if (plausible(value) && !knownValues.has(value)) literals[literalKey(value)] = value;
+    const ok = node.type === 'JSXText' ? plausibleJsxText(value) : plausible(value);
+    if (ok && !knownValues.has(value)) literals[literalKey(value)] = value;
   }
   for (const [key,value] of Object.entries(node)) {
     if (['loc','start','end','extra','comments'].includes(key)) continue;
     if (Array.isArray(value)) value.forEach(walk); else if (value && typeof value === 'object') walk(value);
   }
 }
+// Non-English translation tables (hand-authored fr-FR/pt copy) are not sources.
+const TRANSLATION_TABLES = new Set(['i18n.ts', 'commercialBoundaryI18n.ts', 'decisionMemoryI18n.ts', 'commercialBoundaryConversionLabels.ts']);
 for (const file of fs.readdirSync(app,{recursive:true}).sort()) {
-  if (!file.endsWith('.tsx') || file.startsWith('components/ui/')) continue;
-  walk(parse(fs.readFileSync(path.join(app,file),'utf8'),{sourceType:'module',plugins:['typescript','jsx']}));
+  const tsx = file.endsWith('.tsx');
+  const ts = file.endsWith('.ts') && !file.endsWith('.d.ts') && !TRANSLATION_TABLES.has(file);
+  if ((!tsx && !ts) || file.startsWith('components/ui/')) continue;
+  walk(parse(fs.readFileSync(path.join(app,file),'utf8'),{sourceType:'module',plugins: tsx ? ['typescript','jsx'] : ['typescript']}));
 }
 merge(literals);
 const sorted = Object.fromEntries(Object.entries(source).sort(([a],[b])=>a.localeCompare(b,'en')));

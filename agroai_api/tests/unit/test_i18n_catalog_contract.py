@@ -87,9 +87,16 @@ def test_canary_source_is_small_canonical_ui_subset():
 def test_canary_locale_canonicalization_uses_enabled_registry():
     assert _canonical_enabled_locale("pt-BR") == "pt-BR"
     assert _canonical_enabled_locale("pt_br") == "pt-BR"
-    with pytest.raises(HTTPException) as staged:
-        _canonical_enabled_locale("de")
-    assert staged.value.status_code == 422
+    # A target locale that is not yet release-eligible must be rejected; a
+    # release-eligible one resolves exactly.
+    enabled = set(enabled_ui_locales())
+    staged_locales = [code for code in target_ui_locales() if code not in enabled]
+    for code in staged_locales:
+        with pytest.raises(HTTPException) as staged:
+            _canonical_enabled_locale(code)
+        assert staged.value.status_code == 422
+    if "de" in enabled:
+        assert _canonical_enabled_locale("de") == "de"
     with pytest.raises(HTTPException) as exc:
         _canonical_enabled_locale("made-up-locale")
     assert exc.value.status_code == 422

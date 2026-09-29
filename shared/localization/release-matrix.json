@@ -14,9 +14,15 @@
     "preferredLanguage": "am"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0017,
+    "identicalToEnglish": 4,
+    "nativeScriptShare": 0.9929,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "am",
@@ -33,9 +39,15 @@
     "preferredLanguage": "ar"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0013,
+    "identicalToEnglish": 3,
+    "nativeScriptShare": 0.9946,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ar",
@@ -52,9 +64,15 @@
     "preferredLanguage": "bg"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0038,
+    "identicalToEnglish": 9,
+    "nativeScriptShare": 0.9967,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "bg",
@@ -71,9 +89,15 @@
     "preferredLanguage": "bn"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0029,
+    "identicalToEnglish": 7,
+    "nativeScriptShare": 0.9937,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "bn",
@@ -90,9 +114,14 @@
     "preferredLanguage": "bs"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.025,
+    "identicalToEnglish": 60,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "bs",
@@ -109,9 +138,14 @@
     "preferredLanguage": "ca"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0042,
+    "identicalToEnglish": 10,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ca",
@@ -128,9 +162,14 @@
     "preferredLanguage": "cs"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0113,
+    "identicalToEnglish": 27,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "cs",
@@ -147,9 +186,14 @@
     "preferredLanguage": "da"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0196,
+    "identicalToEnglish": 47,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "da",
@@ -166,9 +210,14 @@
     "preferredLanguage": "de"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0071,
+    "identicalToEnglish": 17,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "de",
@@ -185,9 +234,15 @@
     "preferredLanguage": "el"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0092,
+    "identicalToEnglish": 22,
+    "nativeScriptShare": 0.9954,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "el",
@@ -223,9 +278,14 @@
     "preferredLanguage": "es"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0029,
+    "identicalToEnglish": 7,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "es",
@@ -242,9 +302,14 @@
     "preferredLanguage": "et"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0067,
+    "identicalToEnglish": 16,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "et",
@@ -261,9 +326,15 @@
     "preferredLanguage": "fa"
    },
    "legal": true,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0046,
+    "identicalToEnglish": 11,
+    "nativeScriptShare": 0.9946,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "fa",
@@ -280,9 +351,14 @@
     "preferredLanguage": "fi"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0104,
+    "identicalToEnglish": 25,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "fi",
@@ -299,9 +375,14 @@
     "preferredLanguage": "fr-FR"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0046,
+    "identicalToEnglish": 11,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "fr-FR",
@@ -318,9 +399,15 @@
     "preferredLanguage": "gu"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0021,
+    "identicalToEnglish": 5,
+    "nativeScriptShare": 0.9933,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "gu",
@@ -337,9 +424,15 @@
     "preferredLanguage": "hi"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0013,
+    "identicalToEnglish": 3,
+    "nativeScriptShare": 0.9942,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "hi",
@@ -356,9 +449,14 @@
     "preferredLanguage": "hr"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0071,
+    "identicalToEnglish": 17,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "hr",
@@ -375,9 +473,14 @@
     "preferredLanguage": "hu"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0117,
+    "identicalToEnglish": 28,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "hu",
@@ -393,10 +496,16 @@
    "intelligence": {
     "preferredLanguage": "hy"
    },
-   "legal": false,
-   "ready": false,
+   "legal": true,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0054,
+    "identicalToEnglish": 13,
+    "nativeScriptShare": 0.9958,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "hy",
@@ -413,9 +522,14 @@
     "preferredLanguage": "id"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0033,
+    "identicalToEnglish": 8,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "id",
@@ -432,9 +546,14 @@
     "preferredLanguage": "is"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0088,
+    "identicalToEnglish": 21,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "is",
@@ -451,9 +570,14 @@
     "preferredLanguage": "it"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0033,
+    "identicalToEnglish": 8,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "it",
@@ -469,10 +593,16 @@
    "intelligence": {
     "preferredLanguage": "ja"
    },
-   "legal": false,
-   "ready": false,
+   "legal": true,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0033,
+    "identicalToEnglish": 8,
+    "nativeScriptShare": 0.9921,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ja",
@@ -489,9 +619,15 @@
     "preferredLanguage": "ka"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0054,
+    "identicalToEnglish": 13,
+    "nativeScriptShare": 0.9962,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ka",
@@ -507,10 +643,16 @@
    "intelligence": {
     "preferredLanguage": "kk"
    },
-   "legal": false,
-   "ready": false,
+   "legal": true,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0054,
+    "identicalToEnglish": 13,
+    "nativeScriptShare": 0.9962,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "kk",
@@ -527,9 +669,15 @@
     "preferredLanguage": "kn"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0,
+    "identicalToEnglish": 0,
+    "nativeScriptShare": 0.9946,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "kn",
@@ -546,9 +694,15 @@
     "preferredLanguage": "ko"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0021,
+    "identicalToEnglish": 5,
+    "nativeScriptShare": 0.9892,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ko",
@@ -565,9 +719,14 @@
     "preferredLanguage": "lt"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0058,
+    "identicalToEnglish": 14,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "lt",
@@ -584,9 +743,14 @@
     "preferredLanguage": "lv"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0058,
+    "identicalToEnglish": 14,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "lv",
@@ -603,9 +767,15 @@
     "preferredLanguage": "mk"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0046,
+    "identicalToEnglish": 11,
+    "nativeScriptShare": 0.9962,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "mk",
@@ -622,9 +792,15 @@
     "preferredLanguage": "ml"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0025,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.9954,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ml",
@@ -640,10 +816,16 @@
    "intelligence": {
     "preferredLanguage": "mn"
    },
-   "legal": false,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "legal": true,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0033,
+    "identicalToEnglish": 8,
+    "nativeScriptShare": 0.9975,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "mn",
@@ -660,9 +842,15 @@
     "preferredLanguage": "mr"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0008,
+    "identicalToEnglish": 2,
+    "nativeScriptShare": 0.9946,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "mr",
@@ -679,9 +867,14 @@
     "preferredLanguage": "ms"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0042,
+    "identicalToEnglish": 10,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ms",
@@ -697,10 +890,16 @@
    "intelligence": {
     "preferredLanguage": "my"
    },
-   "legal": false,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "legal": true,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0075,
+    "identicalToEnglish": 18,
+    "nativeScriptShare": 0.9837,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "my",
@@ -717,9 +916,14 @@
     "preferredLanguage": "nl"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0067,
+    "identicalToEnglish": 16,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "nl",
@@ -736,9 +940,14 @@
     "preferredLanguage": "no"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.015,
+    "identicalToEnglish": 36,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "no",
@@ -755,9 +964,15 @@
     "preferredLanguage": "pa"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0029,
+    "identicalToEnglish": 7,
+    "nativeScriptShare": 0.9929,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "pa",
@@ -774,9 +989,14 @@
     "preferredLanguage": "pl"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0021,
+    "identicalToEnglish": 5,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "pl",
@@ -793,9 +1013,14 @@
     "preferredLanguage": "pt-BR"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0042,
+    "identicalToEnglish": 10,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "pt-BR",
@@ -812,9 +1037,14 @@
     "preferredLanguage": "ro"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0108,
+    "identicalToEnglish": 26,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ro",
@@ -831,9 +1061,15 @@
     "preferredLanguage": "ru"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0025,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.9967,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ru",
@@ -850,9 +1086,14 @@
     "preferredLanguage": "sk"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0104,
+    "identicalToEnglish": 25,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sk",
@@ -869,9 +1110,14 @@
     "preferredLanguage": "sl"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0058,
+    "identicalToEnglish": 14,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sl",
@@ -888,9 +1134,14 @@
     "preferredLanguage": "so"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0004,
+    "identicalToEnglish": 1,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "so",
@@ -907,9 +1158,14 @@
     "preferredLanguage": "sq"
    },
    "legal": true,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0054,
+    "identicalToEnglish": 13,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sq",
@@ -945,9 +1201,14 @@
     "preferredLanguage": "sv"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.015,
+    "identicalToEnglish": 36,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sv",
@@ -963,10 +1224,15 @@
    "intelligence": {
     "preferredLanguage": "sw"
    },
-   "legal": false,
-   "ready": false,
-   "transactional": false,
-   "ui": false,
+   "legal": true,
+   "ready": true,
+   "transactional": true,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0033,
+    "identicalToEnglish": 8,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "sw",
@@ -983,9 +1249,15 @@
     "preferredLanguage": "ta"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0025,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.995,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ta",
@@ -1002,9 +1274,15 @@
     "preferredLanguage": "te"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0025,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.9933,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "te",
@@ -1021,9 +1299,15 @@
     "preferredLanguage": "th"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0021,
+    "identicalToEnglish": 5,
+    "nativeScriptShare": 0.9946,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "th",
@@ -1040,9 +1324,14 @@
     "preferredLanguage": "tl"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0325,
+    "identicalToEnglish": 78,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "tl",
@@ -1059,9 +1348,14 @@
     "preferredLanguage": "tr"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0042,
+    "identicalToEnglish": 10,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "tr",
@@ -1078,9 +1372,15 @@
     "preferredLanguage": "uk"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0063,
+    "identicalToEnglish": 15,
+    "nativeScriptShare": 0.9967,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "uk",
@@ -1097,9 +1397,15 @@
     "preferredLanguage": "ur"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0025,
+    "identicalToEnglish": 6,
+    "nativeScriptShare": 0.9958,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "ur",
@@ -1116,9 +1422,14 @@
     "preferredLanguage": "vi"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0021,
+    "identicalToEnglish": 5,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "vi",
@@ -1135,9 +1446,15 @@
     "preferredLanguage": "zh"
    },
    "legal": true,
-   "ready": false,
+   "ready": true,
    "transactional": true,
-   "ui": false,
+   "ui": true,
+   "uiQuality": {
+    "identicalShare": 0.0013,
+    "identicalToEnglish": 3,
+    "nativeScriptShare": 0.9762,
+    "translatable": 2398
+   },
    "voice": {
     "browserFallbackTts": "device-dependent",
     "recognitionHint": "zh",
@@ -1145,9 +1462,9 @@
    }
   }
  },
- "releaseEligible": 1,
+ "releaseEligible": 59,
  "schemaVersion": 1,
  "target": 60,
  "transactionalSourceVersion": "2026-09-28.auth-transactional-v2",
- "uiSourceFingerprint": "0757b7deda116b44e141d8593484ff999406e464a22569d47f3eb8c16b1e934f"
+ "uiSourceFingerprint": "721d48345d9a17a75c9579aa7547f1c0b9fcb5b532a5c8edd208e4ebcef05dd1"
 }

@@ -17,6 +17,7 @@ import literalCatalogPart16 from "../../../shared/ui-literals.en.16.json";
 import literalCatalogPart17 from "../../../shared/ui-literals.en.17.json";
 import literalCatalogPart18 from "../../../shared/ui-literals.en.18.json";
 import literalCatalogPart19 from "../../../shared/ui-literals.en.19.json";
+import literalCatalogPart20 from "../../../shared/ui-literals.en.20.json";
 import extractedLiteralCatalog from "../../../shared/localization/literals.json";
 // Customer-facing API messages (scripts/i18n-extract-api-messages.py) render
 // through the same literal runtime so server errors are localized too.
@@ -53,6 +54,7 @@ const GENERIC_STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.ass
   literalCatalogPart17,
   literalCatalogPart18,
   literalCatalogPart19,
+  literalCatalogPart20,
   extractedLiteralCatalog,
   apiMessageCatalog,
 );

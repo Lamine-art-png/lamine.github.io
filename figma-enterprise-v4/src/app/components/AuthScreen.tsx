@@ -5,6 +5,7 @@ import { RegisterPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
+import { LocalizedTemplate } from "./LocalizedTemplate";
 import { useLocale } from "../hooks/useLocale";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -69,7 +70,7 @@ function VerificationPanel() {
   }
 
   return <div className="space-y-5">
-    <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 text-[#2D6A4F]" /><div><div className="text-[14px] font-semibold text-[#10231B]">Your organization passed automated screening.</div><p className="mt-1 text-[13px] leading-6 text-[#617068]">Verify the email sent to <span className="font-medium text-[#10231B]">{verification?.email || "your email"}</span> to activate the secure AGRO-AI account. {platformHostname ? "Platform API enrollment remains a separate reviewed step after sign-in." : ""}</p></div></div></div>
+    <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 text-[#2D6A4F]" /><div><div className="text-[14px] font-semibold text-[#10231B]">Your organization passed automated screening.</div><p className="mt-1 text-[13px] leading-6 text-[#617068]"><LocalizedTemplate template="Verify the email sent to {email} to activate the secure AGRO-AI account." values={{ email: <span className="font-medium text-[#10231B]">{verification?.email || "your email"}</span> }} /> {platformHostname ? "Platform API enrollment remains a separate reviewed step after sign-in." : ""}</p></div></div></div>
     {message ? <div className="rounded-md border border-[#D7E4CF] bg-[#FBFDF8] px-3 py-2 text-sm text-[#375347]">{message}</div> : null}
     <Field label="Password"><Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="Re-enter password after verifying" /></Field>
     <div className="grid gap-3 sm:grid-cols-2"><Button type="button" onClick={resend} disabled={working !== ""} className="w-full bg-[#10231B] text-white hover:bg-[#183528]">{working === "resend" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Resend verification email</Button><Button type="button" variant="outline" onClick={refresh} disabled={working !== "" || !password} className="w-full border-[#D6DDD0] bg-white text-[#10231B] hover:bg-[#F6F4EE]">{working === "refresh" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}I verified my email</Button></div>
@@ -81,6 +82,8 @@ export function AuthScreen() {
   const legalLang = encodeURIComponent(legalLocale);
   const termsUrl = `https://agroai-pilot.com/terms-of-service?lang=${legalLang}`;
   const privacyUrl = `https://agroai-pilot.com/privacy-policy?lang=${legalLang}`;
+  const termsLink = <a href={termsUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>;
+  const privacyLink = <a href={privacyUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>;
 
   const { login, register, verification, confirmVerification } = useAuth();
   const [mode, setMode] = useState(() => { const params = new URLSearchParams(window.location.search); const requested = params.get("mode") || params.get("auth"); return requested === "register" || requested === "create" ? "register" : "login"; });
@@ -168,7 +171,7 @@ export function AuthScreen() {
             </div>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#718078]">Step {registerStep} of 3 · {registerStep === 1 ? "Account" : registerStep === 2 ? "Operation" : "First workflow"}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#718078]"><LocalizedTemplate template="Step {step} of {total}" values={{ step: registerStep, total: 3 }} /> · {registerStep === 1 ? "Account" : registerStep === 2 ? "Operation" : "First workflow"}</div>
                 <h2 className="mt-2 text-[20px] font-semibold text-[#10231B]">{registerStep === 1 ? "Create your AGRO-AI account" : registerStep === 2 ? "Tell us about the operation" : "Choose how you want to start"}</h2>
                 <p className="mt-1 max-w-xl text-[12px] leading-6 text-[#65736A]">{registerStep === 1 ? "Start with your identity and organization. Screening is automatic; there is no sales call before account creation." : registerStep === 2 ? "These details protect customer workspaces and let AGRO-AI verify that the account belongs to a real agricultural organization." : "Give AGRO-AI enough context to create the right initial workspace and verify the agricultural use case."}</p>
               </div>
@@ -203,7 +206,10 @@ export function AuthScreen() {
                   required
                 />
                 <span className="text-[11px] leading-5 text-[#52645A]">
-                  I agree to the <a href={termsUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">AGRO-AI Terms of Service</a>, acknowledge the <a href={privacyUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#234224] underline underline-offset-2">Privacy Policy</a>, and confirm that I am authorized to bind my organization.
+                  <LocalizedTemplate
+                    template="I agree to the {terms}, acknowledge the {privacy}, and confirm that I am authorized to bind my organization."
+                    values={{ terms: termsLink, privacy: privacyLink }}
+                  />
                 </span>
               </label>
             </> : null}
