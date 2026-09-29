@@ -1,4 +1,4 @@
-name: Production pt-BR localization proof
+name: Production global localization proof
 
 on:
   push:
@@ -32,7 +32,9 @@ jobs:
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - name: Install portal test dependencies
         working-directory: figma-enterprise-v4
-        run: npm ci
+        run: |
+          npm ci
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
       - name: Install Chromium
         working-directory: figma-enterprise-v4
         run: npx playwright install --with-deps chromium
@@ -42,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 24); do
-            if npx playwright test tests/browser/production-ptbr-localization.spec.mjs --project=chromium --reporter=line; then
+            if npx playwright test tests/browser/production-global-localization.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line; then
               exit 0
             fi
             echo "Production localization proof not converged yet (attempt $attempt/24); retrying in 30s..."
