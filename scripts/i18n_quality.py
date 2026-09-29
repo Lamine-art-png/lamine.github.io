@@ -51,12 +51,43 @@ def translatable(value: str) -> bool:
     return not do_not_translate(value) and len(re.findall(r"[A-Za-z]{3,}", value)) >= 2
 
 
+_PRESERVED_TOKEN = re.compile(r"\b(?:[A-Z][A-Za-z0-9.+&/-]*|[A-Za-z]*\d[A-Za-z0-9.-]*)\b")
+
+
 def _native_share(value: str, script: str) -> float:
+    # Proper nouns, product names, acronyms and unit/identifier tokens are
+    # correctly preserved in Latin script; untranslated English prose is
+    # dominated by lowercase words and is still measured.
+    value = _PRESERVED_TOKEN.sub(" ", value)
     letters = [ch for ch in value if ch.isalpha()]
     if not letters:
         return 1.0
     hits = sum(1 for ch in letters if re.search(script, unicodedata.name(ch, "")))
     return hits / len(letters)
+
+
+def _script_of(ch: str) -> str:
+    name = unicodedata.name(ch, "")
+    if not name or not ch.isalpha():
+        return ""
+    if name.startswith("LATIN") or name.startswith("FULLWIDTH LATIN"):
+        return "LATIN"
+    for script in ("ARABIC", "CYRILLIC", "GREEK", "ARMENIAN", "GEORGIAN", "DEVANAGARI", "BENGALI", "GUJARATI",
+                   "GURMUKHI", "TAMIL", "TELUGU", "KANNADA", "MALAYALAM", "THAI", "MYANMAR", "ETHIOPIC",
+                   "HANGUL", "HIRAGANA", "KATAKANA", "CJK", "HEBREW", "SINHALA", "KHMER", "LAO", "TIBETAN"):
+        if name.startswith(script) or f" {script} " in f" {name} ":
+            return script
+    return "OTHER"
+
+
+def foreign_script(locale: str, value: str) -> bool:
+    """Letters from a script the locale never uses (e.g. Devanagari in Amharic)."""
+    root = locale.split("-", 1)[0].lower()
+    allowed = {"LATIN", ""}
+    allowed.update((NATIVE_SCRIPT.get(root) or "").split("|"))
+    if root == "ja":
+        allowed.update({"CJK", "HIRAGANA", "KATAKANA"})
+    return any(_script_of(ch) not in allowed for ch in value)
 
 
 def english_leak_keys(locale: str, source: dict[str, str], catalog: dict[str, str]) -> list[str]:
@@ -68,7 +99,9 @@ def english_leak_keys(locale: str, source: dict[str, str], catalog: dict[str, st
         if not translatable(original):
             continue
         value = catalog.get(key, "")
-        if value.strip() == original.strip():
+        if foreign_script(locale, value) and not foreign_script(locale, original):
+            leaks.append(key)
+        elif value.strip() == original.strip():
             leaks.append(key)
         elif script and _native_share(value, script) < 0.5:
             leaks.append(key)
@@ -98,6 +131,9 @@ def quality_errors(locale: str, source: dict[str, str], catalog: dict[str, str])
         return []
     report = quality_report(locale, source, catalog)
     errors: list[str] = []
+    contaminated = [key for key, value in catalog.items() if foreign_script(locale, value) and not foreign_script(locale, source.get(key, ""))]
+    if contaminated:
+        errors.append(f"foreign_script:{locale}:{','.join(contaminated[:5])}")
     residue = [key for key, value in catalog.items() if has_marker_residue(value) and not has_marker_residue(source.get(key, ""))]
     if residue:
         errors.append(f"authoring_marker_residue:{locale}:{','.join(residue[:5])}")

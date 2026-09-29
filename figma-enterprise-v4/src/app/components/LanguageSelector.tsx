@@ -41,6 +41,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
           title={catalogError || t("language")}
           aria-label={t("language")}
           aria-busy={catalogLoading}
+          data-language-selector
         >
           {GLOBAL_UI_LOCALES.map((item) => (
             <option key={item.code} value={item.code} dir={item.dir}>
