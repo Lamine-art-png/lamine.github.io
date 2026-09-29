@@ -1,17 +1,36 @@
 name: Reconcile production localization readiness
 
+# Read-only release gate. Recomputes which locales are production-ready from
+# the committed catalogs, transactional catalogs and legal snapshots, and fails
+# if the committed manifest/release matrix does not match. It never writes to
+# the repository: generated commits pushed with GITHUB_TOKEN are attributed to
+# github-actions[bot] and hold PR workflows at action_required.
 on:
-  push:
-    branches: [fix/deterministic-localization-release]
+  pull_request:
     paths:
-      - "shared/localization/catalogs/**"
-      - "shared/localization/transactional-catalogs/**"
+      - "shared/localization/**"
+      - "shared/supported-locales.json"
       - "platform-api/legal/localized/**"
       - "scripts/i18n-reconcile-production-locales.py"
+      - "scripts/i18n_quality.py"
+      - "agroai_api/app/api/v1/auth.py"
+      - "agroai_api/app/api/v1/billing.py"
+      - ".github/workflows/i18n-reconcile-production-locales.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "shared/localization/**"
+      - "shared/supported-locales.json"
+      - "platform-api/legal/localized/**"
+      - "scripts/i18n-reconcile-production-locales.py"
+      - "scripts/i18n_quality.py"
+      - "agroai_api/app/api/v1/auth.py"
+      - "agroai_api/app/api/v1/billing.py"
+      - ".github/workflows/i18n-reconcile-production-locales.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: i18n-readiness-reconcile-${{ github.ref }}
@@ -23,27 +42,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Compute truthful production locale set
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Recompute production-ready locale set
         run: python3 scripts/i18n-reconcile-production-locales.py
+      - name: Committed manifest and release matrix must match the release gate
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- shared/supported-locales.json shared/localization/release-matrix.json; then
+            echo "::error::Run python3 scripts/i18n-reconcile-production-locales.py and commit the result."
+            exit 1
+          fi
       - name: Validate advertised static catalog contract
         working-directory: figma-enterprise-v4
         run: node tests/static-locale-catalog-contract.mjs
-      - name: Commit readiness manifest if changed
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "AGRO-AI Release Bot"
-          git config user.email "release-bot@agroai-pilot.com"
-          git add shared/supported-locales.json
-          if git diff --cached --quiet; then
-            echo "Production locale readiness unchanged"
-            exit 0
-          fi
-          git commit -m "Reconcile production-complete locale set"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
