@@ -1,16 +1,9 @@
 name: Deterministic legal locale snapshots
 
+# Manual-only while localization authoring is under active development.
+# Ordinary branch pushes must not launch high-volume external authoring jobs.
 on:
-  push:
-    branches: [fix/deterministic-localization-release]
-    paths:
-      - ".github/workflows/legal-locale-snapshots.yml"
-      - "scripts/legal-i18n-generate.py"
-      - "cloudflare/ollama-compat/src/index.js"
-      - "wrangler.i18n-authoring.toml"
-      - "shared/supported-locales.json"
   workflow_dispatch:
-
 permissions:
   contents: write
 
@@ -70,7 +63,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         locale: ${{ fromJSON(needs.prepare.outputs.locales) }}
     env:
