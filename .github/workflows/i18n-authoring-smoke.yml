@@ -1,15 +1,9 @@
 name: Localization authoring API smoke
 
+# Manual-only while localization authoring is under active development.
+# Ordinary branch pushes must never launch external authoring traffic.
 on:
-  push:
-    branches: [fix/deterministic-localization-release]
-    paths:
-      - ".github/workflows/i18n-authoring-smoke.yml"
-      - "scripts/i18n-generate-catalogs.py"
-      - "cloudflare/ollama-compat/src/index.js"
-      - "wrangler.i18n-authoring.toml"
   workflow_dispatch:
-
 permissions:
   contents: read
 
