@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clock3, LocateFixed, MapPin, Navigation, Sparkles, Loader2 } from "lucide-react";
 import { apiClient } from "../api/client";
 import { currentLocale } from "../i18n";
+import { loadMaplibre } from "./maplibreRuntime";
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "#B23B2E",
@@ -192,7 +193,7 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
     let disposed = false;
     (async () => {
       try {
-        const maplibre = await import("maplibre-gl");
+        const maplibre = await loadMaplibre();
         await import("maplibre-gl/dist/maplibre-gl.css");
         if (disposed || !containerRef.current) return;
         const map = new maplibre.Map({
@@ -347,7 +348,7 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
     const map = mapRef.current;
     if (!map || !ready || !currentLocation) return;
     (async () => {
-      const maplibre = await import("maplibre-gl");
+      const maplibre = await loadMaplibre();
       currentMarkerRef.current?.remove?.();
       const node = document.createElement("div");
       node.className = "h-4 w-4 rounded-full border-[3px] border-white bg-[#1976D2] shadow-lg";

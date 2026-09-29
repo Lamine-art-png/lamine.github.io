@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { apiClient } from "../api/client";
+import { loadMaplibre } from "./maplibreRuntime";
 
 /**
  * Production MapLibre field map.
@@ -93,7 +94,7 @@ export function FieldMap({ t, observations, selectedId, onSelect, workspaceId }:
     let disposed = false;
     (async () => {
       try {
-        const maplibre = await import("maplibre-gl");
+        const maplibre = await loadMaplibre();
         // @ts-ignore vite handles css imports
         await import("maplibre-gl/dist/maplibre-gl.css");
         if (disposed || !containerRef.current) return;
