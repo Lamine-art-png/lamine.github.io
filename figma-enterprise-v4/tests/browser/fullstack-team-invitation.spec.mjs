@@ -26,7 +26,9 @@ function invitationLinkFor(email) {
   return match ? new URL(match[0]) : null;
 }
 
-test("owner invites a new teammate who accepts from the emailed link and appears in Members", async ({ browser, page }) => {
+for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+test(`owner invites a new teammate who accepts from the emailed link and appears in Members (${viewport.width}px)`, async ({ browser, page }) => {
+  await page.setViewportSize(viewport);
   const owner = JSON.parse(readFileSync(SEED, "utf8"));
   const invitee = `grower.${Date.now()}@e2e.agroai.test`;
 
@@ -51,7 +53,7 @@ test("owner invites a new teammate who accepts from the emailed link and appears
   expect(link, "the invitation email must carry a single-use accept link").not.toBeNull();
   const token = link.searchParams.get("token");
 
-  const inviteeContext = await browser.newContext();
+  const inviteeContext = await browser.newContext({ viewport });
   const inviteePage = await inviteeContext.newPage();
   await skipProductTour(inviteePage);
   await inviteePage.goto(`${APP}/accept-invite?token=${token}&lang=en`);
@@ -73,4 +75,6 @@ test("owner invites a new teammate who accepts from the emailed link and appears
   await page.reload();
   await expect(page.getByText("E2E Grower").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('[data-invitation-status="accepted"]').filter({ hasText: invitee })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
+}

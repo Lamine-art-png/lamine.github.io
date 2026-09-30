@@ -293,3 +293,54 @@ def test_invitation_email_is_localized_with_intact_link(client, db, outbox):
     assert "Locale Farms" in email["subject"]
     token = outbox.last_token()
     assert f"lang=pt-BR" in email["text_body"] and token in email["text_body"]
+
+
+def test_unverified_existing_account_cannot_redeem(client, db, outbox):
+    headers, org = _register(client, db, "owner-unverified@example.com")
+    invitee_headers, _ = _register(client, db, "unverified-invitee@example.com")
+    user = db.query(User).filter_by(email="unverified-invitee@example.com").one()
+    user.email_verification_status, user.email_verified_at = "pending", None
+    db.commit()
+    assert _invite(client, headers, email=user.email).status_code == 200
+    response = client.post("/v1/team/invitations/accept", headers=invitee_headers, json={"token": outbox.last_token()})
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "email_verification_required"
+    assert not db.query(OrganizationMembership).filter_by(organization_id=org.id, user_id=user.id).first()
+
+
+def test_revocation_during_provider_call_cannot_be_undone(client, db, monkeypatch):
+    headers, org = _register(client, db, "owner-race@example.com")
+    def revoke_while_sending(**kwargs):
+        row = db.query(TeamInvitation).filter_by(organization_id=org.id).one()
+        row.status, row.token_hash = "revoked", None
+        db.commit()
+        return {"ok": True, "provider": "resend"}
+    monkeypatch.setattr("app.services.team_invitations.send_email", revoke_while_sending)
+    response = _invite(client, headers)
+    assert response.status_code == 502
+    row = db.query(TeamInvitation).filter_by(organization_id=org.id).one()
+    assert row.status == "revoked" and row.token_hash is None
+
+
+def test_sending_link_cannot_be_redeemed_and_duplicate_resend_is_blocked(client, db, outbox):
+    headers, org = _register(client, db, "owner-sending@example.com")
+    assert _invite(client, headers).status_code == 200
+    token = outbox.last_token()
+    row = db.query(TeamInvitation).filter_by(organization_id=org.id).one()
+    row.delivery_status, row.last_sent_at = "sending", None
+    db.commit()
+    assert client.post("/v1/team/invitations/preview", json={"token": token}).status_code == 404
+    assert client.post(f"/v1/team/invitations/{row.id}/resend", headers=headers).status_code == 429
+    assert len(outbox.sent) == 1
+
+
+def test_expired_invitation_resend_cannot_duplicate_new_invitation(client, db, outbox):
+    headers, org = _register(client, db, "owner-expired-resend@example.com")
+    assert _invite(client, headers).status_code == 200
+    old = db.query(TeamInvitation).filter_by(organization_id=org.id).one()
+    old.expires_at = datetime.utcnow() - timedelta(days=1)
+    old.last_sent_at = datetime.utcnow() - timedelta(days=8)
+    db.commit()
+    assert _invite(client, headers).status_code == 200
+    assert client.post(f"/v1/team/invitations/{old.id}/resend", headers=headers).status_code == 409
+    assert len(outbox.sent) == 2

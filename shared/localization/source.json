@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "1064f9086fab2c1a59d8c91b34958e2a3f297b7feee3476ec118071342f10aa4",
+  "sourceFingerprint": "6d985d822b3ee28346425c163884c98889ef0bd841a9dd8964dc9702de311521",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1598,7 +1598,6 @@
     "literal.452996cb98031642": "Add contract",
     "literal.4551ca4d3173505f": "Readiness + ops",
     "literal.45609089ee73fb94": "Open sidebar",
-    "literal.4568a036e1521624": "The invitation for {email} was saved, but the email could not be delivered. Try resending it; AGRO-AI support has been notified.",
     "literal.456b773eb05a7343": "Enterprise request received.",
     "literal.457ca15d71813370": "Active keys",
     "literal.45808d75bf8911fa": "Webhooks",

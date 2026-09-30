@@ -43,7 +43,7 @@ _EMAIL_RE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z
 # Customer-facing result messages (templates; the portal localizes them).
 INVITATION_SENT_MESSAGE = "Invitation email sent to {email}."
 INVITATION_RESENT_MESSAGE = "Invitation email resent to {email}."
-INVITATION_NOT_DELIVERED_MESSAGE = "The invitation for {email} was saved, but the email could not be delivered. Try resending it; AGRO-AI support has been notified."
+INVITATION_NOT_DELIVERED_MESSAGE = "The invitation could not be sent."
 
 ENGLISH_COPY = {
     "subject": "{inviter} invited you to {organization} on AGRO-AI",
@@ -186,6 +186,12 @@ def _deliver(db: Session, row: TeamInvitation, org: Organization, inviter: User)
     except Exception as exc:  # pragma: no cover - defensive; send_email already contains provider errors
         result = {"ok": False, "provider": delivery_status().get("provider"), "reason": exc.__class__.__name__}
 
+    # Provider I/O runs outside the transaction. A revoke, acceptance, or later
+    # delivery attempt must never be undone by this attempt's late response.
+    _lock_organization(db, org.id)
+    db.refresh(row, with_for_update=True)
+    if row.token_hash != hash_invitation_token(token):
+        return {"ok": False, "provider": result.get("provider"), "reason": "invitation_superseded"}
     if result.get("ok"):
         row.delivery_status = "sent"
         row.delivery_error = None
@@ -193,12 +199,16 @@ def _deliver(db: Session, row: TeamInvitation, org: Organization, inviter: User)
         row.status = "pending"
         logger.info("team_invitation.provider_accepted invitation_id=%s provider=%s", row.id, result.get("provider"))
     else:
-        reason = str(result.get("reason") or "provider_failed")[:240]
+        # Provider prose can echo request content. Persist/log only a bounded
+        # error category, never the email body or its bearer invitation token.
+        reason = str(result.get("reason") or "provider_failed").split(":", 1)[0]
+        if not re.fullmatch(r"[A-Za-z_]{1,80}", reason):
+            reason = "provider_failed"
         row.delivery_status = "not_configured" if reason == "email_provider_not_configured" else "failed"
         row.delivery_error = reason
         row.status = "delivery_failed"
         row.token_hash = None  # the link never reached the recipient; nothing may redeem it
-        _record_delivery_gap(db, row, org, inviter, result)
+        _record_delivery_gap(db, row, org, inviter, {**result, "reason": reason})
         logger.error("team_invitation.provider_rejected invitation_id=%s provider=%s reason=%s", row.id, result.get("provider"), reason)
     db.commit()
     db.refresh(row)
@@ -208,6 +218,11 @@ def _deliver(db: Session, row: TeamInvitation, org: Organization, inviter: User)
 def _seat_limit(db: Session, org: Organization) -> int | None:
     from app.services.commercial_control import get_limit
     return get_limit(db, org, "quota.seat")
+
+
+def _lock_organization(db: Session, organization_id: str) -> Organization:
+    """Serialize invitation and seat mutations on PostgreSQL, in one lock order."""
+    return db.query(Organization).filter(Organization.id == organization_id).populate_existing().with_for_update().one()
 
 
 def _active_member_count(db: Session, org: Organization) -> int:
@@ -221,6 +236,7 @@ def create_invitation(db: Session, *, org: Organization, inviter: User, inviter_
     email = normalize_invitation_email(email)
     if role not in ASSIGNABLE_ROLES.get(inviter_role, set()):
         raise _error(status.HTTP_403_FORBIDDEN, "role_not_assignable", "You cannot assign that role.", assignable_roles=sorted(ASSIGNABLE_ROLES.get(inviter_role, set())))
+    org = _lock_organization(db, org.id)
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user and db.query(OrganizationMembership).filter(
         OrganizationMembership.organization_id == org.id, OrganizationMembership.user_id == existing_user.id
@@ -254,7 +270,11 @@ def create_invitation(db: Session, *, org: Organization, inviter: User, inviter_
 
 
 def resend_invitation(db: Session, *, org: Organization, inviter: User, invitation_id: str) -> tuple[TeamInvitation, dict]:
+    org = _lock_organization(db, org.id)
     row = _org_invitation(db, org, invitation_id)
+    membership = db.query(OrganizationMembership).filter_by(organization_id=org.id, user_id=inviter.id, status="active").first()
+    if not membership or row.role not in ASSIGNABLE_ROLES.get(membership.role, set()):
+        raise _error(status.HTTP_403_FORBIDDEN, "role_not_assignable", "You cannot assign that role.")
     state = effective_status(row)
     if state not in {"pending", "delivery_failed", "expired"}:
         raise _error(status.HTTP_409_CONFLICT, "invitation_not_resendable", "This invitation can no longer be resent.", status=state)
@@ -262,11 +282,25 @@ def resend_invitation(db: Session, *, org: Organization, inviter: User, invitati
         raise _error(status.HTTP_429_TOO_MANY_REQUESTS, "invitation_resend_limit", "This invitation has been sent the maximum number of times. Revoke it and create a new one.")
     if row.last_sent_at and datetime.utcnow() - row.last_sent_at < RESEND_MIN_INTERVAL:
         raise _error(status.HTTP_429_TOO_MANY_REQUESTS, "invitation_resend_too_soon", "Please wait a minute before resending.")
+    if row.delivery_status == "sending" and row.updated_at and datetime.utcnow() - row.updated_at < RESEND_MIN_INTERVAL:
+        raise _error(status.HTTP_429_TOO_MANY_REQUESTS, "invitation_resend_too_soon", "Please wait a minute before resending.")
+    other_open = db.query(TeamInvitation).filter(
+        TeamInvitation.organization_id == org.id, TeamInvitation.email == row.email,
+        TeamInvitation.id != row.id, TeamInvitation.status.in_(["pending", "delivery_failed"]),
+        TeamInvitation.expires_at > datetime.utcnow(),
+    ).first()
+    if other_open:
+        raise _error(status.HTTP_409_CONFLICT, "invitation_pending", "An invitation for this email is already open. Resend or revoke it instead.")
+    limit = _seat_limit(db, org)
+    pending = db.query(TeamInvitation).filter(TeamInvitation.organization_id == org.id, TeamInvitation.id != row.id, TeamInvitation.status == "pending", TeamInvitation.expires_at > datetime.utcnow()).count()
+    if limit is not None and _active_member_count(db, org) + pending >= limit:
+        raise _error(status.HTTP_402_PAYMENT_REQUIRED, "seat_limit_reached", "All seats included in your plan are in use or reserved by open invitations.", limit=limit)
     result = _deliver(db, row, org, inviter)  # rotates the token: the previous link stops working
     return row, result
 
 
 def revoke_invitation(db: Session, *, org: Organization, invitation_id: str) -> TeamInvitation:
+    _lock_organization(db, org.id)
     row = _org_invitation(db, org, invitation_id)
     if row.status == "accepted":
         raise _error(status.HTTP_409_CONFLICT, "invitation_already_accepted", "This invitation was already accepted.")
@@ -278,7 +312,7 @@ def revoke_invitation(db: Session, *, org: Organization, invitation_id: str) -> 
 
 
 def _org_invitation(db: Session, org: Organization, invitation_id: str) -> TeamInvitation:
-    row = db.get(TeamInvitation, invitation_id)
+    row = db.query(TeamInvitation).filter_by(id=invitation_id).populate_existing().with_for_update().first()
     if not row or row.organization_id != org.id:
         raise _error(status.HTTP_404_NOT_FOUND, "invitation_not_found", "Invitation not found.")
     return row
@@ -289,16 +323,17 @@ def redeemable_invitation(db: Session, token: str, *, lock: bool = False) -> Tea
     if not token or len(token) > 200:
         raise _error(status.HTTP_404_NOT_FOUND, "invitation_invalid", "This invitation link is invalid or has already been used.")
     query = db.query(TeamInvitation).filter(TeamInvitation.token_hash == hash_invitation_token(token))
-    if lock:
-        query = query.with_for_update()
     row = query.first()
+    if lock and row is not None:
+        _lock_organization(db, row.organization_id)
+        row = query.populate_existing().with_for_update().first()
     if row is None:
         raise _error(status.HTTP_404_NOT_FOUND, "invitation_invalid", "This invitation link is invalid or has already been used.")
     if effective_status(row) == "expired":
         row.status, row.token_hash = "expired", None
         db.commit()
         raise _error(status.HTTP_410_GONE, "invitation_expired", "This invitation has expired. Ask your administrator to send a new one.")
-    if row.status != "pending":
+    if row.status != "pending" or row.delivery_status != "sent" or not row.expires_at:
         raise _error(status.HTTP_404_NOT_FOUND, "invitation_invalid", "This invitation link is invalid or has already been used.")
     return row
 
@@ -307,10 +342,17 @@ def accept_invitation_for_user(db: Session, *, row: TeamInvitation, user: User) 
     """Create (or confirm) the membership for the invited account and consume the token."""
     if (user.email or "").strip().lower() != row.email:
         raise _error(status.HTTP_403_FORBIDDEN, "invitation_email_mismatch", "This invitation was sent to a different email address. Sign in with that account to accept it.")
+    from app.api.deps import require_approved_organization, require_verified_user
+    require_verified_user(user)
     org = db.get(Organization, row.organization_id)
+    require_approved_organization(org)
+    if row.role not in ASSIGNABLE_ROLES["owner"]:
+        raise _error(status.HTTP_403_FORBIDDEN, "role_not_assignable", "You cannot assign that role.")
     membership = db.query(OrganizationMembership).filter(
         OrganizationMembership.organization_id == row.organization_id, OrganizationMembership.user_id == user.id
     ).first()
+    if membership is not None and membership.status != "active":
+        raise _error(status.HTTP_409_CONFLICT, "already_member", "This person is already a member of the organization.")
     if membership is None:
         limit = _seat_limit(db, org)
         if limit is not None and _active_member_count(db, org) >= limit:

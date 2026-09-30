@@ -196,7 +196,7 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
         body = response.text
         ok = 200 <= response.status_code < 300
         if ok:
-            logger.info("Resend email response status=%s body=%s", response.status_code, body[:500])
+            logger.info("Resend email response status=%s", response.status_code)
             return {
                 "ok": True,
                 "provider": "resend",
@@ -206,7 +206,7 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
                 "from_address": from_address,
                 "attachments": len(safe_attachments),
             }
-        logger.error("Resend email failed status=%s body=%s", response.status_code, body[:1000])
+        logger.error("Resend email failed status=%s", response.status_code)
         return {
             "ok": False,
             "provider": "resend",
@@ -255,7 +255,7 @@ def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: st
         if ok:
             logger.info("SendGrid email response status=%s", response.status_code)
             return {"ok": True, "provider": "sendgrid", "status_code": response.status_code, "reason": "accepted", "attachments": len(safe_attachments)}
-        logger.error("SendGrid email failed status=%s body=%s", response.status_code, body[:1000])
+        logger.error("SendGrid email failed status=%s", response.status_code)
         return {"ok": False, "provider": "sendgrid", "status_code": response.status_code, "reason": _provider_rejection_reason(body), "provider_response": _safe_provider_response(body)}
     except httpx.HTTPError as exc:
         logger.exception("SendGrid email delivery failed before provider response")

@@ -17,18 +17,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("team_invitations", sa.Column("locale", sa.String(length=40), nullable=True))
-    op.add_column("team_invitations", sa.Column("delivery_status", sa.String(length=40), nullable=True))
-    op.add_column("team_invitations", sa.Column("delivery_attempts", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("team_invitations", sa.Column("delivery_error", sa.String(length=240), nullable=True))
-    op.add_column("team_invitations", sa.Column("last_sent_at", sa.DateTime(), nullable=True))
-    op.add_column("team_invitations", sa.Column("accepted_at", sa.DateTime(), nullable=True))
-    op.add_column("team_invitations", sa.Column("accepted_by_user_id", sa.String(), sa.ForeignKey("users.id"), nullable=True))
-    op.add_column("team_invitations", sa.Column("revoked_at", sa.DateTime(), nullable=True))
-    op.create_index("ix_team_invitations_org_email_status", "team_invitations", ["organization_id", "email", "status"])
+    # SQLite cannot ALTER a foreign-key constraint. Batch mode copies the
+    # existing rows/constraints there, while PostgreSQL uses additive ALTERs.
+    with op.batch_alter_table("team_invitations") as batch:
+        batch.add_column(sa.Column("locale", sa.String(length=40), nullable=True))
+        batch.add_column(sa.Column("delivery_status", sa.String(length=40), nullable=True))
+        batch.add_column(sa.Column("delivery_attempts", sa.Integer(), nullable=False, server_default="0"))
+        batch.add_column(sa.Column("delivery_error", sa.String(length=240), nullable=True))
+        batch.add_column(sa.Column("last_sent_at", sa.DateTime(), nullable=True))
+        batch.add_column(sa.Column("accepted_at", sa.DateTime(), nullable=True))
+        batch.add_column(sa.Column("accepted_by_user_id", sa.String(), nullable=True))
+        batch.add_column(sa.Column("revoked_at", sa.DateTime(), nullable=True))
+        batch.create_foreign_key("fk_team_invitations_accepted_by_user_id", "users", ["accepted_by_user_id"], ["id"])
+        batch.create_index("ix_team_invitations_org_email_status", ["organization_id", "email", "status"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_team_invitations_org_email_status", table_name="team_invitations")
-    for column in ("revoked_at", "accepted_by_user_id", "accepted_at", "last_sent_at", "delivery_error", "delivery_attempts", "delivery_status", "locale"):
-        op.drop_column("team_invitations", column)
+    with op.batch_alter_table("team_invitations") as batch:
+        batch.drop_index("ix_team_invitations_org_email_status")
+        batch.drop_constraint("fk_team_invitations_accepted_by_user_id", type_="foreignkey")
+        for column in ("revoked_at", "accepted_by_user_id", "accepted_at", "last_sent_at", "delivery_error", "delivery_attempts", "delivery_status", "locale"):
+            batch.drop_column(column)
