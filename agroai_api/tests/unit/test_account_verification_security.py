@@ -62,6 +62,30 @@ def test_consumer_email_is_accepted_with_strong_evidence():
     assert decision.score >= 82
 
 
+
+
+def test_portuguese_operational_goal_is_not_rejected_by_english_keyword_gate():
+    decision = evaluate_organization(
+        _verification_input(
+            email="katia.operator@gmail.com",
+            organization_name="Granel Agrícola Ltda.",
+            organization_type="agribusiness",
+            professional_role="Diretora",
+            country="Brasil",
+            operating_region="Paraná",
+            acres_or_sites="1.200 hectares",
+            primary_crops="Grãos",
+            intended_use="conseguir fazer a gestão com diminuição dos custos operacionais",
+            planned_data_sources="John Deere, Excel",
+            website_url="https://granelagricola.example.com",
+            professional_profile_url="https://www.linkedin.com/in/katia-operator",
+        )
+    )
+    assert decision.approved is True
+    assert decision.status == "preapproved_pending_email"
+    assert "agricultural_use_case_not_detected" not in decision.reason_codes
+
+
 def test_disposable_and_placeholder_applications_are_rejected():
     disposable = evaluate_organization(_verification_input(email="owner@mailinator.com"))
     placeholder = evaluate_organization(
