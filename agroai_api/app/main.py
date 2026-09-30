@@ -189,6 +189,12 @@ async def request_performance_boundary(request: Request, call_next):
     then be distinguished from backend/database time in production traces.
     """
     started = perf_counter()
+    client_build = request.headers.get("x-agroai-client-build")
+    if client_build:
+        from app.api.v1.client_release_events import log_client_build_skew
+        from app.services.release_contract import runtime_build_sha
+
+        log_client_build_skew(client_build, runtime_build_sha(), request.url.path)
     response = await call_next(request)
     duration_ms = max(0.0, (perf_counter() - started) * 1000)
     timing = f"agroai_app;dur={duration_ms:.1f}"
@@ -622,6 +628,9 @@ app.include_router(field_intelligence_router, prefix="/v1")
 # kill switch and rollout controls precisely when the feature is disabled.
 from app.api.v1.field_intelligence_admin import router as field_intelligence_admin_router  # noqa: E402
 app.include_router(field_intelligence_admin_router, prefix="/v1")
+
+from app.api.v1.client_release_events import router as client_release_events_router  # noqa: E402
+app.include_router(client_release_events_router, prefix="/v1")
 
 include_commercial_intelligence(app.router)
 materialize_included_routes(app.router)

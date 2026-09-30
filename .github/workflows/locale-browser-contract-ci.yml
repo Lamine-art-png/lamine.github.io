@@ -128,3 +128,55 @@ jobs:
             figma-enterprise-v4/test-results
           if-no-files-found: ignore
           retention-days: 2
+
+  release-convergence:
+    # Two genuinely different production builds (A, B) served with the
+    # production cache policy; "deploying" switches the live release under
+    # open browsers. Proves fresh/stale/active/multi-tab/offline/rollback/
+    # partial-propagation convergence without losing session, language or
+    # unsaved input, and without reload loops.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    env:
+      RELEASE_A: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      RELEASE_B: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install portal and browser test dependencies
+        run: |
+          npm ci
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Build releases A and B
+        run: |
+          set -euo pipefail
+          for release in A B; do
+            sha_var="RELEASE_${release}"
+            VITE_BUILD_SHA="${!sha_var}" VITE_DEPLOYMENT_ENVIRONMENT=production VITE_API_BASE_URL=http://127.0.0.1:4400 \
+              npx vite build --outDir "$RUNNER_TEMP/release-$release" --emptyOutDir
+          done
+      - name: Run release convergence journeys
+        run: |
+          set -euo pipefail
+          node tests/release-harness/server.mjs --port 4400 --release "A=$RUNNER_TEMP/release-A" --release "B=$RUNNER_TEMP/release-B" --live A > "$RUNNER_TEMP/harness.log" 2>&1 &
+          for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:4400/deployment.json >/dev/null && break; sleep 1; done
+          node scripts/verify-production-release.mjs --url http://127.0.0.1:4400 --sha "$RELEASE_A" --timeout-seconds 30 || true
+          AGROAI_RELEASE_HARNESS=http://127.0.0.1:4400 AGROAI_RELEASE_A="$RELEASE_A" AGROAI_RELEASE_B="$RELEASE_B" \
+            npx playwright test tests/browser/release-convergence.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
+      - name: Upload release convergence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-convergence
+          path: |
+            ${{ runner.temp }}/harness.log
+            figma-enterprise-v4/test-results
+          if-no-files-found: ignore
+          retention-days: 2

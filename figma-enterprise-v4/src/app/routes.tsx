@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { recoverFromAssetFailure } from "../release/releaseRuntime";
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { AssuranceRouteRecovery } from "./components/AssuranceRouteRecovery";
@@ -53,8 +54,17 @@ function PlatformProduct() {
   return <PlatformSelfServiceGate />;
 }
 
+// A route chunk that fails to load after a release (its hashed file retired)
+// loads the current release instead of rendering a broken module; the
+// convergence runtime bounds this so it can never become a reload loop.
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
-  const module = await loader();
+  let module: Record<string, unknown>;
+  try {
+    module = await loader();
+  } catch (error) {
+    if (recoverFromAssetFailure(error, "dynamic_import")) return new Promise<never>(() => undefined);
+    throw error;
+  }
   return { Component: module[exportName] as ComponentType };
 };
 

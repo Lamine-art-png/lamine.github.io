@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
+import { bootReleaseCheck, installReleaseRuntime, recoverFromAssetFailure, reportReleaseEvent } from "./release/releaseRuntime";
 import "./styles/index.css";
 
 (window as typeof window & { __AGROAI_ENTRY_LOADED__?: boolean }).__AGROAI_ENTRY_LOADED__ = true;
@@ -14,7 +15,14 @@ const standalonePlatformHost = window.location.hostname.toLowerCase() === "platf
 const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal";
 const runtimeSurfaceName = standalonePlatformHost ? "developer platform" : "portal";
 const automaticRecoveryKey = "agroai_frontend_cache_recovery_attempted";
-const freshnessRecoveryKey = "agroai_frontend_freshness_recovery_v1";
+
+// Release convergence (see src/release/releaseRuntime.ts): detects that
+// production serves a newer (or rolled-back) release and moves this tab to it
+// at a safe moment, without clearing the session, language or unsaved work.
+installReleaseRuntime();
+window.addEventListener("vite:preloadError", (event) => {
+  reportReleaseEvent("dynamic_import_failure", { reason: String((event as Event & { payload?: unknown }).payload || "preload").slice(0, 120) });
+});
 
 // Stable, eagerly-loaded runtime identity for production smoke verification.
 // Product/source contract tests validate the actual UI separately; this marker
@@ -43,9 +51,10 @@ function isStaleFrontendAssetError(message: string): boolean {
   return htmlAsJavaScript || retiredAsset;
 }
 
-async function repairFrontendRuntime(clearSession = false) {
-  if (clearSession) window.localStorage.removeItem("agroai_access_token");
-
+// Last-resort repair when a stale release cannot boot: drop this origin's
+// AGRO-AI shell caches and service worker, then reload the same page. The
+// session, language and other storage are deliberately left intact.
+async function repairFrontendRuntime() {
   if ("caches" in window) {
     const names = await window.caches.keys();
     await Promise.all(
@@ -60,50 +69,11 @@ async function repairFrontendRuntime(clearSession = false) {
     await Promise.all(registrations.map((registration) => registration.unregister()));
   }
 
-  const recoveryUrl = new URL("/", window.location.origin);
+  const recoveryUrl = new URL(window.location.href);
   recoveryUrl.searchParams.set("frontend_recovery", Date.now().toString());
   window.location.replace(recoveryUrl.toString());
 }
 
-
-function moduleEntryPathFromHtml(html: string): string {
-  try {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const src = doc.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute("src") || "";
-    return src ? new URL(src, window.location.origin).pathname : "";
-  } catch {
-    return "";
-  }
-}
-
-async function verifyFreshFrontendShell(): Promise<boolean> {
-  if (import.meta.env.DEV) return true;
-  try {
-    const currentSrc = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src || "";
-    const currentPath = currentSrc ? new URL(currentSrc, window.location.origin).pathname : "";
-    if (!currentPath) return true;
-
-    const probeUrl = new URL("/", window.location.origin);
-    probeUrl.searchParams.set("agroai_freshness_probe", Date.now().toString());
-    const response = await fetch(probeUrl.toString(), {
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: { "Cache-Control": "no-cache" },
-    });
-    if (!response.ok) return true;
-    const latestPath = moduleEntryPathFromHtml(await response.text());
-    if (!latestPath || latestPath === currentPath) return true;
-
-    if (window.sessionStorage.getItem(freshnessRecoveryKey) !== "true") {
-      window.sessionStorage.setItem(freshnessRecoveryKey, "true");
-      await repairFrontendRuntime(false);
-      return false;
-    }
-  } catch {
-    // Freshness verification is fail-open. Offline/limited networks must still boot.
-  }
-  return true;
-}
 
 function renderBootFailure(message: string) {
   const root = document.getElementById("root");
@@ -124,10 +94,9 @@ function renderBootFailure(message: string) {
     button.disabled = true;
     button.textContent = "Repairing…";
     try {
-      await repairFrontendRuntime(false);
+      await repairFrontendRuntime();
     } catch {
-      window.localStorage.removeItem("agroai_access_token");
-      window.location.href = "/?frontend_recovery=fallback";
+      window.location.reload();
     }
   });
 }
@@ -135,11 +104,21 @@ function renderBootFailure(message: string) {
 function bootFailure(error: unknown) {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error || "Unknown frontend boot error");
 
-  if (isStaleFrontendAssetError(message)
-      && window.sessionStorage.getItem(automaticRecoveryKey) !== "true") {
-    window.sessionStorage.setItem(automaticRecoveryKey, "true");
-    void repairFrontendRuntime(false).catch(() => renderBootFailure(message));
-    return;
+  if (isStaleFrontendAssetError(message)) {
+    // First try the loop-guarded release convergence; if that is exhausted,
+    // one deeper cache/service-worker repair per session; then explain.
+    if (recoverFromAssetFailure(error, "boot_asset")) return;
+    let alreadyRepaired = false;
+    try {
+      alreadyRepaired = window.sessionStorage.getItem(automaticRecoveryKey) === "true";
+      if (!alreadyRepaired) window.sessionStorage.setItem(automaticRecoveryKey, "true");
+    } catch {
+      alreadyRepaired = false;
+    }
+    if (!alreadyRepaired) {
+      void repairFrontendRuntime().catch(() => renderBootFailure(message));
+      return;
+    }
   }
 
   renderBootFailure(message);
@@ -181,7 +160,7 @@ if (!rootEl) {
   // Signed verification/recovery links carry the locale the customer used when
   // the email was issued, so another browser or device opens in that language.
   // Elsewhere ?lang= only fills in when no explicit choice is stored.
-  const freshnessReady = verifyFreshFrontendShell();
+  const freshnessReady = bootReleaseCheck();
   const localeReady = Promise.all([import("./app/i18n"), import("./app/dynamicLocaleCatalog")])
     .then(([{ getStoredLocale, setStoredLocale, canonicalizeSelectedLocale }, { preloadBundledLocaleCatalog }]) => {
       const linkLocale = new URLSearchParams(window.location.search).get("lang");
@@ -199,8 +178,11 @@ if (!rootEl) {
   Promise.all([freshnessReady, import("./app/App.tsx"), localeReady])
     .then(([fresh, { default: App }]) => {
       if (!fresh) return;
-      window.sessionStorage.removeItem(freshnessRecoveryKey);
-      window.sessionStorage.removeItem(automaticRecoveryKey);
+      try {
+        window.sessionStorage.removeItem(automaticRecoveryKey);
+      } catch {
+        // Restricted storage is non-fatal.
+      }
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
       // These modules are deliberately loaded after the portal has rendered.
       // A failure can disable the enhancement, but can never blank the portal.

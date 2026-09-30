@@ -1,7 +1,16 @@
+import { RUNNING_BUILD } from "../../release/releaseRuntime";
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
   "https://api.agroai-pilot.com";
+
+const SAME_ORIGIN_API = (() => {
+  try {
+    return typeof window !== "undefined" && new URL(API_BASE_URL, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+})();
 
 export const API_BASE_URL_SOURCE =
   import.meta.env.VITE_API_BASE_URL ? "VITE_API_BASE_URL" : import.meta.env.VITE_API_URL ? "VITE_API_URL" : "default";
@@ -119,6 +128,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set("Accept-Language", requestLocale);
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Release telemetry: lets the API see which portal build is calling. Only on
+  // same-origin requests, so no CORS preflight or cross-origin header exposure.
+  if (SAME_ORIGIN_API && !headers.has("X-AGROAI-Client-Build")) headers.set("X-AGROAI-Client-Build", RUNNING_BUILD);
 
   const controller = new AbortController();
   const upstreamSignal = fetchOptions.signal;
