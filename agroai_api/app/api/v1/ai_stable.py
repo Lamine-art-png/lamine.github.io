@@ -22,6 +22,7 @@ from app.db.base import get_db
 from app.models.saas import Organization, User
 from app.schemas.ai import ChatRequest, ChatResponse
 from app.services.ai_gateway import parse_model_json
+from app.services.decision_fabric import advisory_prompt, attach_grounding_advisory
 from app.services.gpt56_intelligence import run_gpt56_grounded_intelligence
 from app.services.intelligence_context import build_intelligence_context
 from app.services.intelligence_grounding import build_intelligence_grounding
@@ -226,6 +227,15 @@ async def resilient_intelligence_run(
         packet = build_intelligence_grounding(context, field_id=payload.field_id)
         packet = enrich_grounding_packet(packet, context)
         _attach_specialist_context(packet)
+        decision_advisory = await asyncio.to_thread(
+            attach_grounding_advisory,
+            packet,
+            task=payload.task,
+            question=payload.question,
+        )
+        routing_prompt = advisory_prompt(decision_advisory)
+        if routing_prompt:
+            messages = [*messages, {"role": "system", "content": routing_prompt}]
     except Exception as exc:  # noqa: BLE001
         logger.error("intelligence_grounding_failed error=%s", exc.__class__.__name__)
         release_reservation(db, reservation, reason="intelligence_grounding_failed")
@@ -248,6 +258,7 @@ async def resilient_intelligence_run(
             packet=packet,
             conversation_messages=payload.history,
             preferred_language=payload.preferred_language,
+            decision_routing_prompt=routing_prompt or None,
         )
     )
 
@@ -468,6 +479,12 @@ async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_te
         try:
             packet = enrich_grounding_packet(build_intelligence_grounding(context, field_id=payload.block_id), context)
             _attach_specialist_context(packet)
+            await asyncio.to_thread(
+                attach_grounding_advisory,
+                packet,
+                task="chat",
+                question=payload.message,
+            )
             summary, removed = sanitize_customer_answer(str(body.get("summary") or body.get("answer") or ""), packet, question=payload.message)
             if removed:
                 body["summary"] = summary
