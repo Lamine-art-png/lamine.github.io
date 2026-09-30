@@ -338,28 +338,36 @@ def grounding_state(packet: Any, *, task: str, question: str) -> dict[str, Any]:
 
 
 def attach_grounding_advisory(packet: Any, *, task: str, question: str) -> DecisionAdvisory | None:
-    if not should_invoke(task, question):
-        return None
-    advisory = assess_surface("grounded_intelligence", grounding_state(packet, task=task, question=question))
-    if advisory is None:
-        return None
+    try:
+        if not should_invoke(task, question):
+            return None
+        advisory = assess_surface("grounded_intelligence", grounding_state(packet, task=task, question=question))
+        if advisory is None:
+            return None
 
-    source_health = getattr(packet, "source_health", None)
-    if isinstance(source_health, dict):
-        source_health["decision_routing"] = advisory.safe_dict()
+        # Shadow mode observes and logs only. It must not modify model context.
+        if assist_enabled():
+            source_health = getattr(packet, "source_health", None)
+            if isinstance(source_health, dict):
+                source_health["decision_routing"] = advisory.safe_dict()
 
-    if assist_enabled():
-        constraints = list(getattr(packet, "decision_constraints", []) or [])
-        if advisory.data_sufficient < 0.50:
-            constraints.append(
-                "Internal decision routing indicates that more evidence is needed before a definitive consequential recommendation."
-            )
-        if advisory.needs_human_review >= 0.70:
-            constraints.append(
-                "Internal decision routing requires human review before any consequential operational or external action."
-            )
-        packet.decision_constraints = list(dict.fromkeys(constraints))
-    return advisory
+            constraints = list(getattr(packet, "decision_constraints", []) or [])
+            if advisory.data_sufficient < 0.50:
+                constraints.append(
+                    "Internal decision routing indicates that more evidence is needed before a definitive consequential recommendation."
+                )
+            if advisory.needs_human_review >= 0.70:
+                constraints.append(
+                    "Internal decision routing requires human review before any consequential operational or external action."
+                )
+            packet.decision_constraints = list(dict.fromkeys(constraints))
+        return advisory
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "decision_fabric_grounding_hook_failed error_type=%s",
+            exc.__class__.__name__,
+        )
+        return None
 
 
 def evidence_context_state(context: Any, *, task: str, question: str) -> dict[str, Any]:
@@ -387,10 +395,16 @@ def assess_evidence_context(context: Any, *, task: str, question: str) -> Decisi
     )
 
 
+def advisory_context(advisory: DecisionAdvisory | None) -> dict[str, Any] | None:
+    if advisory is None or not assist_enabled():
+        return None
+    return advisory.safe_dict()
+
+
 def advisory_prompt(advisory: DecisionAdvisory | None) -> str:
-    if advisory is None:
+    safe = advisory_context(advisory)
+    if safe is None:
         return ""
-    safe = advisory.safe_dict()
     return (
         "INTERNAL DECISION ROUTING ADVISORY (never cite or expose as a customer fact): "
         f"route={safe['route']}; urgency={safe['urgency']}; "
