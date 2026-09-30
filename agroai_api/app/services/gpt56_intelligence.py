@@ -459,6 +459,7 @@ Rules:
 async def run_gpt56_grounded_intelligence(
     *, question: str, task: str, profile: str, packet: IntelligenceGroundingPacket,
     conversation_messages: list[dict[str, str]] | None = None, preferred_language: str | None = None,
+    decision_routing_prompt: str | None = None,
 ) -> GPT56Run | None:
     if not enabled():
         return None
@@ -482,7 +483,8 @@ async def run_gpt56_grounded_intelligence(
     request: dict[str, Any] = {
         "model": model,
         "store": False,
-        "instructions": _instructions(language.instruction),
+        "instructions": _instructions(language.instruction)
+        + (f"\n\n{decision_routing_prompt}" if decision_routing_prompt else ""),
         "input": [*history, {"role": "user", "content": "Reason over this exact AGRO-AI task and evidence graph:\n" + json.dumps(user_payload, ensure_ascii=False, default=str)}],
         "reasoning": {"effort": effort},
         "text": {"verbosity": "medium", "format": {"type": "json_schema", "name": "agroai_grounded_decision_v1", "strict": True, "schema": _OUTPUT_SCHEMA}},
