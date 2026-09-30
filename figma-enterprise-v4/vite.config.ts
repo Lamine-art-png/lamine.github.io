@@ -39,6 +39,11 @@ export default defineConfig({
   // Safari available on macOS Catalina. Vite 6's default target starts at
   // Safari 16, so leaving this implicit can produce a completely blank page
   // before our React/runtime recovery code has a chance to run.
+  // Module workers (MapLibre GL tile worker) are emitted as ES modules.
+  worker: {
+    format: 'es',
+  },
+
   build: {
     target: ['es2020', 'safari15.6'],
     cssTarget: 'safari15.6',

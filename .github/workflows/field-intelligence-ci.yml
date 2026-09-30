@@ -188,6 +188,22 @@ jobs:
       - run: npm run test:field-intelligence-launch
       - run: npm run test:i18n
       - run: npm run build
+      - name: Install Chromium for the real map runtime check
+        run: |
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Field Intelligence map renders with the bundled MapLibre tile worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4173 --strictPort > map-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+            sleep 1
+          done
+          npx playwright test tests/browser/field-map-runtime.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
 
   deploy-live-newsroom:
     name: Deploy and verify live newsroom production

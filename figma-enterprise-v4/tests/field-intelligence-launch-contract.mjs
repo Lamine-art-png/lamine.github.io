@@ -55,7 +55,12 @@ ok("map style comes from the backend, not a bundled secret",
 ok("map clusters observations", map.includes("cluster: true"));
 ok("map has severity encoding", map.includes("SEVERITY_COLORS"));
 ok("map degrades to accessible fallback", map.includes("fieldIntel.mapFallback"));
-ok("map is lazy-loaded", map.includes('await import("maplibre-gl")'));
+// MapLibre stays out of the initial bundle: maps load it through the lazy
+// loader (which also registers the bundled tile worker) and nothing imports it
+// statically.
+const maplibreRuntime = readFileSync(join(root, "src", "app", "fieldIntelligence", "maplibreRuntime.ts"), "utf8");
+ok("map is lazy-loaded", map.includes("await loadMaplibre()") && maplibreRuntime.includes('import("maplibre-gl")'));
+ok("MapLibre tile worker is bundled and registered", maplibreRuntime.includes('maplibre-gl-worker.mjs?worker&url') && maplibreRuntime.includes("setWorkerUrl("));
 
 // --- Media viewer -----------------------------------------------------------
 const media = readFileSync(join(root, "src", "app", "fieldIntelligence", "MediaViewer.tsx"), "utf8");
