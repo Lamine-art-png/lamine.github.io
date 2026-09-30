@@ -17,6 +17,7 @@ const app = fs.readFileSync(path.join(src, "App.tsx"), "utf8");
 const i18n = fs.readFileSync(path.join(src, "i18n.ts"), "utf8");
 const hook = fs.readFileSync(path.join(src, "hooks", "useLocale.ts"), "utf8");
 const selector = fs.readFileSync(path.join(src, "components", "LanguageSelector.tsx"), "utf8");
+const authScreen = fs.readFileSync(path.join(src, "components", "AuthScreen.tsx"), "utf8");
 const dynamicCatalog = fs.readFileSync(path.join(src, "dynamicLocaleCatalog.ts"), "utf8");
 const globalOptions = fs.readFileSync(path.join(src, "globalLocaleOptions.ts"), "utf8");
 const literalRuntime = fs.readFileSync(path.join(src, "portalLiteralCatalog.ts"), "utf8");
@@ -102,6 +103,8 @@ assert(dynamicCatalog.includes("installLocaleCatalog(effectiveLocale, chunk, cat
 assert(!dynamicCatalog.includes("clearCachedLocale"), "later chunk failure must never erase successful translation progress");
 assert(selector.includes("GLOBAL_UI_LOCALES"), "language selector must render the full global registry");
 assert(selector.includes("activateLocale"), "language selector must activate the selected locale immediately");
+assert(authScreen.includes("<LanguageSelector compact />"), "every unauthenticated customer must receive the global language selector");
+assert(!/LanguageSelector[^\n]{0,160}(founder|admin|email|allowlist)/i.test(authScreen), "language selector must never be founder/admin/email gated");
 assert(!selector.includes("disabled={Boolean(pendingLocale)}"), "catalog loading must never disable the language selector");
 assert(globalOptions.includes("manifest.enabledUiLocales"), "global selector options must derive from shared manifest");
 assert(literalRuntime.includes("PORTAL_LITERAL_CATALOG"), "portal literal source map missing");

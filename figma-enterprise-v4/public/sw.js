@@ -16,12 +16,17 @@
  */
 const SW_ENV = new URL(self.location.href).searchParams.get("env") || "production";
 const CACHE_FAMILY = `agroai-shell-${SW_ENV}-`;
-const CACHE_VERSION = `${CACHE_FAMILY}v2`;
+const CACHE_VERSION = `${CACHE_FAMILY}v3`;
 const SHELL_PATHS = ["/", "/index.html", "/manifest.webmanifest", "/pwa-icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_PATHS)).catch(() => undefined),
+    (async () => {
+      await caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_PATHS)).catch(() => undefined);
+      // Production updates must not remain behind an old waiting worker.
+      // Activating immediately is safe because API traffic is never cached.
+      await self.skipWaiting();
+    })(),
   );
 });
 
