@@ -141,8 +141,8 @@ def test_assist_grounding_advisory_only_adds_caution(monkeypatch):
     assert packet.observed_facts == ["fact"]
     assert "decision_routing" not in packet.source_health
     assert "existing hard constraint" in packet.decision_constraints
-    assert any("more evidence" in item for item in packet.decision_constraints)
-    assert any("human review" in item for item in packet.decision_constraints)
+    assert any("more evidence" in item.lower() for item in packet.decision_constraints)
+    assert any("human review" in item.lower() for item in packet.decision_constraints)
 
 
 def test_field_assist_can_only_increase_review_caution(monkeypatch):

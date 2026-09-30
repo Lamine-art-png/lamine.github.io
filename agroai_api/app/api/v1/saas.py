@@ -190,7 +190,9 @@ def _save_preferences(db: Session, user: User, prefs: dict) -> dict:
 
 @router.post("/orgs", status_code=status.HTTP_201_CREATED)
 def create_org(payload: OrganizationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    org = Organization(name=payload.name, slug=_unique_slug(db, payload.name), owner_user_id=user.id)
+    # Registration screens every new organization before live access; an
+    # additional organization must not inherit the legacy approved default.
+    org = Organization(name=payload.name, slug=_unique_slug(db, payload.name), owner_user_id=user.id, verification_status="verification_required")
     db.add(org)
     db.flush()
     membership = OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner")
@@ -353,48 +355,44 @@ def assurance_overview(workspace_id: str, user: User = Depends(get_current_user)
     }
 
 
-@router.get("/workspaces/{workspace_id}/evidence")
-def list_evidence(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    return {"workspace_id": workspace.id, "evidence": [], "empty_state": "No tenant evidence has been uploaded for this workspace.", "classification_status": "pending", "proof_domain_mapping": {}}
+def _retired_workspace_route(replacement: str) -> HTTPException:
+    """Legacy workspace routes that returned canned results, consumed quota and
+    performed no work. They are retired truthfully instead of pretending."""
+    return HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "endpoint_retired",
+            "message": "This endpoint has been retired. Use the replacement endpoint.",
+            "replacement": replacement,
+        },
+    )
 
 
-@router.post("/workspaces/{workspace_id}/evidence")
-def upload_evidence_stub(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_upload_evidence(db, workspace.organization)
-    event = UsageEvent(organization_id=workspace.organization_id, workspace_id=workspace.id, user_id=user.id, event_type="evidence_upload", quantity=1, metadata_json={"source": "api_stub"})
-    db.add(event)
-    db.commit()
-    return {"status": "accepted_for_review", "classification_status": "pending", "confidence": None, "issues": ["Upload storage adapter is not yet configured for production files."]}
+@router.get("/workspaces/{workspace_id}/evidence", include_in_schema=False)
+def list_evidence(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("GET /v1/evidence")
 
 
-@router.post("/workspaces/{workspace_id}/agents/run")
-def run_agent(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_run_agent(db, workspace.organization)
-    event = UsageEvent(organization_id=workspace.organization_id, workspace_id=workspace.id, user_id=user.id, event_type="agent_run", quantity=1, metadata_json={"agent": "readiness"})
-    db.add(event)
-    db.commit()
-    return {"run_id": event.id, "status": "requires_human_review", "latest_findings": ["Missing proof remains before report export."], "action_proposals": ["Assign reviewer to evidence chain."], "human_approval_required": True}
+@router.post("/workspaces/{workspace_id}/evidence", include_in_schema=False)
+def retired_workspace_evidence_upload(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("POST /v1/evidence/upload")
 
 
-@router.get("/workspaces/{workspace_id}/agents/runs")
-def agent_runs(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    rows = db.query(UsageEvent).filter(UsageEvent.workspace_id == workspace.id, UsageEvent.event_type == "agent_run").order_by(UsageEvent.created_at.desc()).all()
-    return {"runs": [{"id": row.id, "status": "requires_human_review", "created_at": row.created_at.isoformat(), "metadata": row.metadata_json or {}} for row in rows]}
+@router.post("/workspaces/{workspace_id}/agents/run", include_in_schema=False)
+def run_agent(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("POST /v1/agents/run")
 
 
-@router.get("/workspaces/{workspace_id}/reports")
-def reports(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    can_export = get_plan_limits(workspace.organization.plan).can_export_reports
-    return {"reports": [{"id": "readiness-summary", "title": "Readiness summary", "status": "draftable" if can_export else "blocked", "export_allowed": can_export, "truthful_status": "Evaluation draft. Reviewer required before external use."}]}
+@router.get("/workspaces/{workspace_id}/agents/runs", include_in_schema=False)
+def agent_runs(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("GET /v1/agents/runs")
 
 
-@router.post("/workspaces/{workspace_id}/reports/export")
-def export_report(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_export_reports(workspace.organization)
-    return {"status": "queued", "truthful_status": "Draft report queued for reviewer-safe generation."}
+@router.get("/workspaces/{workspace_id}/reports", include_in_schema=False)
+def reports(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("GET /v1/reports")
+
+
+@router.post("/workspaces/{workspace_id}/reports/export", include_in_schema=False)
+def export_report(workspace_id: str, user: User = Depends(get_current_user)) -> dict:
+    raise _retired_workspace_route("POST /v1/reports/generate")

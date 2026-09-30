@@ -38,7 +38,7 @@ export function BillingPageV2() {
       }
       const result = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: period }) as Record<string, unknown>;
       if (typeof result.checkout_url === "string" && result.checkout_url) window.location.assign(result.checkout_url);
-      else setMessage(String(result.message || "Upgrade request received."));
+      else setMessage(String(result.message || "Checkout could not be started. Please try again."));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start checkout."); }
     finally { setBusy(""); }
   }

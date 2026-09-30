@@ -2,6 +2,7 @@ import { ReactNode, useCallback, useState } from "react";
 import { Lock, Mail, ShieldCheck, Users } from "lucide-react";
 import { apiClient, ProductCheckoutPayload, SupportTicketPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { currentLocale } from "../i18n";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
@@ -307,9 +308,9 @@ export function PricingPage() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+      setMessage(safe(response.message, "Checkout could not be started. Please try again."));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
+      setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }
   };
 
@@ -456,9 +457,9 @@ export function BillingPage() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setMessage(String(response.message || "Upgrade request received."));
+      setMessage(String(response.message || "Checkout could not be started. Please try again."));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
+      setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }
   };
 
@@ -663,55 +664,85 @@ export function AdminRequestsPage() {
   );
 }
 
+type InvitationRow = { id: string; email: string; status: string; role?: string; delivery_status?: string | null; expires_at?: string | null; accepted_at?: string | null };
+
+const INVITATION_REVOKED_MESSAGE = "Invitation for {email} revoked. The link no longer works.";
+
+const INVITATION_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending acceptance",
+  accepted: "Accepted",
+  expired: "Expired",
+  revoked: "Revoked",
+  delivery_failed: "Email not delivered",
+};
+
 export function TeamPage() {
   const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
   const membersState = usePortalResource<{ members: { id: string; name?: string; email?: string; role?: string }[] }>(useCallback(() => apiClient.team.members(), []));
-  const invitationsState = usePortalResource<{ invitations: { id: string; email: string; status: string; role?: string }[] }>(useCallback(() => apiClient.team.invitations(), []));
-  const { currentWorkspace } = useAuth();
+  const invitationsState = usePortalResource<{ invitations: InvitationRow[] }>(useCallback(() => apiClient.team.invitations(), []));
+  const { currentOrganization } = useAuth();
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"owner" | "admin" | "manager" | "operator" | "viewer">("operator");
+  const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "operator" | "viewer">("operator");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"good" | "warn">("good");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const canInvite = ["team", "network", "enterprise"].includes(String(shellState.data?.plan?.id || ""));
+  const isOwner = String(currentOrganization?.role || "") === "owner";
 
-  const startTeamUpgrade = async () => {
+  const report = (text: string, tone: "good" | "warn" = "good") => { setMessage(text); setMessageTone(tone); };
+  const refreshLists = async () => { await Promise.all([invitationsState.refresh(), membersState.refresh()]); };
+
+  const startTeamUpgrade = () => {
     setUpgradeOpen(false);
-    const response = await apiClient.sales.contact({
-      category: "sales",
-      subject: "Team plan request",
-      message: "Customer requested Team plan access from the Team page.",
-      workspace_id: currentWorkspace?.id,
-      source_page: "team",
-    }) as Record<string, unknown>;
-    setMessage(String(response.message || "Team upgrade request received."));
+    window.location.assign("/billing");
   };
 
   const sendInvite = async () => {
     if (!inviteEmail.trim()) return;
+    if (!canInvite) { setUpgradeOpen(true); return; }
+    setBusyId("new");
     try {
-      if (canInvite) {
-        const response = await apiClient.team.invite({ email: inviteEmail.trim(), role: inviteRole }) as Record<string, unknown>;
-        setMessage(String(response.message || "Invitation sent."));
-        await invitationsState.refresh();
-      } else {
-        const response = await apiClient.support.ticket({
-          category: "support",
-          subject: "Team invitation request",
-          message: `Please invite ${inviteEmail} as ${inviteRole}.`,
-          workspace_id: currentWorkspace?.id,
-          source_page: "team",
-        }) as Record<string, unknown>;
-        setMessage(`${safe(response.message, "Team invitation request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
-      }
+      const response = await apiClient.team.invite({ email: inviteEmail.trim(), role: inviteRole, locale: currentLocale() }) as Record<string, unknown>;
+      report(String(response.message || ""));
       setInviteEmail("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Team invitation request received.");
+      report(error instanceof Error ? error.message : "The invitation could not be sent.", "warn");
+    } finally {
+      setBusyId(null);
+      await refreshLists();
+    }
+  };
+
+  const resend = async (row: InvitationRow) => {
+    setBusyId(row.id);
+    try {
+      const response = await apiClient.team.resend(row.id) as Record<string, unknown>;
+      report(String(response.message || ""));
+    } catch (error) {
+      report(error instanceof Error ? error.message : "The invitation could not be resent.", "warn");
+    } finally {
+      setBusyId(null);
+      await refreshLists();
+    }
+  };
+
+  const revoke = async (row: InvitationRow) => {
+    setBusyId(row.id);
+    try {
+      await apiClient.team.revoke(row.id);
+      report(INVITATION_REVOKED_MESSAGE.replace("{email}", row.email));
+    } catch (error) {
+      report(error instanceof Error ? error.message : "The invitation could not be revoked.", "warn");
+    } finally {
+      setBusyId(null);
+      await refreshLists();
     }
   };
 
   return (
-    <Page title="Team" subtitle="Invite and role controls are prepared for workspace collaboration.">
-      {message ? <Banner message={message} /> : null}
+    <Page title="Team" subtitle="Invite teammates and manage their access.">
+      {message ? <Banner tone={messageTone} message={message} /> : null}
       {shellState.error ? <Banner tone="warn" message={shellState.error} /> : null}
       <Panel title="Current user">
         <Row label="Name" value={shellState.data?.user?.name} />
@@ -719,28 +750,28 @@ export function TeamPage() {
         <Row label="Workspace" value={shellState.data?.workspace?.name} />
         <Row label="Plan" value={shellState.data?.plan?.name} />
       </Panel>
-      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim()} onClick={sendInvite}>{canInvite ? "Send invitation" : "Request invite"}</PortalButton>}>
+      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim() || busyId === "new"} onClick={sendInvite}>{busyId === "new" ? "Sending…" : "Send invitation"}</PortalButton>}>
         <div className="grid gap-4 md:grid-cols-[1fr_220px]">
           <label className="text-[12px]" style={{ color: MUTED }}>
             Email
-            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} placeholder="teammate@company.com" />
+            <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} placeholder="teammate@company.com" />
           </label>
           <label className="text-[12px]" style={{ color: MUTED }}>
             Role
             <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as typeof inviteRole)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
+              {isOwner ? <option value="admin">Admin</option> : null}
               <option value="manager">Manager</option>
               <option value="operator">Operator</option>
               <option value="viewer">Viewer</option>
             </select>
           </label>
         </div>
+        <p className="mt-3 text-[12px] leading-5" style={{ color: MUTED }}>We email a secure, single-use link that expires in 7 days. The teammate joins this organization with the selected role when they accept.</p>
         {!canInvite ? (
           <div className="mt-4 rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
             <div className="flex items-start gap-3">
               <Lock className="mt-1 h-5 w-5" style={{ color: GREEN }} />
-              <p className="text-[13px] leading-6" style={{ color: MUTED }}>Direct team invitations are included in Team, Network, and Enterprise. Free/Professional workspaces can submit an invite request.</p>
+              <p className="text-[13px] leading-6" style={{ color: MUTED }}>Team invitations are included in Team, Network, and Enterprise.</p>
             </div>
           </div>
         ) : null}
@@ -755,7 +786,22 @@ export function TeamPage() {
         </Panel>
         <Panel title="Invitations">
           <div className="space-y-2">
-            {(invitationsState.data?.invitations || []).map((row) => <Row key={row.id} label={row.email} value={row.status} />)}
+            {(invitationsState.data?.invitations || []).map((row) => {
+              const canResend = ["pending", "delivery_failed", "expired"].includes(row.status);
+              const canRevoke = ["pending", "delivery_failed"].includes(row.status);
+              return (
+                <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: BG, border: `1px solid ${BORDER}` }} data-invitation-status={row.status}>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-medium" style={{ color: TEXT }}>{row.email}</div>
+                    <div className="text-[12px]" style={{ color: row.status === "delivery_failed" ? "#8A3B12" : MUTED }}>{INVITATION_STATUS_LABELS[row.status] || row.status}{row.role ? ` · ${row.role}` : ""}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    {canResend ? <PortalButton variant="secondary" disabled={busyId === row.id} onClick={() => void resend(row)}>Resend</PortalButton> : null}
+                    {canRevoke ? <PortalButton variant="secondary" disabled={busyId === row.id} onClick={() => void revoke(row)}>Revoke</PortalButton> : null}
+                  </div>
+                </div>
+              );
+            })}
             {invitationsState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{invitationsState.error}</p> : null}
             {!invitationsState.data?.invitations?.length ? <p className="text-[13px]" style={{ color: MUTED }}>No invitations yet.</p> : null}
           </div>

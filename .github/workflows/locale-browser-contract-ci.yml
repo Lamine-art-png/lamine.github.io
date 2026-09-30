@@ -55,6 +55,8 @@ jobs:
             tests/browser/global-language-switching.spec.mjs \
             tests/browser/preauth-static-localization.spec.mjs \
             tests/browser/operation-workspaces.spec.mjs \
+            tests/browser/verify-email-single-use.spec.mjs \
+            tests/browser/session-resilience.spec.mjs \
             --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
           status=${PIPESTATUS[0]}
           exit $status
@@ -68,6 +70,61 @@ jobs:
             figma-enterprise-v4/locale-production-build.log
             figma-enterprise-v4/locale-vite-preview.log
             figma-enterprise-v4/locale-playwright.log
+            figma-enterprise-v4/test-results
+          if-no-files-found: ignore
+          retention-days: 2
+
+  fullstack-team-invitation:
+    # Real API + real portal build: owner invites, the invitee follows the
+    # emailed single-use link, creates an account and appears in Members.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install API dependencies
+        working-directory: agroai_api
+        run: pip install -r requirements.txt
+      - name: Install portal and browser test dependencies
+        working-directory: figma-enterprise-v4
+        run: |
+          npm ci
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Run full-stack invitation journey
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/e2e"
+          mkdir -p "$work"
+          (cd agroai_api && python scripts/e2e_fullstack_server.py --port 8765 --db "$work/e2e.db" --outbox "$work/outbox.jsonl" --seed "$work/seed.json" > "$work/api.log" 2>&1) &
+          cd figma-enterprise-v4
+          VITE_API_BASE_URL=http://127.0.0.1:8765 npx vite build --outDir "$work/dist" --emptyOutDir > "$work/build.log" 2>&1
+          npx vite preview --outDir "$work/dist" --host 127.0.0.1 --port 5173 --strictPort > "$work/preview.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8765/health >/dev/null && curl --fail --silent http://127.0.0.1:5173/team >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              tail -50 "$work/api.log" "$work/preview.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          AGROAI_APP_ORIGIN=http://127.0.0.1:5173 AGROAI_E2E_OUTBOX="$work/outbox.jsonl" AGROAI_E2E_SEED="$work/seed.json" \
+            npx playwright test tests/browser/fullstack-team-invitation.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
+      - name: Upload full-stack evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fullstack-team-invitation
+          path: |
+            ${{ runner.temp }}/e2e/*.log
             figma-enterprise-v4/test-results
           if-no-files-found: ignore
           retention-days: 2

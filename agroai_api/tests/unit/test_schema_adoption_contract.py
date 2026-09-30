@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "036_legal_acceptance_locale"
+    assert HEAD_ALEMBIC_REVISION == "037_team_invitation_delivery"
     assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["market_positions"]
     )

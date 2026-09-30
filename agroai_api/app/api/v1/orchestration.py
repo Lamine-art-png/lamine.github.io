@@ -233,7 +233,24 @@ async def cancel_schedule(
                 schedule.provider_schedule_id,
             )
         except Exception as e:
-            logger.error("Failed to cancel via adapter: %s", e)
+            # The provider may still run this schedule; never report it cancelled.
+            logger.error("Failed to cancel via adapter: %s", e.__class__.__name__)
+            AuditService.log(
+                db=db,
+                tenant_id=tenant_id,
+                action="cancel",
+                resource_type="schedule",
+                resource_id=schedule_id,
+                status="failure",
+                details={"provider": schedule.provider, "error": e.__class__.__name__},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "code": "provider_cancel_failed",
+                    "message": "The controller did not confirm the cancellation. The schedule may still run; retry or cancel it on the controller.",
+                },
+            )
 
     schedule.status = "cancelled"
     schedule.cancelled_at = datetime.utcnow()

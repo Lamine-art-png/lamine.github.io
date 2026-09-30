@@ -12,6 +12,7 @@ from app.api.v1.connectors import create_or_get_connection, public_connection, r
 from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
+from app.services.connector_availability import assert_connector_launchable
 from app.services.connector_vault import credential_reference, store_connector_credentials, vault_configured
 from app.services.oauth_state_store import issue_oauth_state
 from app.services.oauth_urls import oauth_url
@@ -135,6 +136,7 @@ async def start_oauth_secure(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     verify_connector_schema(db)
+    assert_connector_launchable(payload.provider)
     connection = create_or_get_connection(
         db,
         tenant_id=tenant_id,

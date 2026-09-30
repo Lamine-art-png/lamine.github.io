@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
 import json
 import sys
 from pathlib import Path
@@ -27,6 +28,8 @@ MODULES = [
     "agroai_api/app/api/v1/preferences.py",
     "agroai_api/app/services/password_policy.py",
     "agroai_api/app/services/credential_recovery.py",
+    "agroai_api/app/services/team_invitations.py",
+    "agroai_api/app/api/v1/team_invitation_accept.py",
 ]
 MESSAGE_KEYWORDS = {"detail", "message"}
 
@@ -44,7 +47,8 @@ def customer_text(value: object) -> bool:
     text = value.strip()
     if any(marker in text for marker in INTERNAL):
         return False
-    return len(text) >= 8 and " " in text and text[0].isupper() and "{" not in text and "_" not in text.split()[0]
+    # Only {identifier} placeholders are allowed (templates the portal fills).
+    return len(text) >= 8 and " " in text and text[0].isupper() and not re.search(r"\{(?![A-Za-z_][A-Za-z0-9_]*\})", text) and "_" not in text.split()[0]
 
 
 def extract(path: Path) -> set[str]:
@@ -61,6 +65,11 @@ def extract(path: Path) -> set[str]:
                 if isinstance(key, ast.Constant) and key.value in MESSAGE_KEYWORDS and isinstance(value, ast.Constant):
                     if customer_text(value.value):
                         found.add(value.value.strip())
+        # _error(status, code, "message") helper calls in the invitation service
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "_error" and len(node.args) >= 3:
+            message = node.args[2]
+            if isinstance(message, ast.Constant) and customer_text(message.value):
+                found.add(message.value.strip())
         # module constants such as GENERIC_MESSAGE = "..."
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
             names = [t.id for t in node.targets if isinstance(t, ast.Name)]

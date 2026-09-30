@@ -145,6 +145,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_ORIGINS = [
     "https://app.agroai-pilot.com",
+    # First-party Platform API product; the edge already admits it, and the
+    # direct machine hostname must not reject the same client.
+    "https://platform.agroai-pilot.com",
     "https://agroai-pilot.com",
     "https://www.agroai-pilot.com",
     "https://api.agroai-pilot.com",
@@ -171,7 +174,9 @@ app.add_middleware(
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key"],
+    # Matches the edge gateway's allowed request headers (X-Request-Id is a
+    # bounded client correlation id, see bounded_client_correlation_id).
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key", "X-Request-Id"],
     expose_headers=["x-agroai-runtime", "x-agroai-error", "x-agroai-app-ms", "x-agroai-bootstrap-ms", "server-timing"],
 )
 
@@ -596,6 +601,8 @@ app.include_router(connector_hub_router, prefix="/v1")
 from app.api.v1.connector_launch import router as connector_launch_router  # noqa: E402
 app.include_router(connector_launch_router, prefix="/v1")
 
+from app.api.v1.workspace_reports import router as workspace_reports_router  # noqa: E402
+app.include_router(workspace_reports_router, prefix="/v1")
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
 

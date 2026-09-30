@@ -383,8 +383,15 @@ def report_email(
         ),
         attachments=[{"filename": filename, "content_type": "application/pdf", "data": pdf_content}],
     )
+    if not result.get("ok"):
+        # Raising releases the report_export quota reservation: an email that
+        # was never delivered is neither reported as sent nor charged.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The report email could not be delivered. Download the PDF instead, or try again later.",
+        )
     return {
-        "status": "sent" if result.get("ok") else "not_sent",
+        "status": "sent",
         "recipient": recipient,
         "filename": filename,
         "email_provider": result.get("provider"),

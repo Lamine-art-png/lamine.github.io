@@ -143,7 +143,7 @@ if (!rootEl) {
   const localeReady = Promise.all([import("./app/i18n"), import("./app/dynamicLocaleCatalog")])
     .then(([{ getStoredLocale, setStoredLocale, canonicalizeSelectedLocale }, { preloadBundledLocaleCatalog }]) => {
       const linkLocale = new URLSearchParams(window.location.search).get("lang");
-      const linkPath = ["/verify-email", "/recover-account", "/reset-password"].includes(window.location.pathname);
+      const linkPath = ["/verify-email", "/recover-account", "/reset-password", "/accept-invite"].includes(window.location.pathname);
       if (linkLocale && (linkPath || getStoredLocale() === "auto")) {
         const requested = canonicalizeSelectedLocale(linkLocale);
         return preloadBundledLocaleCatalog(requested).then((ready) => {

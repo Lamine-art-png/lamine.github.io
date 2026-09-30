@@ -58,7 +58,7 @@ export function Reports() {
       const result = await apiClient.reports.generate({ report_type: reportType, format, workspace_id: workspaceId }) as any;
       setArtifact(result.artifact || null);
       setPreview(result.preview || "");
-      setMessage("Report generated.");
+      setMessage(result.sample_mode ? "Report generated. This workspace has no evidence yet, so the report contains no field findings." : "Report generated.");
       await reports.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Report generation failed.");
@@ -67,15 +67,19 @@ export function Reports() {
     }
   }
 
-  async function download(id?: string) {
+  async function download(id?: string, filename?: string) {
     if (!id) return;
-    const blob = await apiClient.artifacts.download(id);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = artifact?.filename || "agro-ai-report";
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await apiClient.artifacts.download(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "agro-ai-report";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setMessage(error instanceof Error && error.message ? error.message : "The report could not be downloaded. Please try again.");
+    }
   }
 
   async function generateFactoryPreview() {
@@ -113,8 +117,8 @@ export function Reports() {
       link.download = `agro-ai-${payload.report_type}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setMessage("Report preview ready. PDF export needs retry.");
+    } catch (error) {
+      setMessage(error instanceof Error && error.message ? error.message : "The PDF could not be generated. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -174,7 +178,7 @@ export function Reports() {
           <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="flex items-center justify-between gap-4 mb-4">
               <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>{artifact?.title || "Report preview"}</h2>
-              <PortalButton onClick={() => download(artifact?.id)}>Download</PortalButton>
+              <PortalButton onClick={() => download(artifact?.id, artifact?.filename)}>Download</PortalButton>
             </div>
             <pre className="max-h-[420px] overflow-auto rounded-xl p-4 text-[12px] whitespace-pre-wrap" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{preview}</pre>
           </section>
@@ -243,7 +247,7 @@ export function Reports() {
                 <StatusBadge label={report.artifact_type || "artifact"} />
               </div>
               <p className="text-[12px] mb-4" style={{ color: MUTED }}>{report.filename || report.content_type || "Report artifact"}</p>
-              <PortalButton variant="secondary" onClick={() => download(report.id)}>Download</PortalButton>
+              <PortalButton variant="secondary" onClick={() => download(report.id, report.filename)}>Download</PortalButton>
             </article>
           )) : (
             <article className="rounded-xl p-6 col-span-2" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>

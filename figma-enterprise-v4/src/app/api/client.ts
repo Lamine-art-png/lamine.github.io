@@ -323,7 +323,7 @@ export type BillingCheckoutSessionPayload = { organization_id: string; offer?: s
 export type BillingPortalPayload = { organization_id: string; locale?: string };
 export type EmailVerificationRequestPayload = { email?: string; locale?: string };
 export type EmailVerificationConfirmPayload = { token: string };
-export type TeamInvitationPayload = { email: string; role: "owner" | "admin" | "manager" | "operator" | "viewer" };
+export type TeamInvitationPayload = { email: string; role: "admin" | "manager" | "operator" | "viewer"; locale?: string };
 export type SupportTicketPayload = { category: "support" | "integration" | "issue" | "onboarding" | "sales"; subject: string; message: string; priority?: "low" | "medium" | "high" | "urgent"; name?: string; email?: string; company?: string; role?: string; workspace_id?: string; source_page?: string };
 export type OnboardingPayload = { current_step?: string; selected_plan?: string; organization_type?: string; acres_or_sites?: string; primary_goal?: string; completed_steps?: string[]; workspace_id?: string };
 export type ConversationPayload = { title?: string; workspace_id?: string; message?: string };
@@ -446,7 +446,16 @@ export const apiClient = {
     billingReconciliation: () => get("/v1/platform/admin/billing/reconciliation"),
     drainMeterOutbox: () => post("/v1/platform/admin/billing/meter-outbox/drain"),
   },
-  team: { members: () => get("/v1/team/members"), invitations: () => get("/v1/team/invitations"), invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload), revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`) },
+  team: {
+    members: () => get("/v1/team/members"),
+    invitations: () => get("/v1/team/invitations"),
+    invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload),
+    resend: (invitationId: string) => post(`/v1/team/invitations/${encodeURIComponent(invitationId)}/resend`, {}),
+    revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`),
+    previewInvitation: (token: string) => post("/v1/team/invitations/preview", { token }),
+    acceptInvitation: (token: string) => post("/v1/team/invitations/accept", { token }),
+    acceptInvitationNewAccount: (payload: { token: string; name: string; password: string; terms_accepted: boolean; terms_version: string; privacy_version: string; locale?: string }) => post("/v1/team/invitations/accept-new-account", payload),
+  },
   orgs: { list: () => get("/v1/orgs"), create: (payload: CreateOrgPayload) => post("/v1/orgs", payload) },
   workspaces: { list: () => get("/v1/workspaces"), create: (payload: CreateWorkspacePayload) => post("/v1/workspaces", payload) },
   assurance: {

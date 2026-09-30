@@ -21,6 +21,7 @@ from app.api.v1.connectors import (
 )
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
+from app.services.connector_availability import assert_connector_launchable
 from app.services.oauth_state_store import issue_oauth_state
 from app.services.oauth_urls import oauth_url
 
@@ -35,6 +36,7 @@ async def start_launch_authorization_secure(
     db: Session = Depends(get_db),
 ) -> dict:
     verify_connector_schema(db)
+    assert_connector_launchable(payload.provider)
     manifest = manifest_for(payload.provider)
     auth_pattern = manifest["auth_pattern"]
     mode = "oauth" if auth_pattern == "oauth" else auth_pattern

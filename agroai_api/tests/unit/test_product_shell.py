@@ -116,7 +116,9 @@ def test_team_invites_require_team_entitlement(client, db):
     assert response.json()["detail"]["recommended_plan"] == "team"
 
 
-def test_team_plan_unlocks_team_invites(client, db):
+def test_team_plan_unlocks_team_invites(client, db, monkeypatch):
+    sent = []
+    monkeypatch.setattr("app.services.team_invitations.send_email", lambda **kw: sent.append(kw) or {"ok": True, "provider": "resend", "status_code": 200})
     headers = _register_and_login(client, db, "team-open@example.com")
     org = db.query(Organization).filter(Organization.name == "Shell Farms").order_by(Organization.created_at.desc()).first()
     org.plan = "team"
@@ -124,6 +126,7 @@ def test_team_plan_unlocks_team_invites(client, db):
     db.commit()
     response = client.post("/v1/team/invitations", headers=headers, json={"email": "teammate@example.com", "role": "manager"})
     assert response.status_code == 200
+    assert response.json()["status"] == "sent" and len(sent) == 1 and sent[0]["to_email"] == "teammate@example.com"
     invitations = client.get("/v1/team/invitations", headers=headers)
     assert invitations.status_code == 200
     assert invitations.json()["invitations"][0]["email"] == "teammate@example.com"

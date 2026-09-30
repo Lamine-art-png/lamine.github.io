@@ -310,6 +310,16 @@ def report_factory(ctx: CockpitContext, report_type: str, audience: str | None =
         fields = [row for row in fields if row["field_id"] == field_id]
     exception_payload = exceptions(ctx)
     decisions = decision_workbench(ctx, field_id=field_id)["decisions"]
+    appendix = _evidence_appendix(ctx)
+    customer_data = _has_customer_data(ctx)
+    if not customer_data:
+        # A report is a deliverable: never present the cockpit's sample field,
+        # seeded evaluation telemetry or decisions derived from them as the
+        # customer's operation.
+        summary = _sample_readiness(ctx)
+        fields = []
+        decisions = [_collect_data_decision(exception_payload["exceptions"], "daily")]
+        appendix = []
     missing = summary["missing_source_types"]
     title = _report_title(report_type, audience)
     report = {
@@ -323,10 +333,26 @@ def report_factory(ctx: CockpitContext, report_type: str, audience: str | None =
         "exceptions": exception_payload["exceptions"],
         "decisions": decisions,
         "missing_evidence": missing,
-        "evidence_appendix": _evidence_appendix(ctx),
+        "evidence_appendix": appendix,
         "recommended_next_actions": summary["recommendations"][:6],
     }
-    return {"status": "ok", "sample_mode": not ctx.has_data, "report": report}
+    return {"status": "ok", "sample_mode": not customer_data, "report": report}
+
+
+def _is_evaluation_sample(row: Any) -> bool:
+    meta = getattr(row, "meta_data", None) or {}
+    return getattr(row, "source", None) == "evaluation_sample" or (isinstance(meta, dict) and meta.get("source") == "evaluation_sample")
+
+
+def _has_customer_data(ctx: CockpitContext) -> bool:
+    """True when the workspace holds anything other than seeded evaluation samples."""
+    return bool(
+        ctx.connections
+        or ctx.sources
+        or ctx.evidence
+        or ctx.jobs
+        or any(not _is_evaluation_sample(row) for row in ctx.telemetry)
+    )
 
 
 def _sample_readiness(ctx: CockpitContext) -> dict[str, Any]:
