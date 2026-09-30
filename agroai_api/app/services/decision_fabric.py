@@ -333,6 +333,10 @@ def grounding_state(packet: Any, *, task: str, question: str) -> dict[str, Any]:
         "incomplete_science_count": _count(sum(1 for row in science if getattr(row, "status", None) != "computed")),
         "grounding_confidence": _confidence_band(getattr(packet, "grounding_confidence", None)),
         "decision_constraint_count": _count(len(list(getattr(packet, "decision_constraints", []) or []))),
+        "modalities": _modality_flags([
+            *list(getattr(packet, "observed_facts", []) or []),
+            *list(getattr(packet, "derived_context", []) or []),
+        ]),
         "intent": intent_flags(question, task),
     }
 
@@ -370,6 +374,37 @@ def attach_grounding_advisory(packet: Any, *, task: str, question: str) -> Decis
         return None
 
 
+def _modality_flags(evidence: list[Any]) -> dict[str, bool]:
+    visual = False
+    audio = False
+    document = False
+    telemetry = False
+    field_observation = False
+    for row in evidence[:100]:
+        if isinstance(row, dict):
+            descriptor = " ".join(
+                str(row.get(key) or "").lower()
+                for key in ("type", "source_type", "content_type", "source")
+            )
+        else:
+            descriptor = " ".join(
+                str(getattr(row, key, "") or "").lower()
+                for key in ("source_type", "title")
+            )
+        visual = visual or any(token in descriptor for token in ("image", "photo", "video", "vision"))
+        audio = audio or any(token in descriptor for token in ("audio", "voice"))
+        document = document or any(token in descriptor for token in ("uploaded_file", "document", "pdf", "csv", "spreadsheet"))
+        telemetry = telemetry or any(token in descriptor for token in ("telemetry", "sensor", "meter", "weather"))
+        field_observation = field_observation or "observation" in descriptor
+    return {
+        "has_visual_evidence": visual,
+        "has_audio_evidence": audio,
+        "has_document_evidence": document,
+        "has_telemetry_evidence": telemetry,
+        "has_field_observation": field_observation,
+    }
+
+
 def evidence_context_state(context: Any, *, task: str, question: str) -> dict[str, Any]:
     evidence = list(getattr(context, "evidence", []) or [])
     missing = list(getattr(context, "missing_data", []) or [])
@@ -382,6 +417,7 @@ def evidence_context_state(context: Any, *, task: str, question: str) -> dict[st
         "citation_count": _count(len(citations)),
         "has_missing_data": bool(missing),
         "has_evidence": bool(evidence),
+        "modalities": _modality_flags(evidence),
         "intent": intent_flags(question, task),
     }
 
