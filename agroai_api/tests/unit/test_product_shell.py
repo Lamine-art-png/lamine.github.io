@@ -89,7 +89,7 @@ def test_authenticated_customer_can_change_password_and_keep_current_browser_sig
     )
     assert changed.status_code == 200, changed.text
     body = changed.json()
-    assert body["message"] == "Password changed."
+    assert body["status"] == "password_changed"
     new_token = body["access_token"]
     assert new_token and new_token != old_token
 
