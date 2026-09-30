@@ -476,10 +476,19 @@ export function installReleaseRuntime() {
   window.addEventListener("pageshow", (event) => {
     if ((event as PageTransitionEvent).persisted) void checkForRelease("bfcache", true).then(() => applyPending("visible"));
   });
+  const pruneWorkerCaches = () => {
+    try {
+      navigator.serviceWorker?.controller?.postMessage({ type: "AGROAI_PRUNE_CACHES" });
+    } catch {
+      // ignore
+    }
+  };
   navigator.serviceWorker?.addEventListener?.("controllerchange", () => {
     reportReleaseEvent("service_worker_updated");
+    window.setTimeout(pruneWorkerCaches, 3000);
     void checkForRelease("service_worker", true);
   });
+  window.setTimeout(pruneWorkerCaches, 5000);
   window.setInterval(() => {
     if (document.visibilityState !== "visible") return;
     void checkForRelease("interval").then(() => applyPending("idle"));

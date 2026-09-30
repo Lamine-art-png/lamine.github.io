@@ -36,17 +36,26 @@ self.addEventListener("install", (event) => {
   );
 });
 
+// Delete only stale versions from this deployment environment. Never delete
+// another AGRO-AI environment's cache or an unrelated app cache. Also run
+// after activation (page request / navigation): the previous worker's
+// in-flight fetch handlers can recreate its cache after this worker activated.
+async function pruneStaleCaches() {
+  // Only the newest worker prunes: an older worker must never delete the
+  // cache of a newer release that is installing or waiting.
+  if (self.registration.installing || self.registration.waiting) return;
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith(CACHE_FAMILY) && name !== CACHE_VERSION)
+      .map((name) => caches.delete(name)),
+  );
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      const names = await caches.keys();
-      // Delete only stale versions from this deployment environment. Never
-      // delete another AGRO-AI environment's cache or an unrelated app cache.
-      await Promise.all(
-        names
-          .filter((name) => name.startsWith(CACHE_FAMILY) && name !== CACHE_VERSION)
-          .map((name) => caches.delete(name)),
-      );
+      await pruneStaleCaches();
       await self.clients.claim();
     })(),
   );
@@ -54,6 +63,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "AGROAI_PRUNE_CACHES") event.waitUntil(pruneStaleCaches().catch(() => undefined));
   if (event.data && event.data.type === "AGROAI_GET_BUILD" && event.source) {
     event.source.postMessage({ type: "AGROAI_SW_BUILD", build: BUILD_ID });
   }
@@ -116,6 +126,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
+    event.waitUntil(pruneStaleCaches().catch(() => undefined));
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_VERSION);
