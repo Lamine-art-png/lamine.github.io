@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "a51e119d90586130caefea91be8d4af504fbbafa7723c409c7ccec0d64d2a383",
+  "sourceFingerprint": "1064f9086fab2c1a59d8c91b34958e2a3f297b7feee3476ec118071342f10aa4",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1742,6 +1742,7 @@
     "literal.579f895988fc0f50": "Field Intelligence · live conversation",
     "literal.57a26be2997e74d7": "Creating operation…",
     "literal.57a5c3a9c0913425": "Secure checkout did not return a valid URL.",
+    "literal.57bec38542ae27a9": "Checkout could not be started. Please try again.",
     "literal.57c30c96e72d1449": "Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI.",
     "literal.57f1b0420ee03c7f": "Close data manager",
     "literal.580899575a423dec": "Checking your invitation…",
@@ -2600,7 +2601,6 @@
     "literal.c1250a41c50d638f": "The operation update did not return a valid workspace.",
     "literal.c18e579f54bf2f4c": "Your LIVE API key was created",
     "literal.c199508ac43dfd01": "Include country code",
-    "literal.c1a20828e7a81740": "Upgrade request received.",
     "literal.c1ebc7817870e5be": "Needs attention",
     "literal.c1fc966fb9051757": "Organizations needing governance review, custom controller/API integrations, security process, and dedicated support.",
     "literal.c205924de0fe636c": "Documentation",

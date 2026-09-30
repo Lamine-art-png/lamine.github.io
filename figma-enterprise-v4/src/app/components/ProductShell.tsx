@@ -308,7 +308,7 @@ export function PricingPage() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+      setMessage(safe(response.message, "Checkout could not be started. Please try again."));
     } catch (error) {
       setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }
@@ -457,7 +457,7 @@ export function BillingPage() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setMessage(String(response.message || "Upgrade request received."));
+      setMessage(String(response.message || "Checkout could not be started. Please try again."));
     } catch (error) {
       setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }

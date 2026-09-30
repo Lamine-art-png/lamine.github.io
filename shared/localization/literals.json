@@ -197,7 +197,7 @@
   "literal.a51a0b50b2e5341a": "Enterprise pricing request",
   "literal.76e8ec29c9c32e2b": "Customer requested Enterprise rollout from Billing.",
   "literal.456b773eb05a7343": "Enterprise request received.",
-  "literal.c1a20828e7a81740": "Upgrade request received.",
+  "literal.57bec38542ae27a9": "Checkout could not be started. Please try again.",
   "literal.827beb6ec9dcac23": "Could not start checkout.",
   "literal.6f4eff0775f8a7cb": "Billing portal is not available yet.",
   "literal.205b3db3e4e7b5d7": "Could not open billing portal.",
