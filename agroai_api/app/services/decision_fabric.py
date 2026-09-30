@@ -349,20 +349,18 @@ def attach_grounding_advisory(packet: Any, *, task: str, question: str) -> Decis
         if advisory is None:
             return None
 
-        # Shadow mode observes and logs only. It must not modify model context.
+        # Shadow mode observes and logs only. Assist mode can only add generic
+        # safety constraints; provider/model routing metadata never enters the
+        # customer-visible grounding graph.
         if assist_enabled():
-            source_health = getattr(packet, "source_health", None)
-            if isinstance(source_health, dict):
-                source_health["decision_routing"] = advisory.safe_dict()
-
             constraints = list(getattr(packet, "decision_constraints", []) or [])
             if advisory.data_sufficient < 0.50:
                 constraints.append(
-                    "Internal decision routing indicates that more evidence is needed before a definitive consequential recommendation."
+                    "More evidence is required before a definitive consequential recommendation."
                 )
             if advisory.needs_human_review >= 0.70:
                 constraints.append(
-                    "Internal decision routing requires human review before any consequential operational or external action."
+                    "Human review is required before any consequential operational or external action."
                 )
             packet.decision_constraints = list(dict.fromkeys(constraints))
         return advisory
