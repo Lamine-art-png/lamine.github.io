@@ -125,10 +125,10 @@ test("an open tab converges when the customer returns, keeping session and Portu
   expect(await page.evaluate(() => localStorage.getItem("agroai_access_token"))).toBe(TOKEN);
   expect(await page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe("pt-BR");
   expect(await page.evaluate(() => document.documentElement.lang)).toMatch(/^pt/);
-  const reported = await events();
-  expect(reported.some((row) => row.event === "stale_build_detected" && row.running_build === A && row.latest_build === B)).toBe(true);
-  expect(reported.some((row) => row.event === "recovery_succeeded" && row.running_build === B)).toBe(true);
-  expect(JSON.stringify(reported)).not.toContain(TOKEN);
+  // Diagnostics are sent with sendBeacon (asynchronous, fire-and-forget).
+  await expect.poll(async () => (await events()).some((row) => row.event === "stale_build_detected" && row.running_build === A && row.latest_build === B), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await events()).some((row) => row.event === "recovery_succeeded" && row.running_build === B), { timeout: 10_000 }).toBe(true);
+  expect(JSON.stringify(await events())).not.toContain(TOKEN);
   await context.close();
 });
 
