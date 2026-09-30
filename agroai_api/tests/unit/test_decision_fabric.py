@@ -191,3 +191,32 @@ def test_market_state_contains_only_qualitative_or_presence_signals():
     assert "Secret Specialty Crop" not in serialized
     assert state["has_projected_margin"] is True
     assert state["evidence_value_count"] == 1
+
+
+def test_shadow_mode_observes_without_influencing_model_context(monkeypatch):
+    _configure(monkeypatch, mode="shadow")
+    advisory = _advisory()
+
+    class Packet:
+        observed_facts = ["fact"]
+        derived_context = []
+        unknowns = []
+        conflicts = []
+        science_checks = []
+        source_health = {}
+        grounding_confidence = 0.9
+        decision_constraints = ["hard rule"]
+
+    monkeypatch.setattr(decision_fabric, "assess_surface", lambda *args, **kwargs: advisory)
+    packet = Packet()
+    result = decision_fabric.attach_grounding_advisory(
+        packet,
+        task="decision",
+        question="What should we do?",
+    )
+
+    assert result is advisory
+    assert "decision_routing" not in packet.source_health
+    assert packet.decision_constraints == ["hard rule"]
+    assert decision_fabric.advisory_prompt(advisory) == ""
+    assert decision_fabric.advisory_context(advisory) is None
