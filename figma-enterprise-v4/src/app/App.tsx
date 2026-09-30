@@ -143,10 +143,13 @@ function AuthenticatedApp() {
   }, [token]);
 
   const path = window.location.pathname;
-  if (isLoading) return <BrandedPortalLoader />;
+  // Single-use link pages render before the session loading gate: confirming a
+  // link signs the user in, and unmounting the page mid-flight would replay the
+  // consumed token (and report a successful verification as a failure).
   if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/accept-invite") return <AcceptInvitationPage />;
   if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
+  if (isLoading) return <BrandedPortalLoader />;
   if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
   if (!isAuthenticated) return standalonePlatformHost ? <PlatformAuthScreen /> : <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;

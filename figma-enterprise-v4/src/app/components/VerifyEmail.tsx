@@ -7,6 +7,10 @@ import { LanguageSelector } from "./LanguageSelector";
 
 type VerificationState = "checking" | "success" | "error";
 
+// A verification token is single-use: submit it at most once per page load and
+// share the outcome with any remount.
+const confirmations = new Map<string, Promise<void>>();
+
 export function VerifyEmailPage() {
   const { confirmVerification } = useAuth();
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -26,7 +30,12 @@ export function VerifyEmailPage() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    confirmVerification(token)
+    let confirmation = confirmations.get(token);
+    if (!confirmation) {
+      confirmation = confirmVerification(token);
+      confirmations.set(token, confirmation);
+    }
+    confirmation
       .then(() => {
         if (cancelled) return;
         setState("success");
