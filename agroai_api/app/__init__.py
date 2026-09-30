@@ -29,6 +29,9 @@ class TeamInvitationCreateRequest(BaseModel):
 
     email: str = Field(min_length=3, max_length=240)
     role: Literal["owner", "admin", "manager", "operator", "viewer"] = "viewer"
+    # Language of the invitation email and acceptance page (defaults to the
+    # inviter's current portal language).
+    locale: str | None = Field(default=None, max_length=24)
 
 
 __import__("builtins").TeamInvitationCreateRequest = TeamInvitationCreateRequest

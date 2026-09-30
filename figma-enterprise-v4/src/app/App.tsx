@@ -7,6 +7,7 @@ import { AuthScreen } from "./components/AuthScreen";
 import { PlatformAuthScreen } from "./components/PlatformAuthScreen";
 import { PricingPage } from "./components/PricingPage";
 import { VerifyEmailPage } from "./components/VerifyEmail";
+import { AcceptInvitationPage } from "./components/AcceptInvitation";
 import { useLocale } from "./hooks/useLocale";
 import { applyLocale, t } from "./i18n";
 
@@ -144,6 +145,7 @@ function AuthenticatedApp() {
   const path = window.location.pathname;
   if (isLoading) return <BrandedPortalLoader />;
   if (path === "/verify-email") return <VerifyEmailPage />;
+  if (path === "/accept-invite") return <AcceptInvitationPage />;
   if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
   if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
   if (!isAuthenticated) return standalonePlatformHost ? <PlatformAuthScreen /> : <AuthScreen />;

@@ -20,6 +20,7 @@ from app.models.saas import (
     UsageEvent,
     Workspace,
 )
+from app.services import team_invitations
 from app.services.email_delivery import delivery_status
 from app.services.entitlements import (
     assert_can_access_admin_requests,
@@ -734,17 +735,6 @@ def admin_system(ctx: AuthContext = Depends(get_auth_context)) -> dict:
     }
 
 
-def _serialize_invitation(row: TeamInvitation) -> dict:
-    return {
-        "id": row.id,
-        "email": row.email,
-        "role": row.role,
-        "status": row.status,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
-
-
 @router.get("/team/members")
 def team_members(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, _membership = _require_org(ctx)
@@ -764,40 +754,56 @@ def team_members(ctx: AuthContext = Depends(get_auth_context), db: Session = Dep
 def list_team_invitations(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
-    assert_can_invite_team(org)
+    assert_can_invite_team(org, db)
     rows = db.query(TeamInvitation).filter(TeamInvitation.organization_id == org.id).order_by(TeamInvitation.created_at.desc()).all()
-    return {"invitations": [_serialize_invitation(row) for row in rows]}
+    return {"invitations": [team_invitations.serialize_invitation(row) for row in rows]}
+
+
+def _delivery_response(row: TeamInvitation, result: dict, *, resent: bool = False) -> dict:
+    """Report 'sent' only when the email provider accepted the message."""
+    invitation = team_invitations.serialize_invitation(row)
+    if result.get("ok"):
+        return {
+            "status": "sent",
+            "message": (team_invitations.INVITATION_RESENT_MESSAGE if resent else team_invitations.INVITATION_SENT_MESSAGE).format(email=row.email),
+            "invitation": invitation,
+        }
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail={
+            "code": "invitation_email_not_delivered",
+            "message": team_invitations.INVITATION_NOT_DELIVERED_MESSAGE.format(email=row.email),
+            "invitation": invitation,
+        },
+    )
 
 
 @router.post("/team/invitations")
 def create_team_invitation(payload: TeamInvitationCreateRequest, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
-    assert_can_invite_team(org)
-    row = TeamInvitation(
-        organization_id=org.id,
-        email=payload.email.strip().lower(),
-        role=payload.role,
-        status="pending",
-        invited_by_user_id=ctx.user.id,
+    assert_can_invite_team(org, db)
+    row, result = team_invitations.create_invitation(
+        db, org=org, inviter=ctx.user, inviter_role=membership.role, email=payload.email, role=payload.role, locale=payload.locale,
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return {"status": "received", "message": "Invitation created.", "invitation": _serialize_invitation(row)}
+    return _delivery_response(row, result)
+
+
+@router.post("/team/invitations/{invitation_id}/resend")
+def resend_team_invitation(invitation_id: str, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    org, membership = _require_org(ctx)
+    require_owner_or_admin(membership.role)
+    assert_can_invite_team(org, db)
+    row, result = team_invitations.resend_invitation(db, org=org, inviter=ctx.user, invitation_id=invitation_id)
+    return _delivery_response(row, result, resent=True)
 
 
 @router.delete("/team/invitations/{invitation_id}")
 def delete_team_invitation(invitation_id: str, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
-    assert_can_invite_team(org)
-    row = db.get(TeamInvitation, invitation_id)
-    if not row or row.organization_id != org.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
-    row.status = "revoked"
-    db.commit()
-    return {"ok": True}
+    row = team_invitations.revoke_invitation(db, org=org, invitation_id=invitation_id)
+    return {"ok": True, "invitation": team_invitations.serialize_invitation(row)}
 
 
 @router.get("/conversations")

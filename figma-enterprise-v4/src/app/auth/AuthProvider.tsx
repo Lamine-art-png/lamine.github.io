@@ -68,6 +68,7 @@ type AuthContextValue = {
   updateWorkspace: (workspaceId: string, payload: { name: string }) => Promise<Workspace>;
   requestVerification: (email?: string) => Promise<string>;
   confirmVerification: (token: string) => Promise<void>;
+  adoptSession: (response: Record<string, unknown>) => Promise<void>;
   clearVerification: () => void;
 };
 
@@ -384,6 +385,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSession();
   }, [clearSession]);
 
+  // Adopt an organization-scoped session returned by a non-login endpoint
+  // (for example accepting a team invitation).
+  const adoptSession = useCallback(async (response: Record<string, unknown>) => {
+    const nextToken = getAccessToken(response);
+    if (!nextToken) throw new Error("The response did not include a session.");
+    applyToken(nextToken);
+    setVerification(null);
+    await syncLocalePreferenceAfterAuth();
+    await refreshMe();
+  }, [applyToken, refreshMe]);
+
   const logout = useCallback(async () => {
     await apiClient.logout().catch(() => null);
     clearSession();
@@ -482,7 +494,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     requestVerification,
     confirmVerification,
     clearVerification,
-  }), [clearVerification, confirmVerification, createWorkspace, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, platformAdmin, platformDeveloper, refreshMe, register, requestVerification, selectWorkspace, token, updateWorkspace, user, verification, workspaces]);
+    adoptSession,
+  }), [adoptSession, clearVerification, confirmVerification, createWorkspace, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, platformAdmin, platformDeveloper, refreshMe, register, requestVerification, selectWorkspace, token, updateWorkspace, user, verification, workspaces]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

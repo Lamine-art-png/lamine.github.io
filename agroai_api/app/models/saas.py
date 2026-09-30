@@ -43,7 +43,7 @@ class User(Base):
     usage_events = relationship("UsageEvent", back_populates="user")
     email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
     account_recovery_tokens = relationship("AccountRecoveryToken", back_populates="user", cascade="all, delete-orphan")
-    team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
+    team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan", foreign_keys="TeamInvitation.invited_by_user_id")
     security_events = relationship("SecurityAuditEvent", back_populates="user")
     access_appeals = relationship("AccountAccessAppeal", back_populates="user", foreign_keys="AccountAccessAppeal.user_id", cascade="all, delete-orphan")
 
@@ -443,12 +443,22 @@ class TeamInvitation(Base):
     role = Column(String, default="viewer", nullable=False)
     status = Column(String, default="pending", nullable=False, index=True)
     invited_by_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    # Only the SHA-256 of the single-use link token is stored; it is cleared on
+    # acceptance, revocation, expiry or failed delivery.
     token_hash = Column(String, nullable=True, unique=True, index=True)
     expires_at = Column(DateTime, nullable=True)
+    locale = Column(String(40), nullable=True)
+    delivery_status = Column(String(40), nullable=True)  # sent | failed | not_configured
+    delivery_attempts = Column(Integer, default=0, nullable=False)
+    delivery_error = Column(String(240), nullable=True)
+    last_sent_at = Column(DateTime, nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+    accepted_by_user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    invited_by_user = relationship("User", back_populates="team_invitations_sent")
+    invited_by_user = relationship("User", back_populates="team_invitations_sent", foreign_keys=[invited_by_user_id])
 
 
 class UserPreference(Base):
