@@ -14,6 +14,7 @@ const standalonePlatformHost = window.location.hostname.toLowerCase() === "platf
 const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal";
 const runtimeSurfaceName = standalonePlatformHost ? "developer platform" : "portal";
 const automaticRecoveryKey = "agroai_frontend_cache_recovery_attempted";
+const freshnessRecoveryKey = "agroai_frontend_freshness_recovery_v1";
 
 // Stable, eagerly-loaded runtime identity for production smoke verification.
 // Product/source contract tests validate the actual UI separately; this marker
@@ -62,6 +63,46 @@ async function repairFrontendRuntime(clearSession = false) {
   const recoveryUrl = new URL("/", window.location.origin);
   recoveryUrl.searchParams.set("frontend_recovery", Date.now().toString());
   window.location.replace(recoveryUrl.toString());
+}
+
+
+function moduleEntryPathFromHtml(html: string): string {
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const src = doc.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute("src") || "";
+    return src ? new URL(src, window.location.origin).pathname : "";
+  } catch {
+    return "";
+  }
+}
+
+async function verifyFreshFrontendShell(): Promise<boolean> {
+  if (import.meta.env.DEV) return true;
+  try {
+    const currentSrc = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src || "";
+    const currentPath = currentSrc ? new URL(currentSrc, window.location.origin).pathname : "";
+    if (!currentPath) return true;
+
+    const probeUrl = new URL("/", window.location.origin);
+    probeUrl.searchParams.set("agroai_freshness_probe", Date.now().toString());
+    const response = await fetch(probeUrl.toString(), {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) return true;
+    const latestPath = moduleEntryPathFromHtml(await response.text());
+    if (!latestPath || latestPath === currentPath) return true;
+
+    if (window.sessionStorage.getItem(freshnessRecoveryKey) !== "true") {
+      window.sessionStorage.setItem(freshnessRecoveryKey, "true");
+      await repairFrontendRuntime(false);
+      return false;
+    }
+  } catch {
+    // Freshness verification is fail-open. Offline/limited networks must still boot.
+  }
+  return true;
 }
 
 function renderBootFailure(message: string) {
@@ -140,6 +181,7 @@ if (!rootEl) {
   // Signed verification/recovery links carry the locale the customer used when
   // the email was issued, so another browser or device opens in that language.
   // Elsewhere ?lang= only fills in when no explicit choice is stored.
+  const freshnessReady = verifyFreshFrontendShell();
   const localeReady = Promise.all([import("./app/i18n"), import("./app/dynamicLocaleCatalog")])
     .then(([{ getStoredLocale, setStoredLocale, canonicalizeSelectedLocale }, { preloadBundledLocaleCatalog }]) => {
       const linkLocale = new URLSearchParams(window.location.search).get("lang");
@@ -154,8 +196,10 @@ if (!rootEl) {
       return preloadBundledLocaleCatalog(getStoredLocale());
     })
     .catch(() => false);
-  Promise.all([import("./app/App.tsx"), localeReady])
-    .then(([{ default: App }]) => {
+  Promise.all([freshnessReady, import("./app/App.tsx"), localeReady])
+    .then(([fresh, { default: App }]) => {
+      if (!fresh) return;
+      window.sessionStorage.removeItem(freshnessRecoveryKey);
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
       // These modules are deliberately loaded after the portal has rendered.
