@@ -1109,28 +1109,6 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         conservative_follow_up = safe_field_follow_up(decision_advisory)
         if conservative_follow_up:
             observation.recommended_action = conservative_follow_up
-    if decision_advisory is not None:
-        _record_run(
-            db,
-            observation,
-            stage="decision_routing",
-            provider="agroai",
-            stage_status="completed",
-            model="bounded-routing-v1",
-            attempt_count=int(job.attempt_count or 1),
-            output=decision_advisory.safe_dict(),
-        )
-        _audit(
-            observation,
-            "decision_routing_completed",
-            actor="system",
-            details={
-                "route": decision_advisory.route,
-                "review_required": decision_review_required,
-                "advisory_only": True,
-            },
-        )
-
     observation.status = (
         "needs_review"
         if extraction.confidence < NEEDS_REVIEW_CONFIDENCE or decision_review_required
