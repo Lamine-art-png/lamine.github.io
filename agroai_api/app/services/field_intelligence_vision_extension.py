@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.models.field_intelligence import FieldCaptureSession, FieldObservation, FieldObservationAsset
+from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
 from app.services.field_video import MAX_VIDEO_BYTES, extract_video_audio, extract_video_frames
 from app.services.field_vision import MAX_IMAGE_BYTES, analyze_field_images
 
@@ -335,6 +336,47 @@ def install_field_vision_extension(svc: Any) -> None:
         ]))
         if not observation.recommended_action:
             observation.recommended_action = correlation.get("recommended_next_action")
+
+        # Re-evaluate routing after visual evidence has been fused. The base
+        # pipeline may have routed the text/audio state already; this second,
+        # provider-hidden pass is the multimodal decision point and can only
+        # increase caution.
+        multimodal_advisory = assess_field_observation(
+            confidence=observation.confidence,
+            uncertain_count=len(observation.uncertain_fields_json or []),
+            evidence_count=len(observation.evidence_ids_json or []),
+            severity=observation.severity,
+            has_text=bool(_source_text(observation, session).strip()) or bool(result.succeeded),
+            has_recommended_action=bool((observation.recommended_action or "").strip()),
+            has_correlation=bool(correlation),
+        )
+        if field_requires_review(multimodal_advisory):
+            observation.status = "needs_review"
+        if not (observation.recommended_action or "").strip():
+            conservative_follow_up = safe_field_follow_up(multimodal_advisory)
+            if conservative_follow_up:
+                observation.recommended_action = conservative_follow_up
+        if multimodal_advisory is not None:
+            svc._record_run(
+                db,
+                observation,
+                stage="decision_routing_multimodal",
+                provider="agroai",
+                stage_status="completed",
+                model="bounded-routing-v1",
+                attempt_count=int(job.attempt_count or 1),
+                output=multimodal_advisory.safe_dict(),
+            )
+            svc._audit(
+                observation,
+                "multimodal_decision_routing_completed",
+                actor="system",
+                details={
+                    "route": multimodal_advisory.route,
+                    "review_required": field_requires_review(multimodal_advisory),
+                    "advisory_only": True,
+                },
+            )
 
         evidence = svc._find_evidence_slow(db, observation)
         if evidence is not None:
