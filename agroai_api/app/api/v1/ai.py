@@ -1,6 +1,7 @@
 """Tenant-scoped AGRO-AI Intelligence Engine routes."""
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime, timedelta
@@ -28,6 +29,7 @@ from app.schemas.ai import (
     VerificationResult,
 )
 from app.services.ai_gateway import parse_model_json
+from app.services.decision_fabric import advisory_prompt, assess_evidence_context
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.model_router import ModelRouter
 
@@ -474,6 +476,13 @@ async def _run_ai(
     uploaded_evidence: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     router = ModelRouter()
+    decision_advisory = await asyncio.to_thread(
+        assess_evidence_context,
+        context,
+        task=task,
+        question=user_instruction,
+    )
+    routing_prompt = advisory_prompt(decision_advisory)
     if is_local_ai():
         messages = compact_local_messages(
             question=user_instruction,
@@ -482,6 +491,8 @@ async def _run_ai(
             audience=audience,
             uploaded_evidence=uploaded_evidence,
         )
+        if routing_prompt:
+            messages = [*messages, {"role": "system", "content": routing_prompt}]
         result, _selection = await router.run(
             task=TASK_PROFILE_MAP.get(task, "chat"),
             messages=messages,
@@ -500,6 +511,7 @@ async def _run_ai(
     context_json = json.dumps(context.model_dump(mode="json"), default=str)
     planner_messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        *([{"role": "system", "content": routing_prompt}] if routing_prompt else []),
         {
             "role": "user",
             "content": (
@@ -519,6 +531,7 @@ async def _run_ai(
 
     final_messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        *([{"role": "system", "content": routing_prompt}] if routing_prompt else []),
         {
             "role": "user",
             "content": (
