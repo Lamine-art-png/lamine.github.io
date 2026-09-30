@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
+from i18n_catalog_identity import write_envelope
 from i18n_quality import do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -479,7 +480,7 @@ def generate_locale(locale: str, source_envelope: dict, outdir: Path, endpoint: 
     outdir.mkdir(parents=True, exist_ok=True)
     dest = outdir / f"{locale}.json"
     tmp = dest.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    write_envelope(tmp, envelope)  # stamps catalogSha256 (exact artifact identity)
     tmp.replace(dest)
     progress_path = outdir / f".{locale}.progress.json"
     if progress_path.exists():

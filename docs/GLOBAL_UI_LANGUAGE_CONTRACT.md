@@ -24,6 +24,10 @@ and production releases MUST keep `dynamicCatalogLocales` empty.
 6. Vite ships every validated catalog as its own lazily loaded, content-hashed chunk of the same deployment. `main.tsx` installs the persisted locale's chunk before first render.
 7. Selecting a language loads that static chunk and then switches from one complete catalog to another atomically. `runtime-source-parity-contract.mjs` fails CI if the English source the running portal requires diverges from `source.json`.
 
+### Release artifact identity
+
+`sourceFingerprint` identifies the English source a catalog translates and does not change when only translated values change. Each catalog therefore also carries `catalogSha256` — the SHA-256 of its canonical content (locale, source fingerprint, every translated value) — stamped by `scripts/i18n_catalog_identity.py` and recorded in the release matrix. The release gate requires the stamp to be current, and `scripts/i18n-verify-production-catalogs.mjs` recomputes it from the checked-in catalog and requires that exact identity in the deployed chunk, so an older translation can never pass production verification.
+
 ### Authoring
 
 `.github/workflows/i18n-global-authoring.yml` runs on `i18n-authoring/*` branches and never pushes. For every target locale that is not release-ready it authors the UI catalog (reusing previously validated entries whose English is unchanged), the transactional catalog and the legal snapshots, and uploads them. `scripts/i18n-install-authoring-artifacts.py <download-dir>` installs a run and re-runs the release gate. Customer-facing API messages are inventoried by `scripts/i18n-extract-api-messages.py` so server errors are translated like any other UI copy.

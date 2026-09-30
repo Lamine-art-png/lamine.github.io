@@ -131,7 +131,8 @@ jobs:
           if settings.get("http2") != "on": failures.append("http2_not_on")
           if settings.get("http3") != "off": failures.append("http3_not_off")
           if not app_dns_public.strip(): failures.append("public_dns_resolution_missing")
-          for name in ["portal_default","portal_http2","portal_http11","portal_login_default","portal_api_health_http2","portal_edge_health_http2","machine_api_health_http2","machine_edge_health_http2"]:
+          # Customer access gate: every customer entrypoint must answer.
+          for name in ["portal_default","portal_http2","portal_http11","portal_login_default","portal_api_health_http2","portal_edge_health_http2","machine_api_health_http2"]:
               if by.get(name,{}).get("http") not in ("200","204","301","302","307","308"):
                   failures.append(f"{name}_http_{by.get(name,{}).get('http','missing')}")
           if by.get("portal_http2",{}).get("title") != "AGRO-AI Enterprise Portal":
@@ -139,13 +140,39 @@ jobs:
           if by.get("portal_http11",{}).get("title") != "AGRO-AI Enterprise Portal":
               failures.append("portal_title_mismatch_http11")
 
+          # Machine API edge traversal (api.agroai-pilot.com/v1/* -> agroai-api-edge)
+          # is measured and reported truthfully, separately from customer access:
+          # when the hostname's DNS record is not proxied, /v1 reaches the Render
+          # origin directly (machine API still serves; CIDR-bound Platform API keys
+          # fail closed because no signed edge client IP is present). Fixing it is
+          # a DNS change owned by API Edge Domain Repair, not a customer outage.
+          api_routes=[r for r in routes if "api.agroai-pilot.com" in str(r.get("pattern",""))]
+          machine_edge_http=by.get("machine_edge_health_http2",{}).get("http","missing")
+          if machine_edge_http == "200":
+              traversal="traverses_edge"
+          elif machine_edge_http == "404" and by.get("machine_api_health_http2",{}).get("http") == "200":
+              traversal="bypassed_to_origin"
+          else:
+              traversal=f"unknown_http_{machine_edge_http}"
+          advisories=[]
+          if traversal != "traverses_edge":
+              advisories.append({
+                  "id": "machine_api_edge_bypassed",
+                  "state": traversal,
+                  "worker_route_present": bool(api_routes),
+                  "impact": "machine API reachable; edge-only capabilities (CIDR-bound Platform API keys, Workers AI bridges) unavailable on api.agroai-pilot.com",
+                  "action": "proxy the api.agroai-pilot.com DNS record through Cloudflare (or grant the automation token Zone DNS Edit and run API Edge Domain Repair)",
+              })
+
           result={
               "ready": not failures,
               "failures": failures,
+              "machine_api_edge_traversal": traversal,
+              "advisories": advisories,
               "protocol_settings": settings,
               "public_dns": app_dns_public,
               "app_worker_routes":[r for r in routes if "app.agroai-pilot.com" in str(r.get("pattern",""))],
-              "api_worker_routes":[r for r in routes if "api.agroai-pilot.com" in str(r.get("pattern",""))],
+              "api_worker_routes":api_routes,
               "probes":probes,
           }
           Path("classification.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
@@ -162,9 +189,10 @@ jobs:
           failures="$(jq -c '.failures // ["diagnostic_failed"]' classification.json 2>/dev/null || echo '["diagnostic_failed"]')"
           http2="$(jq -r '.protocol_settings.http2 // "unknown"' classification.json 2>/dev/null || echo unknown)"
           http3="$(jq -r '.protocol_settings.http3 // "unknown"' classification.json 2>/dev/null || echo unknown)"
-          machine_edge="$(jq -r '.probes[]? | select(.name=="machine_edge_health_http2") | .http' classification.json 2>/dev/null || echo unknown)"
+          machine_edge="$(jq -r '.machine_api_edge_traversal // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          advisories="$(jq -c '[.advisories[]?.id]' classification.json 2>/dev/null || echo '[]')"
           portal="$(jq -r '.probes[]? | select(.name=="portal_http2") | .http' classification.json 2>/dev/null || echo unknown)"
-          body="$(printf 'AEP global access diagnostic\\n\\nready: %s\\nHTTP/2: %s\\nHTTP/3: %s\\nportal over HTTP/2: %s\\nmachine edge-health over HTTP/2: %s\\nfailures: %s\\nrun: %s\\nrelease: %s\\n\\nSanitized protocol, DNS, Worker-route and browser-like probe evidence is attached to the workflow run.' "$ready" "$http2" "$http3" "$portal" "$machine_edge" "$failures" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          body="$(printf 'AEP global access diagnostic\\n\\ncustomer access ready: %s\\nHTTP/2: %s\\nHTTP/3: %s\\nportal over HTTP/2: %s\\nmachine API edge traversal: %s\\nadvisories: %s\\nfailures: %s\\nrun: %s\\nrelease: %s\\n\\nSanitized protocol, DNS, Worker-route and browser-like probe evidence is attached to the workflow run.' "$ready" "$http2" "$http3" "$portal" "$machine_edge" "$advisories" "$failures" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
 
       - uses: actions/upload-artifact@v4

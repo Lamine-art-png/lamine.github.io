@@ -1,13 +1,13 @@
 name: API Edge Domain Repair
 
+# Operator-run repair: proxies the api.agroai-pilot.com DNS record so the
+# api.agroai-pilot.com/v1/* Worker route (agroai-api-edge) takes effect, with an
+# exact DNS backup, fail-closed preconditions, live proof and automatic
+# rollback. It requires a Cloudflare token with Zone DNS Edit on the zone; the
+# hourly schedule was removed because it cannot succeed without that grant.
+# AEP Global Access Diagnostics reports edge traversal on every run.
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/api-edge-domain-repair.yml"
   workflow_dispatch:
-  schedule:
-    - cron: "15 * * * *"
 
 permissions:
   contents: read
@@ -58,8 +58,13 @@ jobs:
             "$CF_API/zones/$ZONE_ID/workers/routes" -o routes.json
           jq -e --arg pattern "$API_HOST/v1/*" --arg service "$WORKER_SERVICE" \
             '.success == true and ([.result[] | select(.pattern == $pattern and .script == $service)] | length) == 1' routes.json >/dev/null
-          curl --fail-with-body --silent --show-error "${auth[@]}" \
-            "$CF_API/zones/$ZONE_ID/dns_records?name=$API_HOST&per_page=100" -o dns-before.json
+          dns_status="$(curl --silent --show-error "${auth[@]}" -w '%{http_code}' \
+            "$CF_API/zones/$ZONE_ID/dns_records?name=$API_HOST&per_page=100" -o dns-before.json)"
+          if [ "$dns_status" = "403" ]; then
+            echo "::error title=Cloudflare DNS permission missing::The CLOUDFLARE_API_TOKEN secret cannot read or edit DNS records on ${ZONE_NAME} (HTTP 403). Grant the token Zone > DNS > Edit for ${ZONE_NAME}, or proxy the ${API_HOST} record in the Cloudflare dashboard. No DNS was changed."
+            exit 1
+          fi
+          test "$dns_status" = "200"
           jq -e --arg host "$API_HOST" \
             '.success == true and (.result | length) > 0 and
              all(.result[]; .name == $host) and

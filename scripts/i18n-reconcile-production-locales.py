@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from i18n_catalog_identity import catalog_sha256  # noqa: E402
 from i18n_quality import has_marker_residue, quality_errors, quality_report  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +52,10 @@ def ui_ready(locale: str, source: dict) -> bool:
         and isinstance(catalog, dict)
         and set(catalog) == set(source_catalog)
     ):
+        return False
+    # The stamped artifact identity must match the exact content; a stale stamp
+    # means production verification could not prove this artifact is deployed.
+    if envelope.get("catalogSha256") != catalog_sha256(envelope):
         return False
     for key, original in source_catalog.items():
         value = catalog[key]
@@ -260,6 +265,7 @@ def main() -> None:
             envelope = json_file(UI_DIR / f"{locale}.json") or {}
             report = quality_report(locale, ui_source["catalog"], envelope.get("catalog") or {})
             row["uiQuality"] = {k: v for k, v in report.items() if k not in ("locale", "dntViolations")}
+            row["catalogSha256"] = envelope.get("catalogSha256")
         row["billing"] = {"stripeCheckoutLocale": stripe_locale(locale), "agroaiBillingUi": locale}
         # Voice: the effective locale is sent as the recognition hint and the
         # realtime model answers in the resolved response language; spoken
