@@ -29,6 +29,7 @@ for (let i = 0; i < args.length; i += 1) {
 if (!live || !releases.has(live)) throw new Error("--live must name a --release");
 
 let shellRelease = live; // partial propagation: shell may lag deployment.json
+let outage = false; // network outage: every non-harness connection is dropped
 const events = [];
 const clientBuilds = [];
 
@@ -67,6 +68,10 @@ createServer(async (req, res) => {
   const path = url.pathname;
 
   if (path.startsWith("/__harness/")) {
+    if (path === "/__harness/outage") {
+      outage = url.searchParams.get("on") === "1";
+      return send(res, 200, JSON.stringify({ outage }), { "content-type": "application/json" });
+    }
     if (path === "/__harness/deploy") {
       live = url.searchParams.get("release");
       shellRelease = url.searchParams.get("shell") || live;
@@ -75,6 +80,11 @@ createServer(async (req, res) => {
     if (path === "/__harness/events") return send(res, 200, JSON.stringify(events), { "content-type": "application/json" });
     if (path === "/__harness/client-builds") return send(res, 200, JSON.stringify(clientBuilds), { "content-type": "application/json" });
     return send(res, 404, "unknown harness endpoint");
+  }
+
+  if (outage) {
+    req.socket.destroy();
+    return;
   }
 
   if (path.startsWith("/v1/")) {

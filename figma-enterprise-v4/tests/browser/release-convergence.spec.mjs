@@ -48,6 +48,23 @@ async function newCustomer(browser, { signedIn = true, locale = "pt-BR", restric
   return context;
 }
 
+async function expectRunning(page, build, timeout = 20_000) {
+  try {
+    await expect.poll(() => running(page), { timeout }).toBe(build);
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      running: window.__agroaiRelease?.running,
+      pending: window.__agroaiRelease?.pending(),
+      latest: window.__agroaiRelease?.latest(),
+      blockedBy: window.__agroaiRelease?.unsafeReason(),
+      visibility: document.visibilityState,
+      active: document.activeElement?.tagName,
+      path: location.pathname,
+    })).catch((cause) => ({ unavailable: String(cause) }));
+    throw new Error(`${error.message}\nrelease state: ${JSON.stringify(state)}`);
+  }
+}
+
 async function setVisibility(page, state) {
   await page.evaluate((next) => {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => next });
@@ -124,7 +141,7 @@ test("an open tab converges when the customer returns, keeping session and Portu
   await expect.poll(() => running(page), { timeout: 20_000 }).toBe(B);
   expect(await page.evaluate(() => localStorage.getItem("agroai_access_token"))).toBe(TOKEN);
   expect(await page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe("pt-BR");
-  expect(await page.evaluate(() => document.documentElement.lang)).toMatch(/^pt/);
+  await expect.poll(() => page.evaluate(() => document.documentElement.lang).catch(() => ""), { timeout: 10_000 }).toMatch(/^pt/);
   // Diagnostics are sent with sendBeacon (asynchronous, fire-and-forget).
   await expect.poll(async () => (await events()).some((row) => row.event === "stale_build_detected" && row.running_build === A && row.latest_build === B), { timeout: 10_000 }).toBe(true);
   await expect.poll(async () => (await events()).some((row) => row.event === "recovery_succeeded" && row.running_build === B), { timeout: 10_000 }).toBe(true);
@@ -159,12 +176,12 @@ test("two open tabs converge once each, without a reload storm", async ({ browse
   await deploy(B);
   await returnToTab(first);
   await expect.poll(() => running(first), { timeout: 20_000 }).toBe(B);
-  await expect.poll(() => second.evaluate(() => window.__agroaiRelease.pending()), { timeout: 10_000 }).toBe(B);
-  await setVisibility(second, "hidden");
-  await expect.poll(() => running(second), {
-    timeout: 20_000,
-    message: `second tab did not converge; blocked by: ${await second.evaluate(() => `${window.__agroaiRelease?.unsafeReason()} active=${document.activeElement?.tagName}`).catch(() => "reloading")}`,
-  }).toBe(B);
+  // The second tab learns of B from the first (broadcast) or from B's
+  // service worker claiming it. A background tab applies it immediately; a
+  // visible one waits for a safe point such as being hidden.
+  await expect.poll(async () => (await running(second)) === B || await second.evaluate(() => window.__agroaiRelease.pending()).catch(() => null) === B, { timeout: 15_000 }).toBe(true);
+  if ((await running(second)) !== B) await setVisibility(second, "hidden");
+  await expectRunning(second, B);
   await second.waitForTimeout(3000);
   expect(secondLoads).toBe(1);
   await context.close();
@@ -195,16 +212,25 @@ test("a rollback converges browsers on the newer release back to the previous on
   await context.close();
 });
 
+async function outage(on) {
+  const response = await fetch(new URL(`/__harness/outage?on=${on ? 1 : 0}`, HARNESS));
+  expect(response.ok).toBe(true);
+}
+
 test("offline during a release: no error screen, converges after reconnecting", async ({ browser }) => {
   const context = await newCustomer(browser);
   const page = await openPortal(context);
-  await context.setOffline(true);
-  await deploy(B);
-  await returnToTab(page);
-  await page.waitForTimeout(1500);
-  expect(await running(page)).toBe(A);
-  await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
-  await context.setOffline(false);
+  await outage(true); // connections drop, as on a lost network
+  try {
+    await deploy(B);
+    await returnToTab(page);
+    await page.waitForTimeout(1500);
+    expect(await running(page)).toBe(A);
+    expect(await page.evaluate(() => window.__agroaiRelease.pending())).toBeNull();
+    await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
+  } finally {
+    await outage(false);
+  }
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(() => page.evaluate(() => window.__agroaiRelease.pending()), { timeout: 10_000 }).toBe(B);
   await returnToTab(page);

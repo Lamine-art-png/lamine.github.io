@@ -48,6 +48,7 @@ const GUARD_KEY = "agroai_release_convergence_v1";
 const PEER_KEY = "agroai_release_latest_v1";
 const CHANNEL = "agroai-release";
 const RETURN_FORCES_CHECK_AFTER_MS = 15_000;
+const RELOAD_WATCHDOG_MS = 10_000;
 // Browser tests may shorten the check throttle by defining this before load;
 // production never defines it.
 const testOverrides = (typeof window !== "undefined"
@@ -257,6 +258,14 @@ function reload(trigger: string) {
   storageSet("local", GUARD_KEY, JSON.stringify({ target: pending.target, count: count + 1, last: now }));
   applying = true;
   reportReleaseEvent("recovery_attempted", { trigger });
+  // If the reload navigation is aborted (network hiccup, browser cancelling a
+  // background navigation) this page stays alive: never leave it stuck in the
+  // "applying" state. Retry at the next safe point (immediately when hidden);
+  // the loop guard above still bounds attempts.
+  window.setTimeout(() => {
+    applying = false;
+    if (document.visibilityState === "hidden") applyPending("retry");
+  }, RELOAD_WATCHDOG_MS);
   const go = () => window.location.reload();
   const registration = navigator.serviceWorker?.getRegistration?.();
   if (!registration) return go();
@@ -306,7 +315,9 @@ function markPending(target: string, reason: string, announce: boolean) {
 }
 
 export function checkForRelease(reason: string, force = false): Promise<void> {
-  if (checking) return checking;
+  // A check requested while another runs gets its own fresh answer after it
+  // (e.g. the customer returns while the boot check is still in flight).
+  if (checking) return checking.then(() => checkForRelease(reason, force));
   const now = Date.now();
   if (!force && now - lastCheck < minCheckInterval) return Promise.resolve();
   if (navigator.onLine === false) return Promise.resolve();
