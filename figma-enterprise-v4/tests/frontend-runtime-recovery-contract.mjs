@@ -22,8 +22,13 @@ assert.match(main, /registration\.unregister\(\)/);
 assert.match(main, /updateViaCache:\s*"none"/);
 assert.match(main, /registration\.update\(\)/);
 assert.match(main, /frontend_recovery/);
+assert.match(main, /agroai_frontend_freshness_recovery_v1/);
+assert.match(main, /verifyFreshFrontendShell/);
+assert.match(main, /agroai_freshness_probe/);
+assert.match(main, /cache:\s*"no-store"/);
 
-assert.match(sw, /CACHE_VERSION = `\$\{CACHE_FAMILY\}v2`/);
+assert.match(sw, /CACHE_VERSION = `\$\{CACHE_FAMILY\}v3`/);
+assert.match(sw, /self\.skipWaiting\(\)/);
 assert.match(sw, /isJavaScriptResponse/);
 assert.match(sw, /invalidJavaScriptAsset/);
 assert.match(sw, /application\/javascript; charset=utf-8/);
