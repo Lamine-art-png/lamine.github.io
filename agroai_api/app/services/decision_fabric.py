@@ -502,9 +502,12 @@ def market_state(position: dict[str, Any], evidence: dict[str, Any], *, question
     health = position.get("data_health") if isinstance(position.get("data_health"), dict) else {}
     warnings = list(position.get("warnings") or [])
     missing_fields = list(position.get("missing_fields") or [])
+    health_status = str(health.get("status") or "unknown").strip().lower()
+    if health_status not in {"healthy", "degraded", "missing", "demo", "mixed", "unknown"}:
+        health_status = "unknown"
     return {
         "surface": "crop_intelligence",
-        "data_health": str(health.get("status") or "unknown")[:40],
+        "data_health": health_status,
         "warning_count": _count(len(warnings)),
         "missing_field_count": _count(len(missing_fields)),
         "evidence_value_count": _count(len(evidence or {})),
