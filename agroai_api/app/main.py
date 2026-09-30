@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import inspect
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -292,10 +292,27 @@ async def runtime_error_boundary(request: Request, call_next):
 
 @app.middleware("http")
 async def platform_request_metadata_log(request: Request, call_next):
-    """Persist only bounded, customer-safe Platform API request metadata."""
+    """Persist only bounded, customer-safe Platform API request metadata.
+
+    Starlette BaseHTTPMiddleware can surface RuntimeError("No response returned.")
+    when a browser/navigation cancels an in-flight request before the downstream
+    application sends response headers. Treat a confirmed disconnect as a client
+    cancellation instead of an application failure, while preserving genuine
+    downstream runtime errors.
+    """
 
     started = datetime.datetime.utcnow()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except RuntimeError as exc:
+        if str(exc) == "No response returned." and await request.is_disconnected():
+            logger.info(
+                "client_disconnected_before_response method=%s path=%s",
+                request.method,
+                request.url.path,
+            )
+            return Response(status_code=499)
+        raise
     principal = getattr(request.state, "platform_principal", None)
     if principal is None or not request.url.path.startswith("/v1/platform/"):
         return response
