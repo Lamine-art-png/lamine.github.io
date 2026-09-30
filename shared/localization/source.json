@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "e12017ecb03f4345fa3c7d05ab05b2133bbeb169f13f972b449505ac92b51a51",
+  "sourceFingerprint": "5391d2f798bf4e90d770bf458332d5033f198f858f01e339223e6c23bf479d73",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1334,6 +1334,7 @@
     "literal.25498193b898195d": "Project name",
     "literal.2572eae96cb4fa83": "Scope: intelligence:run",
     "literal.2579939364c5fb22": "Event delivery",
+    "literal.25a61e2844e2eb41": "Report generated. This workspace has no evidence yet, so the report contains no field findings.",
     "literal.25c2ff3594feb73d": "Position name",
     "literal.262354b50bddbc26": "Define access",
     "literal.264ea1cda19daa4f": "Use context in reports and assurance workflows",
@@ -2248,6 +2249,7 @@
     "literal.972c5bdf820966dd": "Research institution",
     "literal.97421516bf4ba5d8": "2. The AGRO-AI team is notified by email.",
     "literal.97643b40ae4c3668": "A deliberate path to test access.",
+    "literal.9779f058b1cd5b1e": "The PDF could not be generated. Please try again.",
     "literal.978afdaafe34a7e0": "Credential reference is stored",
     "literal.979ae9e0b3b650c8": "Authorize accounts, contacts, cases, and customer-success context.",
     "literal.97b64ec75c6f0dc7": "No self-service charges are active.",
@@ -2547,6 +2549,7 @@
     "literal.bae581436dafc4ea": "Intelligence brief unavailable",
     "literal.bb09968a20777dfd": "Provider-specific controller, ERP, district, sensor, or compliance-system integration work.",
     "literal.bb0dae53eab11a15": "Machine identities",
+    "literal.bb1a592d9b02180b": "The report could not be downloaded. Please try again.",
     "literal.bb6aea28739637ea": "Audit",
     "literal.bb6d02b904c56fce": "No project, API key, live access, provider connection, or physical action was created.",
     "literal.bb8fb09fbaf59a63": "You can close this page.",

@@ -690,29 +690,6 @@ async def upload_evidence(provider: str = Query(default="manual_csv"), workspace
     return {"status": "parsed", "connection": public_connection(connection), "data_source": row_to_dict(source), "job": _job_public(job), "rows_parsed": len(rows), "columns": columns, "warnings": warnings, "evidence_preview": [evidence_public(item) for item in evidence[:5]]}
 
 
-@router.post("/reports/generate")
-def generate_report(payload: dict[str, Any] | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    verify_connector_schema(db)
-    payload = payload or {}
-    run = IntelligenceRun(tenant_id=tenant_id, workspace_id=payload.get("workspace_id"), run_type="report_generate", question=str(payload), input_context_json=payload, output_json={"message": "Report generated from available evidence metadata."}, citations_json=[], status="completed")
-    db.add(run)
-    db.commit()
-    db.refresh(run)
-    return {"status": "ok", "report": {"id": run.id, "summary": "Report generated from available evidence metadata.", "input": payload}}
-
-
-@router.post("/reports/export")
-def export_report(payload: dict[str, Any] | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    return generate_report(payload, tenant_id, db)
-
-
-@router.get("/reports")
-def list_reports(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    verify_connector_schema(db)
-    rows = db.query(IntelligenceRun).filter(IntelligenceRun.tenant_id == tenant_id, IntelligenceRun.run_type.like("%report%")).order_by(IntelligenceRun.created_at.desc()).limit(50).all()
-    return {"status": "ok", "reports": [row_to_dict(row) for row in rows]}
-
-
 @router.get("/artifacts")
 def list_artifacts(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     verify_connector_schema(db)

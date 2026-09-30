@@ -601,6 +601,8 @@ app.include_router(connector_hub_router, prefix="/v1")
 from app.api.v1.connector_launch import router as connector_launch_router  # noqa: E402
 app.include_router(connector_launch_router, prefix="/v1")
 
+from app.api.v1.workspace_reports import router as workspace_reports_router  # noqa: E402
+app.include_router(workspace_reports_router, prefix="/v1")
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
 
