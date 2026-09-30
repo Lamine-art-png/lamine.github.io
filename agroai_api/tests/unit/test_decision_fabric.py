@@ -246,3 +246,112 @@ def test_evidence_context_exposes_only_modality_presence_not_uploaded_content():
     assert "Secret Field.jpg" not in serialized
     assert "Private crop note" not in serialized
     assert "123" not in serialized
+
+
+
+def test_action_plan_state_is_aggregate_only():
+    actions = [
+        {
+            "action_type": "request_controller_action",
+            "risk_level": "critical",
+            "approval_required": True,
+            "auto_execute": False,
+            "payload": {
+                "field_id": "secret-field",
+                "controller": "secret-controller",
+                "instruction": "open valve 7",
+            },
+            "title": "Open Secret Ranch valve",
+        },
+        {
+            "action_type": "collect_missing_evidence",
+            "risk_level": "low",
+            "approval_required": False,
+            "auto_execute": True,
+            "payload": {"question": "private question"},
+        },
+    ]
+    state = decision_fabric.action_plan_state(
+        actions,
+        question="Open the valve now and email operator@example.com",
+    )
+    serialized = json.dumps(state)
+    assert "secret-field" not in serialized
+    assert "secret-controller" not in serialized
+    assert "Secret Ranch" not in serialized
+    assert "operator@example.com" not in serialized
+    assert state["planned_action_count"] == 2
+    assert state["approval_required_count"] == 1
+    assert state["highest_risk"] == "critical"
+    assert state["has_physical_control_action"] is True
+    assert state["has_evidence_collection"] is True
+    assert state["intent"]["physical_or_operational_action"] is True
+    assert state["intent"]["external_or_commercial_action"] is True
+
+
+def test_assist_action_advisory_can_only_reduce_autonomy(monkeypatch):
+    _configure(monkeypatch, mode="assist")
+    actions = [
+        {
+            "action_type": "sync_connected_sources",
+            "risk_level": "low",
+            "status": "ready",
+            "approval_required": False,
+            "auto_execute": True,
+        },
+        {
+            "action_type": "send_email",
+            "risk_level": "high",
+            "status": "approval_required",
+            "approval_required": True,
+            "auto_execute": False,
+        },
+    ]
+    advisory = _advisory(route="review", needs_human_review=0.92, data_sufficient=0.4)
+    constrained = decision_fabric.constrain_action_autonomy(actions, advisory)
+
+    assert constrained is not actions
+    assert all(row["auto_execute"] is False for row in constrained)
+    assert constrained[0]["status"] == "ready"
+    assert constrained[0]["approval_required"] is False
+    assert constrained[1]["status"] == "approval_required"
+    assert constrained[1]["approval_required"] is True
+
+
+def test_action_advisory_never_grants_autonomy(monkeypatch):
+    _configure(monkeypatch, mode="assist")
+    actions = [
+        {
+            "action_type": "request_controller_action",
+            "risk_level": "critical",
+            "status": "approval_required",
+            "approval_required": True,
+            "auto_execute": False,
+        },
+    ]
+    advisory = _advisory(
+        route="act",
+        needs_human_review=0.05,
+        data_sufficient=0.99,
+        should_act_now=0.99,
+    )
+    constrained = decision_fabric.constrain_action_autonomy(actions, advisory)
+
+    assert constrained is actions
+    assert constrained[0]["approval_required"] is True
+    assert constrained[0]["auto_execute"] is False
+
+
+def test_shadow_action_advisory_cannot_change_plans(monkeypatch):
+    _configure(monkeypatch, mode="shadow")
+    actions = [
+        {
+            "action_type": "sync_connected_sources",
+            "risk_level": "low",
+            "status": "ready",
+            "approval_required": False,
+            "auto_execute": True,
+        },
+    ]
+    advisory = _advisory(route="review")
+    assert decision_fabric.constrain_action_autonomy(actions, advisory) is actions
