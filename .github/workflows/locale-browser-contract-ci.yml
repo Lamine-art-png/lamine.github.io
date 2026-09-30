@@ -56,6 +56,7 @@ jobs:
             tests/browser/preauth-static-localization.spec.mjs \
             tests/browser/operation-workspaces.spec.mjs \
             tests/browser/verify-email-single-use.spec.mjs \
+            tests/browser/session-resilience.spec.mjs \
             --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
           status=${PIPESTATUS[0]}
           exit $status

@@ -32,6 +32,21 @@ function PortalBootFallback({ reason }: { reason?: string }) {
   );
 }
 
+function SessionUnavailable({ onRetry, onSignOut }: { onRetry: () => void; onSignOut: () => void }) {
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center px-6" style={{ background: "#F6F4EE" }}>
+      <div className="w-full max-w-[420px] rounded-xl bg-white p-6 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ border: "1px solid #E4E3DA" }} role="alert">
+        <h1 className="text-[20px] font-semibold tracking-tight text-[#10231B]">AGRO-AI is temporarily unreachable</h1>
+        <p className="mt-3 text-[14px] leading-6 text-[#65736A]">Your workspace could not be loaded. You are still signed in; check your connection and try again.</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button type="button" onClick={onRetry} className="h-10 rounded-lg bg-[#16533C] px-4 text-[13px] font-semibold text-white">Try again</button>
+          <button type="button" onClick={onSignOut} className="h-10 rounded-lg px-4 text-[13px] font-semibold text-[#10231B]" style={{ border: "1px solid #D6DDD0" }}>Sign out</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BrandedPortalLoader() {
   return (
     <div
@@ -114,7 +129,7 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
-  const { token, isAuthenticated, isLoading } = useAuth();
+  const { token, isAuthenticated, isLoading, sessionUnavailable, retrySession, logout } = useAuth();
   const { locale } = useLocale();
   const [router, setRouter] = useState<any>(null);
   const [routerError, setRouterError] = useState("");
@@ -150,6 +165,7 @@ function AuthenticatedApp() {
   if (path === "/accept-invite") return <AcceptInvitationPage />;
   if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
   if (isLoading) return <BrandedPortalLoader />;
+  if (sessionUnavailable) return <SessionUnavailable onRetry={retrySession} onSignOut={() => void logout()} />;
   if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
   if (!isAuthenticated) return standalonePlatformHost ? <PlatformAuthScreen /> : <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;

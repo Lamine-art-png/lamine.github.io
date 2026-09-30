@@ -3,8 +3,10 @@
   "literal.0f90c9a66a5d1008": "Invite teammates and manage their access.",
   "literal.1f94843777aed851": "Resend",
   "literal.346d7b09dde0183f": "Secure workspace access.",
+  "literal.48f0d3d397d49f13": "Sign out",
   "literal.4ef9de8a0823545a": "Invitation unavailable",
   "literal.580899575a423dec": "Checking your invitation…",
+  "literal.81d88258ede0a29f": "Your workspace could not be loaded. You are still signed in; check your connection and try again.",
   "literal.85ba6a208326478b": "Go to AGRO-AI",
   "literal.97421516bf4ba5d8": "2. The AGRO-AI team is notified by email.",
   "literal.a2dcb321ab217c67": "Sign out and continue",
@@ -13,7 +15,9 @@
   "literal.bfb326de55fd7424": "Create your AGRO-AI account to accept.",
   "literal.cd95ec50ec07b9a8": "Invitations are single-use and expire. Your access is limited to the organization and role you were invited to.",
   "literal.cffe4436fd4a9601": "Sign in to your AGRO-AI account to accept.",
+  "literal.d8b8392e2c542950": "Try again",
   "literal.e4401e72e1188e44": "Join your team on AGRO-AI",
   "literal.e8feb4d31781698c": "We email a secure, single-use link that expires in 7 days. The teammate joins this organization with the selected role when they accept.",
-  "literal.f6b44079c1c82081": "Action needed"
+  "literal.f6b44079c1c82081": "Action needed",
+  "literal.ff253b0690875f02": "AGRO-AI is temporarily unreachable"
 }
