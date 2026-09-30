@@ -310,7 +310,7 @@ export function PricingPage() {
       }
       setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
+      setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }
   };
 
@@ -459,7 +459,7 @@ export function BillingPage() {
       }
       setMessage(String(response.message || "Upgrade request received."));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
+      setMessage(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.");
     }
   };
 

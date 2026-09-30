@@ -63,7 +63,7 @@ def test_oauth_start_uses_secure_route_without_fake_connection(monkeypatch):
     monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-state-key-for-route-test")
     client = _client()
     try:
-        response = client.post("/v1/connectors/oauth/start", json={"provider": "dropbox"})
+        response = client.post("/v1/connectors/oauth/start", json={"provider": "google_drive"})
     finally:
         _cleanup()
     assert response.status_code == 200, response.text

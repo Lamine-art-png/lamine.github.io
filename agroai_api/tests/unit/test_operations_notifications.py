@@ -29,7 +29,7 @@ def test_authenticated_support_ticket_is_emailed_to_operations_and_escaped(clien
     response = client.post("/v1/support/ticket", headers=headers, json={"category": "support", "subject": "Pump <b>down</b>", "message": "<script>alert(1)</script> help"})
     assert response.status_code == 200
     row = db.get(SaaSRequest, response.json()["request_id"])
-    assert row.notification_status == "emailed"
+    assert row.notification_status == "emailed" and response.json()["notification_status"] == "emailed"
     assert len(sent) == 1 and sent[0]["to_email"] == "contact@agroai-pilot.com"
     assert "<script>" not in sent[0]["html_body"] and "&lt;script&gt;" in sent[0]["html_body"]
     assert row.id in sent[0]["text_body"] and "ops-ticket@example.com" in sent[0]["text_body"]
@@ -52,3 +52,11 @@ def test_public_ticket_uses_same_safe_delivery(client, db, outbox):
     assert response.status_code == 200
     assert response.json()["notification_status"] == "email_not_configured"
     assert "<img" not in sent[0]["html_body"]
+
+
+def test_sales_contact_is_emailed_exactly_once(client, db, outbox):
+    sent, _ = outbox
+    response = client.post("/v1/sales/contact", json={"subject": "Team plan", "message": "Pricing follow-up", "email": "buyer@example.com", "source_page": "pricing"})
+    assert response.status_code == 200
+    assert response.json()["notification_status"] == "emailed"
+    assert len(sent) == 1

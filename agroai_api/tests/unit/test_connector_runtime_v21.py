@@ -82,6 +82,9 @@ def test_dropbox_oauth_url_uses_configured_client_id(monkeypatch):
 
 
 def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatch):
+    # Slack is coming soon for customers; lift that gate here only to exercise
+    # the state/callback invariants of a provider without token exchange.
+    monkeypatch.setattr("app.services.connector_availability.COMING_SOON_PROVIDERS", frozenset())
     monkeypatch.setenv("SLACK_OAUTH_CLIENT_ID", "slack-client")
     monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-launch-state-signing-key")
     monkeypatch.setenv("SLACK_OAUTH_REDIRECT_URI", "https://api.example.test/v1/connectors/oauth/callback")

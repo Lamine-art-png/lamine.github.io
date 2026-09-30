@@ -8,6 +8,8 @@
   "dynamic.shared.ready": "Ready",
   "dynamic.shared.readyLower": "ready",
   "dynamic.shared.available": "Available",
+  "dynamic.shared.comingSoon": "Coming soon",
+  "dynamic.shared.comingSoonLower": "coming soon",
   "dynamic.shared.availableLower": "available",
   "dynamic.shared.missing": "Missing",
   "dynamic.shared.low": "low",

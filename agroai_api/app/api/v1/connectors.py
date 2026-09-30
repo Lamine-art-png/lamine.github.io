@@ -28,6 +28,7 @@ from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
 from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
+from app.services.connector_availability import assert_connector_launchable
 from app.services.oauth_state import sign_oauth_state
 from app.services.oauth_urls import oauth_url
 
@@ -140,14 +141,14 @@ CATALOG: list[dict[str, Any]] = [
         "used_by": ["Decisions", "Assurance", "Reports"],
         "promise": "Add ET context to field-level water accounting.",
     },
-    {"id": "gmail", "name": "Gmail", "category": "Email evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["attachments", "operator emails", "reports", "vendor records"], "used_by": ["Evidence", "Reports"], "promise": "OAuth email evidence ingestion is prepared but not enabled yet."},
-    {"id": "outlook", "name": "Outlook", "category": "Email evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["attachments", "operator emails", "reports", "vendor records"], "used_by": ["Evidence", "Reports"], "promise": "OAuth email evidence ingestion is prepared but not enabled yet."},
-    {"id": "google_drive", "name": "Google Drive", "category": "Document evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "PDFs", "spreadsheets", "reports"], "used_by": ["Evidence", "Reports"], "promise": "Drive sync is prepared but not enabled yet."},
-    {"id": "dropbox", "name": "Dropbox", "category": "Document evidence", "status": "not_configured", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "files", "PDFs", "spreadsheets", "image metadata"], "used_by": ["Evidence", "Reports", "Assurance"], "promise": "OAuth Dropbox folder evidence ingestion is ready when the Dropbox client ID is configured.", "required_env": ["DROPBOX_OAUTH_CLIENT_ID"]},
-    {"id": "box", "name": "Box", "category": "Document evidence", "status": "not_configured", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "files", "PDFs", "spreadsheets", "enterprise records"], "used_by": ["Evidence", "Reports", "Assurance"], "promise": "OAuth Box folder evidence ingestion is ready when the Box client ID is configured.", "required_env": ["BOX_OAUTH_CLIENT_ID"]},
-    {"id": "slack", "name": "Slack", "category": "Operations context", "status": "not_configured", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["channels", "messages", "files", "operator handoffs"], "used_by": ["Evidence", "Ask AGRO-AI", "Reports"], "promise": "OAuth Slack context ingestion is ready when the Slack client ID is configured.", "required_env": ["SLACK_OAUTH_CLIENT_ID"]},
-    {"id": "salesforce", "name": "Salesforce", "category": "Customer operations", "status": "not_configured", "required_plan": "enterprise", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["accounts", "contacts", "cases", "opportunities", "customer notes"], "used_by": ["Reports", "Assurance", "Customer success"], "promise": "OAuth Salesforce context is ready when the Salesforce client ID is configured.", "required_env": ["SALESFORCE_OAUTH_CLIENT_ID"]},
-    {"id": "google_earth_engine", "name": "Google Earth Engine", "category": "Geospatial intelligence", "status": "not_configured", "required_plan": "enterprise", "connection_methods": ["service_account"], "upload_supported": False, "imports": ["field imagery", "ET/geospatial layers", "remote sensing context", "project assets"], "used_by": ["Decisions", "Reports", "Assurance"], "promise": "Google Earth Engine is ready when project and service-account env vars are configured.", "required_env": ["GOOGLE_EARTH_ENGINE_PROJECT_ID", "GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON"]},
+    {"id": "gmail", "name": "Gmail", "category": "Email evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["attachments", "operator emails", "reports", "vendor records"], "used_by": ["Evidence", "Reports"], "promise": "Gmail evidence ingestion is coming soon. Upload attachments and reports manually in the meantime."},
+    {"id": "outlook", "name": "Outlook", "category": "Email evidence", "status": "not_configured", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["attachments", "operator emails", "reports", "vendor records"], "used_by": ["Evidence", "Reports"], "promise": "Authorize Outlook to import operational email attachments into Evidence."},
+    {"id": "google_drive", "name": "Google Drive", "category": "Document evidence", "status": "not_configured", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "PDFs", "spreadsheets", "reports"], "used_by": ["Evidence", "Reports"], "promise": "Authorize Google Drive to import selected folders, PDFs and spreadsheets into Evidence."},
+    {"id": "dropbox", "name": "Dropbox", "category": "Document evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "files", "PDFs", "spreadsheets", "image metadata"], "used_by": ["Evidence", "Reports", "Assurance"], "promise": "Dropbox ingestion is coming soon. Upload files manually in the meantime.", "required_env": ["DROPBOX_OAUTH_CLIENT_ID"]},
+    {"id": "box", "name": "Box", "category": "Document evidence", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["folders", "files", "PDFs", "spreadsheets", "enterprise records"], "used_by": ["Evidence", "Reports", "Assurance"], "promise": "Box ingestion is coming soon. Upload files manually in the meantime.", "required_env": ["BOX_OAUTH_CLIENT_ID"]},
+    {"id": "slack", "name": "Slack", "category": "Operations context", "status": "coming_soon", "required_plan": "pro", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["channels", "messages", "files", "operator handoffs"], "used_by": ["Evidence", "Ask AGRO-AI", "Reports"], "promise": "Slack context ingestion is coming soon.", "required_env": ["SLACK_OAUTH_CLIENT_ID"]},
+    {"id": "salesforce", "name": "Salesforce", "category": "Customer operations", "status": "coming_soon", "required_plan": "enterprise", "connection_methods": ["oauth"], "upload_supported": False, "imports": ["accounts", "contacts", "cases", "opportunities", "customer notes"], "used_by": ["Reports", "Assurance", "Customer success"], "promise": "Salesforce context ingestion is coming soon.", "required_env": ["SALESFORCE_OAUTH_CLIENT_ID"]},
+    {"id": "google_earth_engine", "name": "Google Earth Engine", "category": "Geospatial intelligence", "status": "coming_soon", "required_plan": "enterprise", "connection_methods": ["service_account"], "upload_supported": False, "imports": ["field imagery", "ET/geospatial layers", "remote sensing context", "project assets"], "used_by": ["Decisions", "Reports", "Assurance"], "promise": "Google Earth Engine imagery ingestion is coming soon.", "required_env": ["GOOGLE_EARTH_ENGINE_PROJECT_ID", "GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON"]},
     {"id": "custom_api", "name": "Custom API", "category": "Enterprise systems", "status": "enterprise", "required_plan": "enterprise", "connection_methods": ["custom_api"], "upload_supported": False, "imports": ["ERP records", "district records", "sensor APIs", "custom telemetry"], "used_by": ["Enterprise deployments"], "promise": "Connect district, agribusiness, or enterprise systems through a contract-specific API."},
 ]
 
@@ -267,7 +268,7 @@ def connector_readiness(item: dict[str, Any]) -> dict[str, Any]:
     required = list(item.get("required_env") or [])
     missing = [name for name in required if not os.getenv(name, "").strip()]
     status_value = item.get("status", "available")
-    if required:
+    if required and status_value != "coming_soon":
         status_value = "ready_to_authorize" if not missing else "not_configured"
     return {**item, "configured": not missing, "configured_env": [name for name in required if name not in missing], "missing_env": missing, "status": status_value}
 
@@ -629,6 +630,7 @@ def list_jobs(tenant_id: str = Depends(require_current_tenant_id), db: Session =
 
 @router.post("/connectors/oauth/start")
 def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    assert_connector_launchable(payload.provider)
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode="oauth", config=payload.metadata)
     redirect_url = payload.redirect_url or f"{getattr(settings, 'APP_URL', 'https://app.agroai-pilot.com').rstrip('/')}/connectors/oauth/callback"
     state = sign_oauth_state(connection.id)

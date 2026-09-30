@@ -665,7 +665,7 @@ def support_options() -> dict:
 def support_ticket(payload: SupportTicketRequest, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     request_type = "bug" if payload.category == "issue" else payload.category
     row = _create_saas_request(db, ctx=ctx, request_type=request_type, subject=payload.subject, message=payload.message, workspace_id=payload.workspace_id, name=payload.name, email=payload.email, company=payload.company, role=payload.role, source_page=payload.source_page or "support")
-    return {"status": "received", "message": "Thanks - your request was received.", "request_id": row.id}
+    return {"status": "received", "message": "Thanks - your request was received.", "request_id": row.id, "notification_status": row.notification_status}
 
 
 @router.post("/sales/contact")

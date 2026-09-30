@@ -58,17 +58,17 @@ def make_client():
     return TestClient(app)
 
 
-def test_gmail_without_oauth_platform_config_never_fake_connects(monkeypatch):
+def test_google_drive_without_oauth_platform_config_never_fake_connects(monkeypatch):
     monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-test-state-key")
     monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
     client = make_client()
     response = client.post(
         "/v1/connectors/oauth/start",
-        json={"provider": "gmail", "metadata": {"account_hint": "ops@example.com"}},
+        json={"provider": "google_drive", "metadata": {"account_hint": "ops@example.com"}},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["connection"]["provider"] == "gmail"
+    assert body["connection"]["provider"] == "google_drive"
     assert body["connection"]["status"] == "platform_setup_required"
     assert body["connection"]["credentials_ref"] is None
     assert body["auth_url"] is None
