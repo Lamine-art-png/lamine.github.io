@@ -528,3 +528,81 @@ def assess_market_position(
         "crop_intelligence",
         market_state(position, evidence, question=question),
     )
+
+
+_ACTION_RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+
+
+def action_plan_state(actions: list[dict[str, Any]], *, question: str | None = None) -> dict[str, Any]:
+    """Build a provider-safe aggregate of a planned action set.
+
+    The fabric never receives the action payload, recipient, workspace, field,
+    controller target, generated artifact contents, or the raw instruction.
+    """
+    rows = list(actions or [])[:12]
+    risks = [str(row.get("risk_level") or "low").lower() for row in rows]
+    highest_risk = max(
+        (risk for risk in risks if risk in _ACTION_RISK_ORDER),
+        key=lambda risk: _ACTION_RISK_ORDER[risk],
+        default="low",
+    )
+    action_types = {
+        str(row.get("action_type") or "").strip().lower()
+        for row in rows
+        if str(row.get("action_type") or "").strip()
+    }
+    return {
+        "surface": "action_planning",
+        "planned_action_count": _count(len(rows), cap=12),
+        "approval_required_count": _count(sum(1 for row in rows if bool(row.get("approval_required"))), cap=12),
+        "auto_execute_count": _count(sum(1 for row in rows if bool(row.get("auto_execute"))), cap=12),
+        "highest_risk": highest_risk,
+        "has_physical_control_action": "request_controller_action" in action_types,
+        "has_external_communication": bool(action_types.intersection({"send_email", "email_report_to_user"})),
+        "has_field_mutation": bool(action_types.intersection({"create_field_task", "record_field_update", "parse_field_message"})),
+        "has_data_sync": "sync_connected_sources" in action_types,
+        "has_evidence_collection": "collect_missing_evidence" in action_types,
+        "intent": intent_flags(question, "decision"),
+    }
+
+
+def assess_action_plan(
+    actions: list[dict[str, Any]],
+    *,
+    question: str | None = None,
+) -> DecisionAdvisory | None:
+    if not actions:
+        return None
+    return assess_surface(
+        "action_planning",
+        action_plan_state(actions, question=question),
+    )
+
+
+def constrain_action_autonomy(
+    actions: list[dict[str, Any]],
+    advisory: DecisionAdvisory | None,
+) -> list[dict[str, Any]]:
+    """Use the advisory only to reduce autonomy, never to grant new authority.
+
+    In assist mode, weak evidence/high review need disables auto-execution. It
+    does not convert a blocked/approval-gated action into a ready action and does
+    not alter signed payload contents.
+    """
+    if advisory is None or not assist_enabled():
+        return actions
+
+    reduce_autonomy = (
+        advisory.route in {"review", "collect_evidence", "defer"}
+        or advisory.needs_human_review >= 0.70
+        or advisory.data_sufficient < 0.50
+    )
+    if not reduce_autonomy:
+        return actions
+
+    constrained: list[dict[str, Any]] = []
+    for action in actions:
+        row = dict(action)
+        row["auto_execute"] = False
+        constrained.append(row)
+    return constrained

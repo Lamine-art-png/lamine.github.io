@@ -161,6 +161,8 @@ def _instructions(payload: VoiceCallRequest) -> str:
         "Never invent farm telemetry, field history, acreage, weather, controller state, evidence, compliance status, or actions. "
         "For any question that depends on the user's workspace, historical observations, evidence, integrations, agronomic analysis, "
         "or a deep operational conclusion, call ask_agro_ai instead of guessing. "
+        "For any request that requires judging field condition, crop risk, evidence sufficiency, urgency, prioritization, or whether an operational step is appropriate, call ask_agro_ai before proposing or planning the action. "
+        "Do not make consequential agricultural judgments directly from the realtime model when AGRO-AI workspace intelligence can evaluate them. "
         "When the user explicitly requests operational work—creating or updating operations, generating files, drafting or sending communications, "
         "syncing connected data, creating tasks, recording updates, or controller work—call plan_aep_action first. "
         "Use the exact planned action_type, plan_token, and approval_required value when calling execute_aep_action. "
