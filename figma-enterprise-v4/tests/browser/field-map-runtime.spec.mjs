@@ -24,7 +24,7 @@ async function signedIn(page) {
     localStorage.setItem("agroai_locale_v1", "en");
     localStorage.setItem("agroai_product_tour_product_tour_v2_qa-user", "done");
   }, futureJwt());
-  await page.route(`${API_ORIGIN}/**`, async (route) => {
+  const handler = async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -35,7 +35,10 @@ async function signedIn(page) {
     if (path === "/v1/field-intelligence/observations") return json({ observations });
     if (request.method() === "GET") return json({ items: [], data: [], results: [], status: "ok" });
     return json({ status: "ok" });
-  });
+  };
+  // Production serves the API same-origin (app.agroai-pilot.com/v1); stub both.
+  await page.route(`${API_ORIGIN}/**`, handler);
+  await page.route(`${APP}/v1/**`, handler);
 }
 
 for (const viewport of [{ name: "desktop", width: 1400, height: 900 }, { name: "mobile", width: 390, height: 844 }]) {
