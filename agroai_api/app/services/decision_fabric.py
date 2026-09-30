@@ -40,6 +40,8 @@ _OPERATIONAL_TASKS = {
     "evidence_analysis",
     "decision",
     "report",
+    "readiness_refresh",
+    "proof_draft",
 }
 _CASUAL_RE = re.compile(
     r"^\s*(?:hi|hello|hey|yo|bonjour|salut|hola|ol[aá]|thanks?|thank you|merci|gracias|obrigad[oa])[!.?\s]*$",
