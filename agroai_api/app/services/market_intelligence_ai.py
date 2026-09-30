@@ -7,11 +7,13 @@ fallback rather than shown to a customer.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.services.decision_fabric import assess_market_position
 from app.services.model_router import ModelRouter
 
 PROMPT_VERSION = "market-intelligence-grounded-2026.09.2"
@@ -205,6 +207,12 @@ async def generate_market_brief(
     language: str = "en",
 ) -> dict[str, Any]:
     router = ModelRouter()
+    decision_advisory = await asyncio.to_thread(
+        assess_market_position,
+        position,
+        evidence,
+        question=question,
+    )
     if router.mode() == "offline":
         return deterministic_brief(position, question=question, language=language)
 
@@ -213,6 +221,7 @@ async def generate_market_brief(
         "evidence": evidence,
         "question": (question or "What materially matters in this commercial position?")[:1600],
         "response_language": language[:16],
+        "decision_routing": decision_advisory.safe_dict() if decision_advisory is not None else None,
     }
     system = (
         "You are the AGRO-AI Market Intelligence synthesis layer. Explain only the supplied structured facts. "
@@ -221,7 +230,10 @@ async def generate_market_brief(
         "Every numeric claim must copy an evidence value exactly, include its evidence_id in "
         "numeric_claims, and include that same id in evidence_ids. Do not put any number in summary, title, explanation, or limitations unless it "
         "is represented by a numeric_claim. Respond in FACTS.response_language. If evidence is incomplete, say so. Return concise enterprise "
-        "decision-support language."
+        "decision-support language. FACTS.decision_routing, when present, is an internal qualitative routing advisory only: "
+        "it is not evidence, not a financial calculation, not a forecast, and not authorization. Use it only to decide what deserves "
+        "attention, whether more evidence or human review is needed, and the safest next decision-support step. Never cite the routing "
+        "advisory as a customer fact."
     )
     schema = {
         "type": "json_schema",
