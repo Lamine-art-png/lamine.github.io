@@ -81,6 +81,12 @@ def apply_authoritative_billing_event(
             return
 
         org.subscription_status = obj.get("status") or org.subscription_status
+        if org.subscription_status == "canceled":
+            org.plan = "free"
+            org.current_period_start = None
+            org.current_period_end = None
+            org.cancel_at_period_end = False
+            return
         from app.api.v1 import billing as billing_api
 
         price = _first_price(obj)

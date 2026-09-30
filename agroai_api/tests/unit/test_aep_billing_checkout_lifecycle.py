@@ -173,6 +173,8 @@ def test_subscription_price_change_and_cancellation_follow_stripe(monkeypatch):
                "metadata": {"plan": "professional"}, "current_period_end": 1834128000}
     apply_authoritative_billing_event(None, org, "customer.subscription.updated", updated)
     assert (org.plan, org.stripe_price_id, org.current_period_end.year) == ("team", "price_team_local", 2028)
+    apply_authoritative_billing_event(None, org, "customer.subscription.updated", {**updated, "status": "canceled"})
+    assert (org.plan, org.subscription_status) == ("free", "canceled")
     apply_authoritative_billing_event(None, org, "customer.subscription.deleted", updated)
     assert (org.plan, org.subscription_status) == ("free", "canceled")
 
