@@ -25,7 +25,8 @@ async function events() {
 }
 
 async function running(page) {
-  return page.evaluate(() => window.__agroaiRelease?.running || document.querySelector('meta[name="agroai-build"]')?.content || null);
+  // A page that is mid-reload (converging) has no execution context yet.
+  return page.evaluate(() => window.__agroaiRelease?.running || document.querySelector('meta[name="agroai-build"]')?.content || null).catch(() => null);
 }
 
 async function newCustomer(browser, { signedIn = true, locale = "pt-BR", restrictedStorage = false } = {}) {
@@ -160,7 +161,10 @@ test("two open tabs converge once each, without a reload storm", async ({ browse
   await expect.poll(() => running(first), { timeout: 20_000 }).toBe(B);
   await expect.poll(() => second.evaluate(() => window.__agroaiRelease.pending()), { timeout: 10_000 }).toBe(B);
   await setVisibility(second, "hidden");
-  await expect.poll(() => running(second), { timeout: 20_000 }).toBe(B);
+  await expect.poll(() => running(second), {
+    timeout: 20_000,
+    message: `second tab did not converge; blocked by: ${await second.evaluate(() => `${window.__agroaiRelease?.unsafeReason()} active=${document.activeElement?.tagName}`).catch(() => "reloading")}`,
+  }).toBe(B);
   await second.waitForTimeout(3000);
   expect(secondLoads).toBe(1);
   await context.close();

@@ -204,6 +204,12 @@ function isEditable(element: Element | null): boolean {
   return (element as HTMLElement).isContentEditable === true;
 }
 
+function hasContent(element: Element | null): boolean {
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) return element.value.trim().length > 0;
+  if (element instanceof HTMLSelectElement) return false;
+  return Boolean((element as HTMLElement | null)?.textContent?.trim());
+}
+
 /** Why converging right now could cost the customer something, or null when it is safe. */
 export function unsafeReason(atNavigation = false): string | null {
   if (holds.size) return "held";
@@ -215,7 +221,9 @@ export function unsafeReason(atNavigation = false): string | null {
   }
   if (!atNavigation) {
     if (dirtySinceNavigation) return "unsaved_input";
-    if (isEditable(document.activeElement)) return "editing";
+    // A focused field only blocks when it holds content: an autofocused
+    // empty field must not pin a tab to an obsolete release forever.
+    if (isEditable(document.activeElement) && hasContent(document.activeElement)) return "editing";
   }
   return null;
 }
