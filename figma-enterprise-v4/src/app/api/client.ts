@@ -391,6 +391,7 @@ export const apiClient = {
     createPortalSession: (payload: BillingPortalPayload) => post("/v1/billing/create-portal-session", payload),
     summary: () => get("/v1/billing/summary"),
     checkout: (payload: ProductCheckoutPayload) => post("/v1/billing/checkout-authoritative", payload),
+    reconcileCheckout: (payload: { organization_id: string; session_id: string }) => post("/v1/billing/reconcile-checkout", payload),
   },
   product: { plans: () => get("/v1/product/plans"), shell: () => get("/v1/app/shell") },
   account: { me: () => get("/v1/account/me"), profile: () => get("/v1/account/profile"), updateProfile: (payload: unknown) => patch("/v1/account/profile", payload), security: () => get("/v1/account/security"), requestEmailVerification: () => post("/v1/account/email-verification/request"), startTwoFactor: () => post("/v1/account/two-factor/start") },

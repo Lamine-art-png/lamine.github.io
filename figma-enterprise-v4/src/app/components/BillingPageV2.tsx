@@ -1,8 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, CreditCard, RefreshCw } from "lucide-react";
 import { apiClient, ProductCheckoutPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
+import { useLocale } from "../hooks/useLocale";
+import { t as translate } from "../i18n";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type PlanId = ProductCheckoutPayload["plan_id"];
@@ -22,13 +24,47 @@ function barColor(row: QuotaRow) { const p = pct(row); return p >= 100 ? "#B4231
 
 export function BillingPageV2() {
   const { currentOrganization } = useAuth();
+  const { effectiveLocale } = useLocale();
   const state = usePortalResource<CommercialSummary>(useCallback(() => apiClient.billing.commercialSummary(), []));
   const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const busyRef = useRef(false);
   const summary = state.data;
 
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("checkout") !== "success" || !query.get("session_id") || !currentOrganization?.id) return;
+    const sessionId = query.get("session_id")!;
+    let cancelled = false;
+    const reconcile = async () => {
+      setMessage(translate("billing.checkoutConfirming", effectiveLocale));
+      for (let attempt = 0; attempt < 48 && !cancelled; attempt++) {
+        try {
+          const result = await apiClient.billing.reconcileCheckout({ organization_id: currentOrganization.id, session_id: sessionId }) as { status: string };
+          if (cancelled) return;
+          if (result.status === "active") {
+            await state.refresh();
+            setMessage(translate("billing.checkoutActive", effectiveLocale));
+            window.history.replaceState({}, "", "/billing");
+            return;
+          }
+          if (result.status === "expired") { setMessage(translate("billing.checkoutExpired", effectiveLocale)); return; }
+        } catch {
+          if (cancelled) return;
+          setMessage(translate("billing.checkoutConfirmError", effectiveLocale));
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      }
+      if (!cancelled) setMessage(translate("billing.checkoutStillConfirming", effectiveLocale));
+    };
+    void reconcile();
+    return () => { cancelled = true; };
+  }, [currentOrganization?.id, effectiveLocale]);
+
   async function upgrade(plan: Plan) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(plan.id); setMessage("");
     try {
       if (plan.id === "enterprise") {
@@ -36,18 +72,18 @@ export function BillingPageV2() {
         setMessage(String(result.message || "Enterprise request received."));
         return;
       }
-      const result = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: period }) as Record<string, unknown>;
+      const result = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: period, locale: effectiveLocale }) as Record<string, unknown>;
       if (typeof result.checkout_url === "string" && result.checkout_url) window.location.assign(result.checkout_url);
       else setMessage(String(result.message || "Checkout could not be started. Please try again."));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start checkout."); }
-    finally { setBusy(""); }
+    finally { busyRef.current = false; setBusy(""); }
   }
 
   async function manageBilling() {
     if (!currentOrganization?.id) return;
     setBusy("portal"); setMessage("");
     try {
-      const result = await apiClient.billing.createPortalSession({ organization_id: currentOrganization.id }) as Record<string, unknown>;
+      const result = await apiClient.billing.createPortalSession({ organization_id: currentOrganization.id, locale: effectiveLocale }) as Record<string, unknown>;
       if (typeof result.portal_url === "string" && result.portal_url) window.location.assign(result.portal_url);
       else setMessage("Billing portal is not available yet.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not open billing portal."); }
@@ -78,7 +114,7 @@ export function BillingPageV2() {
 
       <section className="rounded-[24px] p-4 sm:p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>Upgrade capacity</h2><p className="mt-2 text-[13px]" style={{ color: MUTED }}>Checkout delegates to the authoritative subscription path.</p></div><div className="inline-flex rounded-lg p-1" style={{ background: BG, border: `1px solid ${BORDER}` }}>{(["monthly", "annual"] as const).map((value) => <button key={value} onClick={() => setPeriod(value)} className="rounded-md px-3 py-2 text-[12px] capitalize" style={{ background: period === value ? GREEN : "transparent", color: period === value ? "white" : TEXT }}>{value}</button>)}</div></div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">{(summary?.upgrade_options || []).map((plan) => <article key={plan.id} className="flex min-h-[210px] flex-col rounded-2xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[17px] font-semibold" style={{ color: TEXT }}>{plan.name}</div><div className="mt-1 text-[13px] font-semibold" style={{ color: GREEN }}>{period === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div><p className="mt-4 text-[12px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p><div className="mt-auto pt-5"><PortalButton onClick={() => upgrade(plan)} disabled={busy === plan.id}>{busy === plan.id ? "Opening…" : plan.id === "enterprise" ? "Talk to sales" : `Upgrade to ${plan.name}`} <ArrowRight className="h-4 w-4" /></PortalButton></div></article>)}</div>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">{(summary?.upgrade_options || []).map((plan) => <article key={plan.id} className="flex min-h-[210px] flex-col rounded-2xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[17px] font-semibold" style={{ color: TEXT }}>{plan.name}</div><div className="mt-1 text-[13px] font-semibold" style={{ color: GREEN }}>{period === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div><p className="mt-4 text-[12px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p><div className="mt-auto pt-5"><PortalButton onClick={() => upgrade(plan)} disabled={Boolean(busy)}>{busy === plan.id ? "Opening…" : plan.id === "enterprise" ? "Talk to sales" : `Upgrade to ${plan.name}`} <ArrowRight className="h-4 w-4" /></PortalButton></div></article>)}</div>
       </section>
     </main>
   </div>;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "6d985d822b3ee28346425c163884c98889ef0bd841a9dd8964dc9702de311521",
+  "sourceFingerprint": "057e6beaa625e3affaccbb1487a385d288adaada162ca3e843b5b60e261bd7d4",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -14,6 +14,11 @@
     "app.reloadPortal": "Reload portal",
     "askAgroAi": "Ask AGRO-AI",
     "billing": "Billing",
+    "billing.checkoutActive": "Your subscription is active.",
+    "billing.checkoutConfirmError": "We could not confirm your subscription yet. Please try Refresh.",
+    "billing.checkoutConfirming": "Confirming your subscription…",
+    "billing.checkoutExpired": "Checkout expired. You can try again.",
+    "billing.checkoutStillConfirming": "We're still confirming your subscription. Please try Refresh shortly.",
     "commandCenter": "Command Center",
     "commercialBoundary.accessEyebrow": "AGRO-AI access",
     "commercialBoundary.body.quota": "Your current commercial quota is exhausted for this period. Upgrade to keep operating without waiting for the reset.",

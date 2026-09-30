@@ -9,7 +9,7 @@
     "agroaiBillingUi": "am",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "76500655990a884569da6cb5b65fc44000febb92ba6df13d1ce514fc69034d56",
+   "catalogSha256": "dd53f51f488e3ca175a7c11ca7105978ca66775d8bb9e432a7f5820895fef059",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "am"
@@ -22,7 +22,7 @@
     "identicalShare": 0.0016,
     "identicalToEnglish": 4,
     "nativeScriptShare": 0.9929,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -35,7 +35,7 @@
     "agroaiBillingUi": "ar",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "1a07fadee95d24614907cc2ad5afd61323514be6a444b6578d1824d9e42fa502",
+   "catalogSha256": "6f872f2e447d7f1d719998b40252738dd0d259e92f7e1a8d073a64fbc0fa273c",
    "direction": "rtl",
    "intelligence": {
     "preferredLanguage": "ar"
@@ -48,7 +48,7 @@
     "identicalShare": 0.0012,
     "identicalToEnglish": 3,
     "nativeScriptShare": 0.9945,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -61,7 +61,7 @@
     "agroaiBillingUi": "bg",
     "stripeCheckoutLocale": "bg"
    },
-   "catalogSha256": "b7db2e7d2882099583de71662d5087b06cd17f61a31c04616f47f40e5587d105",
+   "catalogSha256": "875e9299c1a48f092d001216ca9fd9b434406aa15d70e47f0db58a2380620c1a",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "bg"
@@ -71,10 +71,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0036,
+    "identicalShare": 0.0035,
     "identicalToEnglish": 9,
-    "nativeScriptShare": 0.9964,
-    "translatable": 2532
+    "nativeScriptShare": 0.9965,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -87,7 +87,7 @@
     "agroaiBillingUi": "bn",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "7e06add937d8a1934132d619d0706dd4c3d9c7571ab1c1a110937ea6088e0eb5",
+   "catalogSha256": "fae6e9d0510e356b88bddfac5566d1adb0e71d4e905fe3eb94e8611a9241bda6",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "bn"
@@ -100,7 +100,7 @@
     "identicalShare": 0.0028,
     "identicalToEnglish": 7,
     "nativeScriptShare": 0.9937,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -113,7 +113,7 @@
     "agroaiBillingUi": "bs",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "5d43649353b955765557265c6379cd4fafc9596cb942e9df40ca5a554e1191cc",
+   "catalogSha256": "714d38a15ea44ea68d12b335d6a820615e5c9007fa9cbca2d6f3bf4077274515",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "bs"
@@ -125,7 +125,7 @@
    "uiQuality": {
     "identicalShare": 0.0004,
     "identicalToEnglish": 1,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -138,7 +138,7 @@
     "agroaiBillingUi": "ca",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "7c57b4de04b194207f684cf37866abac4f6373179fe2f39ac435f4aa1b6b6338",
+   "catalogSha256": "8f4465352ce36c52d74e3c501527c09e50321fd528b9278041bc75c276266b71",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ca"
@@ -150,7 +150,7 @@
    "uiQuality": {
     "identicalShare": 0.0039,
     "identicalToEnglish": 10,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -163,7 +163,7 @@
     "agroaiBillingUi": "cs",
     "stripeCheckoutLocale": "cs"
    },
-   "catalogSha256": "9e357a75db1278fcfc55c5608edec2ac79e05b544a501c69eb23f6bb923ddbd2",
+   "catalogSha256": "f36d56a3f24795acb98dac6332989315ba3d9e9cb2d2c4f8cb2ee3fc2dc8227c",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "cs"
@@ -173,9 +173,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0107,
+    "identicalShare": 0.0106,
     "identicalToEnglish": 27,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -188,7 +188,7 @@
     "agroaiBillingUi": "da",
     "stripeCheckoutLocale": "da"
    },
-   "catalogSha256": "4c8ceb5b443f72a25d40c660e89f5894e67220e595bf999630ea760e871bd39c",
+   "catalogSha256": "7a695f90185c5601b4aeda64af6353dfca995943fa5e31965eef6e73655e1566",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "da"
@@ -198,9 +198,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.019,
+    "identicalShare": 0.0189,
     "identicalToEnglish": 48,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -213,7 +213,7 @@
     "agroaiBillingUi": "de",
     "stripeCheckoutLocale": "de"
    },
-   "catalogSha256": "de76c11b1a744eeed9675a4bc20386c5e3ca7b7bb037a99b19b8200e4280f08a",
+   "catalogSha256": "1428029f4488c1612fbaf3674419bcb5bfc9f0da746a74fbd5355b59dd4d36c6",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "de"
@@ -225,7 +225,7 @@
    "uiQuality": {
     "identicalShare": 0.0071,
     "identicalToEnglish": 18,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -238,7 +238,7 @@
     "agroaiBillingUi": "el",
     "stripeCheckoutLocale": "el"
    },
-   "catalogSha256": "5e474deb8dd729f4389cefa61035721834ce550178a662b5d190d68f1dc0fdc8",
+   "catalogSha256": "fb77226b26713f391d53e60da2c800652b7d14ecad426bf55ec81edc2857c6ba",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "el"
@@ -251,7 +251,7 @@
     "identicalShare": 0.0087,
     "identicalToEnglish": 22,
     "nativeScriptShare": 0.9953,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -283,7 +283,7 @@
     "agroaiBillingUi": "es",
     "stripeCheckoutLocale": "es"
    },
-   "catalogSha256": "48de5fbb07b1ff52b150d0124ab0e71dbf7117a21c73e05e0efceaea8f75ea4c",
+   "catalogSha256": "a4448f7e4791eaf3a8de1eecbbd5d910f37184abc0b4119e94d63e6acf59b32a",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "es"
@@ -295,7 +295,7 @@
    "uiQuality": {
     "identicalShare": 0.0028,
     "identicalToEnglish": 7,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -308,7 +308,7 @@
     "agroaiBillingUi": "et",
     "stripeCheckoutLocale": "et"
    },
-   "catalogSha256": "2eeb31f6568c70657de94ca2a1841ec8b4b5d8a582aa0d773053967b28201efa",
+   "catalogSha256": "a49f954bd22ea2066a9c302fc719937c76df862e0b49b7d0776144addeb8642d",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "et"
@@ -320,7 +320,7 @@
    "uiQuality": {
     "identicalShare": 0.0063,
     "identicalToEnglish": 16,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -333,7 +333,7 @@
     "agroaiBillingUi": "fa",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "cdc4cdf3b958ee40b28588878cdc265d2bd0ceea698805e0514647feff4d4792",
+   "catalogSha256": "b30ee1df6ff063d1e89aa1160a2bb1c655eb67aff623b270f56bb8ee962ae0b9",
    "direction": "rtl",
    "intelligence": {
     "preferredLanguage": "fa"
@@ -346,7 +346,7 @@
     "identicalShare": 0.0043,
     "identicalToEnglish": 11,
     "nativeScriptShare": 0.9945,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -359,7 +359,7 @@
     "agroaiBillingUi": "fi",
     "stripeCheckoutLocale": "fi"
    },
-   "catalogSha256": "4f708352ce673c4b412171b8a815eac403bc4c0952a38b6cb3d47c8d503283db",
+   "catalogSha256": "c52bf5747d9103caffa38ecf3945d511bb45cfbf66baf5bd6f84534f871942b4",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "fi"
@@ -371,7 +371,7 @@
    "uiQuality": {
     "identicalShare": 0.0099,
     "identicalToEnglish": 25,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -384,7 +384,7 @@
     "agroaiBillingUi": "fr-FR",
     "stripeCheckoutLocale": "fr"
    },
-   "catalogSha256": "584089cbcac42f875c4e31f3625ce5ce25aeb6f09f699a3a61f66676e804ec77",
+   "catalogSha256": "bf9c3923ab827efcd83d7260d922f5b54afa170cc785e7c27d1fc6c655abaec2",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "fr-FR"
@@ -396,7 +396,7 @@
    "uiQuality": {
     "identicalShare": 0.0043,
     "identicalToEnglish": 11,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -409,7 +409,7 @@
     "agroaiBillingUi": "gu",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "2a4f467dc0e5e6443e0346b56866d2d78386999b6b98f9336292e56a89557690",
+   "catalogSha256": "497050a59b9b0c347b3166a1a142dd1da5cf876d771338ce8f10ce5b56408549",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "gu"
@@ -422,7 +422,7 @@
     "identicalShare": 0.002,
     "identicalToEnglish": 5,
     "nativeScriptShare": 0.9933,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -435,7 +435,7 @@
     "agroaiBillingUi": "hi",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "c87d9d18445f74bfb49710b868180fcd3134a25ba1c2e723050fab65278cf44b",
+   "catalogSha256": "3c86d1c314c439dd9fed78245a264c92db33c3c89c19dfca04e3a7aa919ef80f",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "hi"
@@ -448,7 +448,7 @@
     "identicalShare": 0.0012,
     "identicalToEnglish": 3,
     "nativeScriptShare": 0.9941,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -461,7 +461,7 @@
     "agroaiBillingUi": "hr",
     "stripeCheckoutLocale": "hr"
    },
-   "catalogSha256": "4946db3945db333db1ffeb945e3aeb649599d786ccebaa48476797919835833f",
+   "catalogSha256": "5553726beab578d2f9c65f981c2cc0140072287074001a063d3040cb714e50c0",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "hr"
@@ -473,7 +473,7 @@
    "uiQuality": {
     "identicalShare": 0.0067,
     "identicalToEnglish": 17,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -486,7 +486,7 @@
     "agroaiBillingUi": "hu",
     "stripeCheckoutLocale": "hu"
    },
-   "catalogSha256": "b59710add67df075d7710696eabeda3b825a725d0e5e61292c00bdeddbc1e0e0",
+   "catalogSha256": "afc18351f2165a841b35accb0da6e135960a65160ec47686387f5a01290452c5",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "hu"
@@ -496,9 +496,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0107,
+    "identicalShare": 0.0106,
     "identicalToEnglish": 27,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -511,7 +511,7 @@
     "agroaiBillingUi": "hy",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "d6c5704df57e4c3eae66a35fff16cce9cfa2f55e7415549970e685a78ea7983a",
+   "catalogSha256": "c164e8cc2e84bfea252fb35850fc2c1e2be8c4d2ae842350b777b14b8c7513a8",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "hy"
@@ -524,7 +524,7 @@
     "identicalShare": 0.0051,
     "identicalToEnglish": 13,
     "nativeScriptShare": 0.9957,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -537,7 +537,7 @@
     "agroaiBillingUi": "id",
     "stripeCheckoutLocale": "id"
    },
-   "catalogSha256": "3017430463ed86d7bf5a6464e69179489b511796cb4fcb4c820c5393da1f4f30",
+   "catalogSha256": "8b130d5bcdbc12626f1bcfc91145d2947139f3ad8c958f112984f90409621d79",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "id"
@@ -549,7 +549,7 @@
    "uiQuality": {
     "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -562,7 +562,7 @@
     "agroaiBillingUi": "is",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "3b94acf7df7e1e57e6b15b290c19edb0cccd3eeeb1866d6cafa3b4df2f169ca9",
+   "catalogSha256": "c4b2f29d3992a566de961275c189b7197d2fed3ebbec43fe25931088868d0f2f",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "is"
@@ -574,7 +574,7 @@
    "uiQuality": {
     "identicalShare": 0.0087,
     "identicalToEnglish": 22,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -587,7 +587,7 @@
     "agroaiBillingUi": "it",
     "stripeCheckoutLocale": "it"
    },
-   "catalogSha256": "5455dfd678a6a1614ce20ce618d1ec1c330238081404338b73248cd353598f8e",
+   "catalogSha256": "224e9d3d8008b9cc62d8ab7ee2a4e26250749e2b46777fc6d9f2e5b28656ad7d",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "it"
@@ -599,7 +599,7 @@
    "uiQuality": {
     "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -612,7 +612,7 @@
     "agroaiBillingUi": "ja",
     "stripeCheckoutLocale": "ja"
    },
-   "catalogSha256": "e9d3f7d7c49bc65280250a252274b6162ef7b5965fe90e43eae3fc70818f5763",
+   "catalogSha256": "851a8d8c8d2092d23ce7598442029da5e0ae8530cfe37c0a733ff610eb656ea8",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ja"
@@ -625,7 +625,7 @@
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
     "nativeScriptShare": 0.9921,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -638,7 +638,7 @@
     "agroaiBillingUi": "ka",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "e53cef05356907821a132766b7ef71d6c701b38f11a72a7dcfc0de3f5c657cd0",
+   "catalogSha256": "5e1a084a008501d8af82c5b9de7c08f4b2dc1361ebdaa107eea32200fa439db9",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ka"
@@ -650,8 +650,8 @@
    "uiQuality": {
     "identicalShare": 0.0051,
     "identicalToEnglish": 13,
-    "nativeScriptShare": 0.9964,
-    "translatable": 2532
+    "nativeScriptShare": 0.9965,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -664,7 +664,7 @@
     "agroaiBillingUi": "kk",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "6b453b32e51099b2ee9b11a7e829dc738fae01ac727633d8338a80ddb7966f1d",
+   "catalogSha256": "3ec67862e2ad2fc113fa69fe8924f92a44bb22890c4a573b498deb85b3af27aa",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "kk"
@@ -677,7 +677,7 @@
     "identicalShare": 0.0051,
     "identicalToEnglish": 13,
     "nativeScriptShare": 0.9961,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -690,7 +690,7 @@
     "agroaiBillingUi": "kn",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "6d68598f37e227fba1e6faf465b1fb227c630ae265e9d3ee7327be1c358a8530",
+   "catalogSha256": "4061ab528b02dca63b2b6877b68cc7642862c066483260dcfeabbf762d60cb8e",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "kn"
@@ -703,7 +703,7 @@
     "identicalShare": 0.0004,
     "identicalToEnglish": 1,
     "nativeScriptShare": 0.9961,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -716,7 +716,7 @@
     "agroaiBillingUi": "ko",
     "stripeCheckoutLocale": "ko"
    },
-   "catalogSha256": "292aab9293249fe4f23bb881683ff79fbfc638564fa0f0b6cb38e7fd611b8ed4",
+   "catalogSha256": "98b4e8257a06d50c6ececd72fd526e93bf9d6669b01ae2dee0f2c148512a67d0",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ko"
@@ -728,8 +728,8 @@
    "uiQuality": {
     "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "nativeScriptShare": 0.9885,
-    "translatable": 2532
+    "nativeScriptShare": 0.9886,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -742,7 +742,7 @@
     "agroaiBillingUi": "lt",
     "stripeCheckoutLocale": "lt"
    },
-   "catalogSha256": "95e483f3fe0dd30170bdfd980bde0dbb565bc5514a7093d5748b13441e1d7e94",
+   "catalogSha256": "6d98439b97aef7171ef849ee48c28e2d92a6611f82161821eed56bde740778b3",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "lt"
@@ -754,7 +754,7 @@
    "uiQuality": {
     "identicalShare": 0.0055,
     "identicalToEnglish": 14,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -767,7 +767,7 @@
     "agroaiBillingUi": "lv",
     "stripeCheckoutLocale": "lv"
    },
-   "catalogSha256": "886bfe25e2c52a702f289408ad44ccb998dc6a7f73ccab7b31a5e25a3a76f677",
+   "catalogSha256": "0976dd6f88277e62e0efa3aaeea5c2b1869357d53ab1bc4e3a19215f75bfb695",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "lv"
@@ -779,7 +779,7 @@
    "uiQuality": {
     "identicalShare": 0.0051,
     "identicalToEnglish": 13,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -792,7 +792,7 @@
     "agroaiBillingUi": "mk",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "dfaef100635c1bb17bd72f14bd7a17a79b2ea1533ec570c3c46f8ba06e7c72dc",
+   "catalogSha256": "b617eb4f1ae6404ec88bdf4336cdbbd50a83d2f57d378c886353b39c04a55b16",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "mk"
@@ -805,7 +805,7 @@
     "identicalShare": 0.0043,
     "identicalToEnglish": 11,
     "nativeScriptShare": 0.9961,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -818,7 +818,7 @@
     "agroaiBillingUi": "ml",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "e54b027177ae67e276dcc2d2a6f6da5459221c68acd712b15fd038e7fd32a09c",
+   "catalogSha256": "9b0133e9ceff2e0f1356abdb99c726358d42b5190d59eef8348acf453c1ae61a",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ml"
@@ -831,7 +831,7 @@
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
     "nativeScriptShare": 0.9953,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -844,7 +844,7 @@
     "agroaiBillingUi": "mn",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "956a810e3d3af71afae42eed0e176ccbaf4e6354c495b0d71cfecd0095bb0c2d",
+   "catalogSha256": "8a7c610ebdf195f1361a6ab0e964dbf5e5f1e3b5de882ce8af92667c4cf72402",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "mn"
@@ -857,7 +857,7 @@
     "identicalShare": 0.0032,
     "identicalToEnglish": 8,
     "nativeScriptShare": 0.9972,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -870,7 +870,7 @@
     "agroaiBillingUi": "mr",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "98b7ba291933fd9bce08617e53e5c4fea4abf9bac77484c2465bfd10537dc472",
+   "catalogSha256": "8a5cb3fc99cd25a578ff744236234f9e06d7f775ad413710e6f5fda70e89b2b2",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "mr"
@@ -883,7 +883,7 @@
     "identicalShare": 0.0008,
     "identicalToEnglish": 2,
     "nativeScriptShare": 0.9945,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -896,7 +896,7 @@
     "agroaiBillingUi": "ms",
     "stripeCheckoutLocale": "ms"
    },
-   "catalogSha256": "2ce4bc7bbc740c2f8ed2b7f30c89c68babe67b3fd6c3067c2fff138ff3c9b504",
+   "catalogSha256": "122d2d4bb85cd86b95f6d0f7b0bf95b8a4194e46da7a020a10fc5f5b27ed57cc",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ms"
@@ -908,7 +908,7 @@
    "uiQuality": {
     "identicalShare": 0.0039,
     "identicalToEnglish": 10,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -921,7 +921,7 @@
     "agroaiBillingUi": "my",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "903e7908846b1f36e680da77639844129cad887bfdf09f12de9b7ff4177838d5",
+   "catalogSha256": "0865d027811e1d985feb214b0887e69ca16a66ebff1acfa70f69fbd6b4a3063a",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "my"
@@ -931,10 +931,10 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0067,
-    "identicalToEnglish": 17,
+    "identicalShare": 0.0071,
+    "identicalToEnglish": 18,
     "nativeScriptShare": 0.9838,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -947,7 +947,7 @@
     "agroaiBillingUi": "nl",
     "stripeCheckoutLocale": "nl"
    },
-   "catalogSha256": "3a9b8acca75dd3c83307e0db771eae0b0cf7091284f5ae1db1075563aeab6678",
+   "catalogSha256": "27c6a70d345612eaabab158be5e75cda31a64e698db28f9447d17cf6def77d3a",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "nl"
@@ -959,7 +959,7 @@
    "uiQuality": {
     "identicalShare": 0.0063,
     "identicalToEnglish": 16,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -972,7 +972,7 @@
     "agroaiBillingUi": "no",
     "stripeCheckoutLocale": "nb"
    },
-   "catalogSha256": "b1ebfc36e427bda37166fa585175d50394cb936e53bc197333b2036ce59483ce",
+   "catalogSha256": "b46dc9fa6cdd51fbd0505816b558a335cbee4f8a635b7c9020a8af73e7665bac",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "no"
@@ -984,7 +984,7 @@
    "uiQuality": {
     "identicalShare": 0.0142,
     "identicalToEnglish": 36,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -997,7 +997,7 @@
     "agroaiBillingUi": "pa",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "d49c5414d17ce588e05bea95c68a4ea60ea181db5a186f8a821f20ee93fc804b",
+   "catalogSha256": "bcdb8d7c720125a7ad0dcf1eaf8a5427a132f1495429e5ba3e2c5412a06a10bd",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "pa"
@@ -1010,7 +1010,7 @@
     "identicalShare": 0.0028,
     "identicalToEnglish": 7,
     "nativeScriptShare": 0.9929,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1023,7 +1023,7 @@
     "agroaiBillingUi": "pl",
     "stripeCheckoutLocale": "pl"
    },
-   "catalogSha256": "2a47060c1fb91e088e95956f41107db23dfcb41583908754d8b66d59b8c46095",
+   "catalogSha256": "d314bbd2f918a85a640673534b7e4e3ebc678a0bb7c794cd96a0297000f5a4f1",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "pl"
@@ -1035,7 +1035,7 @@
    "uiQuality": {
     "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1048,7 +1048,7 @@
     "agroaiBillingUi": "pt-BR",
     "stripeCheckoutLocale": "pt-BR"
    },
-   "catalogSha256": "9ef8db581f11c3db2d64dd9a70ca94e8a2842cc3cd72b7b355ebfa616fdd4486",
+   "catalogSha256": "2f10893a6c0db3fa9161acf44e11e5f2138749a1a83ad06b8a255a3dfa581fe6",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "pt-BR"
@@ -1060,7 +1060,7 @@
    "uiQuality": {
     "identicalShare": 0.0039,
     "identicalToEnglish": 10,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1073,7 +1073,7 @@
     "agroaiBillingUi": "ro",
     "stripeCheckoutLocale": "ro"
    },
-   "catalogSha256": "275812262b6bfe090f5af320c7e0ae40666dbea05145083038b824dcb43c9fb1",
+   "catalogSha256": "4d12e4be5b7a5896515464099a249dabf009cebdcfaad4317a6b5fb5e64a7e3c",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ro"
@@ -1083,9 +1083,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0103,
+    "identicalShare": 0.0102,
     "identicalToEnglish": 26,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1098,7 +1098,7 @@
     "agroaiBillingUi": "ru",
     "stripeCheckoutLocale": "ru"
    },
-   "catalogSha256": "d7f2d2b831adfdce4be8ea953de84297b4020195f6b73b797ed6398cdd61f234",
+   "catalogSha256": "d408db79c68e9d29ce35d17fbd421843d76d7e2d2f39ef55005a45ab3a8087a1",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ru"
@@ -1110,8 +1110,8 @@
    "uiQuality": {
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
-    "nativeScriptShare": 0.9964,
-    "translatable": 2532
+    "nativeScriptShare": 0.9965,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1124,7 +1124,7 @@
     "agroaiBillingUi": "sk",
     "stripeCheckoutLocale": "sk"
    },
-   "catalogSha256": "f725687c5ea6d7e09adb05f48cc4b810f612c1df75f35dff2c9202e0506bc929",
+   "catalogSha256": "834fa71f136b6283ed932bd7e3577835f8170aac9be1b11e6cf71a051fd53f4e",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sk"
@@ -1136,7 +1136,7 @@
    "uiQuality": {
     "identicalShare": 0.0099,
     "identicalToEnglish": 25,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1149,7 +1149,7 @@
     "agroaiBillingUi": "sl",
     "stripeCheckoutLocale": "sl"
    },
-   "catalogSha256": "a9aec8fba149399c4e7865d4b1fadef23bd81f01835b5f2d4494ee02576e25fb",
+   "catalogSha256": "b072c7664fff455a1c87d3f9a4ea42db47f5d671ba6f403ed77f26cab3b27d6c",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sl"
@@ -1161,7 +1161,7 @@
    "uiQuality": {
     "identicalShare": 0.0055,
     "identicalToEnglish": 14,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1174,7 +1174,7 @@
     "agroaiBillingUi": "so",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "13b6a9b2756c4e06162445a6dfe58775248bce893fa8eb30c4bcbf91667c1144",
+   "catalogSha256": "48d62a2d1aa9a19e36c9effc88f3d1ffe23391bec5d66a1480eacc1dd3ec6182",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "so"
@@ -1186,7 +1186,7 @@
    "uiQuality": {
     "identicalShare": 0.0004,
     "identicalToEnglish": 1,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1199,7 +1199,7 @@
     "agroaiBillingUi": "sq",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "1be57e450f5c3a6fe227a7a59b36ea2672f7fba3bd8e0b9de348af6f9c988578",
+   "catalogSha256": "b395bd12c1f710d3b67586e869fe41ffce3d533aab8ff081a01b52760f312f24",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sq"
@@ -1211,7 +1211,7 @@
    "uiQuality": {
     "identicalShare": 0.0051,
     "identicalToEnglish": 13,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1224,7 +1224,7 @@
     "agroaiBillingUi": "sr",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "cb7be7cc8dee06cf66dc88afa38e7fe8faaea608fc1143a752251d47fb53d68b",
+   "catalogSha256": "d25271e467e1f2944524a100a071e1c5e741b9b4289a86cd343e5a952d0bba93",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sr"
@@ -1237,7 +1237,7 @@
     "identicalShare": 0.0012,
     "identicalToEnglish": 3,
     "nativeScriptShare": 0.9937,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1250,7 +1250,7 @@
     "agroaiBillingUi": "sv",
     "stripeCheckoutLocale": "sv"
    },
-   "catalogSha256": "530c31e79c2574aed046c96d1b257cf0f65dffc723ad8ba0abebc5f336ddee0c",
+   "catalogSha256": "7d26be76df99ecbe27eeca9383f2686295c632d35fcd9ccdcfd1fb9a76339489",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sv"
@@ -1262,7 +1262,7 @@
    "uiQuality": {
     "identicalShare": 0.0142,
     "identicalToEnglish": 36,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1275,7 +1275,7 @@
     "agroaiBillingUi": "sw",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "91f45e2a746af50df32b2852e41ccbcf0bad3ca4eb7c3db8b4a438f9f588e5e7",
+   "catalogSha256": "f03a8b66338b54eb9617e208889cf816e22a7e2dae64c5373dbc2747a85a5c17",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sw"
@@ -1287,7 +1287,7 @@
    "uiQuality": {
     "identicalShare": 0.0032,
     "identicalToEnglish": 8,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1300,7 +1300,7 @@
     "agroaiBillingUi": "ta",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "7112dffc6d9f8523a9b2dd23aa52dcf83393ac852c7205b7fb0696a4946cfcb9",
+   "catalogSha256": "4337f712ee1dbc58e196dfcc73971b69d1db42e2477d15a5e84cd4383ceacc7c",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "ta"
@@ -1313,7 +1313,7 @@
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
     "nativeScriptShare": 0.9949,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1326,7 +1326,7 @@
     "agroaiBillingUi": "te",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "06440b2b3d499ca3be83b83731714b3b389ccad74e54f67c1c63a414130509ee",
+   "catalogSha256": "085a689c5b03756fe6af95bcff18e0c08101200b01906457d3cc1d7f5dafcb52",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "te"
@@ -1339,7 +1339,7 @@
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
     "nativeScriptShare": 0.9933,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1352,7 +1352,7 @@
     "agroaiBillingUi": "th",
     "stripeCheckoutLocale": "th"
    },
-   "catalogSha256": "405c94aa1e19122a01eb27709a9950fe32327aee7353ba96af7eef6c60ef35ae",
+   "catalogSha256": "7eaf5a5441c40e61f935ec33ec91f6ca5145cfc38ae1b34cf5aaa02e0f073565",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "th"
@@ -1365,7 +1365,7 @@
     "identicalShare": 0.002,
     "identicalToEnglish": 5,
     "nativeScriptShare": 0.9949,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1378,7 +1378,7 @@
     "agroaiBillingUi": "tl",
     "stripeCheckoutLocale": "fil"
    },
-   "catalogSha256": "9c99f2a4289871c36ca9cbf64eb24da662f12c6efa2720bc148c15cee1fdb980",
+   "catalogSha256": "ab543ddb3fccd48e51cdb64c5eb921d76bb662ff44cf6f9db2e846d514b39367",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "tl"
@@ -1388,9 +1388,9 @@
    "transactional": true,
    "ui": true,
    "uiQuality": {
-    "identicalShare": 0.0316,
+    "identicalShare": 0.0315,
     "identicalToEnglish": 80,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1403,7 +1403,7 @@
     "agroaiBillingUi": "tr",
     "stripeCheckoutLocale": "tr"
    },
-   "catalogSha256": "8d4ec734faabf426f75bd5dad60ec80332b0fb58e58c5a7ff3517c87594eedb2",
+   "catalogSha256": "beac4f9c4c0f9d022de5c1f2598dbb26d176d4d6e6ecbb95ffd509abfe87c118",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "tr"
@@ -1415,7 +1415,7 @@
    "uiQuality": {
     "identicalShare": 0.0039,
     "identicalToEnglish": 10,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1428,7 +1428,7 @@
     "agroaiBillingUi": "uk",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "1d6e3f9edf7d158c9292ee0ffaf23b3b9df8b06fab00ad5bf1c9592c9261acfc",
+   "catalogSha256": "c4803e9ea77d13000e77dc25239bb817bb6bc28268316ab98d20ae20029837fb",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "uk"
@@ -1440,8 +1440,8 @@
    "uiQuality": {
     "identicalShare": 0.0059,
     "identicalToEnglish": 15,
-    "nativeScriptShare": 0.9964,
-    "translatable": 2532
+    "nativeScriptShare": 0.9965,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1454,7 +1454,7 @@
     "agroaiBillingUi": "ur",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "13adf453e32a2de22e059393f3564fb49368af53840745aec380dd7ba751a687",
+   "catalogSha256": "45658479d02f256569989b76c2ac2d7cf3456c167da1d46c013d9f79e03d1df5",
    "direction": "rtl",
    "intelligence": {
     "preferredLanguage": "ur"
@@ -1467,7 +1467,7 @@
     "identicalShare": 0.0024,
     "identicalToEnglish": 6,
     "nativeScriptShare": 0.9957,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1480,7 +1480,7 @@
     "agroaiBillingUi": "vi",
     "stripeCheckoutLocale": "vi"
    },
-   "catalogSha256": "637a8f9ca32f16880deb8544751e211c5c2769387ddca1c7a3076eabdeb8fbba",
+   "catalogSha256": "88c07f2b9419a561d334437d06c9ff83a031fb9057ec1a375f1668ce7dfb6178",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "vi"
@@ -1492,7 +1492,7 @@
    "uiQuality": {
     "identicalShare": 0.002,
     "identicalToEnglish": 5,
-    "translatable": 2532
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1505,7 +1505,7 @@
     "agroaiBillingUi": "zh",
     "stripeCheckoutLocale": "zh"
    },
-   "catalogSha256": "d938640aad093518e38dd8d3936b742d75287c894bacdc75829f4d6189319a2f",
+   "catalogSha256": "1b8046a493b05a30b97938c099ee18215fa454b08a75daef59398d8db9c10671",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "zh"
@@ -1517,8 +1517,8 @@
    "uiQuality": {
     "identicalShare": 0.0012,
     "identicalToEnglish": 3,
-    "nativeScriptShare": 0.9751,
-    "translatable": 2532
+    "nativeScriptShare": 0.9752,
+    "translatable": 2537
    },
    "voice": {
     "browserFallbackTts": "device-dependent",
@@ -1531,5 +1531,5 @@
  "schemaVersion": 1,
  "target": 60,
  "transactionalSourceVersion": "2026-09-30.auth-transactional-v3",
- "uiSourceFingerprint": "6d985d822b3ee28346425c163884c98889ef0bd841a9dd8964dc9702de311521"
+ "uiSourceFingerprint": "057e6beaa625e3affaccbb1487a385d288adaada162ca3e843b5b60e261bd7d4"
 }
