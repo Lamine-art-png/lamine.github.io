@@ -24,6 +24,7 @@ from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, IngestionJob
 from app.models.saas import Organization, UsageEvent, Workspace
 from app.services.agentic_artifacts import create_workspace_artifact
+from app.services.decision_fabric import assess_action_plan, constrain_action_autonomy
 from app.services.email_delivery import delivery_status, send_email
 from app.services.entitlements import assert_can_create_workspace, require_owner_or_admin
 from app.services.field_operating_loop import build_field_ops_context, create_field_update, create_task, field_message
@@ -553,6 +554,8 @@ def post_action_plan(
         history=payload.history,
         analysis_context=payload.analysis_context,
     )
+    decision_advisory = assess_action_plan(actions, question=payload.instruction)
+    actions = constrain_action_autonomy(actions, decision_advisory)
     for action in actions:
         action["plan_token"] = sign_action_plan(
             organization_id=ctx.organization.id,
