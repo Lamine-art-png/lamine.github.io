@@ -220,3 +220,30 @@ def test_shadow_mode_observes_without_influencing_model_context(monkeypatch):
     assert packet.decision_constraints == ["hard rule"]
     assert decision_fabric.advisory_prompt(advisory) == ""
     assert decision_fabric.advisory_context(advisory) is None
+
+
+def test_evidence_context_exposes_only_modality_presence_not_uploaded_content():
+    class Context:
+        evidence = [
+            {
+                "type": "uploaded_file",
+                "source_type": "image/jpeg",
+                "filename": "Secret Field.jpg",
+                "parsed_preview": "Private crop note",
+            },
+            {"type": "telemetry_recent", "records": [{"value": 123}]},
+        ]
+        missing_data = []
+        citations = []
+
+    state = decision_fabric.evidence_context_state(
+        Context(),
+        task="field_diagnosis",
+        question="What do you see?",
+    )
+    serialized = json.dumps(state)
+    assert state["modalities"]["has_visual_evidence"] is True
+    assert state["modalities"]["has_telemetry_evidence"] is True
+    assert "Secret Field.jpg" not in serialized
+    assert "Private crop note" not in serialized
+    assert "123" not in serialized
