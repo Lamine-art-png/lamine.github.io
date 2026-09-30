@@ -115,8 +115,10 @@ def test_free_plan_workspace_live_and_export_gates(client, db):
     )
     assert live.status_code == 403
     workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
+    # The retired legacy export route no longer pretends to queue anything; the
+    # plan gate for real report generation is covered on /v1/reports/generate.
     export = client.post(f"/v1/workspaces/{workspace_id}/reports/export", headers=headers)
-    assert export.status_code == 402
+    assert export.status_code == 410
 
 
 def test_paid_entitlements_unlock_live_workspace_and_agent_usage(client, db):
@@ -134,13 +136,18 @@ def test_paid_entitlements_unlock_live_workspace_and_agent_usage(client, db):
     )
     assert created.status_code == 201, created.text
     workspace_id = created.json()["workspace"]["id"]
-    run = client.post(f"/v1/workspaces/{workspace_id}/agents/run", headers=headers)
-    assert run.status_code == 200
-    evidence = client.post(f"/v1/workspaces/{workspace_id}/evidence", headers=headers)
-    assert evidence.status_code == 200
-    export = client.post(f"/v1/workspaces/{workspace_id}/reports/export", headers=headers)
-    assert export.status_code == 200
-    assert db.query(UsageEvent).filter(UsageEvent.event_type == "agent_run").count() == 1
+    # Legacy workspace routes returned canned results and consumed quota without
+    # doing work; they are retired and must never meter usage.
+    for method, path, replacement in (
+        ("post", f"/v1/workspaces/{workspace_id}/agents/run", "POST /v1/agents/run"),
+        ("post", f"/v1/workspaces/{workspace_id}/evidence", "POST /v1/evidence/upload"),
+        ("post", f"/v1/workspaces/{workspace_id}/reports/export", "POST /v1/reports/generate"),
+        ("get", f"/v1/workspaces/{workspace_id}/evidence", "GET /v1/evidence"),
+    ):
+        response = getattr(client, method)(path, headers=headers)
+        assert response.status_code == 410
+        assert response.json()["detail"]["replacement"] == replacement
+    assert db.query(UsageEvent).filter(UsageEvent.event_type.in_(["agent_run", "evidence_upload"])).count() == 0
 
 
 def test_checkout_and_portal_require_owner_or_admin_and_safe_missing_stripe(client, db):
