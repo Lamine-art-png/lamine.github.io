@@ -140,3 +140,19 @@ module comparison).
 - Only one previous release's assets are retained; a tab two or more
   releases old that lazy-loads a retired chunk reloads into the current
   release instead.
+
+## Production verification log
+
+- **2026-09-30, release `740b9448e` (PR #517)** — `scripts/verify-production-release.mjs`
+  passed on `https://app.agroai-pilot.com`: `deployment.json`, `/` and `/team`
+  shells, and `sw.js` all report `740b9448e`; 99 release assets immutable and
+  non-HTML; missing asset `404 text/plain no-store`; `/v1/health` ok through
+  the edge and not publicly cacheable. Real-browser proof: a fresh client runs
+  `740b9448e`, is controlled by the service worker with only
+  `agroai-shell-production-740b9448e…` cached and no `/v1` entries; API calls
+  carry `X-AGROAI-Client-Build: 740b9448e`; Portuguese persists. A client
+  booting an older release (different entry and build id) against production
+  converged by itself in one reload with language and storage intact. The
+  stale-shell step of `production-release.spec.mjs` was skipped for this first
+  release because the previous release predates build identity; it runs for
+  every release from the next one on.
