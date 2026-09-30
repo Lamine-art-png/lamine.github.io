@@ -12,11 +12,17 @@
  *    offline while updates still land when online;
  *  - versioned, environment-scoped cache cleanup prevents staging and
  *    production shells from deleting one another;
+ *  - the cache is scoped to the release: the build replaces
+ *    __AGROAI_BUILD_ID__ with the Git SHA, so every release is a byte-different
+ *    worker that installs, activates immediately and prunes the previous
+ *    release's cache (release identity is equality, never ordering, so a
+ *    rollback converges exactly like a roll-forward);
  *  - SKIP_WAITING lets the app apply an update on user consent.
  */
 const SW_ENV = new URL(self.location.href).searchParams.get("env") || "production";
 const CACHE_FAMILY = `agroai-shell-${SW_ENV}-`;
-const CACHE_VERSION = `${CACHE_FAMILY}v3`;
+const BUILD_ID = "__AGROAI_BUILD_ID__";
+const CACHE_VERSION = `${CACHE_FAMILY}${BUILD_ID}`;
 const SHELL_PATHS = ["/", "/index.html", "/manifest.webmanifest", "/pwa-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -48,6 +54,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "AGROAI_GET_BUILD" && event.source) {
+    event.source.postMessage({ type: "AGROAI_SW_BUILD", build: BUILD_ID });
+  }
 });
 
 function isApiRequest(url) {
@@ -112,7 +121,10 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE_VERSION);
         try {
           const response = await fetch(request, { cache: "no-store" });
-          if (response.ok) await cache.put("/index.html", response.clone());
+          // Only a real HTML shell may become the offline fallback.
+          if (response.ok && /text\/html/i.test(response.headers.get("content-type") || "")) {
+            await cache.put("/index.html", response.clone());
+          }
           return response;
         } catch {
           return (await cache.match("/index.html")) || (await cache.match("/")) || Response.error();

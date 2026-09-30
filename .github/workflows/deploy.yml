@@ -258,8 +258,17 @@ jobs:
           node tests/platform-api-console-contract.mjs
           npm run build
 
+      # This workflow is the only production deployer of the portal: every
+      # release is this exact build (same-origin API, service worker, build
+      # identity). Other portal workflows verify it; they never deploy.
+      - name: Retain the previous release's assets for open tabs
+        run: node figma-enterprise-v4/scripts/retain-previous-release-assets.mjs --url "${PORTAL_URL}" --dist figma-enterprise-v4/dist --save-index previous-index.html
+
       - name: Deploy authenticated products to Pages
         run: npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
+
+      - name: Verify production release identity and cache policy
+        run: node figma-enterprise-v4/scripts/verify-production-release.mjs --url "${PORTAL_URL}" --sha "${GITHUB_SHA}" --timeout-seconds 600
 
       - name: Smoke production portal and global language bundle
         shell: bash
@@ -268,7 +277,7 @@ jobs:
           mkdir -p portal-smoke/assets
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}/" -o portal-smoke/index.html; then
+            if curl --fail --silent --show-error --location --max-time 20 --retry 5 --retry-all-errors --retry-delay 2 "${PORTAL_URL}/" -o portal-smoke/index.html; then
               title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
               if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
                 ready=1
@@ -287,7 +296,7 @@ jobs:
               grep -Fx "$asset" portal-smoke/seen.txt >/dev/null 2>&1 && continue
               echo "$asset" >> portal-smoke/seen.txt
               target="portal-smoke/assets/$(basename "$asset")"
-              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              curl --fail --silent --show-error --max-time 20 --retry 5 --retry-all-errors --retry-delay 2 "${PORTAL_URL}/${asset}" -o "$target"
               grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
               grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
             done < portal-smoke/queue.txt
@@ -299,6 +308,18 @@ jobs:
           grep -F 'agroai_ui_catalog_v4:' portal-smoke/all-js.txt >/dev/null
           grep -F 'Full UI translation unavailable' portal-smoke/all-js.txt >/dev/null
           printf 'portal_global_language_bundle=ok\n'
+
+      - name: Prove the release in a real browser (fresh and stale clients)
+        working-directory: figma-enterprise-v4
+        env:
+          AGROAI_PRODUCTION_URL: ${{ env.PORTAL_URL }}
+          AGROAI_EXPECTED_SHA: ${{ github.sha }}
+          AGROAI_PREVIOUS_INDEX: ${{ github.workspace }}/previous-index.html
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+          npx playwright test tests/browser/production-release.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
 
       - name: Smoke standalone Platform product when custom domain is enabled
         shell: bash

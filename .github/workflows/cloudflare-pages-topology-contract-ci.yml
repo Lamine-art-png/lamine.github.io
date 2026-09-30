@@ -20,6 +20,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Two extra workflows used to build different portal bundles (one against
+      # the edge-bypassing API host, one without service worker or build
+      # identity) and race deploy.yml for the live deployment, so customers
+      # could land on an incoherent release. Only deploy.yml may deploy it.
+      - name: Verify deploy.yml is the only production portal deployer
+        shell: bash
+        run: |
+          set -euo pipefail
+          offenders="$(grep -lE 'pages deploy figma-enterprise-v4/dist|project-name[ =]+"?(\$\{PORTAL_PROJECT\}|agroai-portal)' .github/workflows/*.yml | grep -vE '^.github/workflows/(deploy|cloudflare-pages-topology-contract-ci)\.yml$' || true)"
+          if [ -n "$offenders" ]; then
+            echo "Production portal deployed outside deploy.yml:" >&2
+            echo "$offenders" >&2
+            exit 1
+          fi
+          grep -F 'VITE_BUILD_SHA: ${{ github.sha }}' .github/workflows/deploy.yml >/dev/null
+          grep -F 'VITE_DEPLOYMENT_ENVIRONMENT: production' .github/workflows/deploy.yml >/dev/null
+          grep -F 'verify-production-release.mjs' .github/workflows/deploy.yml >/dev/null
+          echo "single_portal_deployer=deploy.yml"
+
       # This retired customer-portal project has no custom domains or production
       # deployment. Its obsolete Git builds must not shadow the release gates.
       - name: Verify legacy Pages automatic builds remain retired

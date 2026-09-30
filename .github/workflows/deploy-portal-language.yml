@@ -24,12 +24,13 @@ env:
 
 jobs:
   deploy:
-    name: Build, deploy, and smoke portal languages
+    # Verification only. The portal has exactly one production deployer (the
+    # Cloudflare Production Release workflow, deploy.yml); a second deployer
+    # built a different bundle and raced it for the live deployment.
+    name: Validate and smoke production portal languages
     runs-on: ubuntu-latest
-    environment: production
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,72 +40,33 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Build exact 59-language portal
+      - name: Validate 59-language portal source
         working-directory: figma-enterprise-v4
-        env:
-          VITE_API_BASE_URL: ${{ env.API_URL }}
         run: |
           set -euo pipefail
           npm ci
           npm run test:i18n
-          npm run build
 
-      - name: Deploy exact portal bundle
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist \
-            --project-name "${PORTAL_PROJECT}" \
-            --branch main \
-            --commit-hash "${GITHUB_SHA}"
+      - name: Wait for the authoritative release of this commit
+        id: release
+        run: echo "state=$(.github/scripts/wait-for-portal-release.sh "${PORTAL_URL}" "${GITHUB_SHA}")" >> "$GITHUB_OUTPUT"
 
-      - name: Smoke exact production language bundle after deployment convergence
+      - name: Smoke production language bundle
+        if: steps.release.outputs.state == 'current'
         shell: bash
         run: |
           set -euo pipefail
           rm -rf portal-smoke
           mkdir -p portal-smoke/assets
 
-          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' figma-enterprise-v4/dist/index.html \
+          cache_key="${GITHUB_SHA}-$(date +%s)"
+          curl --fail --silent --show-error --location --max-time 20 --retry 5 --retry-all-errors --retry-delay 2 \
+            "${PORTAL_URL}/?portal_release=${cache_key}" -o portal-smoke/index.html
+          printf '%s\n' "$cache_key" > portal-smoke/release-cache-key.txt
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html \
             | sed 's#^/##' \
-            | sort -u > portal-smoke/expected-assets.txt
-          test -s portal-smoke/expected-assets.txt
-
-          ready=0
-          for attempt in $(seq 1 60); do
-            cache_key="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            if ! curl --fail --silent --show-error --location --max-time 20 \
-              "${PORTAL_URL}/?portal_release=${cache_key}" -o portal-smoke/index.html; then
-              sleep 5
-              continue
-            fi
-
-            title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
-            if [ "$title" != "AGRO-AI Enterprise Portal" ]; then
-              sleep 5
-              continue
-            fi
-
-            grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html \
-              | sed 's#^/##' \
-              | sort -u > portal-smoke/production-assets.txt || true
-
-            exact=1
-            while IFS= read -r asset; do
-              [ -n "$asset" ] || continue
-              if ! grep -Fx "$asset" portal-smoke/production-assets.txt >/dev/null 2>&1; then
-                exact=0
-                break
-              fi
-            done < portal-smoke/expected-assets.txt
-
-            if [ "$exact" -eq 1 ]; then
-              printf '%s\n' "$cache_key" > portal-smoke/release-cache-key.txt
-              ready=1
-              break
-            fi
-            sleep 5
-          done
-          test "$ready" -eq 1
+            | sort -u > portal-smoke/production-assets.txt
+          test -s portal-smoke/production-assets.txt
 
           cp portal-smoke/production-assets.txt portal-smoke/queue.txt
           : > portal-smoke/seen.txt
@@ -117,7 +79,7 @@ jobs:
               echo "$asset" >> portal-smoke/seen.txt
               target="portal-smoke/assets/$(printf '%s' "$asset" | tr '/' '_')"
               cache_key="$(cat portal-smoke/release-cache-key.txt)"
-              curl --fail --silent --show-error --max-time 20 \
+              curl --fail --silent --show-error --max-time 20 --retry 5 --retry-all-errors --retry-delay 2 \
                 "${PORTAL_URL}/${asset}?portal_release=${cache_key}" -o "$target"
               grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
               grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" \
