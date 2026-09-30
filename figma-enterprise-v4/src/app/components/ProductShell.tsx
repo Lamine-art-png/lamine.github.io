@@ -519,8 +519,10 @@ export function BillingPage() {
 
 export function SecurityPage() {
   const securityState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.account.security(), []));
-  const { verification, requestVerification } = useAuth();
+  const { verification, requestVerification, adoptSession } = useAuth();
   const [message, setMessage] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const data = securityState.data || {};
   const emailVerification = (data.email_verification || {}) as Record<string, unknown>;
   const organizationVerification = (data.organization_verification || {}) as Record<string, unknown>;
@@ -537,11 +539,67 @@ export function SecurityPage() {
     setMessage(String(response.message || "Two-factor setup request received."));
   };
 
+  const changePassword = async () => {
+    setMessage("");
+    if (!passwordForm.current || !passwordForm.next || !passwordForm.confirm) {
+      setMessage("Enter your current password and your new password.");
+      return;
+    }
+    if (passwordForm.next !== passwordForm.confirm) {
+      setMessage("New passwords do not match.");
+      return;
+    }
+    if (passwordForm.next.length < 12) {
+      setMessage("New password must be at least 12 characters.");
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const response = await apiClient.account.changePassword({
+        current_password: passwordForm.current,
+        new_password: passwordForm.next,
+        confirm_password: passwordForm.confirm,
+      }) as Record<string, unknown>;
+      // The backend invalidates every older session after the credential change
+      // and returns one fresh token for this browser so the customer stays signed in.
+      await adoptSession(response);
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      setMessage("Password changed.");
+      await securityState.refresh().catch(() => null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not change password.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
   return (
     <Page title="Security" subtitle="Protect workspace access and route verification or additional controls professionally.">
       {message ? <Banner message={message} /> : null}
       {securityState.error ? <Banner tone="warn" message={securityState.error} /> : null}
       <div className="grid gap-5 md:grid-cols-2">
+        <div id="password" className="md:col-span-2">
+          <Panel title="Password" action={<PortalButton onClick={changePassword} disabled={passwordBusy}>{passwordBusy ? "Changing…" : "Change password"}</PortalButton>}>
+            <div className="max-w-3xl">
+              <p className="mb-4 text-[13px] leading-6" style={{ color: MUTED }}>Enter your current password once, then choose a new one. You will stay signed in on this browser.</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="text-[12px]" style={{ color: MUTED }}>
+                  Current password
+                  <input type="password" autoComplete="current-password" value={passwordForm.current} onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+                </label>
+                <label className="text-[12px]" style={{ color: MUTED }}>
+                  New password
+                  <input type="password" autoComplete="new-password" minLength={12} value={passwordForm.next} onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+                </label>
+                <label className="text-[12px]" style={{ color: MUTED }}>
+                  Confirm new password
+                  <input type="password" autoComplete="new-password" minLength={12} value={passwordForm.confirm} onChange={(event) => setPasswordForm({ ...passwordForm, confirm: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+                </label>
+              </div>
+              <div className="mt-3 text-[12px]"><a href="/recover-account" className="font-medium underline underline-offset-2" style={{ color: GREEN }}>Forgot your current password?</a></div>
+            </div>
+          </Panel>
+        </div>
         <Panel title="Organization verification">
           <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
           <Row label="Status" value={organizationVerification.customer_label} />
