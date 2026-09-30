@@ -782,19 +782,19 @@ def change_password(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "current_password_incorrect", "message": "Current password is incorrect."},
+            detail={"code": "current_password_incorrect"},
         )
 
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "password_confirmation_mismatch", "message": "New passwords do not match."},
+            detail={"code": "password_confirmation_mismatch"},
         )
 
     if pwd_context.verify(payload.new_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "password_unchanged", "message": "Choose a new password that is different from your current password."},
+            detail={"code": "password_unchanged"},
         )
 
     policy_error = password_policy_error(payload.new_password, email=user.email)
@@ -835,7 +835,7 @@ def change_password(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
 
     session = _session_response(user, ctx.organization, ctx.membership)
-    session["message"] = "Password changed."
+    session["status"] = "password_changed"
     return session
 
 
