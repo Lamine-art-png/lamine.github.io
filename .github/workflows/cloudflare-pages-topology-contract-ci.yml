@@ -34,7 +34,8 @@ jobs:
             echo "$offenders" >&2
             exit 1
           fi
-          grep -F 'VITE_BUILD_SHA: ${{ github.sha }}' .github/workflows/deploy.yml >/dev/null
+          # Split so the workflow parser does not substitute the expression.
+          grep -F 'VITE_BUILD_SHA: $''{{ github.sha }}' .github/workflows/deploy.yml >/dev/null
           grep -F 'VITE_DEPLOYMENT_ENVIRONMENT: production' .github/workflows/deploy.yml >/dev/null
           grep -F 'verify-production-release.mjs' .github/workflows/deploy.yml >/dev/null
           echo "single_portal_deployer=deploy.yml"
