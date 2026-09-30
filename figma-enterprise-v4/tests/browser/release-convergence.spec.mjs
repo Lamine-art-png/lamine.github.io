@@ -66,11 +66,14 @@ async function expectRunning(page, build, timeout = 20_000) {
 }
 
 async function setVisibility(page, state) {
+  // A page that is already reloading into the new release has nothing to hide/show.
   await page.evaluate((next) => {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => next });
     Object.defineProperty(document, "hidden", { configurable: true, get: () => next === "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
-  }, state);
+  }, state).catch((error) => {
+    if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+  });
 }
 
 async function openPortal(context, path = "/") {
@@ -232,9 +235,12 @@ test("offline during a release: no error screen, converges after reconnecting", 
     await outage(false);
   }
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect.poll(() => page.evaluate(() => window.__agroaiRelease.pending()), { timeout: 10_000 }).toBe(B);
-  await returnToTab(page);
-  await expect.poll(() => running(page), { timeout: 20_000 }).toBe(B);
+  // Reconnecting detects B; a background tab applies it at once, a visible
+  // one at the next safe point (here: the customer returning to the tab).
+  await expect.poll(async () => (await running(page)) === B || await page.evaluate(() => window.__agroaiRelease.pending()).catch(() => null) === B, { timeout: 10_000 }).toBe(true);
+  if ((await running(page)) !== B) await returnToTab(page);
+  await expectRunning(page, B);
+  await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
   await context.close();
 });
 
