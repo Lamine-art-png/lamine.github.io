@@ -23,7 +23,7 @@ async function signedInOwner(page, locale) {
     localStorage.setItem("agroai_locale_v1", selected);
     localStorage.setItem("agroai_product_tour_product_tour_v2_qa-user", "done");
   }, { token: futureJwt(), locale });
-  await page.route(`${API_ORIGIN}/**`, async (route) => {
+  const handler = async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -42,7 +42,10 @@ async function signedInOwner(page, locale) {
     // Empty business data for every other read; accept writes.
     if (request.method() === "GET") return json({ items: [], data: [], results: [], status: "ok" });
     return json({ status: "ok" });
-  });
+  };
+  // Production serves the API same-origin (app.agroai-pilot.com/v1); stub both.
+  await page.route(`${API_ORIGIN}/**`, handler);
+  await page.route(`${APP}/v1/**`, handler);
   return catalogCalls;
 }
 
@@ -54,10 +57,15 @@ for (const locale of LOCALES) {
     const catalogCalls = await signedInOwner(page, locale);
     const catalog = loadCatalog(locale);
     const findings = [];
+    // Establish the signed-in shell once (identity stubs engaged).
+    await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("QA Farm", { exact: true }).first(), "signed-in portal shell").toBeVisible({ timeout: 30_000 });
     for (const route of ROUTES) {
       await page.goto(`${APP}${route}`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(1200);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      // Must be the signed-in portal, never the sign-in screen.
+      await expect(page.locator('input[type="password"]'), `${route} must be signed-in content, not the sign-in screen`).toHaveCount(0);
       for (const text of await englishLeaks(page, catalog)) findings.push(`${route} :: ${text}`);
       for (const text of await untranslatedEnglishProse(page)) findings.push(`${route} :: (uninventoried) ${text}`);
     }
