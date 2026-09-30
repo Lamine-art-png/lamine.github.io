@@ -13,7 +13,7 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.services.decision_fabric import assess_market_position
+from app.services.decision_fabric import advisory_context, assess_market_position
 from app.services.model_router import ModelRouter
 
 PROMPT_VERSION = "market-intelligence-grounded-2026.09.2"
@@ -221,7 +221,7 @@ async def generate_market_brief(
         "evidence": evidence,
         "question": (question or "What materially matters in this commercial position?")[:1600],
         "response_language": language[:16],
-        "decision_routing": decision_advisory.safe_dict() if decision_advisory is not None else None,
+        "decision_routing": advisory_context(decision_advisory),
     }
     system = (
         "You are the AGRO-AI Market Intelligence synthesis layer. Explain only the supplied structured facts. "
