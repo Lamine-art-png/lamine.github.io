@@ -44,7 +44,7 @@ def _clean(payload: dict[str, Any]) -> dict[str, Any] | None:
     if event not in EVENTS:
         return None
     cleaned: dict[str, Any] = {"event": event}
-    for key in ("running_build", "latest_build"):
+    for key in ("running_build", "latest_build", "from_build"):
         value = payload.get(key)
         if isinstance(value, str) and _BUILD.match(value):
             cleaned[key] = value

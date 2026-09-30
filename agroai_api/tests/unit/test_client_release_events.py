@@ -8,12 +8,12 @@ def test_release_event_is_logged_with_only_safe_fields(client, caplog):
     caplog.set_level(logging.INFO, logger="agroai.frontend_release")
     response = client.post("/v1/client/release-events", json={
         "event": "stale_build_detected", "running_build": "a" * 40, "latest_build": "b" * 40,
-        "route": "/team", "visibility": "visible", "reason": "peer_tab",
+        "route": "/team", "visibility": "visible", "reason": "peer_tab", "from_build": "e" * 40,
         "token": "secret-bearer", "email": "person@example.com",
     })
     assert response.status_code == 202
     logged = "\n".join(record.getMessage() for record in caplog.records)
-    assert "stale_build_detected" in logged and "a" * 40 in logged and "/team" in logged
+    assert "stale_build_detected" in logged and "a" * 40 in logged and "/team" in logged and "e" * 40 in logged
     assert "secret-bearer" not in logged and "person@example.com" not in logged
 
 

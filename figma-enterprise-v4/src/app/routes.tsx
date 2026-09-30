@@ -62,7 +62,7 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
   try {
     module = await loader();
   } catch (error) {
-    if (recoverFromAssetFailure(error, "dynamic_import")) return new Promise<never>(() => undefined);
+    if (await recoverFromAssetFailure(error, "dynamic_import")) return new Promise<never>(() => undefined);
     throw error;
   }
   return { Component: module[exportName] as ComponentType };

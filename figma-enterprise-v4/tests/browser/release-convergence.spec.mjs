@@ -66,11 +66,14 @@ async function expectRunning(page, build, timeout = 20_000) {
 }
 
 async function setVisibility(page, state) {
+  // A page that is already reloading into the new release has nothing to hide/show.
   await page.evaluate((next) => {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => next });
     Object.defineProperty(document, "hidden", { configurable: true, get: () => next === "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
-  }, state);
+  }, state).catch((error) => {
+    if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+  });
 }
 
 async function openPortal(context, path = "/") {
@@ -142,9 +145,9 @@ test("an open tab converges when the customer returns, keeping session and Portu
   expect(await page.evaluate(() => localStorage.getItem("agroai_access_token"))).toBe(TOKEN);
   expect(await page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe("pt-BR");
   await expect.poll(() => page.evaluate(() => document.documentElement.lang).catch(() => ""), { timeout: 10_000 }).toMatch(/^pt/);
-  // Diagnostics are sent with sendBeacon (asynchronous, fire-and-forget).
-  await expect.poll(async () => (await events()).some((row) => row.event === "stale_build_detected" && row.running_build === A && row.latest_build === B), { timeout: 10_000 }).toBe(true);
-  await expect.poll(async () => (await events()).some((row) => row.event === "recovery_succeeded" && row.running_build === B), { timeout: 10_000 }).toBe(true);
+  // The new page reports where it came from (the old page's own beacons are
+  // best effort: a background tab may reload before they leave).
+  await expect.poll(async () => (await events()).some((row) => row.event === "recovery_succeeded" && row.running_build === B && row.from_build === A), { timeout: 10_000 }).toBe(true);
   expect(JSON.stringify(await events())).not.toContain(TOKEN);
   await context.close();
 });
@@ -228,13 +231,25 @@ test("offline during a release: no error screen, converges after reconnecting", 
     expect(await running(page)).toBe(A);
     expect(await page.evaluate(() => window.__agroaiRelease.pending())).toBeNull();
     await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
+    // A lazy route that cannot load while offline must not reload the page
+    // into the browser's error page.
+    await page.evaluate(() => {
+      window.history.pushState({}, "", "/settings");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await page.waitForTimeout(2500);
+    expect(await page.evaluate(() => Boolean(window.__agroaiRelease)).catch(() => false)).toBe(true);
+    expect(await running(page)).toBe(A);
   } finally {
     await outage(false);
   }
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect.poll(() => page.evaluate(() => window.__agroaiRelease.pending()), { timeout: 10_000 }).toBe(B);
-  await returnToTab(page);
-  await expect.poll(() => running(page), { timeout: 20_000 }).toBe(B);
+  // Reconnecting detects B; a background tab applies it at once, a visible
+  // one at the next safe point (here: the customer returning to the tab).
+  await expect.poll(async () => (await running(page)) === B || await page.evaluate(() => window.__agroaiRelease.pending()).catch(() => null) === B, { timeout: 10_000 }).toBe(true);
+  if ((await running(page)) !== B) await returnToTab(page);
+  await expectRunning(page, B);
+  await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
   await context.close();
 });
 
