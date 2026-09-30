@@ -154,6 +154,38 @@ def intent_flags(question: str | None, task: str | None = None) -> dict[str, boo
     }
 
 
+def _sanitize_state(value: Any, *, depth: int = 0) -> Any:
+    """Recursively minimize provider-bound state.
+
+    Only bounded structured routing signals are expected. This final boundary
+    strips identifiers/secrets even if a future caller accidentally supplies
+    them and truncates free-form strings.
+    """
+    if depth > 6:
+        return None
+    blocked = {
+        "organization_id", "tenant_id", "workspace_id", "field_id", "block_id",
+        "user_id", "email", "name", "filename", "provider", "model", "question",
+        "transcript", "summary", "raw", "api_key", "apikey", "secret", "token",
+        "password", "credential", "authorization", "location", "coordinates",
+        "latitude", "longitude",
+    }
+    if isinstance(value, dict):
+        return {
+            str(key)[:80]: _sanitize_state(item, depth=depth + 1)
+            for key, item in value.items()
+            if str(key).lower() not in blocked
+            and not any(part in str(key).lower() for part in ("secret", "token", "password", "credential", "api_key"))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_state(item, depth=depth + 1) for item in list(value)[:50]]
+    if isinstance(value, str):
+        return value[:160]
+    if isinstance(value, (bool, int, float)) or value is None:
+        return value
+    return str(value)[:160]
+
+
 def _questions(surface: str) -> dict[str, Any]:
     surface_label = {
         "grounded_intelligence": "an evidence-grounded agricultural intelligence request",
@@ -238,28 +270,7 @@ def assess_surface(surface: str, state: dict[str, Any]) -> DecisionAdvisory | No
     if not config.configured:
         return None
 
-    safe_state = {
-        key: value
-        for key, value in state.items()
-        if key
-        not in {
-            "organization_id",
-            "tenant_id",
-            "workspace_id",
-            "field_id",
-            "block_id",
-            "user_id",
-            "email",
-            "name",
-            "filename",
-            "provider",
-            "model",
-            "question",
-            "transcript",
-            "summary",
-            "raw",
-        }
-    }
+    safe_state = _sanitize_state(state)
     payload = {
         "state": json.dumps(safe_state, sort_keys=True, separators=(",", ":"), default=str)[:12000],
         "model": config.model,
