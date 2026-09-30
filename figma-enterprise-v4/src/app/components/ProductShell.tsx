@@ -542,15 +542,15 @@ export function SecurityPage() {
   const changePassword = async () => {
     setMessage("");
     if (!passwordForm.current || !passwordForm.next || !passwordForm.confirm) {
-      setMessage("Enter your current password and your new password.");
+      setMessage("Request could not be processed.");
       return;
     }
     if (passwordForm.next !== passwordForm.confirm) {
-      setMessage("New passwords do not match.");
+      setMessage("The entries do not match.");
       return;
     }
     if (passwordForm.next.length < 12) {
-      setMessage("New password must be at least 12 characters.");
+      setMessage("Use at least 12 characters.");
       return;
     }
     setPasswordBusy(true);
@@ -564,10 +564,18 @@ export function SecurityPage() {
       // and returns one fresh token for this browser so the customer stays signed in.
       await adoptSession(response);
       setPasswordForm({ current: "", next: "", confirm: "" });
-      setMessage("Password changed.");
+      setMessage("Account access updated.");
       await securityState.refresh().catch(() => null);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not change password.");
+      if (error && typeof error === "object" && "code" in error) {
+        const code = String((error as { code?: unknown }).code || "");
+        if (code === "password_confirmation_mismatch") setMessage("The entries do not match.");
+        else if (code === "password_unchanged") setMessage("Request could not be processed.");
+        else if (code === "current_password_incorrect") setMessage("Invalid email or password");
+        else setMessage(error instanceof Error ? error.message : "Request could not be processed.");
+      } else {
+        setMessage(error instanceof Error ? error.message : "Request could not be processed.");
+      }
     } finally {
       setPasswordBusy(false);
     }
@@ -579,24 +587,24 @@ export function SecurityPage() {
       {securityState.error ? <Banner tone="warn" message={securityState.error} /> : null}
       <div className="grid gap-5 md:grid-cols-2">
         <div id="password" className="md:col-span-2">
-          <Panel title="Password" action={<PortalButton onClick={changePassword} disabled={passwordBusy}>{passwordBusy ? "Changing…" : "Change password"}</PortalButton>}>
+          <Panel title="Password" action={<PortalButton onClick={changePassword} disabled={passwordBusy}>{passwordBusy ? "Working..." : "Update account access"}</PortalButton>}>
             <div className="max-w-3xl">
-              <p className="mb-4 text-[13px] leading-6" style={{ color: MUTED }}>Enter your current password once, then choose a new one. You will stay signed in on this browser.</p>
+              <p className="mb-4 text-[13px] leading-6" style={{ color: MUTED }}>Use at least 12 characters.</p>
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="text-[12px]" style={{ color: MUTED }}>
-                  Current password
+                  Password
                   <input type="password" autoComplete="current-password" value={passwordForm.current} onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
                 </label>
                 <label className="text-[12px]" style={{ color: MUTED }}>
-                  New password
+                  Choose a new sign-in credential
                   <input type="password" autoComplete="new-password" minLength={12} value={passwordForm.next} onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
                 </label>
                 <label className="text-[12px]" style={{ color: MUTED }}>
-                  Confirm new password
+                  Confirm sign-in credential
                   <input type="password" autoComplete="new-password" minLength={12} value={passwordForm.confirm} onChange={(event) => setPasswordForm({ ...passwordForm, confirm: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
                 </label>
               </div>
-              <div className="mt-3 text-[12px]"><a href="/recover-account" className="font-medium underline underline-offset-2" style={{ color: GREEN }}>Forgot your current password?</a></div>
+              <div className="mt-3 text-[12px]"><a href="/recover-account" className="font-medium underline underline-offset-2" style={{ color: GREEN }}>Forgot password?</a></div>
             </div>
           </Panel>
         </div>
