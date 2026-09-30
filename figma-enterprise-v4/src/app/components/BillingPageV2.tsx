@@ -38,26 +38,26 @@ export function BillingPageV2() {
     const sessionId = query.get("session_id")!;
     let cancelled = false;
     const reconcile = async () => {
-      setMessage(translate("billing.checkoutConfirming", effectiveLocale));
+      setMessage("billing.checkoutConfirming");
       for (let attempt = 0; attempt < 48 && !cancelled; attempt++) {
         try {
           const result = await apiClient.billing.reconcileCheckout({ organization_id: currentOrganization.id, session_id: sessionId }) as { status: string };
           if (cancelled) return;
           if (result.status === "active") {
             await Promise.all([state.refresh(), refreshMe()]);
-            setMessage(translate("billing.checkoutActive", effectiveLocale));
+            setMessage("billing.checkoutActive");
             window.history.replaceState({}, "", "/billing");
             return;
           }
-          if (result.status === "expired") { setMessage(translate("billing.checkoutExpired", effectiveLocale)); return; }
+          if (result.status === "expired") { setMessage("billing.checkoutExpired"); return; }
         } catch (error) {
           if (cancelled) return;
-          setMessage(translate("billing.checkoutConfirmError", effectiveLocale));
+          setMessage("billing.checkoutConfirmError");
           if ([404, 409, 422].includes((error as ApiError).status || 0)) return;
         }
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
       }
-      if (!cancelled) setMessage(translate("billing.checkoutStillConfirming", effectiveLocale));
+      if (!cancelled) setMessage("billing.checkoutStillConfirming");
     };
     void reconcile();
     return () => { cancelled = true; };
@@ -100,7 +100,7 @@ export function BillingPageV2() {
     </header>
 
     <main className="space-y-5 px-4 py-4 sm:space-y-6 sm:px-8 sm:py-6" style={{ maxWidth: 1280 }}>
-      {state.error ? <Notice warn>{state.error}</Notice> : null}{message ? <Notice>{message}</Notice> : null}
+      {state.error ? <Notice warn>{state.error}</Notice> : null}{message ? <Notice>{message.startsWith("billing.checkout") ? translate(message, effectiveLocale) : message}</Notice> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <Metric label="Current plan" value={summary?.current_plan?.name || "—"} detail={summary?.current_plan ? (period === "annual" ? summary.current_plan.public_price_annual : summary.current_plan.public_price_monthly) : "Loading"} />
         <Metric label="Billing state" value={summary?.billing_status || "—"} detail={summary?.subscription_source ? `Source: ${summary.subscription_source}` : "Commercial state"} />

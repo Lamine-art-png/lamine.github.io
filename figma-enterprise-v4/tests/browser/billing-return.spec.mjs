@@ -6,13 +6,13 @@ function jwt() {
   return `qa.${Buffer.from(JSON.stringify({ sub: "billing-user", exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url")}.sig`;
 }
 
-test("Checkout return waits for authoritative activation and refreshes the plan", async ({ page }) => {
+for (const locale of ["en", "pt-BR"]) test(`Checkout return waits for activation in ${locale}`, async ({ page }) => {
   let reconcileCalls = 0;
   let active = false;
-  await page.addInitScript((token) => {
+  await page.addInitScript(({ token, locale: selected }) => {
     localStorage.setItem("agroai_access_token", token);
-    localStorage.setItem("agroai_locale_v1", "en");
-  }, jwt());
+    localStorage.setItem("agroai_locale_v1", selected);
+  }, { token: jwt(), locale });
 
   const handler = async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -41,9 +41,9 @@ test("Checkout return waits for authoritative activation and refreshes the plan"
   await page.route("https://api.agroai-pilot.com/**", handler);
   await page.route(`${APP}/v1/**`, handler);
   await page.goto(`${APP}/billing?checkout=success&session_id=cs_return`);
-  await expect(page.getByText("Confirming your subscription…")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Your subscription is active.")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Professional", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(locale === "pt-BR" ? "Confirmando sua assinatura…" : "Confirming your subscription…")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(locale === "pt-BR" ? "Sua assinatura está ativa." : "Your subscription is active.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(locale === "pt-BR" ? "Profissional" : "Professional", { exact: true }).first()).toBeVisible();
   expect(reconcileCalls).toBe(2);
   expect(new URL(page.url()).searchParams.has("checkout")).toBe(false);
 });
