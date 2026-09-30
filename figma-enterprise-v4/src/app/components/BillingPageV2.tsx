@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, CreditCard, RefreshCw } from "lucide-react";
-import { apiClient, ProductCheckoutPayload } from "../api/client";
+import { apiClient, ApiError, ProductCheckoutPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { useLocale } from "../hooks/useLocale";
@@ -23,7 +23,7 @@ function pct(row: QuotaRow) { return row.limit === null ? 0 : row.limit ? Math.m
 function barColor(row: QuotaRow) { const p = pct(row); return p >= 100 ? "#B42318" : p >= 80 ? "#B7791F" : GREEN; }
 
 export function BillingPageV2() {
-  const { currentOrganization } = useAuth();
+  const { currentOrganization, refreshMe } = useAuth();
   const { effectiveLocale } = useLocale();
   const state = usePortalResource<CommercialSummary>(useCallback(() => apiClient.billing.commercialSummary(), []));
   const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
@@ -44,15 +44,16 @@ export function BillingPageV2() {
           const result = await apiClient.billing.reconcileCheckout({ organization_id: currentOrganization.id, session_id: sessionId }) as { status: string };
           if (cancelled) return;
           if (result.status === "active") {
-            await state.refresh();
+            await Promise.all([state.refresh(), refreshMe()]);
             setMessage(translate("billing.checkoutActive", effectiveLocale));
             window.history.replaceState({}, "", "/billing");
             return;
           }
           if (result.status === "expired") { setMessage(translate("billing.checkoutExpired", effectiveLocale)); return; }
-        } catch {
+        } catch (error) {
           if (cancelled) return;
           setMessage(translate("billing.checkoutConfirmError", effectiveLocale));
+          if ([404, 409, 422].includes((error as ApiError).status || 0)) return;
         }
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
       }
@@ -60,7 +61,7 @@ export function BillingPageV2() {
     };
     void reconcile();
     return () => { cancelled = true; };
-  }, [currentOrganization?.id, effectiveLocale]);
+  }, [currentOrganization?.id, effectiveLocale, refreshMe]);
 
   async function upgrade(plan: Plan) {
     if (busyRef.current) return;
