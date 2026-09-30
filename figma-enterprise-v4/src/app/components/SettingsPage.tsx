@@ -307,7 +307,7 @@ export function SettingsPage() {
         </Card>
 
         <Card icon={ShieldCheck} title="Security & access" description="Protect account access and team operations.">
-          <div className="flex flex-wrap gap-2"><Link to="/security"><PortalButton>Change password</PortalButton></Link><Link to="/team"><PortalButton variant="secondary">Open team</PortalButton></Link></div>
+          <div className="flex flex-wrap gap-2"><Link to="/security"><PortalButton>Security settings</PortalButton></Link><Link to="/team"><PortalButton variant="secondary">Open team</PortalButton></Link></div>
         </Card>
 
         <Card icon={Users} title="Support & requests" description="Track support, onboarding, integration, sales, and upgrade requests.">
