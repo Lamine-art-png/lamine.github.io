@@ -60,3 +60,4 @@ def test_sales_contact_is_emailed_exactly_once(client, db, outbox):
     assert response.status_code == 200
     assert response.json()["notification_status"] == "emailed"
     assert len(sent) == 1
+

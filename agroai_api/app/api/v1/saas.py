@@ -190,7 +190,9 @@ def _save_preferences(db: Session, user: User, prefs: dict) -> dict:
 
 @router.post("/orgs", status_code=status.HTTP_201_CREATED)
 def create_org(payload: OrganizationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    org = Organization(name=payload.name, slug=_unique_slug(db, payload.name), owner_user_id=user.id)
+    # Registration screens every new organization before live access; an
+    # additional organization must not inherit the legacy approved default.
+    org = Organization(name=payload.name, slug=_unique_slug(db, payload.name), owner_user_id=user.id, verification_status="verification_required")
     db.add(org)
     db.flush()
     membership = OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner")
