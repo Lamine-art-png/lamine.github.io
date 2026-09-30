@@ -139,8 +139,7 @@ def test_assist_grounding_advisory_only_adds_caution(monkeypatch):
 
     assert advisory is not None
     assert packet.observed_facts == ["fact"]
-    assert packet.source_health["decision_routing"]["not_evidence"] is True
-    assert packet.source_health["decision_routing"]["not_authorization"] is True
+    assert "decision_routing" not in packet.source_health
     assert "existing hard constraint" in packet.decision_constraints
     assert any("more evidence" in item for item in packet.decision_constraints)
     assert any("human review" in item for item in packet.decision_constraints)
