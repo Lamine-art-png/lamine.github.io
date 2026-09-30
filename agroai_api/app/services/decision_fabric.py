@@ -265,18 +265,23 @@ def _parse(body: dict[str, Any]) -> DecisionAdvisory | None:
 
 
 def assess_surface(surface: str, state: dict[str, Any]) -> DecisionAdvisory | None:
-    """Evaluate redacted structured state and fail open to existing AGRO-AI logic."""
-    config = decision_model_config()
-    if not config.configured:
-        return None
+    """Evaluate redacted structured state and always fail open.
 
-    safe_state = _sanitize_state(state)
-    payload = {
-        "state": json.dumps(safe_state, sort_keys=True, separators=(",", ":"), default=str)[:12000],
-        "model": config.model,
-        "questions": _questions(surface),
-    }
+    This fabric is optional intelligence. Any configuration, serialization,
+    transport, provider, or parsing failure returns None so the existing
+    AGRO-AI stack remains fully operational.
+    """
     try:
+        config = decision_model_config()
+        if not config.configured:
+            return None
+
+        safe_state = _sanitize_state(state)
+        payload = {
+            "state": json.dumps(safe_state, sort_keys=True, separators=(",", ":"), default=str)[:12000],
+            "model": config.model,
+            "questions": _questions(surface),
+        }
         response = httpx.post(
             f"{config.base_url}/v1/systemone",
             headers={
@@ -289,7 +294,10 @@ def assess_surface(surface: str, state: dict[str, Any]) -> DecisionAdvisory | No
         )
         response.raise_for_status()
         body = response.json()
-    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        if not isinstance(body, dict):
+            return None
+        advisory = _parse(body)
+    except Exception as exc:  # noqa: BLE001
         logger.warning(
             "decision_fabric_unavailable surface=%s error_type=%s",
             surface,
@@ -297,9 +305,6 @@ def assess_surface(surface: str, state: dict[str, Any]) -> DecisionAdvisory | No
         )
         return None
 
-    if not isinstance(body, dict):
-        return None
-    advisory = _parse(body)
     if advisory is not None:
         logger.info(
             "decision_fabric_evaluation surface=%s route=%s route_confidence=%.4f urgency=%.4f human_review=%.4f data_sufficient=%.4f act_now=%.4f mode=%s",
