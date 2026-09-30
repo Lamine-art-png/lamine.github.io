@@ -356,28 +356,6 @@ def install_field_vision_extension(svc: Any) -> None:
             conservative_follow_up = safe_field_follow_up(multimodal_advisory)
             if conservative_follow_up:
                 observation.recommended_action = conservative_follow_up
-        if multimodal_advisory is not None:
-            svc._record_run(
-                db,
-                observation,
-                stage="decision_routing_multimodal",
-                provider="agroai",
-                stage_status="completed",
-                model="bounded-routing-v1",
-                attempt_count=int(job.attempt_count or 1),
-                output=multimodal_advisory.safe_dict(),
-            )
-            svc._audit(
-                observation,
-                "multimodal_decision_routing_completed",
-                actor="system",
-                details={
-                    "route": multimodal_advisory.route,
-                    "review_required": field_requires_review(multimodal_advisory),
-                    "advisory_only": True,
-                },
-            )
-
         evidence = svc._find_evidence_slow(db, observation)
         if evidence is not None:
             svc._apply_evidence_fields(
