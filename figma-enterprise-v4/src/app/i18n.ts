@@ -1,4 +1,5 @@
 import manifestData from "../../../shared/supported-locales.json";
+import billingCopy from "../../../shared/ui-billing.en.json";
 
 export type LocaleDirection = "ltr" | "rtl";
 export type LocaleOption = {
@@ -432,7 +433,8 @@ const pt: Record<string, string> = {
   "intelligence.doIt": "Executar",
 };
 
-export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR, pt };
+// Billing return messages are available before the full locale catalog hydrates.
+export const TRANSLATIONS: Record<string, Record<string, string>> = { en: { ...en, ...billingCopy }, "fr-FR": frFR, pt };
 
 
 const EN_KEYS = Object.keys(en).sort();
