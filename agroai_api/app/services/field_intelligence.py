@@ -35,6 +35,7 @@ from app.models.field_intelligence import (
 )
 from app.models.operational_records import EvidenceRecord, IngestionJob
 from app.models.saas import Workspace
+from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
 from app.services.field_observation_correlation import correlate_observation
 from app.services.field_observation_extraction import extract_observation
 from app.services.field_transcription import (
@@ -1090,10 +1091,55 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         "evidence_count": len(correlation.get("relevant_evidence_ids", [])),
     })
 
+    # --- Hidden bounded decision routing ---
+    # This layer can only increase caution. It cannot invent field facts, raise
+    # severity, authorize equipment control, or replace the extracted/correlated
+    # recommendation with a more aggressive action.
+    decision_advisory = assess_field_observation(
+        confidence=extraction.confidence,
+        uncertain_count=len(extraction.uncertain_fields or []),
+        evidence_count=len(correlation.get("relevant_evidence_ids", [])),
+        severity=observation.severity or extraction.severity,
+        has_text=bool(source_text.strip()),
+        has_recommended_action=bool((observation.recommended_action or "").strip()),
+        has_correlation=bool(correlation),
+    )
+    decision_review_required = field_requires_review(decision_advisory)
+    if not (observation.recommended_action or "").strip():
+        conservative_follow_up = safe_field_follow_up(decision_advisory)
+        if conservative_follow_up:
+            observation.recommended_action = conservative_follow_up
+    if decision_advisory is not None:
+        _record_run(
+            db,
+            observation,
+            stage="decision_routing",
+            provider="agroai",
+            stage_status="completed",
+            model="bounded-routing-v1",
+            attempt_count=int(job.attempt_count or 1),
+            output=decision_advisory.safe_dict(),
+        )
+        _audit(
+            observation,
+            "decision_routing_completed",
+            actor="system",
+            details={
+                "route": decision_advisory.route,
+                "review_required": decision_review_required,
+                "advisory_only": True,
+            },
+        )
+
+    observation.status = (
+        "needs_review"
+        if extraction.confidence < NEEDS_REVIEW_CONFIDENCE or decision_review_required
+        else "completed"
+    )
+
     # --- Feed into the AGRO-AI evidence graph ---
     _link_evidence_record(db, observation, source_text=source_text, transcription_ok=transcription_ok)
 
-    observation.status = "needs_review" if extraction.confidence < NEEDS_REVIEW_CONFIDENCE else "completed"
     observation.processing_error = None
     if session:
         session.status = "completed"
@@ -1119,7 +1165,7 @@ def _evidence_quality(observation: FieldObservation, confirmed_text: str) -> str
         # Reports evidence consumers (which require usable) cannot read it.
         return "unusable"
     confidence = observation.confidence if observation.confidence is not None else 0.0
-    return "needs_review" if confidence < NEEDS_REVIEW_CONFIDENCE else "usable"
+    return "needs_review" if confidence < NEEDS_REVIEW_CONFIDENCE or observation.status == "needs_review" else "usable"
 
 
 def _apply_evidence_fields(
