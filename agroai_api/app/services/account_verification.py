@@ -253,10 +253,23 @@ def evaluate_organization(payload: VerificationInput) -> VerificationDecision:
     intended_use = _normalized_text(payload.intended_use)
     if len(intended_use) < 50:
         reason_codes.append("detailed_use_case_required")
-    elif not _contains_agricultural_context(intended_use, primary_crops, payload.organization_type):
-        reason_codes.append("agricultural_use_case_not_detected")
     else:
-        score += 16
+        # Registration is global. The operational goal can be written in any
+        # supported customer language and does not need to repeat an English
+        # agriculture keyword when the structured organization type and crop /
+        # agricultural segment fields already establish the agricultural use
+        # case. English-only lexical gating incorrectly rejected legitimate
+        # customers whose use case was written in Portuguese and other
+        # languages.
+        structured_agricultural_context = (
+            organization_type in ALLOWED_ORGANIZATION_TYPES
+            and len(primary_crops) >= 3
+            and not _is_placeholder(primary_crops)
+        )
+        if _contains_agricultural_context(intended_use, primary_crops, payload.organization_type) or structured_agricultural_context:
+            score += 16
+        else:
+            reason_codes.append("agricultural_use_case_not_detected")
 
     planned_sources = _normalized_text(payload.planned_data_sources)
     if len(planned_sources) < 8 or _is_placeholder(planned_sources):
