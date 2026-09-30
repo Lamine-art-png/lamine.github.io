@@ -63,7 +63,7 @@ const guardBackoff = typeof testOverrides.guardBackoffMs === "number" && testOve
 const SINGLE_USE_LINK_PATHS = new Set(["/verify-email", "/accept-invite", "/recover-account", "/reset-password"]);
 
 type Latest = { build: string; entry: string | null };
-type Guard = { target: string; count: number; last: number };
+type Guard = { target: string; count: number; last: number; from?: string };
 
 let installed = false;
 let pending: { target: string; reason: string } | null = null;
@@ -255,7 +255,7 @@ function reload(trigger: string) {
       return;
     }
   }
-  storageSet("local", GUARD_KEY, JSON.stringify({ target: pending.target, count: count + 1, last: now }));
+  storageSet("local", GUARD_KEY, JSON.stringify({ target: pending.target, count: count + 1, last: now, from: RUNNING_BUILD }));
   applying = true;
   reportReleaseEvent("recovery_attempted", { trigger });
   // If the reload navigation is aborted (network hiccup, browser cancelling a
@@ -342,7 +342,9 @@ export async function bootReleaseCheck(): Promise<boolean> {
   if (import.meta.env.DEV) return true;
   const guard = readGuard();
   if (guard && (guard.target === RUNNING_BUILD)) {
-    reportReleaseEvent("recovery_succeeded", { attempts: guard.count });
+    // Sent after the new page boots, so a stale browser is visible in
+    // diagnostics even if the old page's beacons were lost during unload.
+    reportReleaseEvent("recovery_succeeded", { attempts: guard.count, from_build: guard.from || null });
     storageSet("local", GUARD_KEY, null);
   }
   const outcome = await Promise.race([
