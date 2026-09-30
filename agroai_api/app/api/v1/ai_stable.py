@@ -258,6 +258,7 @@ async def resilient_intelligence_run(
             packet=packet,
             conversation_messages=payload.history,
             preferred_language=payload.preferred_language,
+            decision_routing_prompt=routing_prompt or None,
         )
     )
 
