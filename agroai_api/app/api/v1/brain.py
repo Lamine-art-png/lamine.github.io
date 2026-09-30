@@ -1,6 +1,7 @@
 """Ask AGRO-AI: adaptive, evidence-grounded, commercially controlled conversation."""
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -14,6 +15,7 @@ from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.saas import Organization, User
 from app.schemas.ai import EvidenceContext
+from app.services.decision_fabric import advisory_prompt, assess_evidence_context
 from app.services.intelligence_context import build_intelligence_context
 from app.services.intelligence_grounding import build_intelligence_grounding
 from app.services.intelligence_hardening import enrich_grounding_packet, sanitize_customer_answer
@@ -272,6 +274,15 @@ async def brain_run(
         uploaded_evidence=payload.uploaded_evidence,
         preferred_language=payload.preferred_language,
     )
+    decision_advisory = await asyncio.to_thread(
+        assess_evidence_context,
+        context,
+        task=payload.task,
+        question=payload.question,
+    )
+    routing_prompt = advisory_prompt(decision_advisory)
+    if routing_prompt:
+        messages = [*messages, {"role": "system", "content": routing_prompt}]
     commercial = bundle.get("commercial_intelligence") or {}
     reservation = reserve_quota(
         db,
