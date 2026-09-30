@@ -1,0 +1,7 @@
+{
+  "billing.checkoutConfirming": "Confirming your subscription…",
+  "billing.checkoutActive": "Your subscription is active.",
+  "billing.checkoutExpired": "Checkout expired. You can try again.",
+  "billing.checkoutConfirmError": "We could not confirm your subscription yet. Please try Refresh.",
+  "billing.checkoutStillConfirming": "We're still confirming your subscription. Please try Refresh shortly."
+}
