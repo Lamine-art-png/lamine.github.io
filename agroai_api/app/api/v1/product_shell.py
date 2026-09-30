@@ -21,6 +21,7 @@ from app.models.saas import (
     Workspace,
 )
 from app.services import team_invitations
+from app.services.operations_notifications import notify_operations
 from app.services.email_delivery import delivery_status
 from app.services.entitlements import (
     assert_can_access_admin_requests,
@@ -226,6 +227,9 @@ def _create_saas_request(
         metadata_json=metadata or {},
     )
     db.add(row)
+    db.commit()  # durable before any delivery attempt
+    db.refresh(row)
+    notify_operations(row, organization_name=org.name if org else None)
     db.commit()
     db.refresh(row)
     return row
