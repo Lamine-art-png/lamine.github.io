@@ -107,7 +107,17 @@ function bootFailure(error: unknown) {
   if (isStaleFrontendAssetError(message)) {
     // First try the loop-guarded release convergence; if that is exhausted,
     // one deeper cache/service-worker repair per session; then explain.
-    if (recoverFromAssetFailure(error, "boot_asset")) return;
+    void recoverFromAssetFailure(error, "boot_asset").then((reloading) => {
+      if (!reloading) repairOrExplain(message);
+    });
+    return;
+  }
+
+  renderBootFailure(message);
+}
+
+function repairOrExplain(message: string) {
+  if (navigator.onLine !== false) {
     let alreadyRepaired = false;
     try {
       alreadyRepaired = window.sessionStorage.getItem(automaticRecoveryKey) === "true";
@@ -120,7 +130,6 @@ function bootFailure(error: unknown) {
       return;
     }
   }
-
   renderBootFailure(message);
 }
 

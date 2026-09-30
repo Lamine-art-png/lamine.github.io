@@ -77,7 +77,9 @@ authentication behaviour.
     cleared;
   - tabs share discoveries via `BroadcastChannel` (storage-event fallback),
     each converging at its own safe point;
-  - a retired lazy chunk or stale boot asset loads the current release;
+  - a retired lazy chunk or stale boot asset loads the current release —
+    only after confirming production is reachable; offline, a failed chunk
+    never reloads the page into the browser's error page;
   - loop guard: two immediate attempts per target, then exponential backoff
     (2, 4, 8… min) with `reload_loop_prevented` reported.
 - **Compatibility.** The portal only calls the API same-origin through the

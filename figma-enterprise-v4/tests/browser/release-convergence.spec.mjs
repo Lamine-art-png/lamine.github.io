@@ -231,6 +231,15 @@ test("offline during a release: no error screen, converges after reconnecting", 
     expect(await running(page)).toBe(A);
     expect(await page.evaluate(() => window.__agroaiRelease.pending())).toBeNull();
     await expect(page.getByText("Frontend recovery mode")).toHaveCount(0);
+    // A lazy route that cannot load while offline must not reload the page
+    // into the browser's error page.
+    await page.evaluate(() => {
+      window.history.pushState({}, "", "/settings");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await page.waitForTimeout(2500);
+    expect(await page.evaluate(() => Boolean(window.__agroaiRelease)).catch(() => false)).toBe(true);
+    expect(await running(page)).toBe(A);
   } finally {
     await outage(false);
   }

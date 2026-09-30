@@ -358,13 +358,24 @@ export async function bootReleaseCheck(): Promise<boolean> {
 
 /**
  * A lazy route or chunk failed to load. After a release its hashed file may be
- * retired; load the current release instead of showing a broken module.
- * Returns true when a reload has been started.
+ * retired; load the current release instead of showing a broken module. If
+ * production cannot be reached (offline, outage) a reload would land on the
+ * browser's error page, so the failure is surfaced instead and retried on the
+ * next navigation or reconnection. Resolves true when a reload has started.
  */
-export function recoverFromAssetFailure(error: unknown, source: string): boolean {
+export async function recoverFromAssetFailure(error: unknown, source: string): Promise<boolean> {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error || "");
   reportReleaseEvent(source === "dynamic_import" ? "dynamic_import_failure" : "asset_load_failure", { reason: message.slice(0, 120) });
-  if (!pending) pending = { target: latestKnown && latestKnown !== RUNNING_BUILD ? latestKnown : `asset-failure:${currentEntryPath()}`, reason: source };
+  if (navigator.onLine === false) return false;
+  const latest = await latestProductionRelease();
+  if (!latest) return false;
+  latestKnown = latest.build;
+  if (!isCurrent(latest)) {
+    if (pending?.target !== latest.build) pending = { target: latest.build, reason: source };
+  } else if (!pending) {
+    // Same release but an asset failed (transient CDN error): one guarded reload.
+    pending = { target: `asset-failure:${currentEntryPath()}`, reason: source };
+  }
   if (unsafeReason(true)) return false;
   reload(source);
   return applying;
