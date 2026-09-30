@@ -142,3 +142,24 @@ def test_quota_reservation_rechecks_idempotency_after_org_lock():
     lock_position = source.index("with_for_update")
     second_lookup_position = source.rindex("_reservation_for_request")
     assert second_lookup_position > lock_position
+
+
+def test_undelivered_report_email_is_an_error_not_a_sent_report(monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from app.api.v1 import chat_artifacts
+
+    monkeypatch.setattr("app.services.email_delivery.send_email", lambda **kwargs: {"ok": False, "provider": "resend", "reason": "provider_rejected"})
+    monkeypatch.setattr(chat_artifacts, "build_report_pdf_bytes", lambda payload, tenant_id: b"%PDF-1.4")
+    payload = chat_artifacts.ReportEmailRequest(to_email="ops@example.com", title="Report")
+    user = type("U", (), {"email": "owner@example.com"})()
+    try:
+        result = chat_artifacts.report_email(payload, tenant_id="org-1", user=user)
+        if asyncio.iscoroutine(result):
+            asyncio.run(result)
+    except HTTPException as exc:
+        assert exc.status_code == 502
+    else:
+        raise AssertionError("an undelivered report email must not return success")

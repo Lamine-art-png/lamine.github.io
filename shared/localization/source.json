@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "5391d2f798bf4e90d770bf458332d5033f198f858f01e339223e6c23bf479d73",
+  "sourceFingerprint": "b43656a576105feec7ecb88f61d96b00a51caac78d6c3eb6051828aac072fe48",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -3063,6 +3063,7 @@
     "literal.fb284f3408bf514c": "Link requested",
     "literal.fb5621c37a16c583": "The original source can still remain stored and available for intelligence context when usable text is present.",
     "literal.fb65a39024aeb19c": "Task created and added to active work.",
+    "literal.fb6de1a72b15bcde": "{file} is securely stored and still processing. It will appear in Sources when ingestion completes.",
     "literal.fb742b8f446e1cb0": "The operation could not be created.",
     "literal.fb9af872e60c946f": "Project creation failed.",
     "literal.fbe202863bf072a6": "Credential reference",

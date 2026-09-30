@@ -184,7 +184,7 @@ export function IntegrationsV3() {
   async function uploadFile(file?: File) {
     if (!file || !selected) return;
     setBusy("upload"); setMessage("");
-    try { const result = await apiClient.evidence.upload(file, selected.id, currentWorkspace?.id) as AnyRecord; setConnection(result.connection || connection); setMessage(`Imported ${String(result.evidence_records_created ?? 0)} evidence records from ${file.name}.`); await refresh(); }
+    try { const result = await apiClient.evidence.upload(file, selected.id, currentWorkspace?.id) as AnyRecord; setConnection(result.connection || connection); setMessage(result.processing_pending ? tf("{file} is securely stored and still processing. It will appear in Sources when ingestion completes.", { file: file.name }) : tf("Imported {count} evidence records from {file}.", { count: String(result.evidence_records_created ?? 0), file: file.name })); await refresh(); }
     catch (error) { setMessage(error instanceof Error ? error.message : tx("Upload failed.")); }
     finally { setBusy(""); }
   }

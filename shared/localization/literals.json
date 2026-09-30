@@ -417,6 +417,7 @@
   "literal.e697cc1e45afa541": "Attach files",
   "literal.88a48ecb9120e532": "Use sample file",
   "literal.e7173853ce6faee5": "Not available to connect yet. Import files from this source with Manual upload in the meantime.",
+  "literal.fb6de1a72b15bcde": "{file} is securely stored and still processing. It will appear in Sources when ingestion completes.",
   "literal.e26a2590f2f79af7": "Artifact download is unavailable",
   "literal.be258ad5b57f653e": "Operational context",
   "literal.ada9518a409706a3": "Workspace in review",
