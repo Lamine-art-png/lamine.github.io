@@ -76,5 +76,11 @@ test(`owner invites a new teammate who accepts from the emailed link and appears
   await expect(page.getByText("E2E Grower").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('[data-invitation-status="accepted"]').filter({ hasText: invitee })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+
+  const memberRow = page.locator(`[data-member-email="${invitee}"]`);
+  await expect(memberRow).toHaveAttribute("data-member-role", "operator");
+  await memberRow.getByRole("button", { name: "Remove" }).click();
+  await memberRow.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.locator(`[data-member-email="${invitee}"]`)).toHaveCount(0, { timeout: 15_000 });
 });
 }

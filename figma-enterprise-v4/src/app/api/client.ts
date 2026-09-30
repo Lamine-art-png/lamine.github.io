@@ -452,6 +452,7 @@ export const apiClient = {
     invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload),
     resend: (invitationId: string) => post(`/v1/team/invitations/${encodeURIComponent(invitationId)}/resend`, {}),
     revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`),
+    removeMember: (userId: string) => remove(`/v1/team/members/${encodeURIComponent(userId)}`),
     previewInvitation: (token: string) => post("/v1/team/invitations/preview", { token }),
     acceptInvitation: (token: string) => post("/v1/team/invitations/accept", { token }),
     acceptInvitationNewAccount: (payload: { token: string; name: string; password: string; terms_accepted: boolean; terms_version: string; privacy_version: string; locale?: string }) => post("/v1/team/invitations/accept-new-account", payload),

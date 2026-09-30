@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.models.saas import (
     Conversation,
     ConversationMessage,
     OnboardingState,
+    OrganizationMembership,
     SaaSRequest,
     TeamInvitation,
     UsageEvent,
@@ -752,6 +753,41 @@ def team_members(ctx: AuthContext = Depends(get_auth_context), db: Session = Dep
         for membership in org.memberships
     ]
     return {"members": members, "count": len(members)}
+
+
+@router.delete("/team/members/{user_id}")
+def remove_team_member(user_id: str, request: Request, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    """Remove a teammate, or leave the organization when ``user_id`` is yourself.
+
+    The membership row is deleted, so the removed person's organization-scoped
+    sessions stop working on their next request. Owners cannot be removed or
+    leave; admins can remove only the roles they are allowed to assign.
+    """
+    from app.api.v1.auth import _request_metadata
+    from app.services.security_audit import record_security_event
+
+    org, actor = _require_org(ctx)
+    target = db.query(OrganizationMembership).filter(
+        OrganizationMembership.organization_id == org.id, OrganizationMembership.user_id == user_id
+    ).with_for_update().first()
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "member_not_found", "message": "Member not found."})
+    leaving = target.user_id == ctx.user.id
+    if target.role == "owner":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "owner_cannot_be_removed", "message": "The organization owner cannot be removed."})
+    if not leaving and target.role not in team_invitations.ASSIGNABLE_ROLES.get(actor.role, set()):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "member_not_removable", "message": "You cannot remove this member."})
+    removed_email, removed_role = target.user.email, target.role
+    db.delete(target)
+    ip_address, user_agent = _request_metadata(request)
+    record_security_event(
+        db, event_type="team.member.left" if leaving else "team.member.removed", outcome="removed",
+        organization_id=org.id, user_id=ctx.user.id, subject=removed_email,
+        ip_address=ip_address, user_agent=user_agent,
+        metadata={"removed_user_id": user_id, "role": removed_role},
+    )
+    db.commit()
+    return {"status": "left" if leaving else "removed", "user_id": user_id}
 
 
 @router.get("/team/invitations")

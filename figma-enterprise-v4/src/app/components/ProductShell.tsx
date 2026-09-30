@@ -667,6 +667,8 @@ export function AdminRequestsPage() {
 type InvitationRow = { id: string; email: string; status: string; role?: string; delivery_status?: string | null; expires_at?: string | null; accepted_at?: string | null };
 
 const INVITATION_REVOKED_MESSAGE = "Invitation for {email} revoked. The link no longer works.";
+// Mirrors the server: owners manage everyone but the owner; admins manage the roles they can assign.
+const REMOVABLE_ROLES: Record<string, string[]> = { owner: ["admin", "manager", "operator", "viewer"], admin: ["manager", "operator", "viewer"] };
 
 const INVITATION_STATUS_LABELS: Record<string, string> = {
   pending: "Pending acceptance",
@@ -680,7 +682,8 @@ export function TeamPage() {
   const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
   const membersState = usePortalResource<{ members: { id: string; name?: string; email?: string; role?: string }[] }>(useCallback(() => apiClient.team.members(), []));
   const invitationsState = usePortalResource<{ invitations: InvitationRow[] }>(useCallback(() => apiClient.team.invitations(), []));
-  const { currentOrganization } = useAuth();
+  const { currentOrganization, user, logout } = useAuth();
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "operator" | "viewer">("operator");
   const [message, setMessage] = useState("");
@@ -721,6 +724,30 @@ export function TeamPage() {
       report(String(response.message || ""));
     } catch (error) {
       report(error instanceof Error ? error.message : "The invitation could not be resent.", "warn");
+    } finally {
+      setBusyId(null);
+      await refreshLists();
+    }
+  };
+
+  const currentRole = String(currentOrganization?.role || "");
+  const canRemove = (member: { id: string; role?: string }) =>
+    member.id === user?.id ? member.role !== "owner" : (REMOVABLE_ROLES[currentRole] || []).includes(String(member.role || ""));
+
+  const removeMember = async (member: { id: string; name?: string; email?: string }) => {
+    const leaving = member.id === user?.id;
+    setBusyId(member.id);
+    try {
+      await apiClient.team.removeMember(member.id);
+      setConfirmRemoveId(null);
+      if (leaving) {
+        await logout();
+        window.location.assign("/");
+        return;
+      }
+      setMessage("");
+    } catch (error) {
+      report(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.", "warn");
     } finally {
       setBusyId(null);
       await refreshLists();
@@ -779,7 +806,24 @@ export function TeamPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Members">
           <div className="space-y-2">
-            {(membersState.data?.members || []).map((member) => <Row key={member.id} label={safe(member.name || member.email)} value={member.role} />)}
+            {(membersState.data?.members || []).map((member) => (
+              <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-3 text-[13px]" style={{ borderColor: BORDER }} data-member-email={member.email} data-member-role={member.role}>
+                <div className="min-w-0">
+                  <div className="truncate font-medium" style={{ color: TEXT }}>{safe(member.name || member.email)}</div>
+                  <div className="truncate text-[12px]" style={{ color: MUTED }}>{safe(member.email)} · {safe(member.role)}</div>
+                </div>
+                {canRemove(member) ? (
+                  confirmRemoveId === member.id ? (
+                    <div className="flex gap-2">
+                      <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => void removeMember(member)}>Confirm</PortalButton>
+                      <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => setConfirmRemoveId(null)}>Cancel</PortalButton>
+                    </div>
+                  ) : (
+                    <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => setConfirmRemoveId(member.id)}>Remove</PortalButton>
+                  )
+                ) : null}
+              </div>
+            ))}
             {membersState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{membersState.error}</p> : null}
             {!membersState.data?.members?.length ? <p className="text-[13px]" style={{ color: MUTED }}>No team members loaded yet.</p> : null}
           </div>
