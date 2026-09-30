@@ -745,9 +745,9 @@ export function TeamPage() {
         window.location.assign("/");
         return;
       }
-      report("Member removed. They can no longer access this organization.");
+      setMessage("");
     } catch (error) {
-      report(error instanceof Error ? error.message : "The member could not be removed.", "warn");
+      report(error instanceof Error && error.message ? error.message : "The request could not be completed. Please try again or contact AGRO-AI support.", "warn");
     } finally {
       setBusyId(null);
       await refreshLists();
@@ -815,11 +815,11 @@ export function TeamPage() {
                 {canRemove(member) ? (
                   confirmRemoveId === member.id ? (
                     <div className="flex gap-2">
-                      <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => void removeMember(member)}>{member.id === user?.id ? "Confirm leave" : "Confirm removal"}</PortalButton>
+                      <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => void removeMember(member)}>Confirm</PortalButton>
                       <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => setConfirmRemoveId(null)}>Cancel</PortalButton>
                     </div>
                   ) : (
-                    <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => setConfirmRemoveId(member.id)}>{member.id === user?.id ? "Leave organization" : "Remove"}</PortalButton>
+                    <PortalButton variant="secondary" disabled={busyId === member.id} onClick={() => setConfirmRemoveId(member.id)}>Remove</PortalButton>
                   )
                 ) : null}
               </div>

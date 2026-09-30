@@ -80,8 +80,7 @@ test(`owner invites a new teammate who accepts from the emailed link and appears
   const memberRow = page.locator(`[data-member-email="${invitee}"]`);
   await expect(memberRow).toHaveAttribute("data-member-role", "operator");
   await memberRow.getByRole("button", { name: "Remove" }).click();
-  await memberRow.getByRole("button", { name: "Confirm removal" }).click();
-  await expect(page.getByText("Member removed. They can no longer access this organization.")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(`[data-member-email="${invitee}"]`)).toHaveCount(0);
+  await memberRow.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.locator(`[data-member-email="${invitee}"]`)).toHaveCount(0, { timeout: 15_000 });
 });
 }
