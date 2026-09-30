@@ -20,6 +20,7 @@ on:
       - "shared/supported-locales.json"
       - "shared/localization/**"
       - "scripts/i18n-verify-production-catalogs.mjs"
+      - "scripts/i18n-catalog-identity.mjs"
       - ".github/workflows/deploy-i18n-edge.yml"
   workflow_dispatch:
 
@@ -100,13 +101,14 @@ jobs:
           curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
 
       - name: Prove deterministic locale release contract
-        # Registry == release manifest; every advertised locale's shipped
-        # catalog chunk is deployed with the current source fingerprint; locale
+        # Registry == release manifest; every advertised locale's exact release
+        # catalog artifact (catalogSha256) is deployed; locale
         # observability accepts events. Retries while Pages converges.
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/i18n-verify-production-catalogs.mjs | tee locale-release-contract.json
+          # Up to 15 minutes for the Pages deployment of new catalog artifacts.
+          AGROAI_VERIFY_ATTEMPTS=45 node scripts/i18n-verify-production-catalogs.mjs | tee locale-release-contract.json
 
       - name: Upload immutable locale evidence
         if: always()

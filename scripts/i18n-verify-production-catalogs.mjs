@@ -5,12 +5,15 @@
 // from a shipped, release-validated catalog — the path customers actually use:
 //   1. the API language registry equals the release manifest's advertised set;
 //   2. the deployed portal bundle maps every advertised non-English locale to a
-//      catalog chunk, and each chunk is reachable and carries the current
-//      canonical source fingerprint with complete status;
+//      catalog chunk, and each chunk is reachable and contains the exact
+//      checked-in release artifact identity (catalogSha256 recomputed here
+//      from the catalog content — a translation-only change is detected), the
+//      current canonical source fingerprint, and complete status;
 //   3. the locale observability endpoint accepts events.
 // No translation provider is called; runtime generation is not a customer path.
 import fs from "node:fs";
 import path from "node:path";
+import { catalogSha256 } from "./i18n-catalog-identity.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const APP = (process.env.AGROAI_APP_ORIGIN || "https://app.agroai-pilot.com").replace(/\/+$/, "");
@@ -22,6 +25,12 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, "shared/supported-lo
 const fingerprint = JSON.parse(fs.readFileSync(path.join(root, "shared/localization/source.json"), "utf8")).sourceFingerprint;
 const advertised = manifest.enabledUiLocales.filter((code) => code !== "auto");
 const translated = advertised.filter((code) => code !== "en");
+
+const CATALOG_DIR = process.env.AGROAI_CATALOG_DIR || path.join(root, "shared/localization/catalogs");
+const expectedIdentity = Object.fromEntries(translated.map((code) => {
+  const envelope = JSON.parse(fs.readFileSync(path.join(CATALOG_DIR, `${code}.json`), "utf8"));
+  return [code, catalogSha256(envelope)];
+}));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -72,6 +81,7 @@ async function catalogsDeployed() {
   await Promise.all(translated.map(async (code) => {
     const { status, body } = await text(`${APP}/assets/${map.get(code)}`);
     if (status !== 200) failures.push(`${code}:http_${status}`);
+    else if (!body.includes(expectedIdentity[code])) failures.push(`${code}:catalog_artifact_not_deployed`);
     else if (!body.includes(fingerprint)) failures.push(`${code}:stale_fingerprint`);
     else if (!body.includes("complete-generated")) failures.push(`${code}:incomplete_status`);
   }));
@@ -97,6 +107,7 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
         advertisedLocales: advertised.length,
         deployedCatalogs: translated.length,
         sourceFingerprint: fingerprint,
+        catalogIdentity: "catalogSha256-per-locale",
         runtimeGenerationRequired: false,
       }));
       process.exit(0);
