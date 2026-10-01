@@ -448,6 +448,7 @@ def enroll_user(db: Session, user_id: str, organization_id: str | None, *, sourc
         user_id=user_id, organization_id=organization_id, sequence_version=SEQUENCE_VERSION,
         source=source, status="active", enrolled_at=enrolled_at or datetime.utcnow(),
     )
+    row.next_action_at = row.enrolled_at
     try:
         with db.begin_nested():
             db.add(row)
@@ -608,8 +609,43 @@ def _provider_message_id(result: dict) -> str | None:
     return str(value)[:200] if value else None
 
 
+def next_action_time(enrollment: LifecycleEmailEnrollment, rows: dict[str, LifecycleEmailSend]) -> datetime | None:
+    """When this enrollment next has work: the first unfinished step's due time,
+    no earlier than its retry time or the end of the minimum gap. None when the
+    enrollment is no longer active. Mirrors the checks in process_enrollment."""
+    if enrollment.status != "active":
+        return None
+    for step in STEPS:
+        row = rows.get(step.key)
+        if row is not None and row.status in FINAL:
+            continue
+        if row is not None and row.status == "sending":
+            # Re-examine once a claim would count as stale.
+            return (row.updated_at or enrollment.enrolled_at) + SENDING_STALE_AFTER
+        candidates = [enrollment.enrolled_at + step.delay]
+        if row is not None and row.next_attempt_at:
+            candidates.append(row.next_attempt_at)
+        if enrollment.last_sent_at:
+            candidates.append(enrollment.last_sent_at + MIN_GAP)
+        return max(candidates)
+    # Every step is final: the next pass marks the enrollment completed.
+    return enrollment.enrolled_at
+
+
+def _schedule_next(db: Session, enrollment: LifecycleEmailEnrollment) -> None:
+    rows = {row.step: row for row in db.query(LifecycleEmailSend).filter(LifecycleEmailSend.user_id == enrollment.user_id).all()}
+    enrollment.next_action_at = next_action_time(enrollment, rows)
+    db.commit()
+
+
 def process_enrollment(db: Session, enrollment: LifecycleEmailEnrollment, now: datetime | None = None, sender: Callable[..., dict] | None = None) -> str:
-    """Advance one user's sequence by at most one email. Returns what happened."""
+    """Advance one user's sequence by at most one email, then record when it next has work."""
+    outcome = _advance(db, enrollment, now=now, sender=sender)
+    _schedule_next(db, enrollment)
+    return outcome
+
+
+def _advance(db: Session, enrollment: LifecycleEmailEnrollment, now: datetime | None = None, sender: Callable[..., dict] | None = None) -> str:
     from app.services.email_delivery import send_email
 
     now = now or datetime.utcnow()
@@ -672,26 +708,51 @@ def process_enrollment(db: Session, enrollment: LifecycleEmailEnrollment, now: d
     return "completed"
 
 
+ERROR_BACKOFF = timedelta(hours=1)
+
+
 def process_due(db: Session, *, now: datetime | None = None, limit: int = 200, sender: Callable[..., dict] | None = None) -> dict[str, Any]:
+    """Process enrollments that have work due now, the longest-waiting first.
+
+    Users merely waiting for a later step are not selected, so they cannot fill
+    the batch. Each processed enrollment moves its next_action_at forward (the
+    next step, the 20h gap, a retry, or ERROR_BACKOFF after a failure), so the
+    queue rotates and every due enrollment is reached within a bounded number
+    of runs. NULL (pre-039 rows) counts as due at enrollment time.
+    """
     held = sending_ready()
     if held:
         return {"status": "held", "reason": held}
     now = now or datetime.utcnow()
     outcomes: dict[str, int] = {}
+    due_at = func.coalesce(LifecycleEmailEnrollment.next_action_at, LifecycleEmailEnrollment.enrolled_at)
     enrollments = (
         db.query(LifecycleEmailEnrollment)
-        .filter(LifecycleEmailEnrollment.status == "active")
-        .order_by(LifecycleEmailEnrollment.enrolled_at.asc())
+        .filter(LifecycleEmailEnrollment.status == "active", due_at <= now)
+        .order_by(due_at.asc(), LifecycleEmailEnrollment.user_id.asc())
         .limit(limit)
         .all()
     )
     for enrollment in enrollments:
+        user_id = enrollment.user_id
         try:
             outcome = process_enrollment(db, enrollment, now=now, sender=sender)
         except Exception:
             db.rollback()
-            logger.exception("lifecycle_email_processing_failed user_id=%s", enrollment.user_id)
+            logger.exception("lifecycle_email_processing_failed user_id=%s", user_id)
             outcome = "error"
+            # Back off so one failing enrollment cannot hold the head of the queue.
+            try:
+                db.execute(
+                    update(LifecycleEmailEnrollment)
+                    .where(LifecycleEmailEnrollment.user_id == user_id)
+                    .values(next_action_at=now + ERROR_BACKOFF)
+                    .execution_options(synchronize_session=False)
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception("lifecycle_email_backoff_failed user_id=%s", user_id)
         outcomes[outcome] = outcomes.get(outcome, 0) + 1
     return {"status": "ok", "processed": len(enrollments), "outcomes": outcomes}
 
@@ -767,7 +828,7 @@ def describe(db: Session, user_id: str) -> dict[str, Any]:
         "enrolled": True, "status": enrollment.status, "stop_reason": enrollment.stop_reason, "source": enrollment.source,
         "sequence_version": enrollment.sequence_version, "enrolled_at": _iso(enrollment.enrolled_at),
         "unsubscribed": enrollment.unsubscribed_at is not None, "unsubscribed_at": _iso(enrollment.unsubscribed_at),
-        "next": upcoming if enrollment.status == "active" else None, "history": history, "sending": sending_ready() or "ready",
+        "next": upcoming if enrollment.status == "active" else None, "next_action_at": _iso(enrollment.next_action_at), "history": history, "sending": sending_ready() or "ready",
     }
 
 

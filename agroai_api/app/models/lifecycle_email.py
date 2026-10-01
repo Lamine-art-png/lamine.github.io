@@ -1,10 +1,10 @@
-"""Lifecycle onboarding email state (see alembic 038_lifecycle_emails)."""
+"""Lifecycle onboarding email state (see alembic 038_lifecycle_emails, 039_lifecycle_next_action)."""
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 
 from app.db.base import Base
 
@@ -15,6 +15,7 @@ def _id() -> str:
 
 class LifecycleEmailEnrollment(Base):
     __tablename__ = "lifecycle_email_enrollments"
+    __table_args__ = (Index("ix_lifecycle_email_enrollments_status_next_action", "status", "next_action_at"),)
 
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
@@ -26,6 +27,8 @@ class LifecycleEmailEnrollment(Base):
     stopped_at = Column(DateTime, nullable=True)
     unsubscribed_at = Column(DateTime, nullable=True)
     last_sent_at = Column(DateTime, nullable=True)
+    # When this enrollment next has work; the scheduler selects only due rows.
+    next_action_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -57,6 +57,7 @@ def main() -> int:
             db.add(LifecycleEmailEnrollment(
                 user_id=user.id, organization_id=membership.organization_id if membership else None,
                 sequence_version=SEQUENCE_VERSION, source="backfill", status="active", enrolled_at=enrolled_at,
+                next_action_at=now,
             ))
             for step in STEPS:
                 if step.key == start.key:

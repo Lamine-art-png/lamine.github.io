@@ -33,7 +33,15 @@ emails never invite a customer to a feature their plan does not include.
 - `app/services/lifecycle_email_i18n.py`: localized copy.
 - `app/api/v1/lifecycle_email_routes.py`: unsubscribe, provider events, admin view.
 - `alembic/versions/038_lifecycle_emails.py`: `lifecycle_email_enrollments`,
-  `lifecycle_email_sends` (unique `(user_id, step)` = idempotency key).
+  `lifecycle_email_sends` (unique `(user_id, step)` = idempotency key);
+  `039_lifecycle_next_action.py`: `next_action_at` on the enrollment.
+- Scheduling: after every pass an enrollment records when it next has work
+  (the next step's due time, no earlier than a retry/deferred-localization
+  time or the 20h gap; a stale in-flight claim is re-examined after 30 min).
+  `process_due` selects only active enrollments due now, earliest first, up to
+  the batch limit, so users who are merely waiting never fill a batch and a
+  backlog larger than the batch rotates. An enrollment whose processing raises
+  backs off one hour instead of holding the head of the queue.
 - Hooks: `/v1/auth/email-verification/confirm` and
   `/v1/team/invitations/accept-new-account` enqueue `enroll_and_start` as a
   background task; `/v1/internal/queue/drain-outbox` (hourly Cloudflare edge

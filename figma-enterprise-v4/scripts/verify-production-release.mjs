@@ -13,6 +13,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, inde
 const base = String(args.url || "").replace(/\/$/, "");
 const sha = String(args.sha || "");
 const timeoutMs = Number(args["timeout-seconds"] || 900) * 1000;
+const retryIntervalMs = Number(args["retry-interval-ms"] || 15_000);
 if (!base || !/^[A-Za-z0-9._-]{7,80}$/.test(sha)) throw new Error("--url and --sha are required");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,14 +63,29 @@ if (!deployment) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-check(/no-store/i.test(deployment.headers.get("cache-control") || ""), "deployment.json is no-store");
-check(deployment.data.environment === "production", "deployment.json environment is production");
 
 // 2-6 run until every check agrees or the time budget is spent: Cloudflare
 // Pages propagates deployment.json, the shell, assets and sw.js independently,
 // so a single early pass can observe a transient mix. A release is only
 // verified when one complete pass sees exactly this release everywhere.
 async function verifyPass() {
+  // 1. Deployment identity, environment and cache policy, re-read in every
+  // pass so a failure can never be erased by a later retry.
+  {
+    const { response, body } = await get(`/deployment.json?verify=${Date.now()}`);
+    let current = null;
+    try {
+      current = JSON.parse(body.toString("utf8"));
+    } catch {
+      current = null;
+    }
+    check(response.status === 200 && /json/i.test(response.headers.get("content-type") || ""), "deployment.json is served as JSON");
+    check(current?.build_sha === sha, `deployment.json identity is ${sha}`);
+    check(current?.environment === "production", "deployment.json environment is production");
+    check(/no-store/i.test(response.headers.get("cache-control") || ""), "deployment.json is no-store");
+    deployment = { data: current || {}, headers: response.headers };
+  }
+
   // 2. The shell (root and a deep link) is this release and never long-cached.
   for (const path of ["/", "/team"]) {
     const { response, body } = await get(`${path}?verify=${Date.now()}`);
@@ -143,7 +159,7 @@ for (let pass = 1; ; pass += 1) {
   if (!failures.length) break;
   if (Date.now() - started > timeoutMs) break;
   console.log(`pass ${pass} saw ${failures.length} inconsistency(ies); waiting for propagation`);
-  await sleep(15_000);
+  await sleep(retryIntervalMs);
 }
 
 if (failures.length) {
