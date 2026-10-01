@@ -104,12 +104,20 @@ def test_rtl_direction_comes_from_family_registry():
     assert family_direction("fr") == "ltr"
 
 
-def test_wolof_is_a_first_class_ui_locale():
+def test_wolof_is_a_target_locale_and_fails_closed_until_released():
+    """wo goes through the same gate as every locale: declared, never exposed before its artifacts pass."""
     from app.services.language_registry import canonical_ui_locale, family_name, manifest, target_ui_locales
 
-    assert "wo" in target_ui_locales() and "wo" in enabled_ui_locales()
+    assert "wo" in target_ui_locales()
     assert "wo" not in manifest().get("unsupportedLegacyLocales", [])
     spec = locale_specs()["wo"]
     assert (spec.code, spec.language_code, spec.direction) == ("wo", "wo", "ltr")
     assert family_name("wo") == "Wolof"
-    assert canonical_ui_locale("wo") == "wo" and canonical_ui_locale("wo-SN") == "wo"
+    if "wo" in enabled_ui_locales():
+        assert canonical_ui_locale("wo") == "wo" and canonical_ui_locale("wo-SN") == "wo"
+    else:
+        # Not yet advertised by the release gate: resolves to English, never a half-translated locale.
+        from app.services.lifecycle_email_i18n import resolve_locale
+
+        assert canonical_ui_locale("wo") == "en"
+        assert resolve_locale("wo") == "en" and resolve_locale("wo-SN") == "en"

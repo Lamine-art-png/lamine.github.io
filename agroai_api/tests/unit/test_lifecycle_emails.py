@@ -664,6 +664,12 @@ def test_wolof_preference_gets_wolof_email_and_language_change_applies(client, d
     """wo is a first-class locale: the shipped Wolof catalog is used, and a later change of language changes later email."""
     from app.services.language_registry import canonical_ui_locale, family_name
 
+    from app.services import language_registry
+
+    # The state once the release gate advertises wo (its lifecycle catalog is already shipped).
+    enabled = language_registry.enabled_ui_locales()
+    if "wo" not in enabled:
+        monkeypatch.setattr(language_registry, "enabled_ui_locales", lambda: tuple(enabled) + ("wo",))
     real_dir = lifecycle_email_i18n._REPO_ROOT / "shared" / "localization" / "lifecycle-email-catalogs"
     monkeypatch.setattr(lifecycle_email_i18n, "CATALOG_DIR", real_dir)
     lifecycle_email_i18n._static_catalog.cache_clear()

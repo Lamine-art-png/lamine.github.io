@@ -60,6 +60,25 @@ validation. If neither works the send is deferred hourly for up to 3 days and
 then skipped as `localization_unavailable` — never sent in English. English is
 used only for unknown/unsupported/invalid locales. RTL locales render `dir="rtl"`.
 
+Catalog quality: fr-FR, pt-BR, es, sw, sr and wo are hand-written; the
+other locales are machine-authored with hand corrections to high-risk keys.
+Each catalog envelope has a `review` object stating exactly that (none has
+had native-speaker review). The release gate and every generator reject
+degenerate machine output (token loops, one stock phrase reused for many
+unrelated strings) and keep Serbian in Cyrillic. Keep the English source free
+of phrases machine translation renders literally ("seats", "evidence uploads",
+"setup emails", "operation", "field walks", a sentence-initial "Crop").
+
+Wolof (wo) is a target locale with a shipped lifecycle catalog, but it is not
+advertised: its UI, transactional and legal artifacts cannot yet be authored
+(no provider in the pipeline produces usable Wolof), so the gate fails it
+closed and a `wo` preference resolves to English until it is released.
+
+The field and market steps only run when Field Intelligence / Market
+Intelligence are released to the organization (their release gates), so an
+email never sends a customer to a page they cannot open. Market copy uses the
+page's own terms: crop and market intelligence live in Market Intelligence.
+
 To change copy: edit the English source, push an `i18n-authoring/*` branch,
 install the artifacts. The matrix (`scripts/i18n-authoring-matrix.py`) includes
 every locale whose lifecycle catalog is not current.
