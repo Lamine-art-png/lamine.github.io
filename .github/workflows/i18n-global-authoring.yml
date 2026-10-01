@@ -36,7 +36,7 @@ jobs:
           python-version: "3.11"
       - id: matrix
         name: Resolve locales whose artifacts are not yet release-ready
-        run: python3 scripts/i18n-reconcile-production-locales.py --pending-matrix >> "$GITHUB_OUTPUT"
+        run: python3 scripts/i18n-authoring-matrix.py >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         if: steps.matrix.outputs.any == 'true'
         with:
@@ -132,6 +132,21 @@ jobs:
             sleep 10
           done
           exit 1
+      - name: Lifecycle email catalog
+        id: lifecycle
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if python3 scripts/i18n-lifecycle-catalog-ready.py --locale "$LOCALE"; then
+            echo "committed lifecycle email catalog already ready"; exit 0
+          fi
+          for attempt in 1 2 3; do
+            if python3 scripts/i18n-generate-transactional-catalogs.py --locales "$LOCALE" --outdir out/lifecycle \
+              --source shared/localization/lifecycle-email-source.json \
+              --purpose "customer onboarding email to agricultural professionals (keep Ask AGRO-AI, Field Intelligence, Market Intelligence and plan names unchanged)"; then exit 0; fi
+            sleep 10
+          done
+          exit 1
       - name: Legal presentation snapshots
         id: legal
         continue-on-error: true
@@ -152,7 +167,7 @@ jobs:
       - name: Summarize
         if: always()
         run: |
-          echo "ui=${{ steps.ui.outcome }} transactional=${{ steps.tx.outcome }} legal=${{ steps.legal.outcome }}" | tee out-summary.txt
+          echo "ui=${{ steps.ui.outcome }} transactional=${{ steps.tx.outcome }} lifecycle=${{ steps.lifecycle.outcome }} legal=${{ steps.legal.outcome }}" | tee out-summary.txt
           mkdir -p out && mv out-summary.txt out/summary-$LOCALE.txt
       - uses: actions/upload-artifact@v4
         if: always()
@@ -162,5 +177,5 @@ jobs:
           retention-days: 7
           include-hidden-files: true
       - name: Fail visibly when any artifact for this locale is incomplete
-        if: steps.ui.outcome != 'success' || steps.tx.outcome != 'success' || steps.legal.outcome != 'success'
+        if: steps.ui.outcome != 'success' || steps.tx.outcome != 'success' || steps.lifecycle.outcome != 'success' || steps.legal.outcome != 'success'
         run: exit 1

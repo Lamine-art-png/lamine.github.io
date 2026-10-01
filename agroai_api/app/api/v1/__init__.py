@@ -51,6 +51,7 @@ from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import team_invitation_accept as team_invitation_accept_module  # noqa: E402
 from . import support_mail as support_mail_module  # noqa: E402
+from . import lifecycle_email_routes as lifecycle_email_routes_module  # noqa: E402
 from . import sales_contact_notifications as sales_contact_notifications_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
@@ -160,6 +161,7 @@ product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
 product_shell_module.router.include_router(outreach_router)
 product_shell_module.router.include_router(team_invitation_accept_module.router)
 product_shell_module.router.include_router(support_mail_module.router)
+product_shell_module.router.include_router(lifecycle_email_routes_module.router)
 
 _hide_compat_schema_shadows()
 

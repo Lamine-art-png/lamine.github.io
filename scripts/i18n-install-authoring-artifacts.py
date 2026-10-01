@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UI_DIR = ROOT / "shared/localization/catalogs"
 TX_DIR = ROOT / "shared/localization/transactional-catalogs"
+LIFECYCLE_DIR = ROOT / "shared/localization/lifecycle-email-catalogs"
 LEGAL_DIR = ROOT / "platform-api/legal/localized"
 # Pinned canonical English legal DOM: an authoring input, not a served page.
 CANONICAL_DIR = ROOT / "shared/localization/legal-canonical"
@@ -36,7 +37,7 @@ def main() -> None:
     if len(args) != 1:
         raise SystemExit(__doc__)
     downloaded = Path(args[0])
-    installed = {"ui": [], "transactional": [], "legal": []}
+    installed = {"ui": [], "transactional": [], "lifecycle": [], "legal": []}
 
     canonical_dom = downloaded / "canonical-legal-dom"
     canonical_hashes: dict[str, str] = {}
@@ -65,6 +66,11 @@ def main() -> None:
         if tx.exists():
             shutil.copyfile(tx, TX_DIR / tx.name)
             installed["transactional"].append(locale)
+        lifecycle = bundle / "lifecycle" / f"{locale}.json"
+        if lifecycle.exists():
+            LIFECYCLE_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(lifecycle, LIFECYCLE_DIR / lifecycle.name)
+            installed["lifecycle"].append(locale)
         legal = bundle / "legal" / locale
         if legal.is_dir():
             mismatched = [

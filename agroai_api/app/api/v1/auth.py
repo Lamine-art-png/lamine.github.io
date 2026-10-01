@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -38,6 +38,7 @@ from app.services.account_verification import (
 )
 from app.services.email_verification import confirm_verification, create_verification_token, send_or_log_verification
 from app.services.entitlements import serialize_entitlements
+from app.services.lifecycle_emails import enroll_and_start as enroll_lifecycle_emails
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.identity_vault import encrypt_phone
 from app.services.language_registry import canonical_ui_locale
@@ -777,6 +778,7 @@ def request_email_verification(
 def email_verification_confirm(
     payload: EmailVerificationConfirmRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict:
     """Verify the single-use email token and establish an approved session."""
@@ -809,6 +811,9 @@ def email_verification_confirm(
         user_agent=user_agent,
     )
     db.commit()
+
+    # Lifecycle onboarding email starts after the response; it never affects verification.
+    background_tasks.add_task(enroll_lifecycle_emails, user.id, source="email_verified")
 
     response = _session_response(user, membership.organization, membership)
     response.update(

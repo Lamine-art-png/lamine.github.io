@@ -89,6 +89,7 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
         "035_self_service_legal_accept": "034_intelligence_wallet_commerce",
         "036_legal_acceptance_locale": "035_self_service_legal_accept",
         "037_team_invitation_delivery": "036_legal_acceptance_locale",
+        "038_lifecycle_emails": "037_team_invitation_delivery",
     }
     actual = {}
 

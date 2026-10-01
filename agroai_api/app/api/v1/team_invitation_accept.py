@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from app.core.rate_limiting import limiter
 from app.db.base import get_db
 from app.models.saas import Organization, SelfServiceLegalAcceptance, User, UserPreference
 from app.services import team_invitations
+from app.services.lifecycle_emails import enroll_and_start as enroll_lifecycle_emails
 from app.services.password_policy import password_policy_error
 from app.services.security_audit import privacy_hash, record_security_event
 
@@ -82,7 +83,7 @@ def accept_invitation(payload: InvitationTokenRequest, request: Request, user: U
 
 @router.post("/team/invitations/accept-new-account", status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_RATE_LIMIT)
-def accept_invitation_new_account(payload: InvitationNewAccountRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+def accept_invitation_new_account(payload: InvitationNewAccountRequest, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> dict:
     if payload.terms_accepted is not True or (payload.terms_version, payload.privacy_version) not in _SELF_SERVICE_ACCEPTED_VERSION_PAIRS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -146,4 +147,5 @@ def accept_invitation_new_account(payload: InvitationNewAccountRequest, request:
     db.commit()
     db.refresh(membership)
     org = db.get(Organization, row.organization_id)
+    background_tasks.add_task(enroll_lifecycle_emails, user.id, source="invitation_accepted")
     return {"status": "accepted", **_session_response(user, org, membership)}

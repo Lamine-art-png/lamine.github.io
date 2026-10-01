@@ -155,14 +155,29 @@ async def drain_task_outbox() -> dict:
             status_code=503,
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
+    lifecycle = await asyncio.to_thread(_run_lifecycle_emails)
     return {
         "status": "ok",
+        "lifecycle_emails": lifecycle,
         "outbox": outbox,
         "webhook_outbox": webhook_outbox,
         "meter_outbox": meter_outbox,
         "platform_maintenance": platform_maintenance,
         "object_gc": object_gc,
     }
+
+
+def _run_lifecycle_emails() -> dict:
+    """Lifecycle onboarding email; isolated so it can never fail other maintenance."""
+    try:
+        from app.services.lifecycle_emails import run_scheduled
+
+        return run_scheduled()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.getLogger("agroai.lifecycle_email").exception("lifecycle_email_scheduled_run_failed")
+        return {"status": "error", "reason": exc.__class__.__name__}
 
 
 def _drain_webhook_outbox() -> dict[str, int]:
