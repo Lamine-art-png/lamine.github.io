@@ -276,7 +276,7 @@ def test_non_english_customer_receives_localized_email_with_no_english_fallback(
     message = lc.sent[0]
     assert message["subject"] == "[pt-BR] Welcome to AGRO-AI"
     assert '<html lang="pt-BR"' in message["html_body"] and "lang=pt-BR" in message["html_body"]
-    assert "[pt-BR] Stop onboarding emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
+    assert "[pt-BR] Unsubscribe from these setup emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
     assert _row(db, user, "welcome").locale == "pt-BR"
 
 
@@ -645,3 +645,16 @@ def test_failing_enrollment_backs_off_instead_of_blocking_queue(db, lc, monkeypa
     # The next batch of one moves on to the healthy enrollments.
     assert lifecycle_emails.process_due(db, now=now, limit=1)["outcomes"] == {"sent": 1}
     assert lifecycle_emails.process_due(db, now=now, limit=1)["outcomes"] == {"sent": 1}
+
+
+def test_field_and_market_emails_respect_release_gates(client, db, lc, monkeypatch):
+    """The email must match what the customer can open: unreleased surfaces are never promoted."""
+    monkeypatch.setattr(settings, "FIELD_INTELLIGENCE_RELEASE_STATE", "disabled", raising=False)
+    monkeypatch.setenv("MARKET_INTELLIGENCE_RELEASE_STATE", "disabled")
+    user, _ = _signup(client, db, "gated@example.com")
+    for day in (1, 3, 5, 7, 10, 12, 14):
+        _run(db, user, days=day)
+    assert (_row(db, user, "field").status, _row(db, user, "field").reason) == ("skipped", "not_available")
+    assert (_row(db, user, "market").status, _row(db, user, "market").reason) == ("skipped", "not_available")
+    assert "field" not in _steps(lc) and "market" not in _steps(lc)
+    assert all("/field-intelligence" not in m["html_body"] and "/market-intelligence" not in m["html_body"] for m in lc.sent)

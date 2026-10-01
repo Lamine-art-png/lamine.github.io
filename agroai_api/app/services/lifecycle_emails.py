@@ -100,6 +100,10 @@ class Signals:
     team_invited: bool = False
     team_invites_enabled: bool = False
     ask_enabled: bool = False
+    # Field and Market Intelligence ship behind release gates: an email only
+    # points at a surface this organization can actually open.
+    field_available: bool = False
+    market_available: bool = False
     seats: int | None = None
     last_active_at: datetime | None = None
     ai_used_this_month: int = 0
@@ -143,6 +147,14 @@ def gather_signals(db: Session, user: User, org: Organization) -> Signals:
         ai_limit=effective.value("quota.ai_action.monthly"),
         upload_limit=effective.value("quota.evidence_upload.monthly"),
     )
+    from app.services.field_intelligence_rollout import field_intelligence_access
+    from app.services.market_intelligence_release import market_intelligence_access
+
+    signals.field_available = (
+        effective.state("field_intelligence.capture") in {"enabled", "preview"}
+        and field_intelligence_access(db, org, user_email=user.email)[0]
+    )
+    signals.market_available = market_intelligence_access(db, org, user_email=user.email)[0]
     t = signals.activation_times
     data_at = [
         _first(db, DataSource, DataSource.tenant_id == org.id),
@@ -195,9 +207,9 @@ def _next_unfinished(signals: Signals) -> str | None:
         return "connect_data"
     if not signals.asked and signals.ask_enabled:
         return "ask"
-    if not signals.field_used:
+    if not signals.field_used and signals.field_available:
         return "field"
-    if not signals.market_used:
+    if not signals.market_used and signals.market_available:
         return "market"
     return None
 
@@ -216,8 +228,12 @@ def evaluate(step: str, signals: Signals, now: datetime) -> Decision:
             return Decision(False, "already_asked")
         return Decision(True, variant="with_data" if signals.has_data else "without_data")
     if step == "field":
+        if not signals.field_available:
+            return Decision(False, "not_available")
         return Decision(False, "already_used_field_intelligence") if signals.field_used else Decision(True)
     if step == "market":
+        if not signals.market_available:
+            return Decision(False, "not_available")
         return Decision(False, "already_used_market_intelligence") if signals.market_used else Decision(True)
     if step == "connectors":
         if signals.connector_connected:
