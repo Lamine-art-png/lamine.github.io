@@ -112,7 +112,7 @@ export const SIGNUP_KEYS = {
 // release gate validates every advertised locale; these are rendered live.
 export const REPRESENTATIVE_LOCALES = [
   "pt-BR", "fr-FR", "de", "es", "ja", "zh", "ko", "ar", "fa", "ur",
-  "ru", "uk", "hi", "ta", "my", "th", "am", "sw", "so",
+  "ru", "uk", "hi", "ta", "my", "th", "am", "sw", "so", "wo",
 ];
 
 // Walk every signup step (legal acceptance included) up to the final submit

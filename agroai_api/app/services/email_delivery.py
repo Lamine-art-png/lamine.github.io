@@ -136,7 +136,7 @@ def send_email(
         if provider == "resend":
             return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags)
         if provider == "sendgrid":
-            return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments)
+            return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags)
     except Exception as exc:  # pragma: no cover - production network/provider path
         logger.exception("Email delivery failed before provider response provider=%s", provider)
         return {"ok": False, "provider": provider, "reason": exc.__class__.__name__}
@@ -252,7 +252,8 @@ def _sendgrid_attachments(attachments: list[dict[str, Any]] | None) -> list[dict
     ]
 
 
-def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None) -> dict:
+def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None) -> dict:
+    email_headers, email_tags = headers, tags
     from_address = _from_address()
     payload: dict[str, Any] = {
         "personalizations": [{"to": [{"email": to_email}]}],
@@ -266,6 +267,12 @@ def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: st
     safe_attachments = _sendgrid_attachments(attachments)
     if safe_attachments:
         payload["attachments"] = safe_attachments
+    if email_headers:
+        # SendGrid v3 message-level headers (List-Unsubscribe, List-Unsubscribe-Post).
+        payload["headers"] = {str(name): str(value) for name, value in email_headers.items()}
+    if email_tags:
+        # SendGrid's equivalent of Resend tags: custom_args echoed in event webhooks.
+        payload["custom_args"] = {str(tag["name"]): str(tag["value"]) for tag in email_tags if tag.get("name")}
     headers = {"Authorization": f"Bearer {settings.SENDGRID_API_KEY}", "Content-Type": "application/json", "Accept": "application/json"}
     try:
         with httpx.Client(timeout=30, headers=headers) as client:

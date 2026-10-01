@@ -17,6 +17,7 @@ from app.models.lifecycle_email import LifecycleEmailEnrollment, LifecycleEmailS
 from app.models.operational_records import DataSource
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, User, UserPreference
 from app.services import lifecycle_email_i18n, lifecycle_emails
+from app.services.email_delivery import send_email as _real_send_email
 from app.services.email_verification import create_verification_token
 
 PASSWORD = "Harvest-Ledger-Pump-2026"
@@ -134,7 +135,7 @@ def test_free_customer_full_sequence_and_conversion_uses_real_plan_numbers(clien
     assert _row(db, user, "team").reason == "plan_without_team_invites"
     plans = lc.sent[-1]
     assert "Ask AGRO-AI: 500 questions a month" in plans["text_body"]
-    assert "500 evidence uploads a month instead of 15" in plans["text_body"]
+    assert "Up to 500 evidence files a month (instead of 15)" in plans["text_body"]
     assert "has used" not in plans["text_body"]  # no usage claim without real usage
     assert "Live connections are included from the Professional plan" in lc.sent[4]["text_body"]
 
@@ -152,7 +153,7 @@ def test_upgrade_messaging_only_reflects_real_usage(client, db, lc):
     db.commit()
     assert lifecycle_emails.process_enrollment(db, enrollment, now=now) == "sent"
     assert _row(db, user, "plans").variant == "usage"
-    assert "has used 13 of its 15 evidence uploads" in lc.sent[-1]["text_body"]
+    assert "has uploaded 13 of the 15 evidence files included in its plan" in lc.sent[-1]["text_body"]
 
 
 def test_paid_customer_never_gets_free_upgrade_email(client, db, lc):
@@ -275,7 +276,7 @@ def test_non_english_customer_receives_localized_email_with_no_english_fallback(
     message = lc.sent[0]
     assert message["subject"] == "[pt-BR] Welcome to AGRO-AI"
     assert '<html lang="pt-BR"' in message["html_body"] and "lang=pt-BR" in message["html_body"]
-    assert "[pt-BR] Stop onboarding emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
+    assert "[pt-BR] Unsubscribe from AGRO-AI welcome emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
     assert _row(db, user, "welcome").locale == "pt-BR"
 
 
@@ -503,3 +504,192 @@ def test_every_supported_locale_has_a_current_lifecycle_catalog():
     lifecycle_email_i18n._static_catalog.cache_clear()
     missing = [loc for loc in target_ui_locales() if loc not in {"auto", "en"} and lifecycle_email_i18n._static_catalog(loc) is None]
     assert missing == []
+
+
+def test_lifecycle_email_reaches_sendgrid_with_one_click_unsubscribe_headers(client, db, lc, monkeypatch):
+    """End to end through the real send_email: the SendGrid v3 payload carries both RFC 8058 headers."""
+    for key in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "RESEND_API_KEY"):
+        monkeypatch.setattr(settings, key, None, raising=False)
+    monkeypatch.setattr(settings, "SENDGRID_API_KEY", "SG.test", raising=False)
+    monkeypatch.setattr(settings, "FROM_EMAIL", "AGRO-AI <hello@agroai-pilot.com>", raising=False)
+    monkeypatch.setattr("app.services.email_delivery.send_email", _real_send_email)
+    payloads: list[dict] = []
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, json=None):
+            payloads.append({"url": url, "json": json})
+            return SimpleNamespace(status_code=202, text="")
+
+    monkeypatch.setattr("app.services.email_delivery.httpx.Client", Client)
+    user, _org = _signup(client, db, "sendgrid@example.com")
+    lifecycle = [p for p in payloads if (p["json"].get("custom_args") or {}).get("category") == "lifecycle"]
+    transactional = [p for p in payloads if p not in lifecycle]
+    (request,) = lifecycle
+    assert transactional and all("headers" not in p["json"] for p in transactional)
+    assert request["url"] == "https://api.sendgrid.com/v3/mail/send"
+    headers = request["json"]["headers"]
+    assert headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert headers["List-Unsubscribe"].startswith("<") and f"/v1/email/lifecycle/unsubscribe?u={user.id}" in headers["List-Unsubscribe"]
+    assert request["json"]["custom_args"] == {"category": "lifecycle", "step": "welcome"}
+    assert _row(db, user, "welcome").status == "sent"
+
+
+def _bulk_enroll(db, prefix, count, enrolled_at):
+    users = [User(email=f"{prefix}-{i}@example.test", password_hash="x", email_verification_status="verified") for i in range(count)]
+    db.add_all(users)
+    db.flush()
+    orgs = [Organization(name=f"{prefix} {i}", slug=f"{prefix}-{i}", owner_user_id=user.id) for i, user in enumerate(users)]
+    db.add_all(orgs)
+    db.flush()
+    db.add_all([OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner") for user, org in zip(users, orgs)])
+    db.commit()
+    return [lifecycle_emails.enroll_user(db, user.id, org.id, source="email_verified", enrolled_at=enrolled_at) for user, org in zip(users, orgs)]
+
+
+def test_waiting_enrollments_cannot_starve_newer_due_users(db, lc):
+    """>200 older active enrollments that are only waiting must not consume the batch."""
+    t0 = datetime.utcnow() - timedelta(minutes=5)
+    old = _bulk_enroll(db, "old", 250, t0)
+    first = lifecycle_emails.process_due(db, now=t0 + timedelta(minutes=5), limit=300)
+    assert first["outcomes"] == {"sent": 250}  # all 250 welcomed; next step (connect_data) is a day away
+    lc.sent.clear()
+
+    new = _bulk_enroll(db, "new", 30, t0 + timedelta(hours=2))
+    result = lifecycle_emails.process_due(db, now=t0 + timedelta(hours=3), limit=200)
+    # Only the 30 newer users have work due; the 250 waiting users are not selected at all.
+    assert result == {"status": "ok", "processed": 30, "outcomes": {"sent": 30}}
+    assert {m["to_email"] for m in lc.sent} == {f"new-{i}@example.test" for i in range(30)}
+    assert all(_steps(lc)[i] == "welcome" for i in range(30))
+    for enrollment in old:
+        db.refresh(enrollment)
+        assert enrollment.next_action_at == t0 + timedelta(days=1)  # connect_data due time
+    # Once connect_data is due for the old cohort, they progress too (no starvation in either direction).
+    lc.sent.clear()
+    later = lifecycle_emails.process_due(db, now=t0 + timedelta(days=1, hours=1), limit=200)
+    assert later["processed"] == 200
+    # The remaining 50 old users, plus the 30 newer users whose connect_data is now due too.
+    assert lifecycle_emails.process_due(db, now=t0 + timedelta(days=1, hours=2), limit=200)["processed"] == 80
+    assert _steps(lc) == ["connect_data"] * 280
+    assert len({m["to_email"] for m in lc.sent}) == len(lc.sent)  # nobody received two emails
+
+
+def test_due_backlog_larger_than_batch_rotates_fairly(db, lc):
+    t0 = datetime.utcnow() - timedelta(minutes=5)
+    _bulk_enroll(db, "backlog", 230, t0)
+    now = t0 + timedelta(minutes=5)
+    seen: list[str] = []
+    for _ in range(3):
+        lc.sent.clear()
+        lifecycle_emails.process_due(db, now=now, limit=100)
+        seen.extend(m["to_email"] for m in lc.sent)
+    # Every user welcomed exactly once across three bounded batches; nobody twice, nobody skipped.
+    assert len(seen) == 230 and len(set(seen)) == 230
+    assert lifecycle_emails.process_due(db, now=now, limit=100)["processed"] == 0
+
+
+def test_next_action_tracks_gap_retry_and_deferred_localization(client, db, lc):
+    user, _ = _signup(client, db, "schedule@example.com")
+    enrollment = db.get(LifecycleEmailEnrollment, user.id)
+    welcome = _row(db, user, "welcome")
+    # After welcome: connect_data at +1 day, and never sooner than the 20h gap.
+    assert enrollment.next_action_at == max(enrollment.enrolled_at + timedelta(days=1), welcome.sent_at + lifecycle_emails.MIN_GAP)
+    # A provider failure schedules the retry time.
+    lc.state["result"] = {"ok": False, "provider": "resend", "reason": "provider_unavailable", "status_code": 503}
+    due = enrollment.enrolled_at + timedelta(days=1, hours=1)
+    assert lifecycle_emails.process_enrollment(db, enrollment, now=due) == "retry"
+    row = _row(db, user, "connect_data")
+    assert enrollment.next_action_at == row.next_attempt_at > due
+    # Retries remain reachable through process_due once due, and then succeed.
+    lc.state["result"] = {"ok": True, "provider": "resend", "status_code": 200, "provider_response": '{"id":"msg-r"}'}
+    assert lifecycle_emails.process_due(db, now=row.next_attempt_at - timedelta(minutes=1))["processed"] == 0
+    assert lifecycle_emails.process_due(db, now=row.next_attempt_at)["outcomes"] == {"sent": 1}
+    # Deferred localization is retried at its scheduled time too.
+    preference = db.get(UserPreference, user.id)
+    preference.locale = "de"
+    db.commit()
+    lc.state["translator_down"] = True
+    ask_due = enrollment.enrolled_at + timedelta(days=5, hours=1)
+    lifecycle_emails.process_enrollment(db, enrollment, now=ask_due)
+    deferred = [r for r in db.query(LifecycleEmailSend).filter_by(user_id=user.id) if r.status == "deferred_localization"]
+    if deferred:  # catalogs are isolated in this fixture, so German relies on runtime translation
+        assert enrollment.next_action_at == deferred[0].next_attempt_at
+        lc.state["translator_down"] = False
+        assert lifecycle_emails.process_due(db, now=deferred[0].next_attempt_at)["outcomes"] == {"sent": 1}
+
+
+def test_failing_enrollment_backs_off_instead_of_blocking_queue(db, lc, monkeypatch):
+    t0 = datetime.utcnow() - timedelta(minutes=5)
+    enrollments = _bulk_enroll(db, "err", 3, t0)
+    broken = min(e.user_id for e in enrollments)  # first in queue order (ties break on user_id)
+    real = lifecycle_emails._advance
+
+    def flaky(db_, enrollment, **kwargs):
+        if enrollment.user_id == broken:
+            raise RuntimeError("boom")
+        return real(db_, enrollment, **kwargs)
+
+    monkeypatch.setattr(lifecycle_emails, "_advance", flaky)
+    now = t0 + timedelta(minutes=5)
+    result = lifecycle_emails.process_due(db, now=now, limit=1)
+    assert result["outcomes"] == {"error": 1}
+    assert db.get(LifecycleEmailEnrollment, broken).next_action_at == now + lifecycle_emails.ERROR_BACKOFF
+    # The next batch of one moves on to the healthy enrollments.
+    assert lifecycle_emails.process_due(db, now=now, limit=1)["outcomes"] == {"sent": 1}
+    assert lifecycle_emails.process_due(db, now=now, limit=1)["outcomes"] == {"sent": 1}
+
+
+def test_field_and_market_emails_respect_release_gates(client, db, lc, monkeypatch):
+    """The email must match what the customer can open: unreleased surfaces are never promoted."""
+    monkeypatch.setattr(settings, "FIELD_INTELLIGENCE_RELEASE_STATE", "disabled", raising=False)
+    monkeypatch.setenv("MARKET_INTELLIGENCE_RELEASE_STATE", "disabled")
+    user, _ = _signup(client, db, "gated@example.com")
+    for day in (1, 3, 5, 7, 10, 12, 14):
+        _run(db, user, days=day)
+    assert (_row(db, user, "field").status, _row(db, user, "field").reason) == ("skipped", "not_available")
+    assert (_row(db, user, "market").status, _row(db, user, "market").reason) == ("skipped", "not_available")
+    assert "field" not in _steps(lc) and "market" not in _steps(lc)
+    assert all("/field-intelligence" not in m["html_body"] and "/market-intelligence" not in m["html_body"] for m in lc.sent)
+
+
+def test_wolof_preference_gets_wolof_email_and_language_change_applies(client, db, lc, monkeypatch):
+    """wo is a first-class locale: the shipped Wolof catalog is used, and a later change of language changes later email."""
+    from app.services.language_registry import canonical_ui_locale, family_name
+
+    from app.services import language_registry
+
+    # The state once the release gate advertises wo (its lifecycle catalog is already shipped).
+    enabled = language_registry.enabled_ui_locales()
+    if "wo" not in enabled:
+        monkeypatch.setattr(language_registry, "enabled_ui_locales", lambda: tuple(enabled) + ("wo",))
+    real_dir = lifecycle_email_i18n._REPO_ROOT / "shared" / "localization" / "lifecycle-email-catalogs"
+    monkeypatch.setattr(lifecycle_email_i18n, "CATALOG_DIR", real_dir)
+    lifecycle_email_i18n._static_catalog.cache_clear()
+    assert canonical_ui_locale("wo") == "wo" and canonical_ui_locale("wo-SN") == "wo"
+    assert lifecycle_email_i18n.resolve_locale("wo") == "wo" and family_name("wo") == "Wolof"
+    wolof = lifecycle_email_i18n._static_catalog("wo")
+    french = lifecycle_email_i18n._static_catalog("fr-FR")
+    assert wolof is not None and french is not None
+    english = lifecycle_email_i18n.source_catalog()
+    assert wolof["welcome.subject"] != english["welcome.subject"]
+
+    user, _ = _signup(client, db, "wolof@example.com", locale="wo")
+    welcome = lc.sent[-1]
+    assert welcome["subject"] == wolof["welcome.subject"]
+    assert 'lang="wo"' in welcome["html_body"] and wolof["welcome.cta"] in welcome["html_body"]
+    assert _row(db, user, "welcome").locale == "wo"
+    assert lc.state["translator_calls"] == []  # deterministic catalog, no runtime translation
+
+    preference = db.get(UserPreference, user.id)
+    preference.locale = "fr-FR"
+    db.commit()
+    _run(db, user, days=1)
+    assert lc.sent[-1]["subject"] == french["connect_data.subject"] and _row(db, user, "connect_data").locale == "fr-FR"

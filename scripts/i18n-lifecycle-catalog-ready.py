@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from i18n_quality import collapsed_values, degenerate_keys, serbian_script_keys  # noqa: E402
 SOURCE = ROOT / "shared/localization/lifecycle-email-source.json"
 CATALOGS = ROOT / "shared/localization/lifecycle-email-catalogs"
 
@@ -32,6 +34,9 @@ def ready(locale: str) -> bool:
         and envelope.get("sourceFingerprint") == fingerprint(source["catalog"])
         and set(catalog) == set(source["catalog"])
         and all(isinstance(v, str) and v.strip() for v in catalog.values())
+        and not degenerate_keys(source["catalog"], catalog)
+        and not collapsed_values(source["catalog"], catalog)
+        and not serbian_script_keys(locale, source["catalog"], catalog)
     )
 
 

@@ -62,7 +62,7 @@ def language_families() -> dict[str, LanguageFamily]:
         if code and code not in families:
             families[code] = LanguageFamily(
                 code=code,
-                name=code,
+                name=str(item.get("englishName") or code).strip(),
                 direction=str(item.get("direction") or ("rtl" if code in RTL_LANGUAGE_FAMILIES else "ltr")),
             )
     return families

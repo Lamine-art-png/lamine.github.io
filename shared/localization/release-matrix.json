@@ -283,7 +283,7 @@
     "agroaiBillingUi": "es",
     "stripeCheckoutLocale": "es"
    },
-   "catalogSha256": "a4448f7e4791eaf3a8de1eecbbd5d910f37184abc0b4119e94d63e6acf59b32a",
+   "catalogSha256": "44a49253f2ed72e94d5555fb4218492b9affb977bc8dafc96a7e1897a15b2c64",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "es"
@@ -384,7 +384,7 @@
     "agroaiBillingUi": "fr-FR",
     "stripeCheckoutLocale": "fr"
    },
-   "catalogSha256": "bf9c3923ab827efcd83d7260d922f5b54afa170cc785e7c27d1fc6c655abaec2",
+   "catalogSha256": "27ee551acafa11c9c11673ef32dc1ca2eb881fdf467ff6afcc8773f35b77fae3",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "fr-FR"
@@ -690,7 +690,7 @@
     "agroaiBillingUi": "kn",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "4061ab528b02dca63b2b6877b68cc7642862c066483260dcfeabbf762d60cb8e",
+   "catalogSha256": "80ec36c26857f4f4e10b297ac33a74fc2ead41c0e35d9bfef79d8b8df8ab28a1",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "kn"
@@ -1048,7 +1048,7 @@
     "agroaiBillingUi": "pt-BR",
     "stripeCheckoutLocale": "pt-BR"
    },
-   "catalogSha256": "2f10893a6c0db3fa9161acf44e11e5f2138749a1a83ad06b8a255a3dfa581fe6",
+   "catalogSha256": "6ef4a36cdf18c19d188896a768803362d5e96219d3fd86899116fa298f1e3911",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "pt-BR"
@@ -1174,7 +1174,7 @@
     "agroaiBillingUi": "so",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "48d62a2d1aa9a19e36c9effc88f3d1ffe23391bec5d66a1480eacc1dd3ec6182",
+   "catalogSha256": "910122577a58120016e73f400920be8599b7564c2c76da2df4e2c8c166e99184",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "so"
@@ -1275,7 +1275,7 @@
     "agroaiBillingUi": "sw",
     "stripeCheckoutLocale": "auto"
    },
-   "catalogSha256": "f03a8b66338b54eb9617e208889cf816e22a7e2dae64c5373dbc2747a85a5c17",
+   "catalogSha256": "d34f8bd49cd46499fe7e2311bd3645a3cc0ee01624c8ffa79b47f3c802d05b0f",
    "direction": "ltr",
    "intelligence": {
     "preferredLanguage": "sw"
@@ -1500,6 +1500,25 @@
     "responseLanguage": "vi"
    }
   },
+  "wo": {
+   "billing": {
+    "agroaiBillingUi": "wo",
+    "stripeCheckoutLocale": "auto"
+   },
+   "direction": "ltr",
+   "intelligence": {
+    "preferredLanguage": "wo"
+   },
+   "legal": false,
+   "ready": false,
+   "transactional": false,
+   "ui": false,
+   "voice": {
+    "browserFallbackTts": "device-dependent",
+    "recognitionHint": "wo",
+    "responseLanguage": "wo"
+   }
+  },
   "zh": {
    "billing": {
     "agroaiBillingUi": "zh",
@@ -1529,7 +1548,7 @@
  },
  "releaseEligible": 60,
  "schemaVersion": 1,
- "target": 60,
+ "target": 61,
  "transactionalSourceVersion": "2026-09-30.auth-transactional-v3",
  "uiSourceFingerprint": "057e6beaa625e3affaccbb1487a385d288adaada162ca3e843b5b60e261bd7d4"
 }

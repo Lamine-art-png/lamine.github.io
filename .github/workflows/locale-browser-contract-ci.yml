@@ -155,6 +155,8 @@ jobs:
           npm ci
           npm install --no-save --no-package-lock @playwright/test@1.55.0
           npx playwright install --with-deps chromium
+      - name: Release verifier cannot pass an inconsistent deployment
+        run: npm run test:release-verifier
       - name: Build releases A and B
         run: |
           set -euo pipefail

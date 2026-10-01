@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "038_lifecycle_emails"
+HEAD_ALEMBIC_REVISION = "039_lifecycle_next_action"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -108,7 +108,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "conversation_messages": {"id", "conversation_id", "organization_id"},
     "email_verification_tokens": {"id", "user_id", "token_hash"},
     "team_invitations": {"id", "organization_id", "token_hash", "delivery_status", "accepted_at", "revoked_at"},
-    "lifecycle_email_enrollments": {"user_id", "status", "enrolled_at", "unsubscribed_at"},
+    "lifecycle_email_enrollments": {"user_id", "status", "enrolled_at", "unsubscribed_at", "next_action_at"},
     "lifecycle_email_sends": {"id", "user_id", "step", "status", "scheduled_for"},
     "telemetry": {"id", "tenant_id", "block_id"},
     "recommendations": {"id", "tenant_id", "block_id"},

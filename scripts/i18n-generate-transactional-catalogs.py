@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
+from i18n_quality import collapsed_values, degenerate, serbian_latin_to_cyrillic
 from i18n_quality import has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,8 @@ def validate_chunk(source: dict[str, str], translated: dict) -> dict[str, str]:
             raise ValueError(f"placeholder_mismatch:{key}")
         if has_marker_residue(value) and not has_marker_residue(original):
             raise ValueError(f"marker_residue:{key}")
+        if degenerate(value, original):
+            raise ValueError(f"degenerate_output:{key}")
         value.encode("utf-8",errors="strict")
         out[key]=value
     return out
@@ -74,6 +77,8 @@ def validate(source: dict[str, str], translated: dict) -> dict[str, str]:
     changed=sum(1 for key, original in source.items() if out[key] != original)
     if changed < max(8, len(source)//3):
         raise ValueError(f"insufficient_translation_progress:{changed}")
+    if collapsed_values(source, out):
+        raise ValueError("collapsed_translation_output")
     return out
 
 def cloudflare_rest_available() -> bool:
@@ -127,7 +132,7 @@ def call_cloudflare_rest(locale: str, source: dict[str,str]) -> dict[str,str]:
                 out[key]=value
             if set(out) != set(source):
                 raise ValueError("transactional_key_mismatch")
-            return out
+            return validate_chunk(source, out)
         except Exception as exc:
             failures.append(f"{model}:{type(exc).__name__}:{str(exc)[:240]}")
     raise RuntimeError("cloudflare_rest_models_failed:"+"|".join(failures))
@@ -178,7 +183,7 @@ def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
                 if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
                     raise ValueError(f"placeholder_mismatch:{key}")
                 out[key]=value
-            return out
+            return validate_chunk(source, out)
         except Exception as exc:
             last=exc
             if attempt<MAX_ATTEMPTS:
@@ -217,6 +222,9 @@ def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     out={}
     for chunk in split_source(source):
         out.update(translate_resilient(locale,chunk))
+    if locale.split("-",1)[0].lower()=="sr":
+        # Same deterministic normalization as the UI catalog: Serbian ships in Cyrillic.
+        out={key: serbian_latin_to_cyrillic(value, source[key]) for key, value in out.items()}
     return validate(source,out)
 
 def main():
