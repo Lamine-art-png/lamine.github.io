@@ -94,7 +94,7 @@ def test_professional_checkout_returns_checkout_url_if_stripe_configured(client,
     class _Session:
         @staticmethod
         def create(**_kwargs):
-            return {"url": "https://checkout.example/session"}
+            return {"id": "cs_fake", "url": "https://checkout.example/session"}
 
     monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_SECRET_KEY", "sk_test_fake", raising=False)
     monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_PRICE_PRO_MONTHLY", "price_fake", raising=False)

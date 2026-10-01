@@ -52,7 +52,8 @@ def apply_authoritative_billing_event(
 
     if event_type == "checkout.session.completed":
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
-        org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
+        if org.subscription_status not in ACTIVE_STATES:
+            org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
         metadata = obj.get("metadata") or {}
         checkout_mode = metadata.get("checkout_mode") or obj.get("mode")
         if checkout_mode == "subscription":
@@ -62,6 +63,11 @@ def apply_authoritative_billing_event(
         return
 
     if event_type.startswith("customer.subscription."):
+        # An old subscription can emit a late cancellation after a replacement
+        # is already active. Never let that event revoke the new subscription.
+        if (org.stripe_subscription_id and obj.get("id") != org.stripe_subscription_id
+                and org.subscription_status in ACTIVE_STATES):
+            return
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("id") or org.stripe_subscription_id
         org.subscription_source = "stripe"
@@ -75,16 +81,20 @@ def apply_authoritative_billing_event(
             return
 
         org.subscription_status = obj.get("status") or org.subscription_status
-        metadata_plan = (obj.get("metadata") or {}).get("plan")
-
+        if org.subscription_status == "canceled":
+            org.plan = "free"
+            org.current_period_start = None
+            org.current_period_end = None
+            org.cancel_at_period_end = False
+            return
         from app.api.v1 import billing as billing_api
 
-        normalized = billing_api._normalize_plan_id(metadata_plan)
         price = _first_price(obj)
-        if normalized not in CANONICAL_PLANS:
-            normalized = billing_api._normalize_plan_id(billing_api._plan_from_price(price.get("id")))
+        normalized = billing_api._normalize_plan_id(billing_api._plan_from_price(price.get("id")))
         if normalized in CANONICAL_PLANS:
             org.plan = normalized
+        else:
+            org.plan = "free"  # missing or unknown Stripe price cannot grant paid access
 
         org.stripe_price_id = price.get("id") or org.stripe_price_id
         org.stripe_product_id = price.get("product") or org.stripe_product_id
@@ -94,7 +104,10 @@ def apply_authoritative_billing_event(
         return
 
     if event_type == "invoice.payment_failed":
-        org.subscription_status = "past_due"
+        invoice_subscription = (obj.get("subscription") or
+                                ((obj.get("parent") or {}).get("subscription_details") or {}).get("subscription"))
+        if invoice_subscription and invoice_subscription == org.stripe_subscription_id:
+            org.subscription_status = "past_due"
         return
 
     # invoice.payment_succeeded, invoice.paid, payment_intent.succeeded, and all
