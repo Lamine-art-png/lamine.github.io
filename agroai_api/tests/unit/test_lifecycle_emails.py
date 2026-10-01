@@ -494,3 +494,12 @@ def test_localized_email_uses_the_portals_own_product_and_plan_names(client, db,
     assert labels["field_name"] != "Field Intelligence"  # the portal localizes it
     assert labels["field_name"] in field["html_body"] and "Field Intelligence" not in field["html_body"]
     assert labels["plan_professional"] in plans["text_body"] and labels["ask_name"] in plans["text_body"]
+
+
+def test_every_supported_locale_has_a_current_lifecycle_catalog():
+    """Copy edits must be re-authored before release (shared/localization/lifecycle-email-catalogs)."""
+    from app.services.language_registry import target_ui_locales
+
+    lifecycle_email_i18n._static_catalog.cache_clear()
+    missing = [loc for loc in target_ui_locales() if loc not in {"auto", "en"} and lifecycle_email_i18n._static_catalog(loc) is None]
+    assert missing == []
