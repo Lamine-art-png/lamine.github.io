@@ -111,7 +111,7 @@ def english_leak_keys(locale: str, source: dict[str, str], catalog: dict[str, st
 # Degenerate provider output: a model that cannot translate a language loops on
 # one token ("mid ka mid ah mid ka mid ah ...") or balloons a short string. Such
 # entries pass key/placeholder/script checks, so they are rejected explicitly.
-_REPEATED_RUN = re.compile(r"(\b\w+(?:\s+\w+){0,2}\b)(?:[\s,.:;»«]+\1\b){4,}", re.I | re.U)
+_REPEATED_RUN = re.compile(r"(\b\w+(?:\s+\w+){0,3}\b)(?:[\s,.:;»«]+\1\b){4,}", re.I | re.U)
 _LENGTH_BLOWUP = 4.0
 
 
