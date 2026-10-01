@@ -133,7 +133,7 @@ def test_free_customer_full_sequence_and_conversion_uses_real_plan_numbers(clien
     assert _row(db, user, "ask").reason == "not_in_plan"
     assert _row(db, user, "team").reason == "plan_without_team_invites"
     plans = lc.sent[-1]
-    assert "Ask AGRO-AI, with 500 questions a month" in plans["text_body"]
+    assert "Ask AGRO-AI: 500 questions a month" in plans["text_body"]
     assert "500 evidence uploads a month instead of 15" in plans["text_body"]
     assert "has used" not in plans["text_body"]  # no usage claim without real usage
     assert "Live connections are included from the Professional plan" in lc.sent[4]["text_body"]
@@ -482,3 +482,15 @@ def test_lifecycle_source_copy_is_well_formed():
     used = __import__("re").findall(r'c\("([a-z_.0-9]+)"\)|"([a-z_]+\.(?:cta|subject|preview|headline))"', open(lifecycle_emails.__file__).read())
     keys = {a or b for a, b in used}
     assert keys <= set(source["catalog"]), sorted(keys - set(source["catalog"]))
+
+
+def test_localized_email_uses_the_portals_own_product_and_plan_names(client, db, lc):
+    user, org = _signup(client, db, "names@example.com", locale="pt-BR")
+    for day in (1, 3, 5, 7, 10, 12, 14):
+        _run(db, user, days=day)
+    field = next(m for m in lc.sent if m["tags"][1]["value"] == "field")
+    plans = next(m for m in lc.sent if m["tags"][1]["value"] == "plans")
+    labels = lifecycle_email_i18n.product_labels("pt-BR")
+    assert labels["field_name"] != "Field Intelligence"  # the portal localizes it
+    assert labels["field_name"] in field["html_body"] and "Field Intelligence" not in field["html_body"]
+    assert labels["plan_professional"] in plans["text_body"] and labels["ask_name"] in plans["text_body"]

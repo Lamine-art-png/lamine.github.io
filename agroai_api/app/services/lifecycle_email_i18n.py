@@ -174,3 +174,52 @@ def localized_copy(locale: str) -> tuple[dict[str, str], str]:
         return static, "catalog"
     logger.error("lifecycle_email_catalog_missing locale=%s", locale)
     return _runtime_catalog(locale), "runtime"
+
+
+_UI_CATALOG_DIR = _REPO_ROOT / "shared" / "localization" / "catalogs"
+# Product surfaces, named exactly as the portal navigation names them.
+PRODUCT_LABELS = {
+    "ask_name": "Ask AGRO-AI",
+    "field_name": "Field Intelligence",
+    "market_name": "Market Intelligence",
+    "plan_free": "Free",
+    "plan_professional": "Professional",
+    "plan_team": "Team",
+    "plan_network": "Network",
+}
+_UI_KEYS = {
+    "Ask AGRO-AI": "askAgroAi",
+    "Field Intelligence": "fieldIntelligence",
+    "Free": "dynamic.shared.free",
+    "Professional": "dynamic.shared.professional",
+    "Team": "dynamic.shared.team",
+    "Network": "dynamic.shared.network",
+}
+
+
+@lru_cache(maxsize=128)
+def _ui_catalog(locale: str) -> dict:
+    try:
+        envelope = json.loads((_UI_CATALOG_DIR / f"{locale}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    catalog = envelope.get("catalog", envelope)
+    return catalog if isinstance(catalog, dict) else {}
+
+
+def product_labels(locale: str) -> dict[str, str]:
+    """Localized product and plan names from the deployed portal UI catalog for ``locale``.
+
+    Emails then use exactly the labels the customer sees in the portal. The UI
+    inventory keys literal strings by sha256 of their English text.
+    """
+    if locale == "en":
+        return dict(PRODUCT_LABELS)
+    catalog = _ui_catalog(locale)
+    labels = {}
+    for placeholder, english in PRODUCT_LABELS.items():
+        candidates = [_UI_KEYS.get(english), "literal." + hashlib.sha256(english.encode("utf-8")).hexdigest()[:16]]
+        value = next((catalog.get(key) for key in candidates if key and isinstance(catalog.get(key), str) and catalog.get(key).strip()), None)
+        labels[placeholder] = value or english
+    return labels
+

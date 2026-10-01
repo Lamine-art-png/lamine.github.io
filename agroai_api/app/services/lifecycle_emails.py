@@ -343,7 +343,10 @@ def render(step: str, variant: str | None, copy: dict[str, str], *, locale: str,
     from app.services.commercial_control import BASE_ENTITLEMENTS
 
     free, pro = BASE_ENTITLEMENTS["free"], BASE_ENTITLEMENTS["professional"]
+    from app.services.lifecycle_email_i18n import product_labels
+
     values = {
+        **product_labels(locale),
         "name": (user.name or "").strip(),
         "organization": org.name,
         "connectors": ", ".join(available_connector_names()),
