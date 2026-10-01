@@ -108,6 +108,41 @@ def english_leak_keys(locale: str, source: dict[str, str], catalog: dict[str, st
     return leaks
 
 
+# Degenerate provider output: a model that cannot translate a language loops on
+# one token ("mid ka mid ah mid ka mid ah ...") or balloons a short string. Such
+# entries pass key/placeholder/script checks, so they are rejected explicitly.
+_REPEATED_RUN = re.compile(r"(\b\w+(?:\s+\w+){0,2}\b)(?:[\s,.:;»«]+\1\b){4,}", re.I | re.U)
+_LENGTH_BLOWUP = 4.0
+
+
+def degenerate(value: str, original: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    if _REPEATED_RUN.search(value) and not _REPEATED_RUN.search(original or ""):
+        return True
+    return len(original or "") > 20 and len(value) > _LENGTH_BLOWUP * len(original)
+
+
+def degenerate_keys(source: dict[str, str], catalog: dict[str, str]) -> list[str]:
+    return [key for key, original in source.items() if degenerate(catalog.get(key, ""), original)]
+
+
+def collapsed_values(source: dict[str, str], catalog: dict[str, str]) -> dict[str, int]:
+    """Translations reused for implausibly many distinct English strings.
+
+    A provider that does not know the language returns one stock phrase for
+    unrelated inputs ("Lees meer »" for Settings, Billing and Password). Healthy
+    catalogs reuse a value for at most a handful of distinct source strings.
+    """
+    limit = max(4, int(len(source) * 0.004))
+    sources_by_value: dict[str, set[str]] = {}
+    for key, original in source.items():
+        value = catalog.get(key)
+        if isinstance(value, str) and isinstance(original, str) and len(value.strip()) >= 2:
+            sources_by_value.setdefault(value.strip(), set()).add(original.strip().lower())
+    return {value: len(origins) for value, origins in sources_by_value.items() if len(origins) > limit}
+
+
 def quality_report(locale: str, source: dict[str, str], catalog: dict[str, str]) -> dict:
     root = locale.split("-", 1)[0].lower()
     prose = [key for key, value in source.items() if translatable(value)]
@@ -137,6 +172,12 @@ def quality_errors(locale: str, source: dict[str, str], catalog: dict[str, str])
     residue = [key for key, value in catalog.items() if has_marker_residue(value) and not has_marker_residue(source.get(key, ""))]
     if residue:
         errors.append(f"authoring_marker_residue:{locale}:{','.join(residue[:5])}")
+    collapsed = collapsed_values(source, catalog)
+    if collapsed:
+        errors.append(f"collapsed_output:{locale}:{len(collapsed)}")
+    looping = degenerate_keys(source, catalog)
+    if looping:
+        errors.append(f"degenerate_output:{locale}:{len(looping)}:{','.join(looping[:5])}")
     if report["dntViolations"]:
         errors.append(f"do_not_translate_modified:{locale}:{','.join(report['dntViolations'][:5])}")
     if report["identicalShare"] > MAX_IDENTICAL_TO_ENGLISH:

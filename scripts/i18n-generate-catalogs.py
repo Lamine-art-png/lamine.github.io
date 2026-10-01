@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
 from i18n_catalog_identity import write_envelope
-from i18n_quality import do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
+from i18n_quality import collapsed_values, degenerate, do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -68,6 +68,8 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
             raise ValueError(f"translation_invalid_value:{key}")
         if has_marker_residue(value) and not has_marker_residue(original):
             raise ValueError(f"translation_marker_residue:{key}")
+        if degenerate(value, original):
+            raise ValueError(f"translation_degenerate_output:{key}")
         value = value.strip()
         if sorted(TOKENS.findall(original)) != sorted(TOKENS.findall(value)):
             raise ValueError(f"translation_placeholder_mismatch:{key}")
@@ -356,10 +358,13 @@ def seed_catalog(locale: str, source_envelope: dict, seed_dir: Path | None) -> d
             return {}
         prior = {key: value for key, value in prior.items() if key in source and historical.get(key) == source[key]}
     leaks = set(english_leak_keys(locale, source, prior))
+    # A stock phrase reused for many unrelated strings is provider failure, not
+    # a translation: never carry it forward.
+    collapsed = set(collapsed_values(source, prior))
     seeded: dict[str, str] = {}
     for key, original in source.items():
         value = prior.get(key)
-        if key in leaks or not isinstance(value, str) or not value.strip():
+        if key in leaks or not isinstance(value, str) or not value.strip() or value.strip() in collapsed:
             continue
         try:
             seeded.update(validate_chunk({key: original}, {key: value}))

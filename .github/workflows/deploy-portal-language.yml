@@ -40,7 +40,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Validate 59-language portal source
+      - name: Validate every advertised portal language source
         working-directory: figma-enterprise-v4
         run: |
           set -euo pipefail

@@ -9,7 +9,7 @@ const APP = process.env.AGROAI_APP_ORIGIN || "http://127.0.0.1:4173";
 const API_ORIGIN = "https://api.agroai-pilot.com";
 const ROUTES = ["/", "/field-intelligence", "/field-queue", "/tasks", "/operations", "/evidence", "/assurance", "/reports",
   "/integrations", "/intelligence", "/market-intelligence", "/readiness", "/sources", "/settings", "/profile", "/billing", "/security", "/support"];
-const LOCALES = ["pt-BR", "ja", "ar", "de", "hi", "sw"].filter((code) => (manifest.enabledUiLocales || []).includes(code));
+const LOCALES = ["pt-BR", "ja", "ar", "de", "hi", "sw", "wo"].filter((code) => (manifest.enabledUiLocales || []).includes(code));
 
 function futureJwt() {
   const payload = Buffer.from(JSON.stringify({ sub: "qa-user", exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url");

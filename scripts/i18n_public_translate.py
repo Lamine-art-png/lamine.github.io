@@ -122,12 +122,35 @@ def _translate_pack(locale: str, entries: list[tuple[str, str]]) -> dict[str, st
     return output
 
 
+def _suspicious(pack_source: dict[str, str], pack_output: dict[str, str]) -> list[str]:
+    """Items a packed request likely hallucinated: loops, or one output reused for different inputs."""
+    from i18n_quality import degenerate
+
+    inputs_by_output: dict[str, set[str]] = {}
+    for key, value in pack_output.items():
+        inputs_by_output.setdefault(value.strip(), set()).add(pack_source[key].strip().lower())
+    return [
+        key for key, value in pack_output.items()
+        if degenerate(value, pack_source[key]) or len(inputs_by_output[value.strip()]) > 1
+    ]
+
+
 def translate_catalog(locale: str, source: dict[str, str]) -> dict[str, str]:
+    from i18n_quality import degenerate
+
     if locale == "en":
         return dict(source)
     output: dict[str, str] = {}
     for pack in _pack(list(source.items())):
-        output.update(_translate_pack(locale, pack))
+        translated = _translate_pack(locale, pack)
+        # Low-resource models hallucinate on long packed inputs; re-ask those
+        # items one at a time and refuse anything that is still degenerate.
+        for key in _suspicious(dict(pack), translated):
+            single = _translate_pack(locale, [(key, source[key])])[key]
+            if degenerate(single, source[key]):
+                raise RuntimeError(f"public_translation_degenerate:{key}")
+            translated[key] = single
+        output.update(translated)
     if set(output) != set(source):
         raise RuntimeError("public_translation_key_mismatch")
     return output

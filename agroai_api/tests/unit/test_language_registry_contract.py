@@ -102,3 +102,14 @@ def test_rtl_direction_comes_from_family_registry():
     for code in ("ar", "fa", "ur"):
         assert family_direction(code) == "rtl"
     assert family_direction("fr") == "ltr"
+
+
+def test_wolof_is_a_first_class_ui_locale():
+    from app.services.language_registry import canonical_ui_locale, family_name, manifest, target_ui_locales
+
+    assert "wo" in target_ui_locales() and "wo" in enabled_ui_locales()
+    assert "wo" not in manifest().get("unsupportedLegacyLocales", [])
+    spec = locale_specs()["wo"]
+    assert (spec.code, spec.language_code, spec.direction) == ("wo", "wo", "ltr")
+    assert family_name("wo") == "Wolof"
+    assert canonical_ui_locale("wo") == "wo" and canonical_ui_locale("wo-SN") == "wo"

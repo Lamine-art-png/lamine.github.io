@@ -83,7 +83,7 @@ jobs:
           test "$(wc -l < dynamic-locales.txt | tr -d ' ')" -eq 58
 
           # Keep production proof representative and bounded. The edge-release
-          # workflow owns the exhaustive 59-locale matrix when i18n itself changes.
+          # workflow owns the exhaustive advertised-locale matrix when i18n itself changes.
           # These six cover Latin, RTL, CJK, Indic, Cyrillic and African language
           # families without turning a backend release into 58 provider calls.
           printf '%s\n' es ar zh hi ru sw > proof-locales.txt

@@ -11,7 +11,7 @@ import re
 import time
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
-from i18n_quality import has_marker_residue
+from i18n_quality import degenerate, has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENDPOINT = "http://127.0.0.1:8787/api/chat"
@@ -110,6 +110,8 @@ def validate(source, candidate):
             raise ValueError(f"legal_placeholder_mismatch:{key}")
         if has_marker_residue(value) and not has_marker_residue(original):
             raise ValueError(f"legal_marker_residue:{key}")
+        if degenerate(value, original):
+            raise ValueError(f"legal_degenerate_output:{key}")
         out[key] = value
     return out
 

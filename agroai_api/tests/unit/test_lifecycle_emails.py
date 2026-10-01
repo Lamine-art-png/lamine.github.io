@@ -135,7 +135,7 @@ def test_free_customer_full_sequence_and_conversion_uses_real_plan_numbers(clien
     assert _row(db, user, "team").reason == "plan_without_team_invites"
     plans = lc.sent[-1]
     assert "Ask AGRO-AI: 500 questions a month" in plans["text_body"]
-    assert "500 evidence uploads a month instead of 15" in plans["text_body"]
+    assert "Up to 500 evidence files a month (instead of 15)" in plans["text_body"]
     assert "has used" not in plans["text_body"]  # no usage claim without real usage
     assert "Live connections are included from the Professional plan" in lc.sent[4]["text_body"]
 
@@ -153,7 +153,7 @@ def test_upgrade_messaging_only_reflects_real_usage(client, db, lc):
     db.commit()
     assert lifecycle_emails.process_enrollment(db, enrollment, now=now) == "sent"
     assert _row(db, user, "plans").variant == "usage"
-    assert "has used 13 of its 15 evidence uploads" in lc.sent[-1]["text_body"]
+    assert "has uploaded 13 of the 15 evidence files included in its plan" in lc.sent[-1]["text_body"]
 
 
 def test_paid_customer_never_gets_free_upgrade_email(client, db, lc):
@@ -276,7 +276,7 @@ def test_non_english_customer_receives_localized_email_with_no_english_fallback(
     message = lc.sent[0]
     assert message["subject"] == "[pt-BR] Welcome to AGRO-AI"
     assert '<html lang="pt-BR"' in message["html_body"] and "lang=pt-BR" in message["html_body"]
-    assert "[pt-BR] Unsubscribe from these setup emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
+    assert "[pt-BR] Unsubscribe from AGRO-AI welcome emails" in message["html_body"] and "[pt-BR] Continue setup" in message["html_body"]
     assert _row(db, user, "welcome").locale == "pt-BR"
 
 
@@ -658,3 +658,32 @@ def test_field_and_market_emails_respect_release_gates(client, db, lc, monkeypat
     assert (_row(db, user, "market").status, _row(db, user, "market").reason) == ("skipped", "not_available")
     assert "field" not in _steps(lc) and "market" not in _steps(lc)
     assert all("/field-intelligence" not in m["html_body"] and "/market-intelligence" not in m["html_body"] for m in lc.sent)
+
+
+def test_wolof_preference_gets_wolof_email_and_language_change_applies(client, db, lc, monkeypatch):
+    """wo is a first-class locale: the shipped Wolof catalog is used, and a later change of language changes later email."""
+    from app.services.language_registry import canonical_ui_locale, family_name
+
+    real_dir = lifecycle_email_i18n._REPO_ROOT / "shared" / "localization" / "lifecycle-email-catalogs"
+    monkeypatch.setattr(lifecycle_email_i18n, "CATALOG_DIR", real_dir)
+    lifecycle_email_i18n._static_catalog.cache_clear()
+    assert canonical_ui_locale("wo") == "wo" and canonical_ui_locale("wo-SN") == "wo"
+    assert lifecycle_email_i18n.resolve_locale("wo") == "wo" and family_name("wo") == "Wolof"
+    wolof = lifecycle_email_i18n._static_catalog("wo")
+    french = lifecycle_email_i18n._static_catalog("fr-FR")
+    assert wolof is not None and french is not None
+    english = lifecycle_email_i18n.source_catalog()
+    assert wolof["welcome.subject"] != english["welcome.subject"]
+
+    user, _ = _signup(client, db, "wolof@example.com", locale="wo")
+    welcome = lc.sent[-1]
+    assert welcome["subject"] == wolof["welcome.subject"]
+    assert 'lang="wo"' in welcome["html_body"] and wolof["welcome.cta"] in welcome["html_body"]
+    assert _row(db, user, "welcome").locale == "wo"
+    assert lc.state["translator_calls"] == []  # deterministic catalog, no runtime translation
+
+    preference = db.get(UserPreference, user.id)
+    preference.locale = "fr-FR"
+    db.commit()
+    _run(db, user, days=1)
+    assert lc.sent[-1]["subject"] == french["connect_data.subject"] and _row(db, user, "connect_data").locale == "fr-FR"
