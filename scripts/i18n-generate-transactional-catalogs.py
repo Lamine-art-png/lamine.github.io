@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
-from i18n_quality import collapsed_values, degenerate
+from i18n_quality import collapsed_values, degenerate, serbian_latin_to_cyrillic
 from i18n_quality import has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,6 +222,9 @@ def translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     out={}
     for chunk in split_source(source):
         out.update(translate_resilient(locale,chunk))
+    if locale.split("-",1)[0].lower()=="sr":
+        # Same deterministic normalization as the UI catalog: Serbian ships in Cyrillic.
+        out={key: serbian_latin_to_cyrillic(value, source[key]) for key, value in out.items()}
     return validate(source,out)
 
 def main():

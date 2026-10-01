@@ -200,6 +200,7 @@ _WORD = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}|https?://\S+|[\w\u00C0-\u024F'â€
 def serbian_latin_to_cyrillic(value: str, english_source: str) -> str:
     """Transliterate Serbian-Latin words; keep tokens copied from the English source."""
     keep = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9.+&/_-]*", english_source))
+    keep |= {token.rstrip(".") for token in keep}  # "Inc." in the source keeps "Inc"
 
     def convert(match: re.Match) -> str:
         word = match.group(0)
@@ -217,3 +218,11 @@ def serbian_latin_to_cyrillic(value: str, english_source: str) -> str:
         return "".join(out)
 
     return _WORD.sub(convert, value)
+
+
+def serbian_script_keys(locale: str, source: dict[str, str], catalog: dict[str, str]) -> list[str]:
+    """AGRO-AI presents Serbian in Cyrillic; values still in Serbian Latin are not ready."""
+    if locale.split("-", 1)[0].lower() != "sr":
+        return []
+    return [key for key, original in source.items()
+            if isinstance(catalog.get(key), str) and serbian_latin_to_cyrillic(catalog[key], original) != catalog[key]]

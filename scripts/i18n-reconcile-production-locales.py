@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n_catalog_identity import catalog_sha256  # noqa: E402
-from i18n_quality import collapsed_values, degenerate, degenerate_keys, has_marker_residue, quality_errors, quality_report  # noqa: E402
+from i18n_quality import collapsed_values, degenerate, degenerate_keys, serbian_script_keys, has_marker_residue, quality_errors, quality_report  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "shared" / "supported-locales.json"
@@ -76,7 +76,8 @@ def transactional_ready(locale: str, source: dict) -> bool:
     expected = stable_fingerprint(source.get("catalog") or {})
     if isinstance(catalog, dict) and any(isinstance(v, str) and has_marker_residue(v) for v in catalog.values()):
         return False
-    if isinstance(catalog, dict) and (degenerate_keys(source.get("catalog") or {}, catalog) or collapsed_values(source.get("catalog") or {}, catalog)):
+    if isinstance(catalog, dict) and (degenerate_keys(source.get("catalog") or {}, catalog) or collapsed_values(source.get("catalog") or {}, catalog)
+                                      or serbian_script_keys(locale, source.get("catalog") or {}, catalog)):
         return False
     return bool(
         envelope.get("schemaVersion") == 1
