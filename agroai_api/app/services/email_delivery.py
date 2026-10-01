@@ -101,8 +101,21 @@ def _normalize_attachments(attachments: list[dict[str, Any]] | None) -> list[dic
     return normalized
 
 
-def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None) -> dict:
-    """Send one email and return a safe operational result."""
+def send_email(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    headers: dict[str, str] | None = None,
+    tags: list[dict[str, str]] | None = None,
+) -> dict:
+    """Send one email and return a safe operational result.
+
+    ``headers`` (e.g. List-Unsubscribe) and ``tags`` (provider analytics labels)
+    are optional and only used by callers that need them.
+    """
 
     status = delivery_status()
     if not status["configured"]:
@@ -119,9 +132,9 @@ def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | 
     logger.info("Sending email through %s to=%s from=%s attachments=%s", provider, to_email, status.get("from_address"), len(safe_attachments))
     try:
         if provider == "smtp":
-            return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments)
+            return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers)
         if provider == "resend":
-            return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments)
+            return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags)
         if provider == "sendgrid":
             return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments)
     except Exception as exc:  # pragma: no cover - production network/provider path
@@ -138,11 +151,13 @@ def _split_content_type(value: str) -> tuple[str, str]:
     return maintype or "application", subtype or "octet-stream"
 
 
-def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None) -> dict:
+def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None) -> dict:
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = settings.FROM_EMAIL
     message["To"] = to_email
+    for name, value in (headers or {}).items():
+        message[name] = value
     message.set_content(text_body)
     if html_body:
         message.add_alternative(html_body, subtype="html")
@@ -172,7 +187,8 @@ def _resend_attachments(attachments: list[dict[str, Any]] | None) -> list[dict[s
     ]
 
 
-def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None) -> dict:
+def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None) -> dict:
+    email_headers, email_tags = headers, tags
     from_address = _from_address()
     payload: dict[str, Any] = {
         "from": from_address,
@@ -184,6 +200,10 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
     safe_attachments = _resend_attachments(attachments)
     if safe_attachments:
         payload["attachments"] = safe_attachments
+    if email_headers:
+        payload["headers"] = dict(email_headers)
+    if email_tags:
+        payload["tags"] = [dict(tag) for tag in email_tags]
     headers = {
         "Authorization": f"Bearer {settings.RESEND_API_KEY}",
         "Content-Type": "application/json",

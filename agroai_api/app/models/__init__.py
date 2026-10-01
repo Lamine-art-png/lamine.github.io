@@ -74,6 +74,7 @@ from app.models.platform_product import (
     PlatformSupportMessage, PlatformSupportRequest, PlatformTermsAcceptance,
     PlatformTermsDocument,
 )
+from app.models.lifecycle_email import LifecycleEmailEnrollment, LifecycleEmailSend  # noqa: E402
 from app.models.market_intelligence import (
     MarketPosition, MarketContractPosition, MarketObservation,
     MarketScenario, MarketDecisionJournalEntry, MarketIntelligenceInsight,
@@ -122,4 +123,5 @@ __all__ = [
     "PlatformTermsDocument",
     "MarketPosition", "MarketContractPosition", "MarketObservation", "MarketScenario",
     "MarketDecisionJournalEntry", "MarketIntelligenceInsight",
+    "LifecycleEmailEnrollment", "LifecycleEmailSend",
 ]

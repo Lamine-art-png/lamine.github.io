@@ -272,6 +272,13 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
+    # Lifecycle onboarding email (app/services/lifecycle_emails.py). Off unless
+    # explicitly enabled; sends are also held until a postal address for the
+    # commercial-email footer is configured.
+    LIFECYCLE_EMAILS_ENABLED: bool = False
+    LIFECYCLE_EMAIL_POSTAL_ADDRESS: str = ""
+    # Resend webhook signing secret (whsec_...) for delivery/open/click/bounce events.
+    RESEND_WEBHOOK_SECRET: str = ""
     EMAIL_ADMIN_TOKEN: str = ""
 
     # AI gateway

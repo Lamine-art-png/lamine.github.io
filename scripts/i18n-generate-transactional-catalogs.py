@@ -17,6 +17,9 @@ from i18n_quality import has_marker_residue
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "shared/localization/transactional-source.json"
+# What the copy is for, stated to the translation model. Lifecycle onboarding
+# email reuses this generator with --source/--purpose (same envelope format).
+PURPOSE = "account-verification email"
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 ENDPOINT = os.environ.get("I18N_TRANSACTIONAL_AUTHORING_ENDPOINT", "http://127.0.0.1:8787/api/chat")
 MAX_ATTEMPTS = 4
@@ -79,7 +82,7 @@ def cloudflare_rest_available() -> bool:
 
 def call_cloudflare_rest(locale: str, source: dict[str,str]) -> dict[str,str]:
     system=(
-        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI account-verification email. "
+        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI {PURPOSE}. "
         "Return exactly one JSON object with identical keys. Preserve {product} exactly. Preserve AGRO-AI, API, TEST, LIVE, URLs and numeric values. "
         "For pt-BR use natural Brazilian Portuguese. Do not add or remove legal/security claims. No markdown or explanation."
     )
@@ -132,7 +135,7 @@ def call_cloudflare_rest(locale: str, source: dict[str,str]) -> dict[str,str]:
 
 def call_translate(locale: str, source: dict[str,str]) -> dict[str,str]:
     system=(
-        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI account-verification email. "
+        f"Translate every JSON string value into the requested locale ({locale}) for professional AGRO-AI {PURPOSE}. "
         "Return exactly one JSON object with identical keys. Preserve {product} exactly. Preserve AGRO-AI, API, TEST, LIVE, URLs and numeric values. "
         "For pt-BR use natural Brazilian Portuguese. Do not add or remove legal/security claims. No markdown or explanation."
     )
@@ -220,7 +223,14 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--locales",required=True)
     parser.add_argument("--outdir",default=str(ROOT/"shared/localization/transactional-catalogs"))
+    parser.add_argument("--source",default=None,help="alternate English source envelope (default: transactional)")
+    parser.add_argument("--purpose",default=None,help="what the copy is for, stated to the translator")
     args=parser.parse_args()
+    global SOURCE_PATH, PURPOSE
+    if args.source:
+        SOURCE_PATH=Path(args.source)
+    if args.purpose:
+        PURPOSE=args.purpose
     locales=[x.strip() for x in args.locales.split(",") if x.strip()]
     envelope=json.loads(SOURCE_PATH.read_text(encoding="utf-8"))
     source=envelope["catalog"]
