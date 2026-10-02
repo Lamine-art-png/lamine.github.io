@@ -24,6 +24,8 @@ export const PLATFORM_INTELLIGENCE_COPY = {
   completedRunDetail: "Per completed intelligence run.",
   startMinutes: "Start in minutes",
   step1Title: "Add funds",
+  // Not rendered: the minimum top-up is shown from the wallet response
+  // (minimum_topup_cents). Kept only so localization catalogs stay valid.
   step1Body: "Prepay $10 or more.",
   step2Title: "Create key",
   step2Body: "Get an agro_live_ advisory key.",

@@ -38,8 +38,8 @@ function walletBody(balanceCents) {
   };
 }
 
-async function stubConsole(page, { locale = "en", balanceCents = 1000, walletStatus = 200 } = {}) {
-  const state = { walletCalls: 0, bootstrapCalls: 0, runKeys: [], overviewCalls: 0, balanceCents };
+async function stubConsole(page, { locale = "en", balanceCents = 1000, walletStatus = 200, minimumTopupCents = 500 } = {}) {
+  const state = { walletCalls: 0, bootstrapCalls: 0, runKeys: [], overviewCalls: 0, balanceCents, minimumTopupCents };
   await page.addInitScript(({ token, selected }) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", selected);
@@ -63,7 +63,7 @@ async function stubConsole(page, { locale = "en", balanceCents = 1000, walletSta
     if (path === "/v1/platform/developer/wallet" || path === "/v1/platform/developer/wallet/sync") {
       state.walletCalls += 1;
       if (walletStatus !== 200) return json({ detail: "Not authenticated" }, walletStatus);
-      return json(walletBody(state.balanceCents));
+      return json({ ...walletBody(state.balanceCents), minimum_topup_cents: state.minimumTopupCents });
     }
     if (path === "/v1/platform/developer/intelligence/bootstrap") {
       state.bootstrapCalls += 1;
@@ -126,6 +126,19 @@ test("desktop console keeps the Portal session, shows the key once, and never st
   await expect(page.getByText("fp_console_1")).toBeVisible();
   await expect(page.getByText(SECRET)).toHaveCount(0);
   expect(await storageValues(page)).not.toContain(SECRET);
+});
+
+test("overview states the server minimum top-up, not a hard-coded amount", async ({ page }) => {
+  const state = await stubConsole(page, { balanceCents: 0 });
+  await page.goto(`${APP}/platform/home`);
+  const steps = page.locator("div.grid.gap-5");
+  await expect(steps.getByText("Minimum top-up: $5.00")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Prepay $10 or more.")).toHaveCount(0);
+  // $10 stays as the recommended quick-add amount.
+  await expect(page.getByRole("button", { name: "Add $10" })).toBeVisible();
+  state.minimumTopupCents = 700;
+  await page.reload();
+  await expect(steps.getByText("Minimum top-up: $7.00")).toBeVisible({ timeout: 20_000 });
 });
 
 test("Playground sends a fresh idempotency key per run and explains a low balance", async ({ page }) => {

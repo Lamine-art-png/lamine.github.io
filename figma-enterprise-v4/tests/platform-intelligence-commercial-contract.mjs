@@ -35,4 +35,10 @@ assert.ok(authCheck >= 0 && advancedCheck >= 0 && commercialCheck >= 0 && authCh
 assert.ok(routes.includes("if (commercialSurface) return <PlatformIntelligenceConsole />"),
   "commercial-only customers must retain the paid Intelligence front door");
 
+// The minimum top-up is server-authoritative (MIN_TOPUP_CENTS). The console
+// must render it from the wallet response, never a hard-coded amount.
+assert.ok(!source.includes("C.step1Body"), "overview must not render the hard-coded 'Prepay $10 or more' minimum");
+assert.ok((source.match(/C\.minimumTopup\}: \{money\(wallet\?\.minimum_topup_cents/g) || []).length >= 2,
+  "overview and billing must render the minimum top-up from wallet.minimum_topup_cents");
+
 console.log("AGRO-AI paid intelligence console contract passed.");
