@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   apply:
@@ -45,25 +46,36 @@ jobs:
             tests/unit/test_platform_billing_cleanup.py \
             tests/unit/test_platform_billing_runtime_diagnostics.py
 
-      - name: Commit the backend cleanup to main
+      # main is protected (PR + required checks): never push to it. When the
+      # deterministic cleanup is not yet on main, propose it as a pull request
+      # that goes through the normal release gates.
+      - name: Propose the backend cleanup as a pull request
         id: commit
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             agroai_api/app/api/v1/platform_billing.py \
             agroai_api/tests/unit/test_platform_billing_cleanup.py
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Backend cleanup already applied"
+            echo "Backend cleanup already applied on main"
             exit 0
           fi
+          branch="automation/platform-billing-cleanup-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
           git commit -m "Add billing readiness and abandoned Checkout recovery"
-          git push origin HEAD:main
+          git push origin "HEAD:refs/heads/${branch}"
+          pr_url="$(gh pr create --base main --head "$branch" \
+            --title "Apply Platform billing cleanup" \
+            --body "Deterministic output of .github/scripts/apply_platform_billing_cleanup.py from run ${GITHUB_RUN_ID}. Merge through the normal required checks.")"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
 
       - name: Record cleanup success
         if: success()
@@ -71,9 +83,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CHANGED: ${{ steps.commit.outputs.changed }}
           COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
+          PR_URL: ${{ steps.commit.outputs.pr_url }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ Platform billing backend cleanup applied. Non-secret readiness diagnostics, abandoned/canceled Checkout retry recovery, and secret-redaction tests are committed. changed=\`${CHANGED:-false}\` commit=\`${COMMIT_SHA:-already-applied}\`."
+          if [ "${CHANGED:-false}" = "true" ]; then
+            body="Platform billing backend cleanup proposed for review: ${PR_URL} (commit \`${COMMIT_SHA}\`). It reaches production only after the pull request passes the required checks and merges."
+          else
+            body="✅ Platform billing backend cleanup is already on main; nothing to apply."
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
 
       - name: Record cleanup failure
         if: failure()
