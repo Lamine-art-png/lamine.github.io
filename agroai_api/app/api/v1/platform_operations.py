@@ -864,6 +864,8 @@ def list_partner_dossiers(
 @router.get("/admin/abuse")
 def list_abuse_events(
     abuse_status: str | None = Query(default=None, alias="status"),
+    project_hold_state: str | None = Query(default=None, pattern="^(active|released)$"),
+    api_project_id: str | None = Query(default=None, max_length=200),
     ctx: AuthContext = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -872,6 +874,13 @@ def list_abuse_events(
     query = db.query(PlatformAbuseEvent)
     if abuse_status:
         query = query.filter(PlatformAbuseEvent.status == abuse_status)
+    # Operators find the events that still hold a suspension (whatever their
+    # later status or action) with ?project_hold_state=active, so no hold is
+    # ever hidden behind the listing limit.
+    if project_hold_state:
+        query = query.filter(PlatformAbuseEvent.project_hold_state == project_hold_state)
+    if api_project_id:
+        query = query.filter(PlatformAbuseEvent.api_project_id == api_project_id)
     rows = query.order_by(PlatformAbuseEvent.created_at.desc()).limit(500).all()
     return {
         "events": [
@@ -883,11 +892,73 @@ def list_abuse_events(
                 "severity": row.severity,
                 "status": row.status,
                 "automated_action": row.automated_action,
+                "project_hold_state": row.project_hold_state,
+                "project_hold_released_at": row.project_hold_released_at.isoformat() if row.project_hold_released_at else None,
                 "evidence_summary": row.evidence_summary_json,
                 "created_at": row.created_at.isoformat(),
             }
             for row in rows
         ]
+    }
+
+
+def _locked_project(db: Session, project_id: str, organization_id: str | None) -> ApiProject | None:
+    return (
+        db.query(ApiProject)
+        .filter(ApiProject.id == project_id, ApiProject.organization_id == organization_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+
+
+def _active_project_holds(db: Session, project_id: str) -> int:
+    return (
+        db.query(PlatformAbuseEvent)
+        .filter(
+            PlatformAbuseEvent.api_project_id == project_id,
+            PlatformAbuseEvent.project_hold_state == "active",
+        )
+        .count()
+    )
+
+
+def _apply_project_hold(db: Session, row: PlatformAbuseEvent, action: str, actor_user_id: str) -> dict | None:
+    """Reference-counted AGRO-AI suspension of the event's project.
+
+    Each disable_project event is one hold. A suspended project returns to
+    active only when its last active hold is released. The event row and then
+    the project row are locked (one fixed order for every caller), so
+    concurrent holds and restorations serialize on the project and the
+    remaining-hold count is read after every earlier transaction committed.
+    """
+    if not row.api_project_id:
+        return None
+    project = _locked_project(db, row.api_project_id, row.organization_id)
+    if project is None:
+        return None
+    if action == "disable_project":
+        row.project_hold_state = "active"
+        row.project_hold_released_at = None
+        row.project_hold_released_by_user_id = None
+        # "suspended" is an AGRO-AI operator hold. Unlike a customer's own
+        # "disabled", customers cannot lift it and self-service flows never
+        # re-activate it.
+        project.status = "suspended"
+    elif row.project_hold_state == "active":
+        row.project_hold_state = "released"
+        row.project_hold_released_at = datetime.utcnow()
+        row.project_hold_released_by_user_id = actor_user_id
+        db.flush()
+        if project.status == "suspended" and _active_project_holds(db, project.id) == 0:
+            project.status = "active"
+    project.updated_at = datetime.utcnow()
+    db.flush()
+    return {
+        "project_id": project.id,
+        "project_status": project.status,
+        "event_hold": row.project_hold_state,
+        "remaining_project_holds": _active_project_holds(db, project.id),
     }
 
 
@@ -899,27 +970,27 @@ def review_abuse_event(
     db: Session = Depends(get_db),
 ) -> dict:
     _flag("PLATFORM_API_PRIVATE_BETA_ENABLED")
-    row = db.get(PlatformAbuseEvent, event_id)
+    row = (
+        db.query(PlatformAbuseEvent)
+        .filter(PlatformAbuseEvent.id == event_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="Not found")
     row.status = payload.status
     row.reviewed_by_user_id = ctx.user.id
     row.reviewed_at = datetime.utcnow()
+    hold = None
     if payload.action == "disable_key" and row.api_key_id:
         key = db.get(PlatformApiKey, row.api_key_id)
         if key and key.organization_id == row.organization_id:
             key.status = "disabled"
-    elif payload.action == "disable_project" and row.api_project_id:
-        project = db.get(ApiProject, row.api_project_id)
-        if project and project.organization_id == row.organization_id:
-            # "suspended" is an AGRO-AI operator hold. Unlike a customer's own
-            # "disabled", customers cannot lift it and self-service flows never
-            # re-activate it.
-            project.status = "suspended"
-    elif payload.action == "restore_project" and row.api_project_id:
-        project = db.get(ApiProject, row.api_project_id)
-        if project and project.organization_id == row.organization_id and project.status == "suspended":
-            project.status = "active"
+    elif payload.action in {"disable_project", "restore_project"}:
+        hold = _apply_project_hold(db, row, payload.action, ctx.user.id)
+    # Later reviews (status changes, other actions) never release a hold
+    # implicitly; only restore_project on this event does.
     row.automated_action = payload.action
     record_product_audit(
         db,
@@ -930,7 +1001,10 @@ def review_abuse_event(
         actor_user_id=ctx.user.id,
         actor_type="platform_admin",
         reason=payload.reason,
-        metadata={"action": payload.action},
+        metadata={"action": payload.action, **({"project_hold": hold} if hold else {})},
     )
     db.commit()
-    return {"status": row.status, "action": row.automated_action}
+    result = {"status": row.status, "action": row.automated_action}
+    if hold:
+        result["project"] = hold
+    return result

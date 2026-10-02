@@ -604,6 +604,7 @@ class PlatformAbuseEvent(Base):
     __table_args__ = (
         Index("ix_platform_abuse_org_state", "organization_id", "status", "created_at"),
         Index("ix_platform_abuse_signal", "signal_type", "created_at"),
+        Index("ix_platform_abuse_project_hold", "api_project_id", "project_hold_state"),
     )
 
     id = Column(String, primary_key=True, default=new_product_id)
@@ -617,6 +618,12 @@ class PlatformAbuseEvent(Base):
     evidence_summary_json = Column(JSON, nullable=False, default=dict)
     reviewed_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
+    # Durable project suspension this event holds (alembic 041). Independent of
+    # status/automated_action, which later reviews overwrite: "active" while
+    # this event keeps its project suspended, "released" once restored.
+    project_hold_state = Column(String, nullable=True)
+    project_hold_released_at = Column(DateTime, nullable=True)
+    project_hold_released_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

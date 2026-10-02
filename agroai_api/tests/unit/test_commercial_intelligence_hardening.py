@@ -518,3 +518,114 @@ def test_operator_suspension_survives_self_service_and_customer_reactivation(db,
     restored_project, service_account = legacy._default_advisory_project(db, org.id, org.owner_user_id)
     assert restored_project.id == project.id
     assert service_account.scopes == ["intelligence:run"]
+
+
+def _held_project(db, monkeypatch, holds: int):
+    from app.api.v1 import platform_operations
+    from app.models.platform_product import PlatformAbuseEvent
+
+    monkeypatch.setattr(platform_operations.settings, "PLATFORM_API_PRIVATE_BETA_ENABLED", True, raising=False)
+    monkeypatch.setattr(platform_operations, "record_product_audit", lambda *args, **kwargs: None)
+    org, _org_b, _ws, _ws_other, _ws_b, project, _principal = _tenant_context(db)
+    admin = User(email=f"operator-{holds}@example.test", password_hash="x")
+    db.add(admin)
+    db.flush()
+    events = []
+    for index in range(holds):
+        event = PlatformAbuseEvent(
+            organization_id=org.id, api_project_id=project.id, signal_type=f"signal-{index}", severity="high",
+            evidence_summary_json={},
+        )
+        db.add(event)
+        events.append(event)
+    db.commit()
+    operator = SimpleNamespace(user=admin)
+
+    def review(event, status, action):
+        return platform_operations.review_abuse_event(
+            event.id, platform_operations.AbuseReview(status=status, action=action, reason="operator review"),
+            ctx=operator, db=db,
+        )
+
+    for event in events:
+        review(event, "monitoring", "disable_project")
+    db.refresh(project)
+    assert project.status == "suspended"
+    return org, project, events, review, admin
+
+
+def test_single_abuse_hold_restores_project(db, monkeypatch) -> None:
+    _org, project, (event,), review, admin = _held_project(db, monkeypatch, 1)
+    result = review(event, "resolved", "restore_project")
+    db.refresh(project)
+    db.refresh(event)
+    assert project.status == "active"
+    assert result["project"]["remaining_project_holds"] == 0
+    assert event.project_hold_state == "released"
+    assert event.project_hold_released_by_user_id == admin.id and event.project_hold_released_at is not None
+
+
+def test_project_stays_suspended_until_every_abuse_hold_is_restored(db, monkeypatch) -> None:
+    _org, project, (first, second), review, _admin = _held_project(db, monkeypatch, 2)
+
+    result = review(first, "resolved", "restore_project")
+    db.refresh(project)
+    assert project.status == "suspended", "another event still holds the suspension"
+    assert result["project"]["remaining_project_holds"] == 1
+
+    # Re-reviewing the still-held event (status change, other action) is not a restore.
+    review(second, "resolved", None)
+    review(second, "monitoring", "throttle")
+    db.refresh(project)
+    db.refresh(second)
+    assert project.status == "suspended" and second.project_hold_state == "active"
+
+    # Restoring an already-released event again cannot release someone else's hold.
+    review(first, "resolved", "restore_project")
+    db.refresh(project)
+    assert project.status == "suspended"
+
+    result = review(second, "resolved", "restore_project")
+    db.refresh(project)
+    assert project.status == "active"
+    assert result["project"]["remaining_project_holds"] == 0
+
+
+def test_multi_hold_suspension_blocks_customer_and_self_service_override(db, monkeypatch) -> None:
+    from app.api.v1 import platform_api
+
+    monkeypatch.setattr(platform_api, "record_product_audit", lambda *args, **kwargs: None)
+    org, project, (first, _second), review, _admin = _held_project(db, monkeypatch, 2)
+    review(first, "resolved", "restore_project")
+    customer = SimpleNamespace(organization=org, user=SimpleNamespace(id=org.owner_user_id))
+    with pytest.raises(HTTPException) as patch_error:
+        platform_api.update_project(project.id, platform_api.ProjectUpdate(status="active"), ctx=customer, db=db)
+    assert patch_error.value.status_code == 403
+    with pytest.raises(HTTPException) as bootstrap_error:
+        legacy._default_advisory_project(db, org.id, org.owner_user_id)
+    assert bootstrap_error.value.detail["code"] == "intelligence_project_unavailable"
+    db.refresh(project)
+    assert project.status == "suspended"
+
+
+def test_abuse_listing_exposes_and_filters_active_holds(db, monkeypatch) -> None:
+    from app.api.v1 import platform_operations
+    from app.db.schema_contract import HEAD_SCHEMA_REQUIREMENTS
+
+    _org, project, (first, second), review, _admin = _held_project(db, monkeypatch, 2)
+    review(first, "resolved", "restore_project")
+    # A held event re-reviewed with another action still lists as the hold.
+    review(second, "monitoring", "throttle")
+    listing = platform_operations.list_abuse_events(
+        abuse_status=None, project_hold_state="active", api_project_id=project.id, ctx=None, db=db
+    )
+    assert [(e["id"], e["automated_action"], e["project_hold_state"]) for e in listing["events"]] == [
+        (second.id, "throttle", "active")
+    ]
+    released = platform_operations.list_abuse_events(
+        abuse_status=None, project_hold_state="released", api_project_id=project.id, ctx=None, db=db
+    )
+    assert [e["id"] for e in released["events"]] == [first.id]
+    assert released["events"][0]["project_hold_released_at"] is not None
+    # Partial schemas missing any hold column must fail schema adoption.
+    assert {"project_hold_state", "project_hold_released_at", "project_hold_released_by_user_id"} <= HEAD_SCHEMA_REQUIREMENTS["platform_abuse_events"]
