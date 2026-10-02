@@ -13,7 +13,6 @@ on:
 permissions:
   contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   apply:
@@ -46,14 +45,14 @@ jobs:
             tests/unit/test_platform_billing_cleanup.py \
             tests/unit/test_platform_billing_runtime_diagnostics.py
 
-      # main is protected (PR + required checks): never push to it. When the
-      # deterministic cleanup is not yet on main, propose it as a pull request
-      # that goes through the normal release gates.
-      - name: Propose the backend cleanup as a pull request
+      # main is protected (PR + required checks): never push to it. A pull
+      # request opened with GITHUB_TOKEN would never trigger the required
+      # checks, so when the deterministic cleanup is missing from main the run
+      # pushes a branch, links it in the evidence issue, and fails until a
+      # maintainer opens the pull request (which runs every required check).
+      - name: Stage the backend cleanup on a branch for review
         id: commit
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git add \
@@ -70,27 +69,29 @@ jobs:
           git switch -c "$branch"
           git commit -m "Add billing readiness and abandoned Checkout recovery"
           git push origin "HEAD:refs/heads/${branch}"
-          pr_url="$(gh pr create --base main --head "$branch" \
-            --title "Apply Platform billing cleanup" \
-            --body "Deterministic output of .github/scripts/apply_platform_billing_cleanup.py from run ${GITHUB_RUN_ID}. Merge through the normal required checks.")"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+          echo "compare_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1" >> "$GITHUB_OUTPUT"
+
+      - name: Require a reviewed pull request
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
+          COMPARE_URL: ${{ steps.commit.outputs.compare_url }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="Platform billing backend cleanup is not on main. Commit \`${COMMIT_SHA}\` is staged for review; open the pull request at ${COMPARE_URL} so the required checks run. Nothing reaches production until it merges."
+          echo "::error::Cleanup staged at ${COMPARE_URL}; open the pull request to run the required checks."
+          exit 1
 
       - name: Record cleanup success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-          CHANGED: ${{ steps.commit.outputs.changed }}
-          COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
-          PR_URL: ${{ steps.commit.outputs.pr_url }}
         run: |
-          if [ "${CHANGED:-false}" = "true" ]; then
-            body="Platform billing backend cleanup proposed for review: ${PR_URL} (commit \`${COMMIT_SHA}\`). It reaches production only after the pull request passes the required checks and merges."
-          else
-            body="✅ Platform billing backend cleanup is already on main; nothing to apply."
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" -f body="$body"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="✅ Platform billing backend cleanup is already on main; nothing to apply."
 
       - name: Record cleanup failure
         if: failure()
