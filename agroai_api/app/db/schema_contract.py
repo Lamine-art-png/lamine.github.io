@@ -212,7 +212,15 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_status_components": {"id", "component_key", "status", "public"},
     "platform_status_incidents": {"id", "status", "severity", "public_summary"},
     "platform_status_incident_updates": {"id", "incident_id", "status", "public_message"},
-    "platform_abuse_events": {"id", "organization_id", "signal_type", "status", "project_hold_state"},
+    "platform_abuse_events": {
+        "id",
+        "organization_id",
+        "signal_type",
+        "status",
+        "project_hold_state",
+        "project_hold_released_at",
+        "project_hold_released_by_user_id",
+    },
     "field_runtime_flags": {"key", "value_json", "updated_at"},
     "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},
 }

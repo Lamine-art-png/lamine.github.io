@@ -864,6 +864,8 @@ def list_partner_dossiers(
 @router.get("/admin/abuse")
 def list_abuse_events(
     abuse_status: str | None = Query(default=None, alias="status"),
+    project_hold_state: str | None = Query(default=None, pattern="^(active|released)$"),
+    api_project_id: str | None = Query(default=None, max_length=200),
     ctx: AuthContext = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -872,6 +874,13 @@ def list_abuse_events(
     query = db.query(PlatformAbuseEvent)
     if abuse_status:
         query = query.filter(PlatformAbuseEvent.status == abuse_status)
+    # Operators find the events that still hold a suspension (whatever their
+    # later status or action) with ?project_hold_state=active, so no hold is
+    # ever hidden behind the listing limit.
+    if project_hold_state:
+        query = query.filter(PlatformAbuseEvent.project_hold_state == project_hold_state)
+    if api_project_id:
+        query = query.filter(PlatformAbuseEvent.api_project_id == api_project_id)
     rows = query.order_by(PlatformAbuseEvent.created_at.desc()).limit(500).all()
     return {
         "events": [
@@ -883,6 +892,8 @@ def list_abuse_events(
                 "severity": row.severity,
                 "status": row.status,
                 "automated_action": row.automated_action,
+                "project_hold_state": row.project_hold_state,
+                "project_hold_released_at": row.project_hold_released_at.isoformat() if row.project_hold_released_at else None,
                 "evidence_summary": row.evidence_summary_json,
                 "created_at": row.created_at.isoformat(),
             }

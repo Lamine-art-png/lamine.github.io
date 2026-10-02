@@ -606,3 +606,26 @@ def test_multi_hold_suspension_blocks_customer_and_self_service_override(db, mon
     assert bootstrap_error.value.detail["code"] == "intelligence_project_unavailable"
     db.refresh(project)
     assert project.status == "suspended"
+
+
+def test_abuse_listing_exposes_and_filters_active_holds(db, monkeypatch) -> None:
+    from app.api.v1 import platform_operations
+    from app.db.schema_contract import HEAD_SCHEMA_REQUIREMENTS
+
+    _org, project, (first, second), review, _admin = _held_project(db, monkeypatch, 2)
+    review(first, "resolved", "restore_project")
+    # A held event re-reviewed with another action still lists as the hold.
+    review(second, "monitoring", "throttle")
+    listing = platform_operations.list_abuse_events(
+        abuse_status=None, project_hold_state="active", api_project_id=project.id, ctx=None, db=db
+    )
+    assert [(e["id"], e["automated_action"], e["project_hold_state"]) for e in listing["events"]] == [
+        (second.id, "throttle", "active")
+    ]
+    released = platform_operations.list_abuse_events(
+        abuse_status=None, project_hold_state="released", api_project_id=project.id, ctx=None, db=db
+    )
+    assert [e["id"] for e in released["events"]] == [first.id]
+    assert released["events"][0]["project_hold_released_at"] is not None
+    # Partial schemas missing any hold column must fail schema adoption.
+    assert {"project_hold_state", "project_hold_released_at", "project_hold_released_by_user_id"} <= HEAD_SCHEMA_REQUIREMENTS["platform_abuse_events"]
