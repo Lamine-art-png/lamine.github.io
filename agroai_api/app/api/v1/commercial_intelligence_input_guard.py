@@ -42,15 +42,17 @@ _SENSITIVE_SUFFIXES = (
     "_private_key",
     "_client_secret",
 )
+# High-confidence credential formats, matched anywhere in a string: customers
+# paste secrets into free-text notes and questions, not only into dedicated
+# values.
 _SECRET_VALUE_PATTERNS = (
-    re.compile(r"^Bearer\s+[A-Za-z0-9._~+/=-]{16,}$", re.IGNORECASE),
-    re.compile(r"^sk_(?:live|test)_[A-Za-z0-9]{12,}$"),
-    re.compile(r"^rk_(?:live|test)_[A-Za-z0-9]{12,}$"),
-    re.compile(r"^gh[pousr]_[A-Za-z0-9]{20,}$"),
-    re.compile(r"^github_pat_[A-Za-z0-9_]{20,}$"),
-    re.compile(r"^xox[baprs]-[A-Za-z0-9-]{12,}$"),
-    re.compile(r"^AKIA[0-9A-Z]{16}$"),
-    re.compile(r"^-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE),
+    re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{12,}"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{12,}"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
 _MAX_SCAN_DEPTH = 16
 

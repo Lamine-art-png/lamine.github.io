@@ -263,7 +263,7 @@ class PartnerDossierWrite(BaseModel):
 class AbuseReview(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: str = Field(pattern="^(open|monitoring|resolved|false_positive)$")
-    action: str | None = Field(default=None, pattern="^(throttle|challenge|disable_key|disable_project|require_review)$")
+    action: str | None = Field(default=None, pattern="^(throttle|challenge|disable_key|disable_project|restore_project|require_review)$")
     reason: str = Field(min_length=3, max_length=2000)
 
 
@@ -912,7 +912,14 @@ def review_abuse_event(
     elif payload.action == "disable_project" and row.api_project_id:
         project = db.get(ApiProject, row.api_project_id)
         if project and project.organization_id == row.organization_id:
-            project.status = "disabled"
+            # "suspended" is an AGRO-AI operator hold. Unlike a customer's own
+            # "disabled", customers cannot lift it and self-service flows never
+            # re-activate it.
+            project.status = "suspended"
+    elif payload.action == "restore_project" and row.api_project_id:
+        project = db.get(ApiProject, row.api_project_id)
+        if project and project.organization_id == row.organization_id and project.status == "suspended":
+            project.status = "active"
     row.automated_action = payload.action
     record_product_audit(
         db,

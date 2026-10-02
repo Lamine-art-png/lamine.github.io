@@ -11,6 +11,7 @@ on:
       - '.github/workflows/deploy-platform-api-marketing.yml'
       - '.github/workflows/platform-api-private-beta-diagnostics.yml'
       - '.github/workflows/production-readiness-snapshot.yml'
+      - '.github/workflows/intelligence-api-commercial-production-verification.yml'
       - '.github/scripts/resolve-backend-release-sha.sh'
       - 'scripts/check_backend_release_identity_contract.py'
       - 'figma-enterprise-v4/**'
@@ -77,7 +78,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "039_lifecycle_next_action (head)"
+          test "$(alembic heads)" = "040_intelligence_money_checks (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db

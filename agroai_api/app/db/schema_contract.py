@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "039_lifecycle_next_action"
+HEAD_ALEMBIC_REVISION = "040_intelligence_money_checks"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {

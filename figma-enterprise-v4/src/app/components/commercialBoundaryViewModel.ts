@@ -112,7 +112,13 @@ export function isCommercialQuota(detail: CommercialBoundaryDetail) {
   return detail.code === "quota_exceeded" || (detail.status === 429 && Boolean(detail.metric) && detail.limit !== undefined);
 }
 
+// The prepaid Intelligence API wallet is a separate product from Portal
+// subscriptions: a low wallet balance is resolved by a top-up inside the
+// Intelligence console, never by a Portal plan upgrade.
+const PREPAID_WALLET_CODES = new Set(["insufficient_intelligence_balance"]);
+
 export function shouldShowCommercialBoundary(detail: CommercialBoundaryDetail) {
+  if (PREPAID_WALLET_CODES.has(String(detail.code || ""))) return false;
   if (detail.status === 429) return isCommercialQuota(detail);
   return detail.status === 402 || ["upgrade_required", "subscription_inactive", "quota_exceeded"].includes(String(detail.code || ""));
 }

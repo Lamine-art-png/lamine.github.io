@@ -60,4 +60,22 @@ for label, workflow in {
     if '--arg sha "$GITHUB_SHA"' in workflow:
         raise AssertionError(f"{label}: backend identity must not be compared to the release workflow SHA")
 
+# The paid Intelligence API proof must run for every backend release Render can
+# deploy. Render rebuilds on any agroai_api/** change (the tree the resolver
+# walks), so a narrow file list would let unrelated backend changes ship
+# without re-proving the commercial contract.
+commercial = read(".github/workflows/intelligence-api-commercial-production-verification.yml")
+commercial_paths = commercial.split("paths:", 1)[1].split("workflow_dispatch:", 1)[0] if "paths:" in commercial else ""
+for required_path in (
+    "agroai_api/**",
+    ".github/scripts/resolve-backend-release-sha.sh",
+    ".github/workflows/intelligence-api-commercial-production-verification.yml",
+):
+    if f"- {required_path}" not in commercial_paths:
+        raise AssertionError(f"commercial production proof: push paths must include {required_path!r}")
+require(commercial, "resolve-backend-release-sha.sh", "commercial production proof")
+require(commercial, 'value.get("build_sha") == expected', "commercial production proof exact identity")
+if '--arg sha "$GITHUB_SHA"' in commercial:
+    raise AssertionError("commercial production proof: backend identity must not be compared to the workflow SHA")
+
 print("Backend release identity contract: ok")

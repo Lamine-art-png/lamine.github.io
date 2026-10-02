@@ -16,6 +16,7 @@ from typing import Any, Literal
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.ai import _run_ai
@@ -62,6 +63,10 @@ TASK_CATALOG: dict[str, dict[str, Any]] = {
 
 SENSITIVE_INPUT_KEYS = {"password", "secret", "token", "authorization", "api_key", "apikey", "private_key"}
 ADVISORY_SCOPES = ["intelligence:run"]
+_ADVISORY_ACCESS_UNAVAILABLE = {
+    "code": "intelligence_project_unavailable",
+    "message": "AGRO-AI Intelligence access for this organization is disabled. Contact AGRO-AI support.",
+}
 
 
 class IntelligenceRequest(BaseModel):
@@ -120,21 +125,30 @@ def _request_hash(payload: IntelligenceRequest) -> str:
 
 
 def _wallet(db: Session, organization_id: str, *, lock: bool = False) -> IntelligenceWallet:
-    query = db.query(IntelligenceWallet).filter(IntelligenceWallet.organization_id == organization_id)
-    if lock:
-        query = query.with_for_update()
-    row = query.first()
-    if row is None:
-        row = IntelligenceWallet(organization_id=organization_id, currency="usd", balance_cents=0)
-        db.add(row)
-        db.flush()
+    def load() -> IntelligenceWallet | None:
+        query = db.query(IntelligenceWallet).filter(IntelligenceWallet.organization_id == organization_id)
         if lock:
-            row = (
-                db.query(IntelligenceWallet)
-                .filter(IntelligenceWallet.organization_id == organization_id)
-                .with_for_update()
-                .first()
-            )
+            # populate_existing: a wallet already in this session's identity
+            # map (e.g. from the pre-inference balance check) must be refreshed
+            # from the locked row, or a debit is computed from a stale balance
+            # and overwrites a concurrent one.
+            query = query.with_for_update().populate_existing()
+        return query.first()
+
+    row = load()
+    if row is None:
+        # Concurrent first requests (wallet + sync on first console load) race
+        # the one-wallet-per-organization unique constraint. Insert inside a
+        # savepoint so the loser re-reads the winner's wallet instead of
+        # failing the request or poisoning the caller's transaction.
+        try:
+            with db.begin_nested():
+                db.add(IntelligenceWallet(organization_id=organization_id, currency="usd", balance_cents=0))
+        except IntegrityError:
+            pass
+        row = load()
+        if row is None:
+            raise HTTPException(status_code=503, detail={"code": "intelligence_wallet_unavailable"})
     return row
 
 
@@ -276,8 +290,9 @@ def _default_advisory_project(db: Session, organization_id: str, user_id: str | 
         db.add(project)
         db.flush()
     elif project.status != "active":
-        project.status = "active"
-        project.updated_at = datetime.utcnow()
+        # Never resurrect a project an operator suspended or the customer
+        # disabled: re-activating it would silently revive every key on it.
+        raise HTTPException(status_code=403, detail=_ADVISORY_ACCESS_UNAVAILABLE)
 
     service_account = (
         db.query(ApiServiceAccount)
@@ -302,8 +317,11 @@ def _default_advisory_project(db: Session, organization_id: str, user_id: str | 
         )
         db.add(service_account)
         db.flush()
+    elif service_account.status != "active":
+        raise HTTPException(status_code=403, detail=_ADVISORY_ACCESS_UNAVAILABLE)
     else:
-        service_account.status = "active"
+        # Narrow only: the default advisory identity never carries more than
+        # intelligence:run, even if it was edited from the Advanced Platform.
         service_account.scopes = ADVISORY_SCOPES
     return project, service_account
 
