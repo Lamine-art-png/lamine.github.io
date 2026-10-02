@@ -48,12 +48,16 @@ jobs:
           ready=0
           for attempt in $(seq 1 60); do
             bust="$(date +%s)-${attempt}"
-            news_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D news.headers -o news.html -w '%{http_code}' "https://agroai-pilot.com/news?verify=${bust}" || true)"
-            script_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o restore.js -w '%{http_code}' "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
+            # /news and the card script are exact Worker routes (no trailing *),
+            # which Cloudflare does not match when a query string is present, so
+            # they are probed without a cache-busting query.
+            news_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -D news.headers -o news.html -w '%{http_code}' "https://agroai-pilot.com/news" || true)"
+            script_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' -o restore.js -w '%{http_code}' "https://agroai-pilot.com/news/agroai-news-card-restore.js" || true)"
             jd_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o jd.html -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
             jd_cover_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D jd-cover.headers -o jd-cover.webp -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
             field_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o field.html -w '%{http_code}' "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
             if [ "$news_code" = "200" ] && [ "$script_code" = "200" ] && [ "$jd_code" = "200" ] && [ "$jd_cover_code" = "200" ] && [ "$field_code" = "200" ] && \
+               grep -F 'data-agroai-news-card-restoration' news.html >/dev/null && \
                grep -F 'Introducing AGRO-AI Field Intelligence' restore.js >/dev/null && \
                grep -F '/news/introducing-agro-ai-field-intelligence' restore.js >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' restore.js >/dev/null && \
