@@ -1130,6 +1130,11 @@ def update_project(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    if row.status == "suspended":
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "project_suspended", "message": "This project is suspended by AGRO-AI. Contact AGRO-AI support."},
+        )
     if payload.name is not None:
         row.name = payload.name
     if payload.status is not None:

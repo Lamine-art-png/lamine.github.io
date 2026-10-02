@@ -460,3 +460,61 @@ def test_topup_reconciliation_rejects_invalid_stripe_state(
     assert ledger.status == expected_status
     assert wallet.balance_cents == 0
     assert wallet.lifetime_funded_cents == 0
+
+
+def test_operator_suspension_survives_self_service_and_customer_reactivation(db, monkeypatch) -> None:
+    """An abuse suspension must hold until AGRO-AI restores it.
+
+    Previously the commercial console re-activated any non-active Intelligence
+    project on the next bootstrap or Playground run, reviving every key on it,
+    and the Advanced Platform project PATCH let customers lift the hold.
+    """
+    from app.api.v1 import platform_api, platform_operations
+    from app.models.platform_product import PlatformAbuseEvent
+
+    monkeypatch.setattr(platform_operations.settings, "PLATFORM_API_PRIVATE_BETA_ENABLED", True, raising=False)
+    monkeypatch.setattr(platform_operations, "record_product_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(platform_api, "record_product_audit", lambda *args, **kwargs: None)
+    org, _org_b, _ws, _ws_other, _ws_b, project, _principal = _tenant_context(db)
+    admin = User(email="operator@example.test", password_hash="x")
+    db.add(admin)
+    db.flush()
+    event = PlatformAbuseEvent(
+        organization_id=org.id, api_project_id=project.id, signal_type="burst", severity="high", evidence_summary_json={}
+    )
+    db.add(event)
+    db.commit()
+    operator = SimpleNamespace(user=admin)
+
+    platform_operations.review_abuse_event(
+        event.id,
+        platform_operations.AbuseReview(status="resolved", action="disable_project", reason="abuse burst"),
+        ctx=operator,
+        db=db,
+    )
+    db.refresh(project)
+    assert project.status == "suspended"
+
+    with pytest.raises(HTTPException) as bootstrap_error:
+        legacy._default_advisory_project(db, org.id, org.owner_user_id)
+    assert bootstrap_error.value.status_code == 403
+    assert bootstrap_error.value.detail["code"] == "intelligence_project_unavailable"
+
+    customer = SimpleNamespace(organization=org, user=SimpleNamespace(id=org.owner_user_id))
+    with pytest.raises(HTTPException) as patch_error:
+        platform_api.update_project(project.id, platform_api.ProjectUpdate(status="active"), ctx=customer, db=db)
+    assert patch_error.value.status_code == 403
+    db.refresh(project)
+    assert project.status == "suspended"
+
+    platform_operations.review_abuse_event(
+        event.id,
+        platform_operations.AbuseReview(status="resolved", action="restore_project", reason="reviewed"),
+        ctx=operator,
+        db=db,
+    )
+    db.refresh(project)
+    assert project.status == "active"
+    restored_project, service_account = legacy._default_advisory_project(db, org.id, org.owner_user_id)
+    assert restored_project.id == project.id
+    assert service_account.scopes == ["intelligence:run"]
