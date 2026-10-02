@@ -170,10 +170,11 @@ def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_rele
     overwritten = _seed(Session, holds=1)
     restored = _seed(Session, holds=1)
     orphan = _seed(Session, holds=1)
+    global_restore = _seed(Session, holds=3)
     db = Session()
     try:
         # Reset every seeded event to its pre-041 shape (no hold column data).
-        for seeded in (overwritten, restored, orphan):
+        for seeded in (overwritten, restored, orphan, global_restore):
             db.query(PlatformAbuseEvent).filter_by(api_project_id=seeded.project).update(
                 {"project_hold_state": None, "automated_action": None}, synchronize_session=False
             )
@@ -194,6 +195,13 @@ def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_rele
         audit(restored, restored.events[0], "disable_project", 1)
         audit(restored, restored.events[0], "restore_project", 2)
         db.query(ApiProject).filter_by(id=restored.project).update({"status": "active"})
+        # D: legacy global restore — A disables, B restores (which reactivated the
+        # whole project before 041), C disables again. Only C still holds.
+        a, b, c = global_restore.events
+        audit(global_restore, a, "disable_project", 1)
+        audit(global_restore, b, "disable_project", 2)
+        audit(global_restore, b, "restore_project", 3)
+        audit(global_restore, c, "disable_project", 4)
         # C: suspended with no reconstructable hold at all.
         db.query(PlatformAbuseEvent).filter_by(api_project_id=orphan.project).delete(synchronize_session=False)
         db.commit()
@@ -217,6 +225,9 @@ def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_rele
             assert holds(overwritten.project)[overwritten.events[0]][0] == "active"
             assert holds(overwritten.project)[overwritten.extra][0] is None
             assert {state for state, _ in holds(restored.project).values()} == {None}
+            d_holds = holds(global_restore.project)
+            a, b, c = global_restore.events
+            assert (d_holds[a][0], d_holds[b][0], d_holds[c][0]) == (None, None, "active")
             seeded_holds = holds(orphan.project)
             assert list(seeded_holds.values()) == [("active", "legacy_project_suspension")]
         finally:
@@ -225,7 +236,11 @@ def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_rele
         # Every suspension is releasable through the normal operator review.
         monkeypatch.setattr(platform_operations.settings, "PLATFORM_API_PRIVATE_BETA_ENABLED", True, raising=False)
         monkeypatch.setattr(platform_operations, "record_product_audit", lambda *a, **k: None)
-        for seeded, event_id in ((overwritten, overwritten.events[0]), (orphan, next(iter(seeded_holds)))):
+        for seeded, event_id in (
+            (overwritten, overwritten.events[0]),
+            (orphan, next(iter(seeded_holds))),
+            (global_restore, global_restore.events[2]),
+        ):
             db = Session()
             try:
                 platform_operations.review_abuse_event(
@@ -239,11 +254,11 @@ def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_rele
     finally:
         db = Session()
         try:
-            orgs = [overwritten.org, restored.org, orphan.org]
+            orgs = [overwritten.org, restored.org, orphan.org, global_restore.org]
             db.query(PlatformProductAuditEvent).filter(PlatformProductAuditEvent.organization_id.in_(orgs)).delete(synchronize_session=False)
             db.commit()
         finally:
             db.close()
-        for seeded in (overwritten, restored, orphan):
+        for seeded in (overwritten, restored, orphan, global_restore):
             _cleanup(Session, seeded)
         engine.dispose()

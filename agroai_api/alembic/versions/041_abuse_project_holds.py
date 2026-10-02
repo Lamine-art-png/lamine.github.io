@@ -7,12 +7,15 @@ cannot lift a suspension another event still requires. ``status`` and
 ``automated_action`` are overwritten by later reviews and are not hold records.
 
 Backfill (every currently ``suspended`` project ends with a releasable hold):
-an abuse event holds its project when its last disable/restore review in the
-``platform.abuse.reviewed`` audit history was ``disable_project`` (later
-reviews overwrote ``automated_action``, so it is only the fallback when no
-audit history exists). A suspended project with no reconstructable hold gets
-one seeded ``legacy_project_suspension`` event, so operators can always lift
-it through the normal restore_project review.
+holds are reconstructed over each project's whole disable/restore timeline
+from the ``platform.abuse.reviewed`` audit history. Before this revision a
+``restore_project`` on any event reactivated the whole project, so every
+disable that precedes the project's last restore is void; an event holds the
+project only if it disabled it after that restore. ``automated_action`` (later
+reviews overwrote it) is used, timed by ``reviewed_at``, only for events with
+no audit history. A suspended project with no reconstructable hold gets one
+seeded ``legacy_project_suspension`` event, so operators can always lift it
+through the normal restore_project review.
 
 Revision ID: 041_abuse_project_holds
 Revises: 040_intelligence_money_checks
@@ -68,36 +71,49 @@ def backfill_project_holds(bind) -> None:
     for project_id, organization_id in projects:
         events = bind.execute(
             sa.text(
-                "SELECT id, automated_action, project_hold_state FROM platform_abuse_events "
+                "SELECT id, automated_action, project_hold_state, reviewed_at FROM platform_abuse_events "
                 "WHERE api_project_id = :project ORDER BY created_at"
             ),
             {"project": project_id},
         ).fetchall()
-        active = 0
-        for event_id, automated_action, hold_state in events:
+        # (timestamp, event_id, action) across the project's whole timeline.
+        timeline = []
+        existing_active = 0
+        for event_id, automated_action, hold_state, reviewed_at in events:
             if hold_state is not None:
-                active += hold_state == "active"
+                existing_active += hold_state == "active"
                 continue
             reviews = bind.execute(
                 sa.text(
-                    "SELECT metadata_json FROM platform_product_audit_events "
+                    "SELECT created_at, metadata_json FROM platform_product_audit_events "
                     "WHERE subject_type = 'abuse_event' AND subject_id = :event "
                     "AND event_type = 'platform.abuse.reviewed' ORDER BY created_at"
                 ),
                 {"event": event_id},
             ).fetchall()
-            hold_actions = [
-                _metadata(row[0]).get("action")
-                for row in reviews
-                if _metadata(row[0]).get("action") in {"disable_project", "restore_project"}
+            actions = [
+                (created_at, _metadata(metadata).get("action"))
+                for created_at, metadata in reviews
+                if _metadata(metadata).get("action") in {"disable_project", "restore_project"}
             ]
-            last = hold_actions[-1] if hold_actions else automated_action
-            if last == "disable_project":
-                bind.execute(
-                    sa.text("UPDATE platform_abuse_events SET project_hold_state = 'active' WHERE id = :event"),
-                    {"event": event_id},
-                )
-                active += 1
+            if actions:
+                timeline.extend((at, event_id, action) for at, action in actions)
+            elif automated_action == "disable_project" and reviewed_at is not None:
+                timeline.append((reviewed_at, event_id, "disable_project"))
+        timeline.sort(key=lambda item: item[0])
+        restores = [at for at, _event, action in timeline if action == "restore_project"]
+        last_restore = restores[-1] if restores else None
+        held = {
+            event_id
+            for at, event_id, action in timeline
+            if action == "disable_project" and (last_restore is None or at > last_restore)
+        }
+        for event_id in held:
+            bind.execute(
+                sa.text("UPDATE platform_abuse_events SET project_hold_state = 'active' WHERE id = :event"),
+                {"event": event_id},
+            )
+        active = existing_active + len(held)
         if active == 0:
             bind.execute(
                 sa.text(
