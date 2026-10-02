@@ -36,7 +36,7 @@ jobs:
       - name: Enforce revision graph contract
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
-          test "$(alembic heads)" = "039_lifecycle_next_action (head)"
+          test "$(alembic heads)" = "040_intelligence_money_checks (head)"
       - name: Migrate real PostgreSQL to repository head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
@@ -66,6 +66,10 @@ jobs:
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_commercial_intelligence_wallet_postgres.py
+      - name: Prove paid Intelligence tenancy, credential, replay and suspension attacks fail closed
+        env:
+          PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_commercial_intelligence_attack_matrix_postgres.py
       - name: Prove intelligence memory concurrency and database immutability
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
