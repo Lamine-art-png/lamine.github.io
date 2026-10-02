@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 
 from app.db.base import Base
 
@@ -14,6 +14,12 @@ def _id() -> str:
 
 class IntelligenceWallet(Base):
     __tablename__ = "platform_intelligence_wallets"
+    # Mirrors alembic 040_intelligence_money_checks.
+    __table_args__ = (
+        CheckConstraint("balance_cents >= 0", name="ck_intelligence_wallet_balance_nonnegative"),
+        CheckConstraint("lifetime_funded_cents >= 0", name="ck_intelligence_wallet_funded_nonnegative"),
+        CheckConstraint("lifetime_spent_cents >= 0", name="ck_intelligence_wallet_spent_nonnegative"),
+    )
 
     id = Column(String, primary_key=True, default=_id)
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
@@ -35,6 +41,12 @@ class IntelligenceWalletLedger(Base):
         UniqueConstraint("external_reference", name="uq_intelligence_wallet_ledger_external_reference"),
         Index("ix_intelligence_wallet_ledger_org_time", "organization_id", "created_at"),
         Index("ix_intelligence_wallet_ledger_status", "status", "created_at"),
+        CheckConstraint(
+            "(kind = 'intelligence_charge' AND amount_cents < 0)"
+            " OR (kind IN ('topup', 'intelligence_refund') AND amount_cents > 0)"
+            " OR kind NOT IN ('intelligence_charge', 'topup', 'intelligence_refund')",
+            name="ck_intelligence_wallet_ledger_amount_sign",
+        ),
     )
 
     id = Column(String, primary_key=True, default=_id)
