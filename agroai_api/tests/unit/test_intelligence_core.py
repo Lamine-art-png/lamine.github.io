@@ -46,7 +46,39 @@ def test_ai_status_works_without_secrets(client, monkeypatch):
     body = response.json()
     assert body["configured"] is False
     assert body["mode"] == "offline"
+    assert body["provider"] == "offline" and body["model"] is None
     assert "AI_API_KEY" not in str(body)
+
+
+def test_ai_status_never_discloses_the_serving_vendor_or_model(client, monkeypatch):
+    from app.services.model_router import ModelRouter
+
+    monkeypatch.setattr(
+        ModelRouter,
+        "status",
+        lambda self: {
+            "configured": True,
+            "provider": "ollama",
+            "base_url_present": True,
+            "model": "@cf/vendor/internal-model",
+            "mode": "ollama",
+            "missing_env": [],
+            "fallback_active": False,
+            "lanes": {"hosted": {"primary": "vendor/secret-lane"}},
+        },
+    )
+
+    body = client.get("/v1/ai/status").json()
+
+    assert body == {
+        "configured": True,
+        "provider": "agroai",
+        "base_url_present": True,
+        "model": "agroai-intelligence-1",
+        "mode": "ollama",
+        "missing_env": [],
+        "fallback_active": False,
+    }
 
 
 def test_intelligence_context_excludes_secrets_and_oauth_codes(db):

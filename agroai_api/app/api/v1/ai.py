@@ -559,10 +559,28 @@ async def _run_ai(
     return _normalize_agent_body(body, plan_body, context), answer_result
 
 
+_PUBLIC_RUNTIME_PROVIDER = "agroai"
+_PUBLIC_RUNTIME_MODEL = "agroai-intelligence-1"
+
+
 @router.get("/ai/status", response_model=AIStatusResponse)
 async def ai_status() -> AIStatusResponse:
-    model_router = ModelRouter()
-    return AIStatusResponse(**model_router.status())
+    """Public, unauthenticated runtime readiness.
+
+    AGRO-AI owns the model abstraction: callers learn whether intelligence is
+    configured and not degraded, never which vendor or model serves it.
+    """
+    status = ModelRouter().status()
+    serving = bool(status.get("configured")) and not bool(status.get("fallback_active"))
+    return AIStatusResponse(
+        configured=bool(status.get("configured")),
+        provider=_PUBLIC_RUNTIME_PROVIDER if serving else "offline",
+        base_url_present=bool(status.get("base_url_present")),
+        model=_PUBLIC_RUNTIME_MODEL if serving else None,
+        mode=status.get("mode") or "offline",
+        missing_env=list(status.get("missing_env") or []),
+        fallback_active=bool(status.get("fallback_active")),
+    )
 
 
 @router.get("/ai/context", response_model=EvidenceContext)
