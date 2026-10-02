@@ -146,3 +146,104 @@ def test_new_hold_racing_the_last_restoration_keeps_the_project_suspended(monkey
     finally:
         _cleanup(Session, seeded)
         engine.dispose()
+
+
+def _backfill_module():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "041_abuse_project_holds.py"
+    spec = importlib.util.spec_from_file_location("migration_041", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_backfill_reconstructs_overwritten_holds_and_keeps_every_suspension_releasable(monkeypatch):
+    """Pre-041 suspensions whose automated_action was later overwritten still hold."""
+    from app.api.v1 import platform_operations
+    from app.models.platform_api import ApiProject
+    from app.models.platform_product import PlatformAbuseEvent, PlatformProductAuditEvent
+
+    engine = create_engine(POSTGRES_URL, pool_pre_ping=True)
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    overwritten = _seed(Session, holds=1)
+    restored = _seed(Session, holds=1)
+    orphan = _seed(Session, holds=1)
+    db = Session()
+    try:
+        # Reset every seeded event to its pre-041 shape (no hold column data).
+        for seeded in (overwritten, restored, orphan):
+            db.query(PlatformAbuseEvent).filter_by(api_project_id=seeded.project).update(
+                {"project_hold_state": None, "automated_action": None}, synchronize_session=False
+            )
+        t0 = datetime(2026, 10, 2, 17, 0)
+
+        def audit(seeded, event_id, action, minute):
+            db.add(PlatformProductAuditEvent(
+                organization_id=seeded.org, actor_user_id=seeded.admin, actor_type="platform_admin",
+                event_type="platform.abuse.reviewed", subject_type="abuse_event", subject_id=event_id,
+                outcome="success", metadata_json={"action": action}, created_at=t0.replace(minute=minute),
+            ))
+
+        # A: disabled, then re-reviewed with throttle (automated_action overwritten).
+        audit(overwritten, overwritten.events[0], "disable_project", 1)
+        audit(overwritten, overwritten.events[0], "throttle", 2)
+        db.query(PlatformAbuseEvent).filter_by(id=overwritten.events[0]).update({"automated_action": "throttle"})
+        # B: disabled, then restored — not a hold; project is already active.
+        audit(restored, restored.events[0], "disable_project", 1)
+        audit(restored, restored.events[0], "restore_project", 2)
+        db.query(ApiProject).filter_by(id=restored.project).update({"status": "active"})
+        # C: suspended with no reconstructable hold at all.
+        db.query(PlatformAbuseEvent).filter_by(api_project_id=orphan.project).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    module = _backfill_module()
+    try:
+        for _ in range(2):  # idempotent
+            with engine.begin() as connection:
+                module.backfill_project_holds(connection)
+
+        db = Session()
+        try:
+            def holds(project_id):
+                return {
+                    e.id: (e.project_hold_state, e.signal_type)
+                    for e in db.query(PlatformAbuseEvent).filter_by(api_project_id=project_id)
+                }
+
+            assert holds(overwritten.project)[overwritten.events[0]][0] == "active"
+            assert holds(overwritten.project)[overwritten.extra][0] is None
+            assert {state for state, _ in holds(restored.project).values()} == {None}
+            seeded_holds = holds(orphan.project)
+            assert list(seeded_holds.values()) == [("active", "legacy_project_suspension")]
+        finally:
+            db.close()
+
+        # Every suspension is releasable through the normal operator review.
+        monkeypatch.setattr(platform_operations.settings, "PLATFORM_API_PRIVATE_BETA_ENABLED", True, raising=False)
+        monkeypatch.setattr(platform_operations, "record_product_audit", lambda *a, **k: None)
+        for seeded, event_id in ((overwritten, overwritten.events[0]), (orphan, next(iter(seeded_holds)))):
+            db = Session()
+            try:
+                platform_operations.review_abuse_event(
+                    event_id,
+                    platform_operations.AbuseReview(status="resolved", action="restore_project", reason="backfill release"),
+                    ctx=SimpleNamespace(user=SimpleNamespace(id=seeded.admin)), db=db,
+                )
+            finally:
+                db.close()
+            assert _project_status(Session, seeded.project) == "active"
+    finally:
+        db = Session()
+        try:
+            orgs = [overwritten.org, restored.org, orphan.org]
+            db.query(PlatformProductAuditEvent).filter(PlatformProductAuditEvent.organization_id.in_(orgs)).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+        for seeded in (overwritten, restored, orphan):
+            _cleanup(Session, seeded)
+        engine.dispose()
