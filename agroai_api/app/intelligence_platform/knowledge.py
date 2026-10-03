@@ -187,8 +187,12 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
     if projected > MAX_BYTES_PER_PROJECT:
         raise HTTPException(status_code=409, detail={"code": "knowledge_storage_quota_exceeded", "limit_bytes": MAX_BYTES_PER_PROJECT})
 
-    if existing is not None and existing.content_sha256 == content_sha:
-        existing.title = payload.title
+    if existing is not None and existing.content_sha256 == content_sha and existing.title == payload.title:
+        # Same searchable text (body + title header): refresh descriptive
+        # metadata only; chunks stay valid.
+        existing.source_type = payload.source.type
+        existing.source_label = payload.source.label
+        existing.source_uri = payload.source.uri
         existing.observed_at = payload.observed_at or existing.observed_at
         existing.metadata_json = payload.metadata
         existing.updated_at = datetime.utcnow()

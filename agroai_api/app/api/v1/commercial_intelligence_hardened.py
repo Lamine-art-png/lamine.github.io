@@ -265,7 +265,9 @@ def _recover_if_stale(
     )
     if run.status != "processing":
         return False
-    created = run.created_at or datetime.utcnow()
+    # The current attempt's start, not the original creation: a failed run
+    # reclaimed for a same-key retry gets a fresh staleness window.
+    created = run.started_at or run.created_at or datetime.utcnow()
     if datetime.utcnow() - created < _STALE_RUN_AFTER:
         return False
     _refund_legacy_stranded_charge(db, run=run, principal=principal)

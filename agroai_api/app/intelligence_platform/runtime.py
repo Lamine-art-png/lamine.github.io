@@ -261,8 +261,22 @@ async def prepare(
                 {"id": evidence_id, "type": "tool_result", "title": f"{result['name']} ({result['status']})", "origin": "agroai_tool"}
             )
             if result["name"] == "knowledge.search.v1":
+                # Every citable passage is also a resolvable provenance source.
                 for hit in (result.get("output") or {}).get("results") or []:
                     prepared.known_ids.add(hit["id"])
+                    prepared.sources.append(
+                        {
+                            "id": hit["id"],
+                            "type": "knowledge",
+                            "title": hit["title"],
+                            "document_id": hit["document_id"],
+                            "collection": hit["collection"],
+                            "observed_at": hit["observed_at"],
+                            "freshness_hours": _freshness_hours(hit["observed_at"] or hit["updated_at"], now),
+                            "origin": "customer_knowledge",
+                            "via_tool": evidence_id,
+                        }
+                    )
             sections.append(
                 f"TOOL_RESULT id={evidence_id} tool={result['name']}@{result['version']} status={result['status']} "
                 + json.dumps(

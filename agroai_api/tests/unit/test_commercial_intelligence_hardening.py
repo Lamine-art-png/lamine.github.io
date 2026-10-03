@@ -231,7 +231,9 @@ async def test_late_provider_completion_cannot_charge_recovered_run(db, monkeypa
         # running. Completion must honor that terminal transition.
         with Session(db.bind) as recovery:
             run = recovery.query(CommercialIntelligenceRun).filter_by(idempotency_key="late-completion").one()
+            # Staleness is measured from the current attempt's start.
             run.created_at = datetime.utcnow() - timedelta(minutes=11)
+            run.started_at = datetime.utcnow() - timedelta(minutes=11)
             recovery.commit()
             assert hardened._recover_if_stale(recovery, run=run, principal=principal)
         return {"answer": "Late result"}, SimpleNamespace(status="ok", demo_fallback=False, provider="test", model="test")

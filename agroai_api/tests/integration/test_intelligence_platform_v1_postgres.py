@@ -806,3 +806,46 @@ def test_data_tools_match_canonical_project_and_workspace_predicates(platform, m
             db.commit()
         finally:
             db.close()
+
+
+def test_review_round_three_regressions(platform):
+    p = platform
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+
+    # Re-ingest with a corrected title rebuilds the searchable chunks.
+    base = {"collection": "sops", "title": "Old title", "external_id": "sop-1", "text": "flush drip filters weekly"}
+    doc = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json=base).json()
+    renamed = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json={**base, "title": "Filtration SOP"})
+    assert renamed.status_code == 201 and renamed.json()["id"] == doc["id"]
+    hits = p.client.post("/v1/intelligence/knowledge/search", headers=p.keys["A"], json={"collections": ["sops"], "query": "filtration"}).json()["data"]
+    assert hits and hits[0]["title"] == "Filtration SOP"
+    assert p.client.post("/v1/intelligence/knowledge/search", headers=p.keys["A"], json={"collections": ["sops"], "query": "old title"}).json()["data"] == []
+
+    # Knowledge tool hits are resolvable provenance sources.
+    run = _run(p, "A", {"task": "answer", "question": "filters?", "tools": [{"name": "knowledge.search.v1", "arguments": {"collections": ["sops"], "query": "filters"}}]}).json()
+    assert any(s["type"] == "knowledge" and s.get("via_tool") == "tool_1" and s["document_id"] == doc["id"] for s in run["provenance"]["sources"])
+
+    # A reclaimed old failed run gets a fresh staleness window.
+    headers = {**p.keys["A"], "Idempotency-Key": "old-failed"}
+    body = {"task": "answer", "question": "old failure"}
+    p.state.model_raises = True
+    assert p.client.post("/v1/intelligence", headers=headers, json=body).status_code == 503
+    p.state.model_raises = False
+    db = p.Session()
+    try:
+        row = db.query(CommercialIntelligenceRun).filter_by(idempotency_key="old-failed").one()
+        row.created_at = datetime.utcnow() - timedelta(hours=2)
+        row.started_at = datetime.utcnow() - timedelta(hours=2)
+        db.commit()
+    finally:
+        db.close()
+    from app.api.v1 import commercial_intelligence_hardened as hardened
+
+    db = p.Session()
+    try:
+        row = db.query(CommercialIntelligenceRun).filter_by(idempotency_key="old-failed").one()
+        row.status, row.started_at = "processing", datetime.utcnow()
+        db.commit()
+        assert hardened._recover_if_stale(db, run=row, principal=None) is False, "fresh attempt is not stale"
+    finally:
+        db.close()
