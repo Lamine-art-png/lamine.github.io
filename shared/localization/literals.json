@@ -252,7 +252,7 @@
   "literal.4c63184958a5f220": "Price evidence",
   "literal.1371c80b8039aec5": "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "literal.72246dfabbb4c0ca": "Unable to load Commercial Intelligence.",
-  "literal.c523b665ebb96f38": "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
+  "literal.2fce184d45984c0d": "Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.",
   "literal.13a287d7edfe36a2": "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
   "literal.b4019bf203d82191": "Projected margin turned negative: {value} {currency}.",
   "literal.6442c31d4f94e50c": "Realizable price {price} is below break-even {breakeven} {currency}.",

@@ -112,7 +112,7 @@ const COPY = [
   "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "Unable to load Commercial Intelligence.",
   "Retry",
-  "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
+  "Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.",
   "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
   "{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.",
   "Projected margin turned negative: {value} {currency}.",
@@ -218,7 +218,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
     const ccy = reason.currency || "";
     switch (reason.code) {
       case "economic_change":
-        return reason.impact_percent_of_revenue ? tf("Projected margin changed by {change} {currency} ({percent}% of projected revenue).", { change: fmt.number(reason.change, 2), currency: ccy, percent: fmt.number(reason.impact_percent_of_revenue, 2) }) : null;
+        return reason.impact_percent_of_revenue ? tf("Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.", { change: fmt.number(reason.change, 2), currency: ccy, percent: fmt.number(reason.impact_percent_of_revenue, 2) }) : null;
       case "price_change":
         return tf("Realizable price changed by {percent}%: from {previous} to {price} {currency}.", { percent: fmt.number(reason.percent, 2), previous: fmt.number(reason.from, 2), price: fmt.number(reason.to, 2), currency: ccy });
       case "exposure":

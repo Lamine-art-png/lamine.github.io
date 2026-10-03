@@ -123,7 +123,7 @@ test("home leads with material changes and explains them with evidence", async (
   await expect(home.getByText("Material changes need your attention")).toBeVisible();
   const changes = page.getByTestId("material-changes");
   await expect(changes.getByText("HIGH")).toBeVisible();
-  await expect(changes.getByText(/Projected margin changed by -115,200 BRL \(8\.32% of projected revenue\)\./)).toBeVisible();
+  await expect(changes.getByText(/Projected margin changed by -115,200 BRL\. This equals 8\.32% of projected revenue\./)).toBeVisible();
   await expect(changes.getByText(/Realizable price changed by -10\.17%: from 141\.6 to 127\.2 BRL\./)).toBeVisible();
 
   await page.getByTestId("position-cards").getByRole("button", { name: "Sources" }).click();

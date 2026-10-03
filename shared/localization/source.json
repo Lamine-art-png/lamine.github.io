@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "a41bdf30c95bae8cd97031408df07a0428fe5cef95976ac858c9cbe9b12fc6e1",
+  "sourceFingerprint": "9564927548321c401f6fbd4e118eae5f3f2e2465a9b43e3d9341958e64becfea",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1422,6 +1422,7 @@
     "literal.2f801aa9f05284de": "Evidence and uploaded files",
     "literal.2fa4b54101a2aea6": "Sign-in is temporarily locked after repeated failed attempts. Try again later or recover the account.",
     "literal.2fc0c524431a9236": "Point",
+    "literal.2fce184d45984c0d": "Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.",
     "literal.2febe3b366b62739": "Private beta · no billing",
     "literal.2ff911aa52a22576": "Additional technical and commercial information is required.",
     "literal.305f79d77ff4f4c6": "Commercial positions",
@@ -2655,7 +2656,6 @@
     "literal.c4a7a6eecbb7de6d": "• No provider credentials",
     "literal.c4a852adc6ec51fe": "Backend verifies env readiness",
     "literal.c4f1a5dee182e3a4": "Organization verification and Platform API enrollment are separate security decisions.",
-    "literal.c523b665ebb96f38": "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
     "literal.c5336e76656aef14": "Team is for operating groups that need shared workspaces, role controls, controller readiness, field ops, and audit trails.",
     "literal.c54e3625467b4fde": "Deep",
     "literal.c593c3ee23992e27": "Starter field context",
