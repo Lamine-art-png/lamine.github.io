@@ -271,8 +271,8 @@ def validate_caller_schema(schema: dict[str, Any]) -> None:
 
 def _resolve_pointer(document: Any, ref: str) -> None:
     pointer = ref[1:]
-    if pointer in ("", "/"):
-        return
+    if pointer == "":
+        return  # "#" is the document root; "#/" is the property named "".
     if not pointer.startswith("/"):
         raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' must be a JSON pointer such as '#/$defs/name'")
     node = document

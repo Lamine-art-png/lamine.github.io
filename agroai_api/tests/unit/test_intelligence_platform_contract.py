@@ -256,3 +256,33 @@ def test_calculation_tool_deadline_is_enforced_while_running(monkeypatch):
     result = tools.execute(SimpleNamespace(db=None, principal=None), [ToolCall(name="slow.calc.v1", arguments={})])[0]
     assert result["status"] == "timeout" and result["error"] == "tool_timeout"
     assert _time.monotonic() - started < 1.0, "the caller stops waiting at the deadline"
+
+
+def test_empty_key_pointer_must_exist():
+    with pytest.raises(schemas.SchemaRejected):
+        schemas.validate_caller_schema({"type": "object", "properties": {"x": {"$ref": "#/"}}})
+    schemas.validate_caller_schema({"type": "object", "properties": {"x": {"$ref": "#"}}})
+    schemas.validate_caller_schema({"type": "object", "": {"type": "string"}, "properties": {"x": {"$ref": "#/"}}})
+
+
+def test_retries_share_one_deadline(monkeypatch):
+    import time as _time
+
+    from sqlalchemy.exc import OperationalError
+
+    calls = []
+
+    def flaky(_ctx, _arguments):
+        calls.append(_time.monotonic())
+        _time.sleep(0.12)
+        raise OperationalError("SELECT 1", {}, Exception("connection reset"))
+
+    tool = tools.PlatformTool(name="flaky.data.v1", version="1", category="data", description="",
+                              input_schema={"type": "object"}, handler=flaky, timeout_ms=200, max_attempts=5)
+    monkeypatch.setitem(tools.REGISTRY._tools, tool.name, tool)
+    ctx = SimpleNamespace(db=SimpleNamespace(get_bind=lambda: SimpleNamespace(dialect=SimpleNamespace(name="sqlite")), rollback=lambda: None), principal=None)
+    started = _time.monotonic()
+    result = tools.execute(ctx, [ToolCall(name="flaky.data.v1", arguments={})])[0]
+    assert result["status"] in {"timeout", "failed"}
+    assert len(calls) == 2, "the second attempt starts inside the 200 ms deadline; a third would not"
+    assert _time.monotonic() - started < 0.45

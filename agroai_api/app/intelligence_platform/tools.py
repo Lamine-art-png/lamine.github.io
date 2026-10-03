@@ -466,11 +466,20 @@ def execute(ctx: ToolContext, calls: list[Any]) -> list[dict[str, Any]]:
             record.update({"status": "skipped", "error": "tool_time_budget_exhausted", "duration_ms": 0, "attempts": 0})
             results.append(record)
             continue
-        remaining_ms = TOOL_TIME_BUDGET_MS - int((time.monotonic() - budget_started) * 1000)
-        deadline_ms = max(1, min(tool.timeout_ms, remaining_ms))
         attempts = 0
         started = time.monotonic()
         while True:
+            # Recomputed per attempt: retries share the tool's own deadline and
+            # the run-wide budget, never a fresh allowance.
+            elapsed_tool_ms = int((time.monotonic() - started) * 1000)
+            remaining_ms = min(
+                tool.timeout_ms - elapsed_tool_ms,
+                TOOL_TIME_BUDGET_MS - int((time.monotonic() - budget_started) * 1000),
+            )
+            if remaining_ms <= 0:
+                outcome = {"status": "timeout", "error": "tool_timeout", "output": {}}
+                break
+            deadline_ms = remaining_ms
             attempts += 1
             try:
                 outcome = _run_with_deadline(ctx, tool, dict(call.arguments), deadline_ms)
