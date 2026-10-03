@@ -67,7 +67,7 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
         if not isinstance(value, str) or not value.strip() or "[object Object]" in value or "\ufffd" in value:
             raise ValueError(f"translation_invalid_value:{key}")
         if (has_marker_residue(value) and not has_marker_residue(original)) or has_placeholder_bracket_residue(value, original):
-            raise ValueError(f"translation_marker_residue:{key}")
+            raise ValueError(f"translation_marker_residue:{key}:{value[:120]!r}")
         if degenerate(value, original):
             raise ValueError(f"translation_degenerate_output:{key}")
         value = value.strip()
