@@ -103,3 +103,48 @@ def test_head_contract_covers_security_assurance_platform_field_launch_and_intel
     assert {"organization_id", "api_project_id", "idempotency_key", "request_hash", "charge_cents", "response_json"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_commercial_intelligence_runs"]
     )
+
+
+def test_intelligence_platform_ownership_columns_are_head_contract():
+    ownership = {"organization_id", "api_project_id", "workspace_id"}
+    for table in ("platform_intelligence_sessions", "platform_intelligence_files", "platform_knowledge_documents", "platform_knowledge_chunks"):
+        assert ownership <= HEAD_SCHEMA_REQUIREMENTS[table], table
+    assert {"organization_id", "api_project_id"} <= HEAD_SCHEMA_REQUIREMENTS["platform_intelligence_session_turns"]
+    assert {"execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"} <= HEAD_SCHEMA_REQUIREMENTS["platform_commercial_intelligence_runs"]
+
+
+def test_partial_042_schema_missing_workspace_ownership_is_not_production_ready(tmp_path, monkeypatch):
+    """A 042 table without workspace_id fails both the deploy contract and /v1/readiness."""
+    import app.main as main
+    from app.db import base as db_base
+
+    engine = sa.create_engine(f"sqlite:///{tmp_path / 'partial.db'}")
+    metadata = sa.MetaData()
+    columns = sorted(HEAD_SCHEMA_REQUIREMENTS["platform_intelligence_files"] - {"workspace_id"})
+    sa.Table("platform_intelligence_files", metadata, *[sa.Column(name, sa.String()) for name in columns])
+    metadata.create_all(engine)
+    with engine.connect() as connection:
+        gaps = schema_contract_gaps(connection, {"platform_intelligence_files": HEAD_SCHEMA_REQUIREMENTS["platform_intelligence_files"]})
+        assert gaps == {"platform_intelligence_files": ["workspace_id"]}
+        assert schema_matches_head_contract(connection) is False
+
+    monkeypatch.setattr(db_base, "engine", engine)
+    status = main.saas_portal_schema_status()
+    assert status["ready"] is False
+    assert "workspace_id" in status["missing"]["platform_intelligence_files"]
+
+
+def test_complete_metadata_schema_satisfies_intelligence_platform_readiness(tmp_path, monkeypatch):
+    import app.main as main
+    from app.db import base as db_base
+    from app.db.base import Base
+
+    engine = sa.create_engine(f"sqlite:///{tmp_path / 'full.db'}")
+    Base.metadata.create_all(engine)
+    with engine.connect() as connection:
+        gaps = schema_contract_gaps(connection)
+        for table in ("platform_intelligence_sessions", "platform_intelligence_files", "platform_knowledge_documents",
+                      "platform_knowledge_chunks", "platform_intelligence_session_turns", "platform_commercial_intelligence_runs"):
+            assert table not in gaps, (table, gaps.get(table))
+    monkeypatch.setattr(db_base, "engine", engine)
+    assert not {k for k in main.saas_portal_schema_status()["missing"] if k.startswith("platform_")}

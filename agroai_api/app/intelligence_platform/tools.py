@@ -30,6 +30,7 @@ from jsonschema import Draft202012Validator
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.intelligence_platform.contract import to_naive_utc
 from app.platform_api.principal import PlatformPrincipal
 from app.services.scientific_tool_registry import get_scientific_tool_registry
 
@@ -277,7 +278,7 @@ def _observations_query(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str
         query = query.filter(EvidenceRecord.evidence_type == str(arguments["evidence_type"]))
     if arguments.get("since"):
         try:
-            since = datetime.fromisoformat(str(arguments["since"]).replace("Z", "+00:00")).replace(tzinfo=None)
+            since = to_naive_utc(datetime.fromisoformat(str(arguments["since"]).replace("Z", "+00:00")))
         except ValueError:
             return {"status": "invalid_input", "invalid_inputs": ["since"], "output": {}}
         query = query.filter(EvidenceRecord.occurred_at >= since)

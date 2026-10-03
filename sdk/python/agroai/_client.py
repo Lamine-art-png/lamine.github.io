@@ -36,6 +36,34 @@ def _wrap(value: Any) -> Any:
     return value
 
 
+# Types AGRO-AI accepts, by extension. Text formats must be declared (the
+# server cannot sniff text); binary formats are verified by content anyway.
+_CONTENT_TYPES_BY_EXTENSION = {
+    ".txt": "text/plain",
+    ".text": "text/plain",
+    ".csv": "text/csv",
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".json": "application/json",
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
+
+def guess_content_type(filename: str | None) -> str:
+    """Content type for an upload when the caller did not supply one.
+
+    Known extensions map to the type AGRO-AI expects; anything else is sent as
+    application/octet-stream, which the server accepts only for formats it can
+    verify from the bytes (images, PDF) and rejects otherwise.
+    """
+    suffix = os.path.splitext(str(filename or ""))[1].lower()
+    return _CONTENT_TYPES_BY_EXTENSION.get(suffix, "application/octet-stream")
+
+
 def _response_format(value: Any) -> dict[str, Any] | None:
     if value is None:
         return None
@@ -417,7 +445,7 @@ class Files:
         else:
             content = file.read()
             filename = filename or os.path.basename(getattr(file, "name", "") or "upload")
-        files = {"file": (filename or "upload", content, content_type or "application/octet-stream")}
+        files = {"file": (filename or "upload", content, content_type or guess_content_type(filename))}
         return self._client._request("POST", "/v1/intelligence/files", files=files, data={"purpose": purpose})
 
     def retrieve(self, file_id: str) -> Any:

@@ -168,3 +168,30 @@ def test_api_key_required(monkeypatch):
     monkeypatch.delenv("AGROAI_API_KEY", raising=False)
     with pytest.raises(Exception):
         AgroAI()
+
+
+@pytest.mark.parametrize(
+    ("filename", "explicit", "expected"),
+    [
+        ("notes.txt", None, "text/plain"),
+        ("lab.CSV", None, "text/csv"),
+        ("sop.md", None, "text/markdown"),
+        ("records.json", None, "application/json"),
+        ("report.pdf", None, "application/pdf"),
+        ("leaf.JPG", None, "image/jpeg"),
+        ("blob.bin", None, "application/octet-stream"),
+        ("noext", None, "application/octet-stream"),
+        ("notes.txt", "text/csv", "text/csv"),
+    ],
+)
+def test_upload_infers_supported_types_and_preserves_explicit(filename, explicit, expected, tmp_path):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = request.content
+        return httpx.Response(201, json={"id": "file_1"})
+
+    path = tmp_path / filename
+    path.write_bytes(b"a,b\n1,2\n")
+    _client(handler).intelligence.files.upload(str(path), content_type=explicit)
+    assert f"Content-Type: {expected}".encode() in seen["body"]

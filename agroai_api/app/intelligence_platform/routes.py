@@ -31,7 +31,7 @@ from app.intelligence_platform import runtime as platform_runtime
 from app.intelligence_platform import schemas as platform_schemas
 from app.intelligence_platform import sessions as platform_sessions
 from app.intelligence_platform import tools as platform_tools
-from app.intelligence_platform.contract import ToolCall
+from app.intelligence_platform.contract import ToolCall, to_naive_utc
 from app.intelligence_platform.ownership import owned
 from app.models.intelligence_commerce import CommercialIntelligenceRun
 from app.platform_api.principal import PlatformPrincipal
@@ -287,7 +287,7 @@ def list_runs(
     if execution:
         query = query.filter(CommercialIntelligenceRun.execution == execution)
     if before:
-        query = query.filter(CommercialIntelligenceRun.created_at < before.replace(tzinfo=None))
+        query = query.filter(CommercialIntelligenceRun.created_at < to_naive_utc(before))
     rows = query.order_by(CommercialIntelligenceRun.created_at.desc()).limit(limit + 1).all()
     data = [_run_summary(row) for row in rows[:limit]]
     return {"object": "list", "data": data, "has_more": len(rows) > limit, "next_before": data[-1]["created_at"] if len(rows) > limit else None}

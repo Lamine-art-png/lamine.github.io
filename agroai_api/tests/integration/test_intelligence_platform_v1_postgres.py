@@ -854,3 +854,136 @@ def test_review_round_three_regressions(platform):
         assert hardened._recover_if_stale(db, run=row, principal=None) is False, "fresh attempt is not stale"
     finally:
         db.close()
+
+
+def _pdf(pages: int) -> bytes:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=72, height=72)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def test_closeout_file_contracts_utf8_and_page_limit(platform):
+    p = platform
+    up = lambda name, data, ctype: p.client.post("/v1/intelligence/files", headers=p.keys["A"], files={"file": (name, io.BytesIO(data), ctype)})
+    # Invalid UTF-8 at the very end of a short file passes the 512-byte sniff
+    # tolerance but must still be a deterministic 415, never a 500.
+    short_tail = up("tail.txt", b"nitrate ok\n\xe2\x82", "text/plain")
+    assert short_tail.status_code == 415 and short_tail.json()["detail"]["code"] == "file_text_must_be_utf8", short_tail.text
+    # Invalid sequence straddling the sniff boundary (bytes 510-513), in a longer file.
+    boundary = b"a" * 510 + b"\xe2\x82" + b"\xff" + b"b" * 100
+    straddle = up("edge.csv", boundary, "text/csv")
+    assert straddle.status_code == 415 and straddle.json()["detail"]["code"] == "file_text_must_be_utf8", straddle.text
+    # Valid multibyte text split across the boundary is accepted.
+    assert up("ok.md", b"a" * 511 + "é".encode() + b" fine", "text/markdown").status_code == 201
+
+    ok = up("200.pdf", _pdf(200), "application/pdf")
+    assert ok.status_code == 201 and ok.json()["page_count"] == 200, ok.text
+    too_many = up("201.pdf", _pdf(201), "application/pdf")
+    assert too_many.status_code == 422 and too_many.json()["detail"]["code"] == "document_page_limit_exceeded"
+    assert p.client.get("/v1/intelligence/capabilities").json()["modalities"]["documents"]["max_pages"] == 200
+
+
+def test_closeout_sdk_inferred_text_types_are_accepted_by_server(platform, tmp_path):
+    import importlib
+    import sys
+    from pathlib import Path
+
+    sdk_root = str(Path(__file__).resolve().parents[3] / "sdk" / "python")
+    sys.path.insert(0, sdk_root)
+    for name in [m for m in sys.modules if m == "agroai" or m.startswith("agroai.")]:
+        del sys.modules[name]
+    try:
+        agroai = importlib.import_module("agroai")
+        token = platform.keys["A"]["Authorization"].split(" ", 1)[1]
+        client = agroai.AgroAI(api_key=token, base_url="http://testserver", http_client=platform.client, max_retries=0)
+        for filename, body in (("notes.txt", b"scouted rows 1-4"), ("lab.csv", b"sample,ppm\nB7,42\n"),
+                               ("sop.md", b"# SOP\nflush filters"), ("records.json", b'{"rows": 2}')):
+            path = tmp_path / filename
+            path.write_bytes(body)
+            uploaded = client.intelligence.files.upload(str(path))  # no explicit content type
+            assert uploaded.kind == "text", (filename, uploaded)
+        unknown = tmp_path / "blob.bin"
+        unknown.write_bytes(b"opaque bytes")
+        with pytest.raises(agroai.UnsupportedMediaTypeError):
+            client.intelligence.files.upload(str(unknown))
+    finally:
+        sys.path.remove(sdk_root)
+        for name in [m for m in sys.modules if m == "agroai" or m.startswith("agroai.")]:
+            del sys.modules[name]
+
+
+def test_closeout_knowledge_reingest_from_new_file_refreshes_source(platform):
+    p = platform
+    up = lambda name: p.client.post("/v1/intelligence/files", headers=p.keys["A"], data={"purpose": "knowledge"},
+                                    files={"file": (name, io.BytesIO(b"drip filter flushing every week"), "text/plain")}).json()["id"]
+    first, second = up("v1.txt"), up("v2.txt")
+    body = {"collection": "sops", "title": "Filter SOP", "external_id": "filters"}
+    doc = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json={**body, "file_id": first}).json()
+    assert doc["file_id"] == first
+    again = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json={**body, "file_id": second})
+    assert again.status_code == 200, "identical text: no re-index"
+    assert again.json()["id"] == doc["id"] and again.json()["file_id"] == second
+    assert p.client.delete(f"/v1/intelligence/files/{first}", headers=p.keys["A"]).status_code == 204
+    current = p.client.get(f"/v1/intelligence/knowledge/documents/{doc['id']}", headers=p.keys["A"]).json()
+    assert current["file_id"] == second, "never points at the deleted upload"
+    inline = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json={**body, "text": "drip filter flushing every week"})
+    assert inline.json()["file_id"] is None, "inline text is the source now"
+
+
+def test_closeout_time_filters_preserve_the_instant(platform):
+    p = platform
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+    from app.models.operational_records import EvidenceRecord
+
+    instant = datetime(2026, 10, 3, 12, 0, 0)  # naive UTC, the DB convention
+    db = p.Session()
+    try:
+        before_rec = EvidenceRecord(tenant_id=p.A.org_id, evidence_type="t", title="before", summary="s", citation_label="c",
+                                    occurred_at=instant - timedelta(minutes=30), value_json={}, quality_status="usable",
+                                    metadata_json={"platform_api_project_id": p.A.project_id})
+        after_rec = EvidenceRecord(tenant_id=p.A.org_id, evidence_type="t", title="after", summary="s", citation_label="c",
+                                   occurred_at=instant + timedelta(minutes=30), value_json={}, quality_status="usable",
+                                   metadata_json={"platform_api_project_id": p.A.project_id})
+        db.add_all([before_rec, after_rec])
+        db.commit()
+        ids = (before_rec.id, after_rec.id)
+    finally:
+        db.close()
+    try:
+        # 14:00+02:00 is exactly 12:00Z. Dropping the offset would wrongly mean 14:00Z.
+        out = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                            json={"name": "observations.query.v1", "arguments": {"since": "2026-10-03T14:00:00+02:00", "evidence_type": "t"}}).json()
+        titles = {item["title"] for item in out["output"]["observations"]}
+        assert titles == {"after"}, titles
+        out = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                            json={"name": "observations.query.v1", "arguments": {"since": "2026-10-03T06:00:00-06:00", "evidence_type": "t"}}).json()
+        assert {item["title"] for item in out["output"]["observations"]} == {"after"}
+
+        run = _run(p, "A", {"task": "answer", "question": "time probe"}).json()
+        db = p.Session()
+        try:
+            row = db.get(CommercialIntelligenceRun, run["id"])
+            row.created_at = instant
+            db.commit()
+        finally:
+            db.close()
+        listed = lambda before: {r["id"] for r in p.client.get("/v1/intelligence/runs", headers=p.keys["A"], params={"before": before}).json()["data"]}
+        assert run["id"] in listed("2026-10-03T14:00:01+02:00"), "12:00:01Z is after the run"
+        assert run["id"] not in listed("2026-10-03T13:59:59+02:00"), "11:59:59Z is before the run"
+
+        # Knowledge observed_at keeps the instant too.
+        doc = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"],
+                            json={"collection": "t", "title": "tz", "text": "tz probe", "observed_at": "2026-10-03T14:00:00+02:00"}).json()
+        assert doc["observed_at"].startswith("2026-10-03T12:00:00"), doc["observed_at"]
+    finally:
+        db = p.Session()
+        try:
+            db.query(EvidenceRecord).filter(EvidenceRecord.id.in_(ids)).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()

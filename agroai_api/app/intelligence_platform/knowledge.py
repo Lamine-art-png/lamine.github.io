@@ -20,7 +20,7 @@ from sqlalchemy import func, text as sql_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.intelligence_platform.contract import valid_collection, validate_metadata
+from app.intelligence_platform.contract import to_naive_utc, valid_collection, validate_metadata
 from app.intelligence_platform.ownership import owned
 from app.models.intelligence_platform import KnowledgeChunk, KnowledgeDocument
 from app.platform_api.principal import PlatformPrincipal
@@ -193,8 +193,11 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
         existing.source_type = payload.source.type
         existing.source_label = payload.source.label
         existing.source_uri = payload.source.uri
-        existing.observed_at = payload.observed_at or existing.observed_at
+        existing.observed_at = to_naive_utc(payload.observed_at) or existing.observed_at
         existing.metadata_json = payload.metadata
+        # The document's source is what was just ingested: a new upload (or
+        # inline text) replaces the previous, possibly expiring, file reference.
+        existing.file_id = file_row.id if file_row is not None else None
         existing.updated_at = datetime.utcnow()
         db.commit()
         return existing, False
@@ -210,7 +213,7 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
     document.source_type = payload.source.type
     document.source_label = payload.source.label
     document.source_uri = payload.source.uri
-    document.observed_at = payload.observed_at
+    document.observed_at = to_naive_utc(payload.observed_at)
     document.metadata_json = payload.metadata
     document.content_sha256 = content_sha
     document.byte_size = byte_size

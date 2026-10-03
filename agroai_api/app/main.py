@@ -39,6 +39,15 @@ _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
     "saas_requests": {"id", "organization_id", "workspace_id", "user_id", "type", "status", "priority", "subject", "message", "notification_status", "metadata_json", "created_at", "updated_at"},
+    # Intelligence Platform v1 (042) ownership and async-job columns: serving
+    # these routes on a schema without them would break tenant isolation, so
+    # readiness fails closed until the migration is complete.
+    "platform_commercial_intelligence_runs": {"id", "organization_id", "api_project_id", "workspace_id", "execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"},
+    "platform_intelligence_sessions": {"id", "organization_id", "api_project_id", "workspace_id", "status", "expires_at"},
+    "platform_intelligence_session_turns": {"id", "session_id", "organization_id", "api_project_id"},
+    "platform_intelligence_files": {"id", "organization_id", "api_project_id", "workspace_id", "status", "storage_uri", "expires_at"},
+    "platform_knowledge_documents": {"id", "organization_id", "api_project_id", "workspace_id", "collection", "external_id"},
+    "platform_knowledge_chunks": {"id", "document_id", "organization_id", "api_project_id", "workspace_id", "collection"},
 }
 
 

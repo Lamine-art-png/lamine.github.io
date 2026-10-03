@@ -103,6 +103,12 @@ def _safe_filename(value: str | None) -> str:
     return (_SAFE_FILENAME.sub("_", name)[:200] or "upload").strip("._ ") or "upload"
 
 
+class PdfPageLimitExceeded(ValueError):
+    def __init__(self, pages: int) -> None:
+        super().__init__(f"{pages} pages")
+        self.pages = pages
+
+
 def extract_pdf_text(data: bytes) -> tuple[str, int]:
     from pypdf import PdfReader
 
@@ -110,6 +116,8 @@ def extract_pdf_text(data: bytes) -> tuple[str, int]:
     if reader.is_encrypted:
         raise ValueError("encrypted_pdf")
     pages = len(reader.pages)
+    if pages > MAX_PDF_PAGES:
+        raise PdfPageLimitExceeded(pages)
     parts: list[str] = []
     total = 0
     for page in reader.pages[:MAX_PDF_PAGES]:
@@ -217,6 +225,15 @@ async def accept_upload(
             if sniffed.kind == "document":
                 try:
                     text, pages = await asyncio.to_thread(extract_pdf_text, data)
+                except PdfPageLimitExceeded as exc:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "document_page_limit_exceeded",
+                            "message": f"PDFs may have at most {MAX_PDF_PAGES} pages; this one has {exc.pages}. Split it or add it to knowledge in parts.",
+                            "max_pages": MAX_PDF_PAGES,
+                        },
+                    ) from exc
                 except Exception as exc:
                     raise HTTPException(
                         status_code=422,
@@ -224,7 +241,12 @@ async def accept_upload(
                     ) from exc
                 row.page_count = pages
             else:
-                text = data.decode("utf-8", errors="strict")[:MAX_EXTRACTED_CHARS]
+                try:
+                    text = data.decode("utf-8", errors="strict")[:MAX_EXTRACTED_CHARS]
+                except UnicodeDecodeError as exc:
+                    # The 512-byte sniff tolerates a split trailing character;
+                    # the whole body must still be valid UTF-8.
+                    raise HTTPException(status_code=415, detail={"code": "file_text_must_be_utf8"}) from exc
             text = text.replace("\x00", "").strip()
             row.extracted_text = text
             row.extraction_status = "extracted" if text else "empty"

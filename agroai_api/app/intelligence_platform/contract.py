@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -33,6 +33,17 @@ _IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,200}$")
 _COLLECTION = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 _TOOL_NAME = re.compile(r"^[a-z0-9][a-z0-9_.]{1,79}$")
 _METADATA_KEY = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+
+
+def to_naive_utc(value: datetime | None) -> datetime | None:
+    """Normalize to the database convention (naive UTC) without losing the instant.
+
+    Aware values are converted to UTC first; only then is tzinfo dropped.
+    Naive values are taken as UTC already.
+    """
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _finite(value: float | None) -> float | None:
