@@ -12,9 +12,17 @@ from app.services.provider_sync_runner import process_provider_sync_job
 from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, process_webhook_delivery_task
 from app.platform_api.jobs import PLATFORM_OPERATION_TASK_TYPE, process_platform_operation_job
 from app.platform_api.stripe_metering import STRIPE_METER_TASK_TYPE, process_meter_export_task
+from app.intelligence_platform.jobs import INTELLIGENCE_JOB_TASK_TYPE
 
 
-SUPPORTED_TASK_TYPES = frozenset({INGESTION_TASK_TYPE, PROVIDER_SYNC_TASK_TYPE, WEBHOOK_TASK_TYPE, PLATFORM_OPERATION_TASK_TYPE, STRIPE_METER_TASK_TYPE})
+SUPPORTED_TASK_TYPES = frozenset({
+    INGESTION_TASK_TYPE,
+    PROVIDER_SYNC_TASK_TYPE,
+    WEBHOOK_TASK_TYPE,
+    PLATFORM_OPERATION_TASK_TYPE,
+    STRIPE_METER_TASK_TYPE,
+    INTELLIGENCE_JOB_TASK_TYPE,
+})
 
 
 def worker_identity(prefix: str = "connector-worker") -> str:
@@ -59,6 +67,15 @@ def process_connector_task(
         if task_type == PLATFORM_OPERATION_TASK_TYPE:
             return process_platform_operation_job(
                 db,
+                job_id=job_id,
+                organization_id=tenant_id,
+                worker_id=resolved_worker_id,
+            )
+        if task_type == INTELLIGENCE_JOB_TASK_TYPE:
+            from app.intelligence_platform.jobs import process_intelligence_job
+
+            # Owns its own session; the job row is the durable state.
+            return process_intelligence_job(
                 job_id=job_id,
                 organization_id=tenant_id,
                 worker_id=resolved_worker_id,

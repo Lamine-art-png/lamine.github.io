@@ -28,6 +28,7 @@ def test_supported_task_type_set_is_exact():
         "connector_ingest_object",
         "connector_provider_sync",
         "platform_api_operation",
+        "platform_intelligence_job",
         "platform_stripe_meter_export",
         "platform_webhook_delivery",
     }

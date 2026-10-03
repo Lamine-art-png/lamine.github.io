@@ -156,15 +156,45 @@ async def drain_task_outbox() -> dict:
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
     lifecycle = await asyncio.to_thread(_run_lifecycle_emails)
+    intelligence_platform = await asyncio.to_thread(_run_intelligence_platform_maintenance)
     return {
         "status": "ok",
         "lifecycle_emails": lifecycle,
+        "intelligence_platform": intelligence_platform,
         "outbox": outbox,
         "webhook_outbox": webhook_outbox,
         "meter_outbox": meter_outbox,
         "platform_maintenance": platform_maintenance,
         "object_gc": object_gc,
     }
+
+
+def _run_intelligence_platform_maintenance() -> dict:
+    """Intelligence jobs (timeouts, re-dispatch), result retention, expired files
+    and sessions. Isolated so it can never fail other maintenance."""
+    from app.intelligence_platform import files as platform_files
+    from app.intelligence_platform import jobs as platform_jobs
+    from app.intelligence_platform import sessions as platform_sessions
+
+    result: dict = {}
+    for name, operation in (
+        ("jobs", platform_jobs.sweep),
+        ("job_results_expired", platform_jobs.purge_expired_payloads_and_results),
+        ("files_expired", platform_files.expire_files),
+        ("sessions_expired", platform_sessions.expire_sessions),
+    ):
+        db = SessionLocal()
+        try:
+            result[name] = operation(db)
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            import logging
+
+            logging.getLogger("agroai.intelligence.maintenance").exception("intelligence_platform_maintenance_failed step=%s", name)
+            result[name] = {"status": "error", "reason": exc.__class__.__name__}
+        finally:
+            db.close()
+    return result
 
 
 def _run_lifecycle_emails() -> dict:
