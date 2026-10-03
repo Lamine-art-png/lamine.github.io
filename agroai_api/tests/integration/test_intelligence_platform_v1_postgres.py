@@ -755,3 +755,54 @@ def test_mixed_timezone_window_and_huge_economics_are_422_not_500(platform):
     huge = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
                          json={"name": "finance.crop_margin.v1", "arguments": {"area_ha": 1e308, "expected_yield_per_ha": 1e308, "price_per_unit": 1}})
     assert huge.status_code == 422, huge.text
+
+
+def test_data_tools_match_canonical_project_and_workspace_predicates(platform, monkeypatch):
+    p = platform
+    from app.intelligence_platform import knowledge
+    from app.models.operational_records import EvidenceRecord
+    from app.models.saas import ManagedEntity
+
+    db = p.Session()
+    try:
+        mine = EvidenceRecord(tenant_id=p.A.org_id, evidence_type="soil_vwc", title="mine", summary="s",
+                              occurred_at=datetime.utcnow(), value_json={"value": 0.2}, quality_status="usable", citation_label="probe",
+                              metadata_json={"platform_api_project_id": p.A.project_id})
+        other = EvidenceRecord(tenant_id=p.A.org_id, evidence_type="soil_vwc", title="other project", summary="s",
+                               occurred_at=datetime.utcnow(), value_json={"value": 0.9}, quality_status="usable", citation_label="probe",
+                               metadata_json={"platform_api_project_id": "another-project"})
+        field = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field",
+                              display_name="Project field", status="active", metadata_json={"api_project_id": p.A.project_id, "crop": "almond"})
+        db.add_all([mine, other, field])
+        db.commit()
+        mine_id, other_id, field_id = mine.id, other.id, field.id
+    finally:
+        db.close()
+    try:
+        out = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                            json={"name": "observations.query.v1", "arguments": {"limit": 50}}).json()["output"]["observations"]
+        ids = {item["id"] for item in out}
+        assert mine_id in ids and other_id not in ids, "other API projects' observations never leak"
+
+        restricted = _workspace_key(p, p.A, "west")
+        hidden = p.client.post("/v1/intelligence/tools/execute", headers=restricted,
+                               json={"name": "fields.get.v1", "arguments": {"field_id": field_id}}).json()
+        assert hidden["status"] == "not_found" and hidden["output"] == {}
+        visible = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                                json={"name": "fields.get.v1", "arguments": {"field_id": field_id}}).json()
+        assert visible["status"] == "completed" and visible["output"]["crop"] == "almond"
+
+        # Knowledge quota is per project, not per workspace.
+        monkeypatch.setattr(knowledge, "MAX_DOCUMENTS_PER_PROJECT", 1)
+        w1, w2 = _workspace_key(p, p.A, "q1"), _workspace_key(p, p.A, "q2")
+        assert p.client.post("/v1/intelligence/knowledge/documents", headers=w1, json={"collection": "c", "title": "a", "text": "alpha"}).status_code == 201
+        blocked = p.client.post("/v1/intelligence/knowledge/documents", headers=w2, json={"collection": "c", "title": "b", "text": "beta"})
+        assert blocked.status_code == 409 and "quota" in blocked.text
+    finally:
+        db = p.Session()
+        try:
+            db.query(EvidenceRecord).filter(EvidenceRecord.id.in_([mine_id, other_id])).delete(synchronize_session=False)
+            db.query(ManagedEntity).filter(ManagedEntity.id == field_id).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()

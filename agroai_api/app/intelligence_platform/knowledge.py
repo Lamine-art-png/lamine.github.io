@@ -171,8 +171,13 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
             .first()
         )
 
+    # Quota is per project by design: deliberately not workspace-scoped.
     used_docs, used_bytes = (
-        _owned_documents(db, principal)
+        db.query(KnowledgeDocument)
+        .filter(
+            KnowledgeDocument.organization_id == principal.organization_id,
+            KnowledgeDocument.api_project_id == principal.api_project_id,
+        )
         .with_entities(func.count(KnowledgeDocument.id), func.coalesce(func.sum(KnowledgeDocument.byte_size), 0))
         .one()
     )

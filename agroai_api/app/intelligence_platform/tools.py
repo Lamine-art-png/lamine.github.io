@@ -263,7 +263,12 @@ def _knowledge_search(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, 
 def _observations_query(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
     from app.models.operational_records import EvidenceRecord
 
-    query = ctx.db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == ctx.principal.organization_id)
+    # Same predicates as GET /v1/platform/observations: organization, API
+    # project, and the key's workspace when restricted.
+    query = ctx.db.query(EvidenceRecord).filter(
+        EvidenceRecord.tenant_id == ctx.principal.organization_id,
+        EvidenceRecord.metadata_json["platform_api_project_id"].as_string() == ctx.principal.api_project_id,
+    )
     if ctx.principal.workspace_id:
         query = query.filter(EvidenceRecord.workspace_id == ctx.principal.workspace_id)
     if arguments.get("field_id"):
@@ -315,7 +320,9 @@ def _field_get(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
     if (
         row is None
         or (project_id and project_id != ctx.principal.api_project_id)
-        or (ctx.principal.workspace_id and row.workspace_id and row.workspace_id != ctx.principal.workspace_id)
+        # Exact match for restricted keys (as /v1/platform/fields): a
+        # project-wide field (NULL workspace) is not visible to them.
+        or (ctx.principal.workspace_id and row.workspace_id != ctx.principal.workspace_id)
     ):
         return {"status": "not_found", "output": {}}
     return {
