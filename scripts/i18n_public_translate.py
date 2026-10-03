@@ -31,9 +31,10 @@ def _keep_marker(index: int) -> str:
 
 def _normalize_markers(value: str) -> str:
     # Providers occasionally drop or widen bracket runs or use full-width
-    # brackets around protection markers; accept any 1-3 bracket variant.
+    # brackets around protection markers; consume the whole run so a widened
+    # marker (e.g. ">>>>") cannot leave a stray bracket next to a placeholder.
     return re.sub(
-        r"[<＜《〈]{1,3}\s*AGROAI[_ ]?(ITEM|KEEP)[_ ]?(\d{4})\s*[>＞》〉]{1,3}",
+        r"[<＜《〈]+\s*AGROAI[_ ]?(ITEM|KEEP)[_ ]?(\d{4})\s*[>＞》〉]+",
         r"<<<AGROAI_\1_\2>>>",
         value,
         flags=re.I,

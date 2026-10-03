@@ -14,7 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from i18n_quality import collapsed_values, degenerate, quality_errors  # noqa: E402
+from i18n_public_translate import _normalize_markers  # noqa: E402
+from i18n_quality import collapsed_values, degenerate, has_placeholder_bracket_residue, quality_errors  # noqa: E402
 
 SOURCE = {f"k{i}": text for i, text in enumerate([
     "Settings", "Billing", "Password", "Continue", "Log out", "Reports", "Create account",
@@ -59,7 +60,20 @@ def test_advertised_ui_catalogs_have_no_degenerate_or_collapsed_entries():
         if code in {"auto", "en"}:
             continue
         catalog = json.loads((ROOT / "shared" / "localization" / "catalogs" / f"{code}.json").read_text(encoding="utf-8"))["catalog"]
-        errors = [e for e in quality_errors(code, source, catalog) if e.startswith(("degenerate_output", "collapsed_output"))]
+        errors = [e for e in quality_errors(code, source, catalog) if e.startswith(("degenerate_output", "collapsed_output", "placeholder_bracket_residue"))]
         if errors:
             failing[code] = errors
     assert failing == {}
+
+
+def test_widened_protection_markers_leave_no_bracket_next_to_placeholders():
+    # Providers sometimes widen ">>>" to ">>>>"; a 1-3 bracket match left "{price}>" in
+    # Punjabi/Gujarati/Tagalog catalogs, which passed the placeholder check.
+    assert _normalize_markers("a <<<<AGROAI_KEEP_0001>>>> b") == "a <<<AGROAI_KEEP_0001>>> b"
+    assert _normalize_markers("《AGROAI KEEP 0002》》") == "<<<AGROAI_KEEP_0002>>>"
+    assert has_placeholder_bracket_residue("ਕੀਮਤ {price}> {currency}", "Price {price} {currency}")
+    assert has_placeholder_bracket_residue("<{plan} plano", "{plan} plan")
+    assert not has_placeholder_bracket_residue("Step {step} of {total}", "Step {step} of {total}")
+    assert not has_placeholder_bracket_residue("<{tag}>", "<{tag}>")
+    errors = quality_errors("pa", {"k": "Price {price} {currency}"}, {"k": "ਕੀਮਤ {price}> {currency}"})
+    assert any(e.startswith("placeholder_bracket_residue:pa:k") for e in errors)

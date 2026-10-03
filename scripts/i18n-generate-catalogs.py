@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
 from i18n_catalog_identity import write_envelope
-from i18n_quality import collapsed_values, degenerate, do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
+from i18n_quality import collapsed_values, degenerate, do_not_translate, has_marker_residue, has_placeholder_bracket_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -66,7 +66,7 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
         value = candidate[key]
         if not isinstance(value, str) or not value.strip() or "[object Object]" in value or "\ufffd" in value:
             raise ValueError(f"translation_invalid_value:{key}")
-        if has_marker_residue(value) and not has_marker_residue(original):
+        if (has_marker_residue(value) and not has_marker_residue(original)) or has_placeholder_bracket_residue(value, original):
             raise ValueError(f"translation_marker_residue:{key}")
         if degenerate(value, original):
             raise ValueError(f"translation_degenerate_output:{key}")
