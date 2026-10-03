@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "4602a2733028d2d5cb1b471abab9f170bcad61b756d3cb2ae877f409e4666d3e",
+  "sourceFingerprint": "a41bdf30c95bae8cd97031408df07a0428fe5cef95976ac858c9cbe9b12fc6e1",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1191,6 +1191,7 @@
     "literal.1351683f095e435c": "Is anything materially affecting your business?",
     "literal.1371c80b8039aec5": "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
     "literal.1377264ba3b0a717": "Workspaces",
+    "literal.13a287d7edfe36a2": "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
     "literal.13b93ae949008daf": "Request more evidence",
     "literal.13f071fedcc2b881": "Security documentation, access review, deployment architecture, and governance support.",
     "literal.140c271d31559bd2": "Decision Workbench",
@@ -2284,7 +2285,6 @@
     "literal.97c25f262f09d9db": "What if",
     "literal.97c7b78274881175": "Commercial controls",
     "literal.97f3175a015e0191": "Salesforce user / org hint",
-    "literal.98082c850f2ae19c": "Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).",
     "literal.983b702f7232faa3": "Security & access",
     "literal.9859597853197476": "Project",
     "literal.9876f838ad257591": "Launch authorization failed.",

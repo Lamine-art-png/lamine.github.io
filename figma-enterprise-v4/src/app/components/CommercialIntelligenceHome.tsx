@@ -113,7 +113,7 @@ const COPY = [
   "Unable to load Commercial Intelligence.",
   "Retry",
   "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
-  "Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).",
+  "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
   "{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.",
   "Projected margin turned negative: {value} {currency}.",
   "Realizable price {price} is below break-even {breakeven} {currency}.",
@@ -214,13 +214,13 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
     if (home && !home.positions.length && onOpenOnboarding) onOpenOnboarding();
   }, [home, onOpenOnboarding]);
 
-  const reasonText = (reason: Reason, unit?: string): string | null => {
+  const reasonText = (reason: Reason): string | null => {
     const ccy = reason.currency || "";
     switch (reason.code) {
       case "economic_change":
         return reason.impact_percent_of_revenue ? tf("Projected margin changed by {change} {currency} ({percent}% of projected revenue).", { change: fmt.number(reason.change, 2), currency: ccy, percent: fmt.number(reason.impact_percent_of_revenue, 2) }) : null;
       case "price_change":
-        return tf("Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).", { old_price: fmt.number(reason.from, 2), new_price: fmt.number(reason.to, 2), currency: ccy, unit: reason.unit || unit || "", percent: fmt.number(reason.percent, 2) });
+        return tf("Realizable price changed by {percent}%: from {previous} to {price} {currency}.", { percent: fmt.number(reason.percent, 2), previous: fmt.number(reason.from, 2), price: fmt.number(reason.to, 2), currency: ccy });
       case "exposure":
         return tf("{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.", { quantity: fmt.number(reason.uncontracted_quantity, 0), unit: reason.unit || "", percent: fmt.number(reason.exposed_percent, 1), value: fmt.number(reason.exposed_revenue, 0), currency: ccy });
       case "margin_turned_negative":
@@ -285,7 +285,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
         <div className="mt-4 space-y-3" data-testid="material-changes">
           {home.material_changes.length ? home.material_changes.map((change) => {
             const position = home.positions.find((item) => item.position_id === change.position_id);
-            const lines = change.reasons.map((reason) => reasonText(reason, position?.quantity_unit)).filter(Boolean) as string[];
+            const lines = change.reasons.map((reason) => reasonText(reason)).filter(Boolean) as string[];
             return (
               <article key={change.id} className="rounded-xl border border-[#E2E7DE] bg-white p-3 sm:p-4">
                 <div className="flex flex-wrap items-center gap-2">
