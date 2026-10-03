@@ -46,6 +46,7 @@ from app.services.market_intelligence import (
     CALCULATION_VERSION,
     MarketCalculationError,
     compute_position,
+    redact_reasons,
 )
 
 METHODOLOGY_VERSION = "materiality-2026.10.1"
@@ -400,7 +401,7 @@ def persist_events(
             level=result.level,
             status="open",
             title_key=result.title_key,
-            reasons_json=result.reasons,
+            reasons_json=redact_reasons(result.reasons, position),
             impact_json=result.impact,
             data_quality_json=result.data_quality,
             reference_snapshot_id=reference.id,

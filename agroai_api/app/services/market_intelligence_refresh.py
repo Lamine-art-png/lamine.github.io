@@ -212,6 +212,8 @@ async def refresh_position_market_data(
                 "price_policy": "automatic",
                 "price_source": f"{AUTOMATED_FX_PREFIX}{price.method}",
                 "price_state": price.state,
+                # Derived use is allowed (the plane filtered that); display may not be.
+                "price_display_allowed": all((item.get("licensing") or {}).get("display_allowed", True) is not False for item in price.evidence),
                 "price_resolved_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             })
             position.metadata_json = metadata

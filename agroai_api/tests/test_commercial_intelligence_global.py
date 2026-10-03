@@ -862,3 +862,40 @@ def test_deterministic_scenario_labels_follow_the_answer_language():
     assert scenario_label({"price_pct": "-8"}, "pt") == "preço -8%"
     assert scenario_label({"fx_pct": "5"}, "fr") == "change +5%"
     assert scenario_label({"sell_pct_now": "25"}, "es") == "comprometer más volumen 25%"
+
+
+def test_display_restricted_licence_redacts_price_but_keeps_derived_values(client, db, monkeypatch):
+    monkeypatch.setattr("app.services.market_intelligence_ai.ModelRouter.mode", lambda _self: "offline")
+    restricted = licensing(license_id="licensed-feed", attribution="Vendor", display_allowed=False)
+    seed(db, series_point("licensed:corn:iowa", "4.40", provider="usda_mymarketnews", commodity="corn", country="US", region="Iowa",
+                          market="Iowa", unit="bushel", currency="USD", frequency="daily_business", fresh_days=4, last_known_days=14,
+                          license_=restricted))
+    act_as(*identity(db, "licence"))
+    created = onboard(client, crop="corn", country_code="US", region="Iowa", season="2026", expected_production="1000",
+                      production_cost_per_unit="3")
+    position_id = created["id"]
+    assert created["refresh"]["price"]["outcome"] == "promoted"
+    for body in (client.get(f"/v1/market-intelligence/positions/{position_id}").json(),
+                 next(p for p in client.get("/v1/market-intelligence/home").json()["positions"] if p["position_id"] == position_id)):
+        assert body["current_realizable_price"] is None and body["redacted_fields"] == ["current_realizable_price"]
+        assert body["projected_margin"] == "1400.00"  # derived values remain: 1000 x (4.40 - 3.00)
+    provenance = client.get(f"/v1/market-intelligence/positions/{position_id}/provenance").json()
+    assert provenance["numbers"]["current_realizable_price"]["value"] is None
+    assert all(s["value"] is None and s["redacted"] for s in provenance["sources"] if s["provider"] == "usda_mymarketnews")
+    ask = client.post("/v1/market-intelligence/ask", json={"position_id": position_id, "question": "What is my price?"}).json()
+    assert "4.40" not in json.dumps(ask)
+
+
+def test_display_restricted_price_never_leaks_through_scenarios_or_changes(client, db):
+    restricted = licensing(license_id="licensed-feed", attribution="Vendor", display_allowed=False)
+    seed(db, series_point("licensed:corn:iowa2", "4.40", provider="usda_mymarketnews", commodity="corn", country="US", region="Iowa",
+                          market="Iowa", unit="bushel", currency="USD", frequency="daily_business", fresh_days=4, last_known_days=14,
+                          license_=restricted))
+    act_as(*identity(db, "licence-2"))
+    position_id = onboard(client, crop="corn", country_code="US", region="Iowa", season="2026", expected_production="1000",
+                          production_cost_per_unit="3")["id"]
+    compare = client.post("/v1/market-intelligence/scenarios/compare", json={"position_id": position_id, "scenarios": [{"price_pct": "-5"}]}).json()
+    saved = client.post("/v1/market-intelligence/scenarios", json={"position_id": position_id, "price_pct": "-5"}).json()
+    for body in (compare, saved):
+        assert "4.40" not in json.dumps(body) and "4.18" not in json.dumps(body)
+    assert compare["scenarios"][0]["result"]["projected_margin"] == "1180.00"  # derived value still available

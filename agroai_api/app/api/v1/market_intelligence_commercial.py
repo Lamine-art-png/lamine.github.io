@@ -45,8 +45,11 @@ from app.services.market_data_adapters import ADAPTERS
 from app.services.market_intelligence import (
     CALCULATION_VERSION,
     MarketCalculationError,
+    apply_display_policy,
     compute_position,
     convert_quantity,
+    redact_reasons,
+    redact_scenario,
     scenario_position,
 )
 from app.services.market_intelligence_refresh import refresh_position_market_data
@@ -107,7 +110,7 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
     positions: list[dict[str, Any]] = []
     for row in rows:
         try:
-            payload = compute_position(row, contracts_by_position[row.id]).payload
+            payload, _ = apply_display_policy(compute_position(row, contracts_by_position[row.id]).payload, None, row)
         except MarketCalculationError as exc:
             payload = {"position_id": row.id, "name": row.name, "error": str(exc)}
         metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
@@ -428,6 +431,7 @@ def position_provenance(position_id: str, ctx: AuthContext = Depends(get_auth_co
     position = _position(db, org_id, position_id)
     contracts = _contracts(db, org_id, position.id)
     computation = compute_position(position, contracts)
+    visible, _ = apply_display_policy(computation.payload, None, position)
     metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
     observations = (
         db.query(MarketObservation)
@@ -465,7 +469,7 @@ def position_provenance(position_id: str, ctx: AuthContext = Depends(get_auth_co
     sources = [source(row) for row in observations]
     price_source = next((s for s in sources if s["observation_type"] in {"physical_price", "cash_price", "realizable_price"}), None)
     fx_sources = [s for s in sources if s["observation_type"] in {"fx_rate", "fx"}][:3]
-    payload = computation.payload
+    payload = visible
     numbers = {
         "current_realizable_price": {
             "value": payload.get("current_realizable_price"),
@@ -539,7 +543,7 @@ def compare_scenarios(payload: CompareRequest, ctx: AuthContext = Depends(get_au
     for levers in payload.scenarios:
         assumptions = levers.model_dump(exclude={"label"}, mode="json", exclude_none=True)
         try:
-            outcome = scenario_position(position, contracts, assumptions)
+            outcome = redact_scenario(scenario_position(position, contracts, assumptions), position)
             results.append({"label": levers.label, "status": "ok", **outcome})
         except MarketCalculationError as exc:
             results.append({"label": levers.label, "status": "invalid", "message": str(exc)})
@@ -606,7 +610,7 @@ def what_changed(
         "current": {"snapshot_id": current.id, "computed_at": _iso(current.computed_at)},
         "changes": [
             {"kind": r.kind, "level": r.level, "would_alert": r.emit and r.level != "LOW", "suppressed_reason": r.suppressed_reason,
-             "reasons": r.reasons, "impact": r.impact}
+             "reasons": redact_reasons(r.reasons, position), "impact": r.impact}
             for r in results
         ],
         "methodology_version": METHODOLOGY_VERSION,

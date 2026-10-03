@@ -617,3 +617,51 @@ def data_health(observations: Iterable[Any]) -> dict[str, Any]:
         "low_quality_count": low_quality,
         "mixed_demo_and_non_demo": mixed_demo,
     }
+
+
+def apply_display_policy(payload: dict[str, Any], evidence: dict[str, str] | None, position: Any) -> tuple[dict[str, Any], dict[str, str] | None]:
+    """Redact values a data licence allows in calculations but not on screen.
+
+    A licensed price may drive revenue and margin (derived values) while the
+    price itself must not be displayed or passed to the model.
+    """
+    metadata = _metadata(position)
+    if metadata.get("price_display_allowed") is not False:
+        return payload, evidence
+    payload = {**payload, "current_realizable_price": None, "redacted_fields": ["current_realizable_price"]}
+    if evidence is not None:
+        evidence = {**evidence, "current_realizable_price": "restricted_by_licence"}
+    return payload, evidence
+
+
+def price_display_allowed(position: Any) -> bool:
+    return _metadata(position).get("price_display_allowed") is not False
+
+
+def redact_scenario(result: dict[str, Any], position: Any) -> dict[str, Any]:
+    """Apply the price display policy to a scenario envelope (baseline/result/delta)."""
+    if price_display_allowed(position):
+        return result
+    redacted = dict(result)
+    for key in ("baseline", "result"):
+        if isinstance(redacted.get(key), dict):
+            redacted[key] = {**redacted[key], "current_realizable_price": None, "weighted_contract_price": None,
+                             "scenario_lock_price": None, "redacted_fields": ["current_realizable_price"]}
+    if isinstance(redacted.get("delta"), dict):
+        redacted["delta"] = {**redacted["delta"], "current_realizable_price": None}
+    return redacted
+
+
+def redact_reasons(reasons: list[dict[str, Any]], position: Any) -> list[dict[str, Any]]:
+    """Materiality reasons keep percentages but drop licence-restricted price levels."""
+    if price_display_allowed(position):
+        return reasons
+    cleaned = []
+    for reason in reasons:
+        item = dict(reason)
+        for key in ("from", "to", "current_realizable_price"):
+            if key in item:
+                item[key] = None
+        cleaned.append(item)
+    return cleaned
+

@@ -29,8 +29,10 @@ from app.models.market_intelligence import (
 from app.services.market_intelligence import (
     CALCULATION_VERSION,
     MarketCalculationError,
+    apply_display_policy,
     compute_position,
     data_health,
+    redact_scenario,
     scenario_position,
 )
 from app.services.market_intelligence_ai import generate_market_brief
@@ -147,10 +149,11 @@ def _position_payload(
 ) -> dict[str, Any]:
     computation = compute_position(row, _contracts(db, org_id, row.id) if contracts is None else contracts)
     observations = _observations(db, org_id, row.id) if observations is None else observations
+    payload, evidence = apply_display_policy(computation.payload, computation.evidence, row)
     return {
-        **computation.payload,
+        **payload,
         "data_health": data_health(observations),
-        "evidence": computation.evidence,
+        "evidence": evidence,
     }
 
 
@@ -458,7 +461,7 @@ def create_scenario(
     position = _position(db, org_id, payload.position_id)
     assumptions = payload.model_dump(exclude={"position_id", "name"}, mode="json")
     try:
-        result = scenario_position(position, _contracts(db, org_id, position.id), assumptions)
+        result = redact_scenario(scenario_position(position, _contracts(db, org_id, position.id), assumptions), position)
     except MarketCalculationError as exc:
         raise HTTPException(status_code=422, detail={"code": "scenario_invalid", "message": str(exc)}) from exc
     scenario = MarketScenario(
@@ -661,11 +664,12 @@ async def ask_market_intelligence(
             raise HTTPException(status_code=404, detail={"code": "no_commercial_positions", "message": "Add a commercial position first."})
     contracts = _contracts(db, org_id, position.id)
     computation = compute_position(position, contracts)
+    visible_payload, visible_evidence = apply_display_policy(computation.payload, computation.evidence, position)
     context, extra_evidence = _ask_context(db, org_id, position, contracts, computation.payload, payload.question)
-    evidence = {**computation.evidence, **extra_evidence}
+    evidence = {**visible_evidence, **extra_evidence}
     language = requested_language(payload.question) or payload.language
     result = await generate_market_brief(
-        computation.payload,
+        visible_payload,
         evidence,
         question=payload.question,
         language=language,
@@ -674,7 +678,7 @@ async def ask_market_intelligence(
     return {
         "position_id": position.id,
         "scope": scope,
-        "position": computation.payload,
+        "position": visible_payload,
         "evidence": evidence,
         "scenarios": context["scenarios"],
         "data_states": context["data_states"],
