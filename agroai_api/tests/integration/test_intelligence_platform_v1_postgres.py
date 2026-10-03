@@ -605,3 +605,17 @@ def test_usage_and_capabilities(platform):
     assert caps["modalities"]["remote_urls"] is False
     console = p.client.get("/v1/platform/developer/intelligence/usage", headers=p.A.jwt)
     assert console.status_code == 200 and console.json()["totals"]["runs"] >= 1
+
+
+def test_job_whose_session_was_deleted_fails_without_charge(platform):
+    p = platform
+    sid = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "temp"}).json()["id"]
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()},
+                        json={"task": "answer", "question": "uses session", "session_id": sid}).json()
+    assert p.client.delete(f"/v1/intelligence/sessions/{sid}", headers=p.keys["A"]).status_code == 204
+    calls = len(p.state.model_calls)
+    assert _execute(p, job["id"], p.A.org_id) == "failed"
+    assert len(p.state.model_calls) == calls
+    detail = p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()
+    assert detail["status"] == "failed" and detail["error"]["code"] == "session_not_found"
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)

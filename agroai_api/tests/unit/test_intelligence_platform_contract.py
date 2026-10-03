@@ -184,3 +184,41 @@ def test_pricing_catalog_is_unchanged():
         "decision": 25, "report": 50, "integration_diagnosis": 15, "readiness_analysis": 15,
     }
     assert json.dumps(runtime.PRICE_COMPONENTS_CENTS, sort_keys=True) == '{"document_attachment": 2, "image_attachment": 5, "knowledge_retrieval": 1}'
+
+
+def test_intelligence_body_cap_rejects_declared_and_streamed_oversize():
+    import asyncio
+
+    from app.core.request_body_limit import IntelligenceBodyLimitMiddleware
+
+    async def app(scope, receive, send):
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                raise RuntimeError("client disconnected")
+            if not message.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    def run(path, headers, chunks):
+        sent = []
+        queue = [{"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1} for index, chunk in enumerate(chunks)]
+
+        async def receive():
+            return queue.pop(0)
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {"type": "http", "method": "POST", "path": path, "headers": headers}
+        asyncio.run(IntelligenceBodyLimitMiddleware(app)(scope, receive, send))
+        return sent[0]["status"]
+
+    big = IntelligenceBodyLimitMiddleware.MULTIPART_MAX_BYTES + 1
+    multipart = [(b"content-type", b"multipart/form-data; boundary=x")]
+    assert run("/v1/intelligence/files", multipart + [(b"content-length", str(big).encode())], [b""]) == 413
+    assert run("/v1/intelligence/files", multipart, [b"a" * (8 * 1024 * 1024)] * 3) == 413  # chunked, no length
+    assert run("/v1/intelligence/files", multipart, [b"a" * 1024]) == 200
+    assert run("/v1/intelligence", [(b"content-type", b"application/json")], [b"a" * (5 * 1024 * 1024)]) == 413
+    assert run("/v1/intelligence/brain/run", [(b"content-type", b"application/json")], [b"a" * (5 * 1024 * 1024)]) == 200, "legacy routes untouched"

@@ -495,6 +495,25 @@ def _readmit_paid_run(
     )
 
 
+def _fail_unstarted_run(db: Session, *, run_id: str, code: str) -> None:
+    """Close a run whose authorization or references failed before compute (no charge)."""
+    db.rollback()
+    run = (
+        db.query(CommercialIntelligenceRun)
+        .filter(CommercialIntelligenceRun.id == run_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if run is not None and run.status in {"processing", "queued"}:
+        run.status = "failed"
+        run.error_code = code[:120]
+        run.completed_at = datetime.utcnow()
+        run.request_payload_json = None
+        run.lease_expires_at = None
+    db.commit()
+
+
 def _decision_text(public: dict[str, Any]) -> str:
     decision = public.get("decision")
     if isinstance(decision, str):

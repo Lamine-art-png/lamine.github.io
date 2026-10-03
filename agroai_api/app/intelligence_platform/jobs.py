@@ -228,10 +228,9 @@ async def execute_job(db: Session, *, run_id: str, organization_id: str, worker_
         admitted = hardened._readmit_paid_run(payload=payload, principal=principal, db=db, run=run)
     except HTTPException as exc:
         # A referenced session/file was deleted, or a boundary changed, after enqueue.
-        db.rollback()
-        locked = db.query(CommercialIntelligenceRun).filter(CommercialIntelligenceRun.id == run_id).with_for_update().populate_existing().one()
         code = exc.detail.get("code") if isinstance(exc.detail, dict) else "intelligence_job_reference_invalid"
-        return _close(db, locked, "failed", str(code)[:120])
+        hardened._fail_unstarted_run(db, run_id=run_id, code=str(code))
+        return "failed"
     try:
         await hardened._complete_paid_run(payload=payload, principal=principal, db=db, admitted=admitted)
     except HTTPException:
