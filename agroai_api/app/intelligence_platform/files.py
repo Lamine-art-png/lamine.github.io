@@ -28,6 +28,7 @@ from typing import Any
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.intelligence_platform.ownership import owned
 from app.models.intelligence_platform import IntelligenceFile
 from app.platform_api.principal import PlatformPrincipal
 
@@ -178,6 +179,7 @@ async def accept_upload(
         row = IntelligenceFile(
             organization_id=principal.organization_id,
             api_project_id=principal.api_project_id,
+            workspace_id=principal.workspace_id,
             created_by_api_key_id=principal.api_key_id,
             filename=filename,
             content_type=sniffed.content_type,
@@ -237,11 +239,7 @@ async def accept_upload(
 
 
 def owned_file(db: Session, principal: PlatformPrincipal, file_id: str, *, for_update: bool = False) -> IntelligenceFile:
-    query = db.query(IntelligenceFile).filter(
-        IntelligenceFile.id == file_id,
-        IntelligenceFile.organization_id == principal.organization_id,
-        IntelligenceFile.api_project_id == principal.api_project_id,
-    )
+    query = owned(db.query(IntelligenceFile), IntelligenceFile, principal).filter(IntelligenceFile.id == file_id)
     if for_update:
         query = query.with_for_update()
     row = query.first()
@@ -271,33 +269,54 @@ def delete_file(db: Session, principal: PlatformPrincipal, file_id: str) -> None
     db.commit()
 
 
-def _purge(row: IntelligenceFile, *, principal_org: str, namespace: str) -> None:
+def _purge(row: IntelligenceFile, *, principal_org: str, namespace: str) -> bool:
+    """Remove a file's content. Returns True once nothing customer-owned remains.
+
+    Extracted text is dropped immediately. If the stored object cannot be
+    deleted right now, the row becomes a ``deleting`` tombstone that keeps the
+    object URI (and is invisible to callers) so the maintenance sweep retries
+    until the object is gone — a transient store error never strands an image.
+    """
+    now = datetime.utcnow()
+    row.extracted_text = None
+    row.deleted_at = row.deleted_at or now
     if row.storage_uri:
         store = _object_store()
-        if store is not None:
-            try:
-                store.delete(row.storage_uri, tenant_id=principal_org, connection_id=namespace)
-            except Exception:  # noqa: BLE001 - row still tombstoned; GC retries via expiry sweep
-                pass
+        try:
+            if store is None:
+                raise RuntimeError("file_storage_unavailable")
+            store.delete(row.storage_uri, tenant_id=principal_org, connection_id=namespace)
+        except Exception:  # noqa: BLE001 - retried by expire_files
+            row.status = "deleting"
+            return False
     row.status = "deleted"
-    row.deleted_at = datetime.utcnow()
-    row.extracted_text = None
     row.storage_uri = None
+    return True
 
 
 def expire_files(db: Session, *, limit: int = 200) -> int:
+    """Retention sweep: expire available files and retry pending object deletions."""
+    from sqlalchemy import and_, or_
+
+    now = datetime.utcnow()
     rows = (
         db.query(IntelligenceFile)
-        .filter(IntelligenceFile.status == "available", IntelligenceFile.expires_at <= datetime.utcnow())
+        .filter(
+            or_(
+                and_(IntelligenceFile.status == "available", IntelligenceFile.expires_at <= now),
+                IntelligenceFile.status == "deleting",
+            )
+        )
         .order_by(IntelligenceFile.expires_at.asc())
         .limit(limit)
         .with_for_update(skip_locked=True)
         .all()
     )
+    purged = 0
     for row in rows:
-        _purge(row, principal_org=str(row.organization_id), namespace=f"intelligence-{row.api_project_id}")
+        purged += int(_purge(row, principal_org=str(row.organization_id), namespace=f"intelligence-{row.api_project_id}"))
     db.commit()
-    return len(rows)
+    return purged
 
 
 def public_file(row: IntelligenceFile) -> dict[str, Any]:

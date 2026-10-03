@@ -48,6 +48,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("api_project_id", sa.String(), sa.ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("workspace_id", sa.String(), sa.ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True),
         sa.Column("created_by_api_key_id", sa.String(), nullable=True),
         sa.Column("created_by_user_id", sa.String(), nullable=True),
         sa.Column("title", sa.String(length=200), nullable=True),
@@ -104,6 +105,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("api_project_id", sa.String(), sa.ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("workspace_id", sa.String(), sa.ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True),
         sa.Column("created_by_api_key_id", sa.String(), nullable=True),
         sa.Column("filename", sa.String(length=255), nullable=False),
         sa.Column("content_type", sa.String(length=100), nullable=False),
@@ -135,6 +137,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("api_project_id", sa.String(), sa.ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("workspace_id", sa.String(), sa.ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True),
         sa.Column("collection", sa.String(length=64), nullable=False),
         sa.Column("title", sa.String(length=300), nullable=False),
         sa.Column("external_id", sa.String(length=200), nullable=True),
@@ -150,13 +153,15 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=20), nullable=False, server_default="ready"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.UniqueConstraint(
-            "organization_id", "api_project_id", "collection", "external_id",
-            name="uq_knowledge_document_external_id",
-        ),
         sa.CheckConstraint("byte_size >= 0", name="ck_knowledge_document_size_nonnegative"),
     )
     op.create_index("ix_platform_knowledge_documents_organization_id", "platform_knowledge_documents", ["organization_id"])
+    op.create_index(
+        "uq_knowledge_document_external_id",
+        "platform_knowledge_documents",
+        ["organization_id", "api_project_id", sa.text("coalesce(workspace_id, '')"), "collection", "external_id"],
+        unique=True,
+    )
     op.create_index("ix_platform_knowledge_documents_api_project_id", "platform_knowledge_documents", ["api_project_id"])
     op.create_index(
         "ix_knowledge_document_owner_collection",
@@ -175,6 +180,7 @@ def upgrade() -> None:
         ),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("api_project_id", sa.String(), sa.ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("workspace_id", sa.String(), sa.ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True),
         sa.Column("collection", sa.String(length=64), nullable=False),
         sa.Column("ordinal", sa.Integer(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),

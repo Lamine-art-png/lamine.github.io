@@ -620,3 +620,94 @@ def test_job_whose_session_was_deleted_fails_without_charge(platform):
     detail = p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()
     assert detail["status"] == "failed" and detail["error"]["code"] == "session_not_found"
     assert _wallet(p.Session, p.A.org_id) == (500, 0)
+
+
+def _workspace_key(p, tenant, name):
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.models.saas import Workspace
+    from app.platform_api.keys import create_platform_key
+
+    db = p.Session()
+    try:
+        workspace = Workspace(organization_id=tenant.org_id, name=name, mode="evaluation")
+        db.add(workspace)
+        db.flush()
+        project = db.get(ApiProject, tenant.project_id)
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=tenant.project_id).first()
+        _key, secret = create_platform_key(db, project=project, service_account=account, name=name,
+                                           scopes=["intelligence:run"], created_by_user_id=tenant.user_id, workspace_id=workspace.id)
+        db.commit()
+        return {"Authorization": f"Bearer {secret}"}
+    finally:
+        db.close()
+
+
+def test_workspace_restricted_keys_cannot_reach_each_others_resources(platform):
+    p = platform
+    w1, w2 = _workspace_key(p, p.A, "north"), _workspace_key(p, p.A, "south")
+    sid = p.client.post("/v1/intelligence/sessions", headers=w1, json={"title": "north"}).json()["id"]
+    fid = p.client.post("/v1/intelligence/files", headers=w1, files={"file": ("n.csv", io.BytesIO(b"a,b\n1,2\n"), "text/csv")}).json()["id"]
+    doc = p.client.post("/v1/intelligence/knowledge/documents", headers=w1,
+                        json={"collection": "notes", "title": "North notes", "external_id": "x", "text": "north block nematode counts"}).json()["id"]
+    project_doc = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"],
+                                json={"collection": "notes", "title": "Project notes", "external_id": "x", "text": "project-wide nematode policy"}).json()["id"]
+    assert project_doc != doc, "same external_id is independent per workspace scope"
+
+    for path in (f"/v1/intelligence/sessions/{sid}", f"/v1/intelligence/files/{fid}", f"/v1/intelligence/knowledge/documents/{doc}"):
+        assert p.client.get(path, headers=w2).status_code == 404, path
+        assert p.client.get(path, headers=w1).status_code == 200, path
+        assert p.client.get(path, headers=p.keys["A"]).status_code == 200, "project-wide key sees the project"
+    assert p.client.get(f"/v1/intelligence/knowledge/documents/{project_doc}", headers=w1).status_code == 404
+    south = p.client.post("/v1/intelligence/knowledge/search", headers=w2, json={"collections": ["notes"], "query": "nematode"}).json()["data"]
+    north = p.client.post("/v1/intelligence/knowledge/search", headers=w1, json={"collections": ["notes"], "query": "nematode"}).json()["data"]
+    assert south == [] and [hit["document_id"] for hit in north] == [doc]
+    before = len(p.state.model_calls)
+    for body in ({"session_id": sid}, {"attachments": [{"file_id": fid}]}):
+        assert p.client.post("/v1/intelligence", headers={**w2, **_idem()}, json={"task": "answer", "question": "cross", **body}).status_code == 404
+    assert len(p.state.model_calls) == before
+    assert p.client.delete(f"/v1/intelligence/sessions/{sid}", headers=w2).status_code == 404
+    assert p.client.get("/v1/intelligence/sessions", headers=w2).json()["data"] == []
+
+
+def test_failed_object_delete_keeps_a_retryable_tombstone(platform):
+    p = platform
+    from app.intelligence_platform import files as platform_files
+    from app.models.intelligence_platform import IntelligenceFile
+
+    image = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                          files={"file": ("leaf.png", io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 256), "image/png")}).json()
+    original_delete = p.store.delete
+
+    def flaky_delete(*args, **kwargs):
+        raise RuntimeError("R2 503")
+
+    p.store.delete = flaky_delete
+    assert p.client.delete(f"/v1/intelligence/files/{image['id']}", headers=p.keys["A"]).status_code == 204
+    assert p.client.get(f"/v1/intelligence/files/{image['id']}", headers=p.keys["A"]).status_code == 404
+    db = p.Session()
+    try:
+        row = db.get(IntelligenceFile, image["id"])
+        assert row.status == "deleting" and row.storage_uri in p.store.objects
+        p.store.delete = original_delete
+        assert platform_files.expire_files(db) >= 1
+        db.expire_all()
+        row = db.get(IntelligenceFile, image["id"])
+        assert row.status == "deleted" and row.storage_uri is None
+        assert not p.store.objects, "object removed on retry"
+    finally:
+        db.close()
+
+
+def test_failed_sync_run_can_be_retried_with_the_same_key(platform):
+    p = platform
+    headers = {**p.keys["A"], "Idempotency-Key": "retry-same-key"}
+    body = {"task": "answer", "question": "retry me"}
+    p.state.model_raises = True
+    assert p.client.post("/v1/intelligence", headers=headers, json=body).status_code == 503
+    p.state.model_raises = False
+    retried = p.client.post("/v1/intelligence", headers=headers, json=body)
+    assert retried.status_code == 200 and retried.json()["status"] == "completed", retried.text
+    replay = p.client.post("/v1/intelligence", headers=headers, json=body)
+    assert replay.json()["id"] == retried.json()["id"]
+    assert p.client.post("/v1/intelligence", headers=headers, json={**body, "question": "changed"}).status_code == 409
+    assert _wallet(p.Session, p.A.org_id) == (495, 1)

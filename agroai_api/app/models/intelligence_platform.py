@@ -1,6 +1,9 @@
 """AGRO-AI Intelligence Platform v1 primitives.
 
-Every row is owned by exactly one (organization, API project) pair. Rows are
+Every row is owned by exactly one (organization, API project) pair, and by
+the workspace of the key that created it when that key is workspace
+restricted (``workspace_id``). A workspace-restricted key sees only rows of
+its workspace; a project-wide key sees the whole project. Rows are
 never looked up by id alone: callers always filter by the authenticated
 principal's organization and project, so a foreign id behaves exactly like a
 missing one. Mirrors alembic 042_intelligence_platform_v1.
@@ -10,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, func
 
 from app.db.base import Base
 
@@ -32,6 +35,7 @@ class IntelligenceSession(Base):
     id = Column(String, primary_key=True, default=_id("ses"))
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True)
     created_by_api_key_id = Column(String, nullable=True)
     created_by_user_id = Column(String, nullable=True)
     title = Column(String(200), nullable=True)
@@ -74,6 +78,7 @@ class IntelligenceFile(Base):
     id = Column(String, primary_key=True, default=_id("file"))
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True)
     created_by_api_key_id = Column(String, nullable=True)
     filename = Column(String(255), nullable=False)
     content_type = Column(String(100), nullable=False)
@@ -96,10 +101,6 @@ class KnowledgeDocument(Base):
 
     __tablename__ = "platform_knowledge_documents"
     __table_args__ = (
-        UniqueConstraint(
-            "organization_id", "api_project_id", "collection", "external_id",
-            name="uq_knowledge_document_external_id",
-        ),
         Index("ix_knowledge_document_owner_collection", "organization_id", "api_project_id", "collection", "created_at"),
         CheckConstraint("byte_size >= 0", name="ck_knowledge_document_size_nonnegative"),
     )
@@ -107,6 +108,7 @@ class KnowledgeDocument(Base):
     id = Column(String, primary_key=True, default=_id("doc"))
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True)
     collection = Column(String(64), nullable=False)
     title = Column(String(300), nullable=False)
     external_id = Column(String(200), nullable=True)
@@ -124,6 +126,19 @@ class KnowledgeDocument(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+# external_id is unique per (organization, project, workspace-or-project-wide,
+# collection); NULL workspace folds to '' so project-wide documents dedupe too.
+Index(
+    "uq_knowledge_document_external_id",
+    KnowledgeDocument.organization_id,
+    KnowledgeDocument.api_project_id,
+    func.coalesce(KnowledgeDocument.workspace_id, ""),
+    KnowledgeDocument.collection,
+    KnowledgeDocument.external_id,
+    unique=True,
+)
+
+
 class KnowledgeChunk(Base):
     """Searchable text unit. On PostgreSQL a generated ``search_vector`` column
     (migration-only) backs full-text search with a GIN index."""
@@ -138,6 +153,7 @@ class KnowledgeChunk(Base):
     document_id = Column(String, ForeignKey("platform_knowledge_documents.id", ondelete="CASCADE"), nullable=False)
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True)
     collection = Column(String(64), nullable=False)
     ordinal = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)

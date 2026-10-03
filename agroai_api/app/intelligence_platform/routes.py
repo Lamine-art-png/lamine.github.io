@@ -32,6 +32,7 @@ from app.intelligence_platform import schemas as platform_schemas
 from app.intelligence_platform import sessions as platform_sessions
 from app.intelligence_platform import tools as platform_tools
 from app.intelligence_platform.contract import ToolCall
+from app.intelligence_platform.ownership import owned
 from app.models.intelligence_commerce import CommercialIntelligenceRun
 from app.platform_api.principal import PlatformPrincipal
 
@@ -437,10 +438,8 @@ def list_sessions(
     from app.models.intelligence_platform import IntelligenceSession
 
     rows = (
-        db.query(IntelligenceSession)
+        owned(db.query(IntelligenceSession), IntelligenceSession, principal)
         .filter(
-            IntelligenceSession.organization_id == principal.organization_id,
-            IntelligenceSession.api_project_id == principal.api_project_id,
             IntelligenceSession.status == "active",
             IntelligenceSession.expires_at > datetime.utcnow(),
         )
@@ -523,10 +522,8 @@ def list_files(
     from app.models.intelligence_platform import IntelligenceFile
 
     rows = (
-        db.query(IntelligenceFile)
+        owned(db.query(IntelligenceFile), IntelligenceFile, principal)
         .filter(
-            IntelligenceFile.organization_id == principal.organization_id,
-            IntelligenceFile.api_project_id == principal.api_project_id,
             IntelligenceFile.status == "available",
             IntelligenceFile.expires_at > datetime.utcnow(),
         )
@@ -585,10 +582,7 @@ def list_documents(
 ) -> dict[str, Any]:
     from app.models.intelligence_platform import KnowledgeDocument
 
-    query = db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.organization_id == principal.organization_id,
-        KnowledgeDocument.api_project_id == principal.api_project_id,
-    )
+    query = owned(db.query(KnowledgeDocument), KnowledgeDocument, principal)
     if collection:
         query = query.filter(KnowledgeDocument.collection == collection)
     rows = query.order_by(KnowledgeDocument.created_at.desc()).limit(limit).all()

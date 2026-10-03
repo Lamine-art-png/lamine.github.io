@@ -296,6 +296,7 @@ class AdmitOutcome:
     replay: dict[str, Any] | None = None
     pending_run_id: str | None = None
     admitted: AdmittedRun | None = None
+    retry_failed_run_id: str | None = None
 
 
 async def _emit(progress: Callable[[str, dict[str, Any]], Awaitable[None]] | None, event: str, data: dict[str, Any]) -> None:
@@ -323,6 +324,11 @@ def _check_existing(
         return AdmitOutcome(replay=dict(existing.response_json))
     if execution == "async" and existing.execution == "async":
         return AdmitOutcome(pending_run_id=existing.id)
+    if execution == "sync" and existing.execution in (None, "sync") and existing.status == "failed":
+        # A failed synchronous run was never charged (the debit only exists in
+        # the completion transaction). Retrying with the same key re-executes
+        # it instead of reporting a misleading "in progress" conflict.
+        return AdmitOutcome(retry_failed_run_id=existing.id)
     if existing.status == "processing" and _recover_if_stale(db, run=existing, principal=principal):
         raise HTTPException(
             status_code=503,
@@ -366,10 +372,14 @@ def _admit_paid_run(
         )
         .first()
     )
+    retry_failed_run_id = None
     if existing:
-        return _check_existing(
+        checked = _check_existing(
             existing, request_hash=request_hash, context=context, principal=principal, db=db, execution=execution
         )
+        if checked.retry_failed_run_id is None:
+            return checked
+        retry_failed_run_id = checked.retry_failed_run_id
 
     # Fast fail before spending provider compute. The final debit is rechecked
     # under a row lock after successful inference to handle concurrent requests.
@@ -387,6 +397,30 @@ def _admit_paid_run(
         )
 
     now = datetime.utcnow()
+    if retry_failed_run_id is not None:
+        reclaimed = (
+            db.query(CommercialIntelligenceRun)
+            .filter(CommercialIntelligenceRun.id == retry_failed_run_id)
+            .with_for_update()
+            .populate_existing()
+            .one()
+        )
+        if reclaimed.status != "failed":
+            # A concurrent retry reclaimed it first.
+            db.rollback()
+            raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": retry_failed_run_id})
+        reclaimed.status = "processing"
+        reclaimed.error_code = None
+        reclaimed.error_detail = None
+        reclaimed.completed_at = None
+        reclaimed.started_at = now
+        reclaimed.charge_cents = price_cents
+        reclaimed.request_id = principal.request_id
+        reclaimed.attempt_count = int(reclaimed.attempt_count or 0) + 1
+        db.commit()
+        return AdmitOutcome(
+            admitted=AdmittedRun(run_id=retry_failed_run_id, price_cents=price_cents, components=components, context=context, resolved=resolved)
+        )
     mode = "stateful" if payload.field_id or payload.workspace_id or payload.session_id else "stateless"
     run = CommercialIntelligenceRun(
         organization_id=principal.organization_id,

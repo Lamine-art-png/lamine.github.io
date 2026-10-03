@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.intelligence_platform.contract import valid_collection, validate_metadata
+from app.intelligence_platform.ownership import owned
 from app.models.intelligence_platform import KnowledgeChunk, KnowledgeDocument
 from app.platform_api.principal import PlatformPrincipal
 
@@ -131,10 +132,7 @@ def query_terms(query: str, *, limit: int = 24) -> list[str]:
 
 
 def _owned_documents(db: Session, principal: PlatformPrincipal):
-    return db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.organization_id == principal.organization_id,
-        KnowledgeDocument.api_project_id == principal.api_project_id,
-    )
+    return owned(db.query(KnowledgeDocument), KnowledgeDocument, principal)
 
 
 def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocumentCreate) -> tuple[KnowledgeDocument, bool]:
@@ -163,6 +161,11 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
             .filter(
                 KnowledgeDocument.collection == payload.collection,
                 KnowledgeDocument.external_id == payload.external_id,
+                # Exact scope: a project-wide key never refreshes (overwrites)
+                # a workspace's document that happens to share an external_id.
+                KnowledgeDocument.workspace_id.is_(None)
+                if principal.workspace_id is None
+                else KnowledgeDocument.workspace_id == principal.workspace_id,
             )
             .with_for_update()
             .first()
@@ -190,6 +193,7 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
     document = existing or KnowledgeDocument(
         organization_id=principal.organization_id,
         api_project_id=principal.api_project_id,
+        workspace_id=principal.workspace_id,
         collection=payload.collection,
         external_id=payload.external_id,
     )
@@ -219,6 +223,7 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
             document_id=document.id,
             organization_id=principal.organization_id,
             api_project_id=principal.api_project_id,
+            workspace_id=principal.workspace_id,
             collection=payload.collection,
             ordinal=index,
             # Contextual header: the title is searchable and travels with every passage.
@@ -311,6 +316,7 @@ def candidate_chunks(
                 FROM platform_knowledge_chunks AS c, to_tsquery('simple', :tsquery) AS q
                 WHERE c.organization_id = :organization_id
                   AND c.api_project_id = :api_project_id
+                  AND (CAST(:workspace_id AS VARCHAR) IS NULL OR c.workspace_id = :workspace_id)
                   AND c.collection = ANY(:collections)
                   AND c.search_vector @@ q
                 ORDER BY score DESC, c.id ASC
@@ -321,6 +327,7 @@ def candidate_chunks(
                 "tsquery": tsquery,
                 "organization_id": principal.organization_id,
                 "api_project_id": principal.api_project_id,
+                "workspace_id": principal.workspace_id,
                 "collections": list(collections),
                 "limit": int(max_results),
             },
@@ -328,12 +335,8 @@ def candidate_chunks(
         scored = [(row[0], row[1], row[2], float(row[3])) for row in rows]
     else:
         candidates = (
-            db.query(KnowledgeChunk.id, KnowledgeChunk.document_id, KnowledgeChunk.text)
-            .filter(
-                KnowledgeChunk.organization_id == principal.organization_id,
-                KnowledgeChunk.api_project_id == principal.api_project_id,
-                KnowledgeChunk.collection.in_(collections),
-            )
+            owned(db.query(KnowledgeChunk.id, KnowledgeChunk.document_id, KnowledgeChunk.text), KnowledgeChunk, principal)
+            .filter(KnowledgeChunk.collection.in_(collections))
             .limit(5_000)
             .all()
         )

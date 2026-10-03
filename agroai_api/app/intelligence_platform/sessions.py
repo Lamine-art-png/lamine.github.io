@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.intelligence_platform.contract import AgriculturalContext, validate_metadata
+from app.intelligence_platform.ownership import owned
 from app.models.intelligence_platform import IntelligenceSession, IntelligenceSessionTurn
 from app.platform_api.principal import PlatformPrincipal
 
@@ -61,10 +62,7 @@ class SessionUpdate(BaseModel):
 
 
 def _query(db: Session, principal: PlatformPrincipal):
-    return db.query(IntelligenceSession).filter(
-        IntelligenceSession.organization_id == principal.organization_id,
-        IntelligenceSession.api_project_id == principal.api_project_id,
-    )
+    return owned(db.query(IntelligenceSession), IntelligenceSession, principal)
 
 
 def create_session(db: Session, principal: PlatformPrincipal, payload: SessionCreate) -> IntelligenceSession:
@@ -75,6 +73,7 @@ def create_session(db: Session, principal: PlatformPrincipal, payload: SessionCr
     row = IntelligenceSession(
         organization_id=principal.organization_id,
         api_project_id=principal.api_project_id,
+        workspace_id=principal.workspace_id,
         created_by_api_key_id=principal.api_key_id,
         created_by_user_id=principal.user_id,
         title=payload.title,
