@@ -217,6 +217,7 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
 
 def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
     last: Exception | None = None
+    primary: Exception | None = None
     explicit_authoring = endpoint.startswith("http://127.0.0.1:") or endpoint.startswith("http://localhost:")
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -226,7 +227,7 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
             try:
                 return validate_chunk(source, public_translate_catalog(locale, source))
             except Exception as public_exc:
-                last = public_exc
+                last = primary = public_exc
             # Release workflows deliberately start an isolated, production-equivalent
             # authoring worker as a secondary fallback.
             if explicit_authoring:
@@ -252,6 +253,10 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
             if attempt < MAX_ATTEMPTS:
                 time.sleep(min(6, attempt * 1.25))
     detail = str(last)[:500] if last else "unknown"
+    # Fallback errors (e.g. an unauthorized model API) would otherwise hide why
+    # the primary public translation was rejected.
+    if primary is not None and primary is not last:
+        detail = f"{detail}|primary:{type(primary).__name__}:{str(primary)[:300]}"
     raise RuntimeError(f"locale_chunk_failed:{locale}:{type(last).__name__ if last else 'unknown'}:{detail}") from None
 
 
