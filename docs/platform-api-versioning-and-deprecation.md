@@ -14,3 +14,11 @@ Deprecations must include:
 - sunset date when known;
 - response headers for deprecated public routes;
 - changelog entry.
+
+## AGRO-AI Intelligence (`/v1/intelligence*`)
+
+The Intelligence Platform v1 compatibility policy — additive-only changes in
+`/v1`, legacy-shaped requests unchanged in prompt/price/idempotency hash,
+12-month minimum deprecation with `Deprecation`/`Sunset` headers, the stable
+`agroai-intelligence-1` alias, and versioned tool/schema names — is defined
+in [INTELLIGENCE_PLATFORM_V1.md](INTELLIGENCE_PLATFORM_V1.md#versioning-and-compatibility).
