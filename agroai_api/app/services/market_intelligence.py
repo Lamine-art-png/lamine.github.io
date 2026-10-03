@@ -128,12 +128,15 @@ def convert_price_per_unit(
         raise MarketCalculationError("price cannot be negative")
     if _unit_key(from_unit) == _unit_key(to_unit):
         return p
-    # One from-unit expressed in target units. Price per target unit is price
-    # divided by that quantity (e.g. $5/bu -> ~$197/t for corn).
-    target_units = convert_quantity(ONE, from_unit, to_unit, commodity)
-    if target_units <= ZERO:
+    # Price per target unit = price x (kg per target unit / kg per source unit),
+    # computed from exact mass factors with a single final rounding (e.g. $5/bu
+    # -> ~$197/t for corn; R$2.36/kg -> exactly R$141.60 per 60 kg saca).
+    # Rounding an intermediate factor (1 kg = 0.01666667 saca) would bias prices.
+    source_kg = kg_per_unit(from_unit, commodity)
+    target_kg = kg_per_unit(to_unit, commodity)
+    if source_kg <= ZERO or target_kg <= ZERO:
         raise MarketCalculationError("invalid unit conversion factor")
-    return (p / target_units).quantize(Q8, rounding=ROUND_HALF_UP)
+    return (p * target_kg / source_kg).quantize(Q8, rounding=ROUND_HALF_UP)
 
 
 def fx_to_reporting(amount: Decimal, source_currency: str, reporting_currency: str, fx_rate: Any | None) -> Decimal:

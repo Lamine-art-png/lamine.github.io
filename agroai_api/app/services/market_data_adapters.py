@@ -799,7 +799,8 @@ class USDANASSQuickStatsSeries(SeriesProvider):
 
 AGMARKNET_RESOURCE = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070"
 _AGMARKNET_COMMODITIES = {
-    "rice": ("Paddy(Dhan)(Common)", "Rice"), "wheat": ("Wheat",), "corn": ("Maize",), "soybean": ("Soyabean",),
+    # Producers sell paddy; milled "Rice" is a different product and price level.
+    "rice": ("Paddy(Dhan)(Common)",), "wheat": ("Wheat",), "corn": ("Maize",), "soybean": ("Soyabean",),
     "cotton": ("Cotton",), "onions": ("Onion",), "tomatoes": ("Tomato",), "groundnuts": ("Groundnut",),
 }
 
@@ -859,9 +860,11 @@ class IndiaAgmarknetSeries(SeriesProvider):
                     variety = str(row.get("variety") or "").strip()
                     if value is None or value <= 0 or not market:
                         continue
+                    if fold(row.get("commodity")) != fold(upstream_name):
+                        continue  # never mix products under one series
                     descriptor = SeriesDescriptor(
                         provider=self.provider_id,
-                        series_key=f"india_agmarknet:{fold(state)}:{fold(district)}:{fold(market)}:{commodity}:{fold(variety)}",
+                        series_key=f"india_agmarknet:{fold(state)}:{fold(district)}:{fold(market)}:{fold(upstream_name)}:{fold(variety)}",
                         source_name=self.name,
                         observation_type="physical_price",
                         native_id=f"{upstream_name} / {variety} / {market}",
