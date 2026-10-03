@@ -70,6 +70,10 @@ jobs:
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_commercial_intelligence_attack_matrix_postgres.py
+      - name: Prove Intelligence Platform v1 tenancy, billing, jobs, sessions, knowledge and streaming
+        env:
+          PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_intelligence_platform_v1_postgres.py
       - name: Prove AGRO-AI project suspension holds serialize and release only on the last restore
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
