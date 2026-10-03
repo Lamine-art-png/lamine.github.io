@@ -33,12 +33,16 @@ def _normalize_markers(value: str) -> str:
     # Providers occasionally drop or widen bracket runs or use full-width
     # brackets around protection markers; consume the whole run so a widened
     # marker (e.g. ">>>>") cannot leave a stray bracket next to a placeholder.
+    # Serbian output transliterates the marker into Cyrillic ("АГРОАИ_КЕЕП").
     return re.sub(
-        r"[<＜《〈]+\s*AGROAI[_ ]?(ITEM|KEEP)[_ ]?(\d{4})\s*[>＞》〉]+",
-        r"<<<AGROAI_\1_\2>>>",
+        r"[<＜《〈]+\s*(?:AGROAI|АГРОАИ)[_ ]?(ITEM|KEEP|ИТЕМ|КЕЕП)[_ ]?(\d{4})\s*[>＞》〉]+",
+        lambda match: f"<<<AGROAI_{_MARKER_KINDS[match.group(1).upper()]}_{match.group(2)}>>>",
         value,
         flags=re.I,
     )
+
+
+_MARKER_KINDS = {"ITEM": "ITEM", "KEEP": "KEEP", "ИТЕМ": "ITEM", "КЕЕП": "KEEP"}
 
 
 def _pack(entries: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:

@@ -71,6 +71,9 @@ def test_widened_protection_markers_leave_no_bracket_next_to_placeholders():
     # Punjabi/Gujarati/Tagalog catalogs, which passed the placeholder check.
     assert _normalize_markers("a <<<<AGROAI_KEEP_0001>>>> b") == "a <<<AGROAI_KEEP_0001>>> b"
     assert _normalize_markers("《AGROAI KEEP 0002》》") == "<<<AGROAI_KEEP_0002>>>"
+    # Observed Serbian output: the marker comes back transliterated to Cyrillic.
+    assert _normalize_markers("Поверење: <<<АГРОАИ_КЕЕП_0000>>>") == "Поверење: <<<AGROAI_KEEP_0000>>>"
+    assert _normalize_markers("<<<агроаи_итем_0003>>>") == "<<<AGROAI_ITEM_0003>>>"
     assert has_placeholder_bracket_residue("ਕੀਮਤ {price}> {currency}", "Price {price} {currency}")
     assert has_placeholder_bracket_residue("<{plan} plano", "{plan} plan")
     assert not has_placeholder_bracket_residue("Step {step} of {total}", "Step {step} of {total}")
