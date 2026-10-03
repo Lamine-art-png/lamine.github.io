@@ -5,7 +5,7 @@ import hmac
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -141,7 +141,7 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
 
 
 @router.post("/internal/queue/drain-outbox", dependencies=[Depends(_require_queue_token)])
-async def drain_task_outbox() -> dict:
+async def drain_task_outbox(background_tasks: BackgroundTasks) -> dict:
     if not queue_configured():
         raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
     try:
@@ -156,8 +156,12 @@ async def drain_task_outbox() -> dict:
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
     lifecycle = await asyncio.to_thread(_run_lifecycle_emails)
+    # Commercial Intelligence refresh + materiality runs after the response so
+    # slow official publications never hold the scheduler request open.
+    background_tasks.add_task(_run_market_intelligence_cycle)
     return {
         "status": "ok",
+        "market_intelligence_cycle": "scheduled",
         "lifecycle_emails": lifecycle,
         "outbox": outbox,
         "webhook_outbox": webhook_outbox,
@@ -165,6 +169,26 @@ async def drain_task_outbox() -> dict:
         "platform_maintenance": platform_maintenance,
         "object_gc": object_gc,
     }
+
+
+def _run_market_intelligence_cycle() -> dict:
+    """Isolated so a market-data failure can never affect other maintenance."""
+    try:
+        from app.services.market_intelligence_cycle import run_cycle_sync
+
+        return run_cycle_sync(trigger="scheduled")
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.getLogger("agroai.market_cycle").exception("market_intelligence_cycle_failed")
+        return {"status": "error", "reason": exc.__class__.__name__}
+
+
+@router.post("/internal/queue/market-cycle", dependencies=[Depends(_require_queue_token)])
+async def run_market_intelligence_cycle_now(background_tasks: BackgroundTasks) -> dict:
+    """Operator trigger for the same cycle the hourly scheduler runs."""
+    background_tasks.add_task(_run_market_intelligence_cycle)
+    return {"status": "scheduled"}
 
 
 def _run_lifecycle_emails() -> dict:

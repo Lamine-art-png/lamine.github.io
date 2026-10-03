@@ -93,6 +93,7 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
         "039_lifecycle_next_action": "038_lifecycle_emails",
         "040_intelligence_money_checks": "039_lifecycle_next_action",
         "041_abuse_project_holds": "040_intelligence_money_checks",
+        "042_market_data_plane": "041_abuse_project_holds",
     }
     actual = {}
 

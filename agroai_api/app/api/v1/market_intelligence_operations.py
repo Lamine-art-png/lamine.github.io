@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.models.market_intelligence import MarketContractPosition, MarketPosition
-from app.services.market_data_providers import registry
+from app.services.market_data_plane import provider_health
 from app.services.market_intelligence_refresh import refresh_organization_market_data, refresh_position_market_data
 
 router = APIRouter()
@@ -117,6 +117,16 @@ def patch_position(
     row = _position(db, org_id, position_id)
     changes = payload.model_dump(exclude_unset=True)
     metadata = changes.pop("metadata", None)
+    current_metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    implied: dict[str, Any] = {}
+    if "current_realizable_price" in changes and not (metadata or {}).get("price_policy"):
+        # A price typed by a person is customer-owned until they opt back into automation.
+        implied.update({"price_policy": "manual" if changes["current_realizable_price"] is not None else "automatic", "price_state": "MANUAL"})
+        implied["price_source"] = "customer"
+    if "fx_rate_to_reporting" in changes:
+        implied.update({"fx_source": "customer", "fx_state": "MANUAL"} if changes["fx_rate_to_reporting"] is not None else {"fx_source": None})
+    if implied:
+        metadata = {**(metadata or {}), **implied}
     for field_name, value in changes.items():
         if isinstance(value, str) and field_name in {"name", "commodity", "season", "quantity_unit", "region"}:
             value = " ".join(value.strip().split())
@@ -124,8 +134,8 @@ def patch_position(
             value = value.lower()
         setattr(row, field_name, value)
     if metadata is not None:
-        current = row.metadata_json if isinstance(row.metadata_json, dict) else {}
-        row.metadata_json = {**current, **metadata, "input_source": current.get("input_source", "customer_structured_input")}
+        merged = {**current_metadata, **metadata, "input_source": current_metadata.get("input_source", "customer_structured_input")}
+        row.metadata_json = {k: v for k, v in merged.items() if v is not None}
     db.commit()
     return {"id": row.id, "status": row.status, "updated": sorted([*changes.keys(), *(["metadata"] if metadata is not None else [])])}
 
@@ -189,11 +199,13 @@ def patch_contract(
         raise HTTPException(status_code=404, detail="Market contract not found")
     changes = payload.model_dump(exclude_unset=True)
     metadata = changes.pop("metadata", None)
+    if "fx_rate_to_reporting" in changes:
+        metadata = {**(metadata or {}), "fx_source": "customer" if changes["fx_rate_to_reporting"] is not None else None}
     for field_name, value in changes.items():
         setattr(row, field_name, value)
     if metadata is not None:
         current = row.metadata_json if isinstance(row.metadata_json, dict) else {}
-        row.metadata_json = {**current, **metadata}
+        row.metadata_json = {k: v for k, v in {**current, **metadata}.items() if v is not None}
     db.commit()
     return {"id": row.id, "status": row.status, "updated": sorted([*changes.keys(), *(["metadata"] if metadata is not None else [])])}
 
@@ -224,10 +236,11 @@ def delete_contract(
 @router.get("/providers")
 async def provider_status(
     ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     _org_id(ctx)
     return {
-        "providers": await registry.status(),
+        "providers": provider_health(db),
         "policy": {
             "verified_upstream_required_for_live": True,
             "customer_input_cannot_self_assign_live": True,

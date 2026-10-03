@@ -141,11 +141,15 @@ def validate_decision_support_policy(payload: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(errors))
 
 
+PUBLIC_ENGINE = {"provider": "agroai", "model": "agroai-intelligence-1"}
+
+
 def deterministic_brief(
     position: dict[str, Any],
     *,
     question: str | None = None,
     language: str = "en",
+    context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     exposed = position.get("exposed_percent")
     margin = position.get("projected_margin_percent")
@@ -186,6 +190,10 @@ def deterministic_brief(
         lines.append(copy["margin"].format(value=margin))
     if warnings:
         lines.append(copy["warning"])
+    if context:
+        from app.services.market_intelligence_ask import deterministic_context_lines
+
+        lines.extend(deterministic_context_lines(context, response_language))
     if not lines:
         lines.append(copy["missing"])
     return {
@@ -205,7 +213,14 @@ async def generate_market_brief(
     *,
     question: str | None = None,
     language: str = "en",
+    context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Grounded synthesis over deterministic facts.
+
+    ``context`` carries deterministic scenario results, open material changes,
+    evidence freshness, provenance and saved scenarios; its numbers are merged
+    into ``evidence`` by the caller so every cited value stays verifiable.
+    """
     router = ModelRouter()
     decision_advisory = await asyncio.to_thread(
         assess_market_position,
@@ -214,7 +229,7 @@ async def generate_market_brief(
         question=question,
     )
     if router.mode() == "offline":
-        return deterministic_brief(position, question=question, language=language)
+        return deterministic_brief(position, question=question, language=language, context=context)
 
     facts = {
         "position": position,
@@ -222,6 +237,7 @@ async def generate_market_brief(
         "question": (question or "What materially matters in this commercial position?")[:1600],
         "response_language": language[:16],
         "decision_routing": advisory_context(decision_advisory),
+        "commercial_context": context or {},
     }
     system = (
         "You are the AGRO-AI Market Intelligence synthesis layer. Explain only the supplied structured facts. "
@@ -233,7 +249,9 @@ async def generate_market_brief(
         "decision-support language. FACTS.decision_routing, when present, is an internal qualitative routing advisory only: "
         "it is not evidence, not a financial calculation, not a forecast, and not authorization. Use it only to decide what deserves "
         "attention, whether more evidence or human review is needed, and the safest next decision-support step. Never cite the routing "
-        "advisory as a customer fact."
+        "advisory as a customer fact. FACTS.commercial_context.scenarios are deterministic what-if results: cite them with their "
+        "evidence ids, call them scenarios, never forecasts. Use commercial_context.data_states, price_source and material_changes "
+        "to answer what changed, which numbers are stale and where a price came from."
     )
     schema = {
         "type": "json_schema",
@@ -305,20 +323,20 @@ async def generate_market_brief(
         max_model_attempts=2,
     )
     if result.status != "ok" or not str(result.content or "").strip():
-        fallback = deterministic_brief(position, question=question, language=language)
+        fallback = deterministic_brief(position, question=question, language=language, context=context)
         fallback["model_trace"]["fallback_reason"] = result.error or result.status
         return fallback
     try:
         payload = json.loads(result.content)
     except (TypeError, ValueError, json.JSONDecodeError):
-        fallback = deterministic_brief(position, question=question, language=language)
+        fallback = deterministic_brief(position, question=question, language=language, context=context)
         fallback["model_trace"]["fallback_reason"] = "invalid_structured_output"
         return fallback
     grounding_errors = validate_numeric_grounding(payload, evidence)
     policy_errors = validate_decision_support_policy(payload)
     errors = grounding_errors + policy_errors
     if errors:
-        fallback = deterministic_brief(position, question=question, language=language)
+        fallback = deterministic_brief(position, question=question, language=language, context=context)
         fallback["model_trace"]["fallback_reason"] = (
             "decision_support_policy_failed" if policy_errors else "numeric_grounding_failed"
         )
@@ -330,10 +348,7 @@ async def generate_market_brief(
         **payload,
         "question": question,
         "response_language": str(language or "en")[:16],
-        "model_trace": {
-            "provider": result.provider,
-            "model": result.model or selection.model,
-            "profile": selection.profile,
-            "grounded": True,
-        },
+        # AGRO-AI owns the model abstraction: customers never see which vendor
+        # or model produced the synthesis.
+        "model_trace": {**PUBLIC_ENGINE, "grounded": True},
     }
