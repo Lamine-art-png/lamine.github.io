@@ -74,7 +74,9 @@ def _translate_pack(locale: str, entries: list[tuple[str, str]]) -> dict[str, st
             protected.append(match.group(0))
             return marker
         safe = PROTECTED_RE.sub(repl, source)
-        encoded_lines.append(f"{_item_marker(index)}\n{safe}")
+        # A single string needs no item delimiter; some providers mangle it
+        # (Serbian dropped it for one sentence, failing the locale build).
+        encoded_lines.append(safe if len(entries) == 1 else f"{_item_marker(index)}\n{safe}")
         keys.append(key)
 
     query = urllib.parse.urlencode({
@@ -103,16 +105,19 @@ def _translate_pack(locale: str, entries: list[tuple[str, str]]) -> dict[str, st
 
     output: dict[str, str] = {}
     for index, key in enumerate(keys):
-        start_marker = _item_marker(index)
-        start = translated.find(start_marker)
-        if start < 0:
-            raise RuntimeError(f"public_translation_missing_item_marker:{index}")
-        content_start = start + len(start_marker)
-        next_marker = _item_marker(index + 1) if index + 1 < len(keys) else ""
-        end = translated.find(next_marker, content_start) if next_marker else len(translated)
-        if end < content_start:
-            raise RuntimeError(f"public_translation_missing_boundary:{index}")
-        value = translated[content_start:end].strip()
+        if len(keys) == 1:
+            value = translated.strip()
+        else:
+            start_marker = _item_marker(index)
+            start = translated.find(start_marker)
+            if start < 0:
+                raise RuntimeError(f"public_translation_missing_item_marker:{index}")
+            content_start = start + len(start_marker)
+            next_marker = _item_marker(index + 1) if index + 1 < len(keys) else ""
+            end = translated.find(next_marker, content_start) if next_marker else len(translated)
+            if end < content_start:
+                raise RuntimeError(f"public_translation_missing_boundary:{index}")
+            value = translated[content_start:end].strip()
         for keep_index, original in enumerate(protected):
             value = value.replace(_keep_marker(keep_index), original)
         if re.search(r"AGROAI[_ ]?(?:KEEP|ITEM)", value, flags=re.I):

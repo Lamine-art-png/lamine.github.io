@@ -77,3 +77,28 @@ def test_widened_protection_markers_leave_no_bracket_next_to_placeholders():
     assert not has_placeholder_bracket_residue("<{tag}>", "<{tag}>")
     errors = quality_errors("pa", {"k": "Price {price} {currency}"}, {"k": "ਕੀਮਤ {price}> {currency}"})
     assert any(e.startswith("placeholder_bracket_residue:pa:k") for e in errors)
+
+
+def test_single_string_requests_need_no_item_delimiter(monkeypatch):
+    # Serbian dropped the item delimiter for one sentence, failing the whole
+    # locale build after bisection had already isolated that one string.
+    import io
+    import urllib.parse
+
+    import i18n_public_translate as public
+
+    sent: list[str] = []
+
+    def fake_urlopen(request, timeout=0):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)["q"][0]
+        sent.append(query)
+        # Echo the request as the "translation", the way a provider preserves markers.
+        return io.BytesIO(json.dumps([[[query.replace("Price", "Cena"), query]]]).encode())
+
+    monkeypatch.setattr(public.urllib.request, "urlopen", fake_urlopen)
+    single = public._translate_pack("sr", [("k", "Price {price} {currency}.")])
+    assert single == {"k": "Cena {price} {currency}."}
+    assert "AGROAI_ITEM" not in sent[-1]
+    many = public._translate_pack("sr", [("a", "Price {price}."), ("b", "Price now.")])
+    assert many == {"a": "Cena {price}.", "b": "Cena now."}
+    assert "AGROAI_ITEM_0000" in sent[-1] and "AGROAI_ITEM_0001" in sent[-1]
