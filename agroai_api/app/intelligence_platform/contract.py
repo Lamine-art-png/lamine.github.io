@@ -78,8 +78,11 @@ class TimeWindow(_Entity):
 
     @model_validator(mode="after")
     def ordered(self) -> "TimeWindow":
-        if self.start and self.end and self.end < self.start:
-            raise ValueError("time_window.end must not be before time_window.start")
+        if self.start and self.end:
+            if (self.start.tzinfo is None) != (self.end.tzinfo is None):
+                raise ValueError("time_window.start and end must both include a UTC offset or both omit it")
+            if self.end < self.start:
+                raise ValueError("time_window.end must not be before time_window.start")
         return self
 
 

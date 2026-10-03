@@ -101,13 +101,19 @@ class FakeStore:
 
     def __init__(self):
         self.objects: dict[str, tuple[bytes, str, str]] = {}
+        self.pending: set[str] = set()
 
-    def put_path(self, path, *, tenant_id, connection_id, filename, content_type, expected_sha256, expected_size, **_):
+    def put_path(self, path, *, tenant_id, connection_id, filename, content_type, expected_sha256, expected_size, pending_registration=False):
         data = open(path, "rb").read()
         assert len(data) == expected_size
         uri = f"s3://fake/agroai/{tenant_id}/{connection_id}/{uuid.uuid4().hex}"
         self.objects[uri] = (data, tenant_id, connection_id)
+        if pending_registration:
+            self.pending.add(uri)
         return SimpleNamespace(uri=uri)
+
+    def promote(self, uri, *, tenant_id, connection_id):
+        self.pending.discard(uri)
 
     def read_bytes(self, uri, *, max_bytes, tenant_id, connection_id):
         data, owner, namespace = self.objects[uri]
@@ -711,3 +717,41 @@ def test_failed_sync_run_can_be_retried_with_the_same_key(platform):
     assert replay.json()["id"] == retried.json()["id"]
     assert p.client.post("/v1/intelligence", headers=headers, json={**body, "question": "changed"}).status_code == 409
     assert _wallet(p.Session, p.A.org_id) == (495, 1)
+
+
+def test_image_upload_uses_pending_registration_and_is_a_live_reference(platform):
+    p = platform
+    from app.services.field_intelligence import _pending_object_has_live_reference
+
+    image = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                          files={"file": ("leaf.webp", io.BytesIO(b"RIFF\x00\x00\x00\x00WEBP" + b"0" * 64), "image/webp")}).json()
+    assert not p.store.pending, "marker cleared after the row committed"
+    db = p.Session()
+    try:
+        from app.models.intelligence_platform import IntelligenceFile
+
+        uri = db.get(IntelligenceFile, image["id"]).storage_uri
+        assert _pending_object_has_live_reference(db, uri) is True
+        assert _pending_object_has_live_reference(db, uri + "-orphan") is False
+    finally:
+        db.close()
+
+
+def test_restricted_key_cannot_read_or_cancel_project_wide_runs(platform):
+    p = platform
+    restricted = _workspace_key(p, p.A, "east")
+    run = _run(p, "A", {"task": "answer", "question": "project-wide run"}).json()
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "project job"}).json()
+    assert p.client.get(f"/v1/intelligence/runs/{run['id']}", headers=restricted).status_code == 404
+    assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=restricted).status_code == 404
+    assert p.client.post(f"/v1/intelligence/jobs/{job['id']}/cancel", headers=restricted).status_code == 404
+    assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "queued"
+
+
+def test_mixed_timezone_window_and_huge_economics_are_422_not_500(platform):
+    p = platform
+    mixed = _run(p, "A", {"task": "answer", "question": "window", "context": {"time_window": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00"}}})
+    assert mixed.status_code == 422, mixed.text
+    huge = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                         json={"name": "finance.crop_margin.v1", "arguments": {"area_ha": 1e308, "expected_yield_per_ha": 1e308, "price_per_unit": 1}})
+    assert huge.status_code == 422, huge.text

@@ -205,6 +205,10 @@ async def accept_upload(
                 content_type=sniffed.content_type,
                 expected_sha256=sha256,
                 expected_size=size,
+                # Marker first: if the row below never commits (crash, DB
+                # error), the shared pending-object reconciler removes the
+                # orphan after its grace period.
+                pending_registration=True,
             )
             row.storage_uri = stored.uri
         else:
@@ -226,6 +230,16 @@ async def accept_upload(
             row.extraction_status = "extracted" if text else "empty"
         db.add(row)
         db.commit()
+        if row.storage_uri:
+            try:
+                await asyncio.to_thread(
+                    _object_store().promote,
+                    row.storage_uri,
+                    tenant_id=str(principal.organization_id),
+                    connection_id=_namespace(principal),
+                )
+            except Exception:  # noqa: BLE001 - the reconciler promotes rows it finds registered
+                pass
         return row
     finally:
         try:

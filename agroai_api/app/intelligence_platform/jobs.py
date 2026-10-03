@@ -79,10 +79,11 @@ def owned_run(db: Session, principal: PlatformPrincipal, run_id: str, *, executi
     )
     if execution is not None:
         query = query.filter(CommercialIntelligenceRun.execution == execution)
+    if principal.workspace_id:
+        # Exact match: a workspace-restricted key never sees project-wide runs.
+        query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
     row = query.first()
     if row is None:
-        raise HTTPException(status_code=404, detail={"code": "intelligence_job_not_found" if execution == "async" else "intelligence_run_not_found"})
-    if principal.workspace_id and row.workspace_id and row.workspace_id != principal.workspace_id:
         raise HTTPException(status_code=404, detail={"code": "intelligence_job_not_found" if execution == "async" else "intelligence_run_not_found"})
     return row
 

@@ -184,7 +184,16 @@ def _crop_margin(_ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]
             "margin_per_ha": round(margin / area, 2),
         }
 
-    return {
+    def finite(value: Any) -> bool:
+        if isinstance(value, float):
+            return math.isfinite(value)
+        if isinstance(value, dict):
+            return all(finite(item) for item in value.values())
+        if isinstance(value, list):
+            return all(finite(item) for item in value)
+        return True
+
+    result = {
         "status": "completed",
         "output": {
             "currency": arguments.get("currency"),
@@ -200,14 +209,17 @@ def _crop_margin(_ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]
         },
         "method": "Partial budget: revenue = yield x area x price; margin = revenue - sum(costs); breakeven from totals.",
     }
+    if not finite(result["output"]):
+        return {"status": "invalid_input", "invalid_inputs": ["magnitude"], "output": {}}
+    return result
 
 
 _CROP_MARGIN_SCHEMA = {
     "type": "object",
     "properties": {
-        "area_ha": {"type": "number", "exclusiveMinimum": 0},
-        "expected_yield_per_ha": {"type": "number", "minimum": 0},
-        "price_per_unit": {"type": "number", "minimum": 0},
+        "area_ha": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000000},
+        "expected_yield_per_ha": {"type": "number", "minimum": 0, "maximum": 1000000},
+        "price_per_unit": {"type": "number", "minimum": 0, "maximum": 1000000000},
         "currency": {"type": "string", "minLength": 3, "maxLength": 3},
         "costs": {
             "type": "array",
@@ -216,7 +228,7 @@ _CROP_MARGIN_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "category": {"type": "string", "minLength": 1, "maxLength": 120},
-                    "amount": {"type": "number", "minimum": 0},
+                    "amount": {"type": "number", "minimum": 0, "maximum": 1000000000000},
                     "basis": {"type": "string", "enum": ["total", "per_ha"]},
                 },
                 "required": ["category", "amount"],
