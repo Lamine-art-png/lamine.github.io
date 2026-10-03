@@ -113,7 +113,7 @@ const COPY = [
   "Unable to load Commercial Intelligence.",
   "Retry",
   "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
-  "Realizable price moved from {from} to {to} {currency} per {unit} ({percent}%).",
+  "Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).",
   "{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.",
   "Projected margin turned negative: {value} {currency}.",
   "Realizable price {price} is below break-even {breakeven} {currency}.",
@@ -220,7 +220,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
       case "economic_change":
         return reason.impact_percent_of_revenue ? tf("Projected margin changed by {change} {currency} ({percent}% of projected revenue).", { change: fmt.number(reason.change, 2), currency: ccy, percent: fmt.number(reason.impact_percent_of_revenue, 2) }) : null;
       case "price_change":
-        return tf("Realizable price moved from {from} to {to} {currency} per {unit} ({percent}%).", { from: fmt.number(reason.from, 2), to: fmt.number(reason.to, 2), currency: ccy, unit: reason.unit || unit || "", percent: fmt.number(reason.percent, 2) });
+        return tf("Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).", { old_price: fmt.number(reason.from, 2), new_price: fmt.number(reason.to, 2), currency: ccy, unit: reason.unit || unit || "", percent: fmt.number(reason.percent, 2) });
       case "exposure":
         return tf("{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.", { quantity: fmt.number(reason.uncontracted_quantity, 0), unit: reason.unit || "", percent: fmt.number(reason.exposed_percent, 1), value: fmt.number(reason.exposed_revenue, 0), currency: ccy });
       case "margin_turned_negative":

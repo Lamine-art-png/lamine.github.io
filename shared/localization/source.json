@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "3d05ff439ee8766c4f58138ccbf099afa6f12b21165db0c39277bd128e5f9600",
+  "sourceFingerprint": "4602a2733028d2d5cb1b471abab9f170bcad61b756d3cb2ae877f409e4666d3e",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1388,7 +1388,6 @@
     "literal.2b932ae9e59f7b4c": "Track operator work from open to in progress to done. Tasks keep recommendations and evidence gaps from disappearing after review.",
     "literal.2ba92e703d8d63c9": "Reviewed production",
     "literal.2bbfbb210f9cec9c": "Create test project",
-    "literal.2bda6531a234b39a": "Realizable price moved from {from} to {to} {currency} per {unit} ({percent}%).",
     "literal.2bf63d817630601b": "Margin",
     "literal.2c0fafdcc3837393": "Abuse signals",
     "literal.2c117aeed4d6f74d": "Start Live AGRO-AI",
@@ -2285,6 +2284,7 @@
     "literal.97c25f262f09d9db": "What if",
     "literal.97c7b78274881175": "Commercial controls",
     "literal.97f3175a015e0191": "Salesforce user / org hint",
+    "literal.98082c850f2ae19c": "Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).",
     "literal.983b702f7232faa3": "Security & access",
     "literal.9859597853197476": "Project",
     "literal.9876f838ad257591": "Launch authorization failed.",

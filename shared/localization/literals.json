@@ -253,7 +253,7 @@
   "literal.1371c80b8039aec5": "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "literal.72246dfabbb4c0ca": "Unable to load Commercial Intelligence.",
   "literal.c523b665ebb96f38": "Projected margin changed by {change} {currency} ({percent}% of projected revenue).",
-  "literal.2bda6531a234b39a": "Realizable price moved from {from} to {to} {currency} per {unit} ({percent}%).",
+  "literal.98082c850f2ae19c": "Realizable price moved from {old_price} to {new_price} {currency} per {unit} ({percent}%).",
   "literal.b4019bf203d82191": "Projected margin turned negative: {value} {currency}.",
   "literal.6442c31d4f94e50c": "Realizable price {price} is below break-even {breakeven} {currency}.",
   "literal.7920203356190641": "Contracted volume {contracted} exceeds marketable supply {supply} {unit}.",
