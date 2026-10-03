@@ -987,3 +987,43 @@ def test_closeout_time_filters_preserve_the_instant(platform):
             db.commit()
         finally:
             db.close()
+
+
+def test_data_tool_statement_timeout_bounds_a_stalled_query(platform, monkeypatch):
+    p = platform
+    import time as _time
+
+    from sqlalchemy import text as sql_text
+
+    from app.intelligence_platform import tools
+    from app.intelligence_platform.contract import ToolCall
+    from app.platform_api.principal import PlatformPrincipal
+
+    def stalled(ctx, arguments):
+        ctx.db.execute(sql_text("SELECT pg_sleep(3)"))
+        return {"status": "completed", "output": {}}
+
+    tool = tools.PlatformTool(name="stalled.data.v1", version="1", category="data", description="",
+                              input_schema={"type": "object"}, handler=stalled, timeout_ms=200, max_attempts=2)
+    monkeypatch.setitem(tools.REGISTRY._tools, tool.name, tool)
+    db = p.Session()
+    try:
+        principal = PlatformPrincipal(authentication_type="platform_api_key", organization_id=p.A.org_id,
+                                      api_project_id=p.A.project_id, scopes=frozenset({"intelligence:run"}),
+                                      environment="live", request_id="deadline")
+        before = db.execute(sql_text("SHOW statement_timeout")).scalar()
+        db.commit()
+        started = _time.monotonic()
+        result = tools.execute(tools.ToolContext(db=db, principal=principal), [ToolCall(name="stalled.data.v1", arguments={})])[0]
+        elapsed = _time.monotonic() - started
+        assert result["status"] == "timeout" and result["attempts"] == 1, result
+        assert elapsed < 1.5, f"stalled query must be cancelled at the deadline ({elapsed:.2f}s)"
+        assert db.execute(sql_text("SELECT 1")).scalar() == 1, "session usable afterwards"
+        assert db.execute(sql_text("SHOW statement_timeout")).scalar() == before, "timeout is not leaked"
+        # A fast data tool restores the previous timeout within the same transaction.
+        tools.execute(tools.ToolContext(db=db, principal=principal),
+                      [ToolCall(name="observations.query.v1", arguments={})])
+        assert db.execute(sql_text("SHOW statement_timeout")).scalar() == before
+    finally:
+        db.rollback()
+        db.close()

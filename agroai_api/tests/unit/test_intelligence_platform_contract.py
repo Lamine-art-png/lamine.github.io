@@ -243,3 +243,16 @@ def test_resolvable_local_refs_are_accepted_and_validated():
     schemas.validate_caller_schema(schema)
     assert schemas.validation_errors({"level": "low"}, schema) == []
     assert schemas.validation_errors({"level": "extreme"}, schema)
+
+
+def test_calculation_tool_deadline_is_enforced_while_running(monkeypatch):
+    import time as _time
+
+    slow = tools.PlatformTool(name="slow.calc.v1", version="1", category="calculation", description="",
+                              input_schema={"type": "object"}, handler=lambda c, a: (_time.sleep(2), {"status": "completed", "output": {}})[1],
+                              timeout_ms=150)
+    monkeypatch.setitem(tools.REGISTRY._tools, slow.name, slow)
+    started = _time.monotonic()
+    result = tools.execute(SimpleNamespace(db=None, principal=None), [ToolCall(name="slow.calc.v1", arguments={})])[0]
+    assert result["status"] == "timeout" and result["error"] == "tool_timeout"
+    assert _time.monotonic() - started < 1.0, "the caller stops waiting at the deadline"

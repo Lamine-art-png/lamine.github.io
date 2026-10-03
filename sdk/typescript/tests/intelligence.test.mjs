@@ -80,3 +80,13 @@ test("custom JSON schema passes through", () => {
   const body = buildRunBody({ question: "x?", responseFormat: { type: "json_schema", schema: { type: "object" } } });
   assert.deepEqual(body.response_format, { type: "json_schema", schema: { type: "object" } });
 });
+
+test("files.upload sends the requested content type even for an existing untyped Blob", async () => {
+  let form;
+  await client(async (_url, init) => { form = init.body; return json(201, { id: "file_1" }); })
+    .intelligence.files.upload(new Blob(["scouted rows"]), { filename: "notes.txt", contentType: "text/plain" });
+  const part = form.get("file");
+  assert.equal(part.type, "text/plain");
+  assert.equal(part.name, "notes.txt");
+  assert.equal(await part.text(), "scouted rows");
+});

@@ -25,8 +25,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
+
 from fastapi import HTTPException
 from jsonschema import Draft202012Validator
+from sqlalchemy import text as sql_text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -462,12 +466,17 @@ def execute(ctx: ToolContext, calls: list[Any]) -> list[dict[str, Any]]:
             record.update({"status": "skipped", "error": "tool_time_budget_exhausted", "duration_ms": 0, "attempts": 0})
             results.append(record)
             continue
+        remaining_ms = TOOL_TIME_BUDGET_MS - int((time.monotonic() - budget_started) * 1000)
+        deadline_ms = max(1, min(tool.timeout_ms, remaining_ms))
         attempts = 0
         started = time.monotonic()
         while True:
             attempts += 1
             try:
-                outcome = tool.handler(ctx, dict(call.arguments))
+                outcome = _run_with_deadline(ctx, tool, dict(call.arguments), deadline_ms)
+                break
+            except _ToolDeadlineExceeded:
+                outcome = {"status": "timeout", "error": "tool_timeout", "output": {}}
                 break
             except OperationalError:
                 ctx.db.rollback()
@@ -494,6 +503,47 @@ def execute(ctx: ToolContext, calls: list[Any]) -> list[dict[str, Any]]:
         )
         results.append(record)
     return results
+
+
+class _ToolDeadlineExceeded(Exception):
+    pass
+
+
+# Calculation tools are pure Python; a bounded pool lets a call be abandoned at
+# its deadline (the request never waits longer than the tool's timeout).
+_CALCULATION_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="agroai-tool")
+
+
+def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str, Any], deadline_ms: int) -> dict[str, Any]:
+    """Run a handler under a real deadline.
+
+    * calculation tools: executed on a worker thread; the caller stops waiting
+      at the deadline.
+    * data / retrieval tools (shared DB session): PostgreSQL enforces a
+      transaction-local ``statement_timeout`` for the duration of the call,
+      restored afterwards; a cancelled statement becomes ``timeout``.
+    """
+    if tool.category == "calculation":
+        future = _CALCULATION_POOL.submit(tool.handler, ctx, arguments)
+        try:
+            return future.result(timeout=deadline_ms / 1000)
+        except FutureTimeout as exc:
+            future.cancel()
+            raise _ToolDeadlineExceeded() from exc
+    db = ctx.db
+    if db is None or db.get_bind().dialect.name != "postgresql":
+        return tool.handler(ctx, arguments)
+    previous = db.execute(sql_text("SHOW statement_timeout")).scalar()
+    db.execute(sql_text(f"SET LOCAL statement_timeout = {int(deadline_ms)}"))
+    try:
+        result = tool.handler(ctx, arguments)
+    except OperationalError as exc:
+        if getattr(getattr(exc, "orig", None), "pgcode", None) == "57014":  # query_canceled
+            db.rollback()  # aborted transaction; also discards the SET LOCAL
+            raise _ToolDeadlineExceeded() from exc
+        raise
+    db.execute(sql_text("SELECT set_config('statement_timeout', :value, true)"), {"value": str(previous)})
+    return result
 
 
 def audit_record(result: dict[str, Any]) -> dict[str, Any]:

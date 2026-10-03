@@ -387,7 +387,9 @@ class Files {
   constructor(private readonly client: AgroAI) {}
   upload(content: Blob | Uint8Array | ArrayBuffer, options: { filename: string; contentType: string; purpose?: "attachment" | "knowledge" }) {
     const form = new FormData();
-    const blob = content instanceof Blob ? content : new Blob([content as BlobPart], { type: options.contentType });
+    // Always re-wrap with the requested type: FormData takes the part's MIME
+    // type from the Blob, and an existing Blob's own type may be empty.
+    const blob = new Blob([content as BlobPart], { type: options.contentType });
     form.set("file", blob, options.filename);
     form.set("purpose", options.purpose ?? "attachment");
     return this.client.request("POST", "/v1/intelligence/files", { form });
