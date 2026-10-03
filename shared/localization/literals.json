@@ -1055,5 +1055,14 @@
   "literal.f82e57e9131af3ba": "Checkout could not start.",
   "literal.57a5c3a9c0913425": "Secure checkout did not return a valid URL.",
   "literal.05bd6feb1f8714b0": "The intelligence run failed.",
+  "literal.b6f6623d83ccf411": "Agricultural context JSON (optional)",
+  "literal.11298e662602d78d": "Structured output",
+  "literal.0c0d5f208d8a0671": "Text answer",
+  "literal.f0d03dfe51191695": "Structured result",
+  "literal.67ed7e24c95195d1": "No intelligence runs yet.",
+  "literal.989f6cf67fb2ea12": "Build with the full platform",
+  "literal.d8a8ebc013439a4e": "Structured outputs, typed agricultural context, sessions, async jobs, knowledge retrieval, files and deterministic tools use the same key and wallet.",
+  "literal.bc23eff0f817e53b": "Python SDK",
+  "literal.40e053213503776c": "TypeScript SDK",
   "literal.2dc3246f9161a305": "Paid advisory intelligence is self-serve; broader Platform administration remains separately enrolled."
 }
