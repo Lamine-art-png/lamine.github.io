@@ -66,7 +66,16 @@ def _query(db: Session, principal: PlatformPrincipal):
 
 
 def create_session(db: Session, principal: PlatformPrincipal, payload: SessionCreate) -> IntelligenceSession:
-    active = _query(db, principal).filter(IntelligenceSession.status == "active").count()
+    # Quota is per project by design: deliberately not workspace-scoped.
+    active = (
+        db.query(IntelligenceSession)
+        .filter(
+            IntelligenceSession.organization_id == principal.organization_id,
+            IntelligenceSession.api_project_id == principal.api_project_id,
+            IntelligenceSession.status == "active",
+        )
+        .count()
+    )
     if active >= MAX_ACTIVE_SESSIONS_PER_PROJECT:
         raise HTTPException(status_code=409, detail={"code": "session_quota_exceeded"})
     now = datetime.utcnow()
