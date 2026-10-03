@@ -93,7 +93,9 @@ def _validate_and_build_context(
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
         metadata = dict(field.metadata_json or {})
         field_project_id = str(metadata.get("api_project_id") or "")
-        if field_project_id and field_project_id != principal.api_project_id:
+        # Exact project tag, like /v1/platform/fields/{id}: untagged legacy
+        # entities are not readable through any API project.
+        if field_project_id != principal.api_project_id:
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
         if field.workspace_id and owned_workspace(field.workspace_id) is None:
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})

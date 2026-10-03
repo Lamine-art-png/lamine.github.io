@@ -319,7 +319,9 @@ def _field_get(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
     project_id = str(meta.get("api_project_id") or "")
     if (
         row is None
-        or (project_id and project_id != ctx.principal.api_project_id)
+        # Exact project tag, like /v1/platform/fields/{id}: an untagged legacy
+        # entity is not visible to any API project.
+        or project_id != ctx.principal.api_project_id
         # Exact match for restricted keys (as /v1/platform/fields): a
         # project-wide field (NULL workspace) is not visible to them.
         or (ctx.principal.workspace_id and row.workspace_id != ctx.principal.workspace_id)

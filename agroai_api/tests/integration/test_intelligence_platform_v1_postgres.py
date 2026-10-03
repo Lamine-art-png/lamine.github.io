@@ -773,9 +773,11 @@ def test_data_tools_match_canonical_project_and_workspace_predicates(platform, m
                                metadata_json={"platform_api_project_id": "another-project"})
         field = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field",
                               display_name="Project field", status="active", metadata_json={"api_project_id": p.A.project_id, "crop": "almond"})
-        db.add_all([mine, other, field])
+        untagged = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field",
+                                 display_name="Legacy untagged", status="active", metadata_json={"crop": "walnut"})
+        db.add_all([mine, other, field, untagged])
         db.commit()
-        mine_id, other_id, field_id = mine.id, other.id, field.id
+        mine_id, other_id, field_id, untagged_id = mine.id, other.id, field.id, untagged.id
     finally:
         db.close()
     try:
@@ -791,6 +793,9 @@ def test_data_tools_match_canonical_project_and_workspace_predicates(platform, m
         visible = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
                                 json={"name": "fields.get.v1", "arguments": {"field_id": field_id}}).json()
         assert visible["status"] == "completed" and visible["output"]["crop"] == "almond"
+        legacy_field = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"],
+                                     json={"name": "fields.get.v1", "arguments": {"field_id": untagged_id}}).json()
+        assert legacy_field["status"] == "not_found", "untagged legacy entities are not visible to any API project"
 
         # Knowledge quota is per project, not per workspace.
         monkeypatch.setattr(knowledge, "MAX_DOCUMENTS_PER_PROJECT", 1)
@@ -802,7 +807,7 @@ def test_data_tools_match_canonical_project_and_workspace_predicates(platform, m
         db = p.Session()
         try:
             db.query(EvidenceRecord).filter(EvidenceRecord.id.in_([mine_id, other_id])).delete(synchronize_session=False)
-            db.query(ManagedEntity).filter(ManagedEntity.id == field_id).delete(synchronize_session=False)
+            db.query(ManagedEntity).filter(ManagedEntity.id.in_([field_id, untagged_id])).delete(synchronize_session=False)
             db.commit()
         finally:
             db.close()

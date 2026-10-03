@@ -266,6 +266,37 @@ def validate_caller_schema(schema: dict[str, Any]) -> None:
         Draft202012Validator.check_schema(schema)
     except SchemaError as exc:
         raise SchemaRejected(f"response_format.schema is not valid JSON Schema: {exc.message[:200]}") from exc
+    _resolve_local_refs(schema, schema)
+
+
+def _resolve_pointer(document: Any, ref: str) -> None:
+    pointer = ref[1:]
+    if pointer in ("", "/"):
+        return
+    if not pointer.startswith("/"):
+        raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' must be a JSON pointer such as '#/$defs/name'")
+    node = document
+    for raw in pointer[1:].split("/"):
+        part = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve")
+
+
+def _resolve_local_refs(node: Any, root: dict[str, Any]) -> None:
+    """Every permitted local $ref must resolve at admission (422), not mid-run."""
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str):
+            _resolve_pointer(root, ref)
+        for child in node.values():
+            _resolve_local_refs(child, root)
+    elif isinstance(node, list):
+        for child in node:
+            _resolve_local_refs(child, root)
 
 
 def resolve_schema(response_format: Any) -> tuple[str, dict[str, Any]] | None:
@@ -298,11 +329,14 @@ def _prune_additional(instance: Any, schema: dict[str, Any]) -> Any:
 def validation_errors(instance: Any, schema: dict[str, Any], *, limit: int = 8) -> list[str]:
     validator = Draft202012Validator(schema)
     errors: list[str] = []
-    for error in validator.iter_errors(instance):
-        path = "/".join(str(part) for part in error.absolute_path) or "(root)"
-        errors.append(f"{path}: {error.message[:200]}")
-        if len(errors) >= limit:
-            break
+    try:
+        for error in validator.iter_errors(instance):
+            path = "/".join(str(part) for part in error.absolute_path) or "(root)"
+            errors.append(f"{path}: {error.message[:200]}")
+            if len(errors) >= limit:
+                break
+    except Exception as exc:  # noqa: BLE001 - defensive: never surface as a server error
+        errors.append(f"(schema): validation could not complete ({exc.__class__.__name__})")
     return errors
 
 

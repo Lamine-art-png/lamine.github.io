@@ -222,3 +222,24 @@ def test_intelligence_body_cap_rejects_declared_and_streamed_oversize():
     assert run("/v1/intelligence/files", multipart, [b"a" * 1024]) == 200
     assert run("/v1/intelligence", [(b"content-type", b"application/json")], [b"a" * (5 * 1024 * 1024)]) == 413
     assert run("/v1/intelligence/brain/run", [(b"content-type", b"application/json")], [b"a" * (5 * 1024 * 1024)]) == 200, "legacy routes untouched"
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "object", "$ref": "#/$defs/missing"},
+        {"type": "object", "properties": {"a": {"$ref": "#/properties/b"}}},
+        {"type": "object", "$defs": {"x": {"type": "string"}}, "properties": {"a": {"$ref": "#x"}}},
+    ],
+)
+def test_unresolvable_local_refs_are_rejected_at_admission(schema):
+    with pytest.raises(schemas.SchemaRejected):
+        schemas.validate_caller_schema(schema)
+
+
+def test_resolvable_local_refs_are_accepted_and_validated():
+    schema = {"type": "object", "$defs": {"risk": {"type": "string", "enum": ["low", "high"]}},
+              "properties": {"level": {"$ref": "#/$defs/risk"}}, "required": ["level"]}
+    schemas.validate_caller_schema(schema)
+    assert schemas.validation_errors({"level": "low"}, schema) == []
+    assert schemas.validation_errors({"level": "extreme"}, schema)
