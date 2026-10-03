@@ -6,8 +6,11 @@ isolation, Stripe reconciliation, and crash recovery obey stronger invariants.
 """
 from __future__ import annotations
 
+import json
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import stripe
 from fastapi import HTTPException, status
@@ -15,6 +18,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1 import commercial_intelligence as legacy
+from app.intelligence_platform import runtime as platform_runtime
+from app.intelligence_platform import sessions as platform_sessions
+from app.intelligence_platform import tools as platform_tools
 from app.models.intelligence_commerce import CommercialIntelligenceRun, IntelligenceWalletLedger
 from app.models.operational_records import EvidenceRecord
 from app.models.platform_api import ApiProject, PlatformApiKey
@@ -87,7 +93,9 @@ def _validate_and_build_context(
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
         metadata = dict(field.metadata_json or {})
         field_project_id = str(metadata.get("api_project_id") or "")
-        if field_project_id and field_project_id != principal.api_project_id:
+        # Exact project tag, like /v1/platform/fields/{id}: untagged legacy
+        # entities are not readable through any API project.
+        if field_project_id != principal.api_project_id:
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
         if field.workspace_id and owned_workspace(field.workspace_id) is None:
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
@@ -259,7 +267,9 @@ def _recover_if_stale(
     )
     if run.status != "processing":
         return False
-    created = run.created_at or datetime.utcnow()
+    # The current attempt's start, not the original creation: a failed run
+    # reclaimed for a same-key retry gets a fresh staleness window.
+    created = run.started_at or run.created_at or datetime.utcnow()
     if datetime.utcnow() - created < _STALE_RUN_AFTER:
         return False
     _refund_legacy_stranded_charge(db, run=run, principal=principal)
@@ -271,30 +281,91 @@ def _recover_if_stale(
     return True
 
 
-async def _execute_paid_intelligence(
+JOB_MAX_ATTEMPTS = 3
+_JOB_RETRY_BACKOFF_SECONDS = (30, 120, 600)
+
+
+@dataclass
+class AdmittedRun:
+    run_id: str
+    price_cents: int
+    components: list[dict[str, Any]]
+    context: EvidenceContext
+    resolved: platform_runtime.Resolved
+    started: float = field(default_factory=time.monotonic)
+
+
+@dataclass
+class AdmitOutcome:
+    replay: dict[str, Any] | None = None
+    pending_run_id: str | None = None
+    admitted: AdmittedRun | None = None
+    retry_failed_run_id: str | None = None
+
+
+async def _emit(progress: Callable[[str, dict[str, Any]], Awaitable[None]] | None, event: str, data: dict[str, Any]) -> None:
+    if progress is not None:
+        try:
+            await progress(event, data)
+        except Exception:  # noqa: BLE001 - a disconnected listener never affects execution or billing
+            pass
+
+
+def _check_existing(
+    existing: CommercialIntelligenceRun,
+    *,
+    request_hash: str,
+    context: EvidenceContext,
+    principal: PlatformPrincipal,
+    db: Session,
+    execution: str,
+) -> AdmitOutcome:
+    if existing.request_hash != request_hash:
+        raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
+    if existing.workspace_id != context.workspace_id:
+        raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
+    if existing.response_json is not None:
+        return AdmitOutcome(replay=dict(existing.response_json))
+    if execution == "async" and existing.execution == "async":
+        return AdmitOutcome(pending_run_id=existing.id)
+    if execution == "sync" and existing.execution in (None, "sync") and existing.status == "failed":
+        # A failed synchronous run was never charged (the debit only exists in
+        # the completion transaction). Retrying with the same key re-executes
+        # it instead of reporting a misleading "in progress" conflict.
+        return AdmitOutcome(retry_failed_run_id=existing.id)
+    if existing.status == "processing" and _recover_if_stale(db, run=existing, principal=principal):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "stale_intelligence_run_recovered",
+                "message": "The interrupted run was closed without a charge. Retry with a new Idempotency-Key.",
+                "run_id": existing.id,
+            },
+        )
+    raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": existing.id})
+
+
+def _admit_paid_run(
     *,
     payload: legacy.IntelligenceRequest,
     idempotency_key: str,
     principal: PlatformPrincipal,
     db: Session,
-) -> dict[str, Any]:
-    """Compute first, then atomically post a successful charge.
-
-    No durable wallet debit exists while a model call is in flight. A process
-    interruption can leave only a stale, non-billable run marker, which is
-    recovered on retry. Successful result + wallet debit + ledger charge commit
-    together in one database transaction.
-    """
+    execution: str = "sync",
+) -> AdmitOutcome:
+    """Authorize, quote, and durably mark a run. No money moves here."""
     if not principal.organization_id or not principal.api_project_id:
         raise HTTPException(status_code=401, detail={"code": "invalid_principal"})
 
     catalog = legacy.TASK_CATALOG[payload.task]
-    price_cents = int(catalog["price_cents"])
-    request_hash = legacy._request_hash(payload)
+    request_hash = legacy._request_hash(payload, execution=execution)
 
     # An idempotency key identifies a request, not an authorization grant.
-    # Revalidate the current key's resource boundary before returning cached data.
+    # Revalidate the current key's resource boundary (workspace, field, and
+    # every platform reference) before returning cached data.
     context = _validate_and_build_context(db, principal, payload)
+    resolved = platform_runtime.resolve(db, principal, payload)
+    price_cents, components = platform_runtime.quote(int(catalog["price_cents"]), payload, resolved)
 
     existing = (
         db.query(CommercialIntelligenceRun)
@@ -305,23 +376,14 @@ async def _execute_paid_intelligence(
         )
         .first()
     )
+    retry_failed_run_id = None
     if existing:
-        if existing.request_hash != request_hash:
-            raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
-        if existing.workspace_id != context.workspace_id:
-            raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
-        if existing.response_json is not None:
-            return dict(existing.response_json)
-        if existing.status == "processing" and _recover_if_stale(db, run=existing, principal=principal):
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "code": "stale_intelligence_run_recovered",
-                    "message": "The interrupted run was closed without a charge. Retry with a new Idempotency-Key.",
-                    "run_id": existing.id,
-                },
-            )
-        raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": existing.id})
+        checked = _check_existing(
+            existing, request_hash=request_hash, context=context, principal=principal, db=db, execution=execution
+        )
+        if checked.retry_failed_run_id is None:
+            return checked
+        retry_failed_run_id = checked.retry_failed_run_id
 
     # Fast fail before spending provider compute. The final debit is rechecked
     # under a row lock after successful inference to handle concurrent requests.
@@ -338,7 +400,32 @@ async def _execute_paid_intelligence(
             },
         )
 
-    mode = "stateful" if payload.field_id or payload.workspace_id else "stateless"
+    now = datetime.utcnow()
+    if retry_failed_run_id is not None:
+        reclaimed = (
+            db.query(CommercialIntelligenceRun)
+            .filter(CommercialIntelligenceRun.id == retry_failed_run_id)
+            .with_for_update()
+            .populate_existing()
+            .one()
+        )
+        if reclaimed.status != "failed":
+            # A concurrent retry reclaimed it first.
+            db.rollback()
+            raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": retry_failed_run_id})
+        reclaimed.status = "processing"
+        reclaimed.error_code = None
+        reclaimed.error_detail = None
+        reclaimed.completed_at = None
+        reclaimed.started_at = now
+        reclaimed.charge_cents = price_cents
+        reclaimed.request_id = principal.request_id
+        reclaimed.attempt_count = int(reclaimed.attempt_count or 0) + 1
+        db.commit()
+        return AdmitOutcome(
+            admitted=AdmittedRun(run_id=retry_failed_run_id, price_cents=price_cents, components=components, context=context, resolved=resolved)
+        )
+    mode = "stateful" if payload.field_id or payload.workspace_id or payload.session_id else "stateless"
     run = CommercialIntelligenceRun(
         organization_id=principal.organization_id,
         api_project_id=principal.api_project_id,
@@ -350,7 +437,7 @@ async def _execute_paid_intelligence(
         task=payload.task,
         mode=mode,
         public_model=legacy.PUBLIC_MODEL,
-        status="processing",
+        status="processing" if execution == "sync" else "queued",
         charge_cents=price_cents,
         currency="usd",
         request_safe_json={
@@ -360,7 +447,20 @@ async def _execute_paid_intelligence(
             "workspace_id": context.workspace_id,
             "input_keys": sorted(payload.input.keys()),
             "language": payload.language,
+            "context_sections": sorted((payload.context.model_dump(exclude_none=True, exclude_defaults=True) if payload.context else {}).keys()),
+            "attachment_ids": [item.file_id for item in payload.attachments],
+            "tools": [item.name for item in payload.tools],
+            "knowledge_collections": list(payload.knowledge.collections) if payload.knowledge else [],
+            "response_format": (payload.response_format.type if payload.response_format else "text"),
         },
+        execution=execution,
+        session_id=payload.session_id,
+        request_id=principal.request_id,
+        metadata_json=dict(payload.metadata) or None,
+        started_at=now if execution == "sync" else None,
+        next_attempt_at=now if execution == "async" else None,
+        # The full request is retained only while an async job is pending.
+        request_payload_json=payload.model_dump(mode="json", by_alias=True) if execution == "async" else None,
     )
     db.add(run)
     try:
@@ -389,11 +489,147 @@ async def _execute_paid_intelligence(
         if concurrent.workspace_id != context.workspace_id:
             raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
         if concurrent.response_json is not None:
-            return dict(concurrent.response_json)
+            return AdmitOutcome(replay=dict(concurrent.response_json))
+        if execution == "async" and concurrent.execution == "async":
+            return AdmitOutcome(pending_run_id=concurrent.id)
         raise HTTPException(
             status_code=409,
             detail={"code": "intelligence_run_in_progress", "run_id": concurrent.id},
         )
+    return AdmitOutcome(
+        admitted=AdmittedRun(
+            run_id=run.id,
+            price_cents=price_cents,
+            components=components,
+            context=context,
+            resolved=resolved,
+        )
+    )
+
+
+def _readmit_paid_run(
+    *,
+    payload: legacy.IntelligenceRequest,
+    principal: PlatformPrincipal,
+    db: Session,
+    run: CommercialIntelligenceRun,
+) -> AdmittedRun:
+    """Rebuild an admitted run in a new session (streaming worker, async job).
+
+    Authorization is re-evaluated against current state, and the price quoted
+    at admission stays binding for this run.
+    """
+    context = _validate_and_build_context(db, principal, payload)
+    resolved = platform_runtime.resolve(db, principal, payload)
+    price_cents, components = platform_runtime.quote(int(legacy.TASK_CATALOG[payload.task]["price_cents"]), payload, resolved)
+    if price_cents != int(run.charge_cents):
+        components = [{"item": "quoted_at_admission", "quantity": 1, "unit_cents": int(run.charge_cents), "cents": int(run.charge_cents)}]
+    return AdmittedRun(
+        run_id=run.id,
+        price_cents=int(run.charge_cents),
+        components=components,
+        context=context,
+        resolved=resolved,
+    )
+
+
+def _fail_unstarted_run(db: Session, *, run_id: str, code: str) -> None:
+    """Close a run whose authorization or references failed before compute (no charge)."""
+    db.rollback()
+    run = (
+        db.query(CommercialIntelligenceRun)
+        .filter(CommercialIntelligenceRun.id == run_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if run is not None and run.status in {"processing", "queued"}:
+        run.status = "failed"
+        run.error_code = code[:120]
+        run.completed_at = datetime.utcnow()
+        run.request_payload_json = None
+        run.lease_expires_at = None
+    db.commit()
+
+
+def _decision_text(public: dict[str, Any]) -> str:
+    decision = public.get("decision")
+    if isinstance(decision, str):
+        return decision
+    return json.dumps(decision, default=str, ensure_ascii=False)
+
+
+def _platform_fields(
+    public: dict[str, Any],
+    *,
+    run: CommercialIntelligenceRun,
+    admitted: AdmittedRun,
+    prepared: platform_runtime.Prepared,
+    structured: platform_runtime.StructuredOutcome | None,
+    degraded_reasons: list[str],
+    session_turns: int | None,
+) -> dict[str, Any]:
+    latency_ms = int((time.monotonic() - admitted.started) * 1000)
+    run.latency_ms = latency_ms
+    schema = admitted.resolved.schema
+    if schema is None:
+        structured_status = "not_requested"
+    elif structured is None:
+        structured_status = "skipped"
+    else:
+        structured_status = structured.status
+    public["request_id"] = run.request_id
+    public["execution"] = run.execution
+    public["degraded_reasons"] = degraded_reasons
+    public["structured_output"] = structured.output if structured is not None and structured.status == "valid" else None
+    public["structured_output_status"] = structured_status
+    public["structured_output_schema"] = schema[0] if schema else None
+    if structured is not None and structured.errors:
+        public["structured_output_errors"] = structured.errors[:8]
+    observed = sorted(str(item["observed_at"]) for item in prepared.sources if item.get("observed_at"))
+    public["provenance"] = {
+        "sources": prepared.sources[:100],
+        "tools": [platform_tools.audit_record(item) | {"evidence_id": item["id"]} for item in prepared.tool_results],
+        "removed_unverifiable_citations": (structured.removed_citations[:20] if structured is not None else []),
+        "assumptions": [str(item) for item in (public.get("output") or {}).get("assumptions") or []][:20]
+        if isinstance(public.get("output"), dict)
+        else [],
+        "limitations": prepared.limitations[:20],
+        "data_freshness": {"oldest_observed_at": observed[0] if observed else None, "newest_observed_at": observed[-1] if observed else None},
+        "inputs_truncated": prepared.truncated,
+    }
+    public["session"] = {"id": run.session_id, "turn_count": session_turns} if run.session_id else None
+    public["usage"] = {
+        "attachments": len(admitted.resolved.files),
+        "tool_calls": len(prepared.tool_results),
+        "knowledge_results": prepared.knowledge_results
+        + sum(len((item.get("output") or {}).get("results") or []) for item in prepared.tool_results if item["name"] == "knowledge.search.v1"),
+        "latency_ms": latency_ms,
+    }
+    public["metadata"] = dict(run.metadata_json or {})
+    public.setdefault("billing", {})["components"] = admitted.components
+    return public
+
+
+async def _complete_paid_run(
+    *,
+    payload: legacy.IntelligenceRequest,
+    principal: PlatformPrincipal,
+    db: Session,
+    admitted: AdmittedRun,
+    progress: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+) -> dict[str, Any]:
+    """Compute first, then atomically post a successful charge.
+
+    No durable wallet debit exists while a model call is in flight. A process
+    interruption can leave only a stale, non-billable run marker, which is
+    recovered on retry. Successful result + wallet debit + ledger charge commit
+    together in one database transaction.
+    """
+    catalog = legacy.TASK_CATALOG[payload.task]
+    price_cents = admitted.price_cents
+    context = admitted.context
+    run_id = admitted.run_id
 
     input_text = legacy.json.dumps(payload.input, default=str, ensure_ascii=False)
     language_instruction = f" Respond in {payload.language}." if payload.language else ""
@@ -408,19 +644,54 @@ async def _execute_paid_intelligence(
     )
 
     try:
-        body, model_result = await legacy._run_ai(
-            task=str(catalog["internal_task"]),
-            user_instruction=instruction,
-            context=context,
+        await _emit(progress, "run.started", {"id": run_id, "task": payload.task, "price_cents": price_cents})
+        prepared = await platform_runtime.prepare(db, principal, payload, admitted.resolved, context)
+        await _emit(
+            progress,
+            "context.ready",
+            {
+                "sources": len(prepared.sources),
+                "tools": [{"name": item["name"], "status": item["status"]} for item in prepared.tool_results],
+                "knowledge_results": prepared.knowledge_results,
+            },
         )
-        degraded = bool(
+        instruction += platform_runtime.instruction_suffix(prepared, admitted.resolved)
+        model_kwargs: dict[str, Any] = {
+            "task": str(catalog["internal_task"]),
+            "user_instruction": instruction,
+            "context": context,
+        }
+        if prepared.history:
+            model_kwargs["history"] = prepared.history
+        await _emit(progress, "inference.started", {})
+        body, model_result = await legacy._run_ai(**model_kwargs)
+        model_degraded = bool(
             model_result.status != "ok"
             or model_result.demo_fallback
             or body.get("_safe_mode")
         )
+        degraded_reasons = (["model_unavailable_or_safe_mode"] if model_degraded else []) + list(prepared.degraded_reasons)
+        structured: platform_runtime.StructuredOutcome | None = None
+        if admitted.resolved.schema is not None and not degraded_reasons:
+            await _emit(progress, "structured_output.started", {"schema": admitted.resolved.schema[0]})
+            structured = await platform_runtime.structure(
+                question=payload.question,
+                schema_name=admitted.resolved.schema[0],
+                schema=admitted.resolved.schema[1],
+                analysis=body,
+                data_block=prepared.data_block,
+                known_ids=prepared.known_ids | {item.source_id for item in context.citations},
+                language=payload.language,
+            )
+            if structured.status != "valid":
+                # Never return malformed structured output as valid, and never
+                # bill for a result the caller asked for and did not get.
+                degraded_reasons.append(f"structured_output_{structured.status}")
+        degraded = bool(degraded_reasons)
+
         fresh_run = (
             db.query(CommercialIntelligenceRun)
-            .filter(CommercialIntelligenceRun.id == run.id)
+            .filter(CommercialIntelligenceRun.id == run_id)
             .with_for_update()
             .populate_existing()
             .first()
@@ -435,10 +706,23 @@ async def _execute_paid_intelligence(
             raise HTTPException(status_code=409, detail={"code": "intelligence_run_already_closed"})
         fresh_run.provider_internal = str(model_result.provider or "") or None
         fresh_run.model_internal = str(model_result.model or "") or None
+        fresh_run.tool_calls_json = [platform_tools.audit_record(item) for item in prepared.tool_results] or None
+        fresh_run.request_payload_json = None
+
+        if fresh_run.cancel_requested_at is not None:
+            # A job canceled while computing is closed without a charge.
+            current_wallet = legacy._wallet(db, principal.organization_id)
+            fresh_run.status = "canceled"
+            fresh_run.error_code = "intelligence_job_canceled"
+            fresh_run.completed_at = datetime.utcnow()
+            db.commit()
+            return {"id": fresh_run.id, "object": "agroai.intelligence", "status": "canceled",
+                    "billing": {"charged_cents": 0, "balance_cents": int(current_wallet.balance_cents)}}
 
         if degraded:
             current_wallet = legacy._wallet(db, principal.organization_id)
             fresh_run.status = "degraded"
+            fresh_run.error_code = (degraded_reasons[0] if degraded_reasons else None)
             fresh_run.completed_at = datetime.utcnow()
             public = legacy._public_result(
                 run=fresh_run,
@@ -448,6 +732,10 @@ async def _execute_paid_intelligence(
                 charged_cents=0,
                 balance_cents=int(current_wallet.balance_cents),
                 degraded=True,
+            )
+            public = _platform_fields(
+                public, run=fresh_run, admitted=admitted, prepared=prepared, structured=structured,
+                degraded_reasons=degraded_reasons, session_turns=None,
             )
             fresh_run.response_json = public
             db.commit()
@@ -481,9 +769,9 @@ async def _execute_paid_intelligence(
                 kind="intelligence_charge",
                 status="posted",
                 amount_cents=-price_cents,
-                idempotency_key=f"charge:{principal.api_project_id}:{idempotency_key}",
+                idempotency_key=f"charge:{principal.api_project_id}:{fresh_run.idempotency_key}",
                 intelligence_run_id=fresh_run.id,
-                metadata_json={"task": payload.task, "public_model": legacy.PUBLIC_MODEL},
+                metadata_json={"task": payload.task, "public_model": legacy.PUBLIC_MODEL, "components": admitted.components},
                 posted_at=datetime.utcnow(),
             )
         )
@@ -498,6 +786,21 @@ async def _execute_paid_intelligence(
             balance_cents=int(locked_wallet.balance_cents),
             degraded=False,
         )
+        session_turns = None
+        if fresh_run.session_id:
+            session_turns = platform_sessions.append_turns(
+                db,
+                session_id=fresh_run.session_id,
+                organization_id=principal.organization_id,
+                api_project_id=principal.api_project_id,
+                run_id=fresh_run.id,
+                question=payload.question,
+                answer=_decision_text(public),
+            )
+        public = _platform_fields(
+            public, run=fresh_run, admitted=admitted, prepared=prepared, structured=structured,
+            degraded_reasons=[], session_turns=session_turns,
+        )
         fresh_run.response_json = public
         db.commit()
         return public
@@ -507,18 +810,45 @@ async def _execute_paid_intelligence(
         db.rollback()
         failed_run = (
             db.query(CommercialIntelligenceRun)
-            .filter(CommercialIntelligenceRun.id == run.id)
+            .filter(CommercialIntelligenceRun.id == run_id)
             .with_for_update()
             .populate_existing()
             .first()
         )
         if failed_run is not None and failed_run.status == "processing":
-            failed_run.status = "failed"
-            failed_run.error_code = "intelligence_execution_failed"
             failed_run.error_detail = exc.__class__.__name__
-            failed_run.completed_at = datetime.utcnow()
+            if failed_run.execution == "async" and int(failed_run.attempt_count or 0) < JOB_MAX_ATTEMPTS:
+                # Bounded retry: return the job to the queue with backoff. The
+                # retained request payload is still present (cleared only on
+                # terminal states), so a retry is a faithful re-execution.
+                backoff = _JOB_RETRY_BACKOFF_SECONDS[min(int(failed_run.attempt_count or 1) - 1, len(_JOB_RETRY_BACKOFF_SECONDS) - 1)]
+                failed_run.status = "queued"
+                failed_run.error_code = "intelligence_execution_retrying"
+                failed_run.lease_expires_at = None
+                failed_run.next_attempt_at = datetime.utcnow() + timedelta(seconds=backoff)
+            else:
+                failed_run.status = "failed"
+                failed_run.error_code = "intelligence_execution_failed"
+                failed_run.completed_at = datetime.utcnow()
+                failed_run.request_payload_json = None
             db.commit()
         raise HTTPException(status_code=503, detail={"code": "intelligence_temporarily_unavailable"}) from exc
+
+
+async def _execute_paid_intelligence(
+    *,
+    payload: legacy.IntelligenceRequest,
+    idempotency_key: str,
+    principal: PlatformPrincipal,
+    db: Session,
+    progress: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+) -> dict[str, Any]:
+    """Synchronous run: admit (authorize, quote, mark) then complete (compute, settle)."""
+    outcome = _admit_paid_run(payload=payload, idempotency_key=idempotency_key, principal=principal, db=db)
+    if outcome.replay is not None:
+        return outcome.replay
+    assert outcome.admitted is not None
+    return await _complete_paid_run(payload=payload, principal=principal, db=db, admitted=outcome.admitted, progress=progress)
 
 
 # Patch the original module globals. FastAPI endpoint functions retain that

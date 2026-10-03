@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "041_abuse_project_holds"
+HEAD_ALEMBIC_REVISION = "042_intelligence_platform_v1"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -206,6 +206,32 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
         "id", "organization_id", "api_project_id", "api_key_id", "workspace_id", "field_id",
         "idempotency_key", "request_hash", "task", "mode", "public_model", "status",
         "charge_cents", "currency", "request_safe_json", "response_json", "created_at", "completed_at",
+        "execution", "session_id", "request_id", "attempt_count", "started_at", "lease_expires_at",
+        "next_attempt_at", "cancel_requested_at", "request_payload_json", "tool_calls_json", "metadata_json", "latency_ms",
+    },
+    # Intelligence Platform v1 (042). Ownership columns (organization,
+    # project, workspace) are security-critical: a schema missing any of them
+    # is not the head schema and must never be adopted as production-ready.
+    "platform_intelligence_sessions": {
+        "id", "organization_id", "api_project_id", "workspace_id", "created_by_api_key_id",
+        "context_json", "metadata_json", "status", "turn_count", "retention_days",
+        "expires_at", "created_at", "deleted_at",
+    },
+    "platform_intelligence_session_turns": {
+        "id", "session_id", "organization_id", "api_project_id", "run_id", "role", "content", "created_at",
+    },
+    "platform_intelligence_files": {
+        "id", "organization_id", "api_project_id", "workspace_id", "created_by_api_key_id",
+        "filename", "content_type", "kind", "purpose", "size_bytes", "sha256", "storage_uri",
+        "extracted_text", "extraction_status", "page_count", "status", "expires_at", "deleted_at",
+    },
+    "platform_knowledge_documents": {
+        "id", "organization_id", "api_project_id", "workspace_id", "collection", "title", "external_id",
+        "source_type", "source_label", "source_uri", "observed_at", "file_id",
+        "content_sha256", "byte_size", "chunk_count", "status",
+    },
+    "platform_knowledge_chunks": {
+        "id", "document_id", "organization_id", "api_project_id", "workspace_id", "collection", "ordinal", "text",
     },
     "platform_support_requests": {"id", "organization_id", "category", "severity", "status"},
     "platform_support_messages": {"id", "support_request_id", "visibility", "body"},

@@ -75,6 +75,8 @@ class CommercialIntelligenceRun(Base):
         Index("ix_commercial_intelligence_run_org_time", "organization_id", "created_at"),
         Index("ix_commercial_intelligence_run_project_time", "api_project_id", "created_at"),
         Index("ix_commercial_intelligence_run_status", "status", "created_at"),
+        Index("ix_commercial_intelligence_run_session_id", "session_id"),
+        Index("ix_commercial_intelligence_run_job_queue", "execution", "status", "next_attempt_at"),
     )
 
     id = Column(String, primary_key=True, default=_id)
@@ -99,3 +101,20 @@ class CommercialIntelligenceRun(Base):
     error_detail = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    # Intelligence Platform v1 (alembic 042). A run is either a synchronous
+    # request or an asynchronous job; both share one idempotency namespace and
+    # one money path.
+    execution = Column(String(16), nullable=False, default="sync", server_default="sync")
+    session_id = Column(String, nullable=True)
+    request_id = Column(String(64), nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=0, server_default="0")
+    started_at = Column(DateTime, nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True)
+    next_attempt_at = Column(DateTime, nullable=True)
+    cancel_requested_at = Column(DateTime, nullable=True)
+    # Full validated request, held only while an async job is pending and
+    # cleared when the job reaches a terminal state.
+    request_payload_json = Column(JSON, nullable=True)
+    tool_calls_json = Column(JSON, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    latency_ms = Column(Integer, nullable=True)

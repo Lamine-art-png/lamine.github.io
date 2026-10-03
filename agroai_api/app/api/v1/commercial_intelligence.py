@@ -23,6 +23,17 @@ from app.api.v1.ai import _run_ai
 from app.core.config import settings
 from app.core.organization_access import organization_access_allowed
 from app.db.base import get_db
+from app.intelligence_platform.contract import (
+    MAX_ATTACHMENTS,
+    MAX_TOOL_CALLS,
+    PLATFORM_REQUEST_FIELDS,
+    AgriculturalContext,
+    Attachment,
+    KnowledgeSpec,
+    ResponseFormat,
+    ToolCall,
+    validate_metadata,
+)
 from app.models.intelligence_commerce import (
     CommercialIntelligenceRun,
     IntelligenceWallet,
@@ -88,6 +99,20 @@ class IntelligenceRequest(BaseModel):
     field_id: str | None = Field(default=None, max_length=200)
     workspace_id: str | None = Field(default=None, max_length=200)
     language: str | None = Field(default=None, max_length=40)
+    # Intelligence Platform v1 (additive; see docs/INTELLIGENCE_PLATFORM_V1.md).
+    context: AgriculturalContext | None = None
+    attachments: list[Attachment] = Field(default_factory=list, max_length=MAX_ATTACHMENTS)
+    response_format: ResponseFormat | None = None
+    tools: list[ToolCall] = Field(default_factory=list, max_length=MAX_TOOL_CALLS)
+    knowledge: KnowledgeSpec | None = None
+    session_id: str | None = Field(default=None, min_length=1, max_length=80)
+    metadata: dict[str, str] = Field(default_factory=dict)
+    stream: bool = False
+
+    @field_validator("metadata")
+    @classmethod
+    def safe_metadata(cls, value: dict[str, str]) -> dict[str, str]:
+        return validate_metadata(value)
 
     @field_validator("input")
     @classmethod
@@ -119,8 +144,19 @@ def _money(cents: int) -> str:
     return f"${cents / 100:.2f}"
 
 
-def _request_hash(payload: IntelligenceRequest) -> str:
-    canonical = json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+def _request_hash(payload: IntelligenceRequest, *, execution: str = "sync") -> str:
+    data = payload.model_dump(mode="json", by_alias=True)
+    # Platform fields left at their defaults are omitted so a legacy-shaped
+    # request hashes exactly as it did before the platform existed (replays of
+    # pre-platform runs stay idempotent). ``stream`` is transport, not
+    # request identity: a streamed request may be replayed without streaming.
+    data.pop("stream", None)
+    for key, default in PLATFORM_REQUEST_FIELDS.items():
+        if key in data and data[key] == default:
+            data.pop(key)
+    if execution != "sync":
+        data["execution"] = execution
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -330,6 +366,9 @@ def _advisory_key_principal(
     request: Request,
     response: Response,
     db: Session,
+    *,
+    route_id: str = "commercial.intelligence.run",
+    cost: int | None = None,
 ) -> PlatformPrincipal:
     if not bool(getattr(settings, "PLATFORM_API_ENABLED", False)):
         raise HTTPException(status_code=404, detail={"code": "platform_api_disabled"})
@@ -366,7 +405,7 @@ def _advisory_key_principal(
         request_id=request_id,
         actor_metadata={"key_fingerprint": verified.key.fingerprint, "commercial_intelligence": True},
     )
-    decision = enforce_rate_limit(principal, route_id="commercial.intelligence.run")
+    decision = enforce_rate_limit(principal, route_id=route_id, cost=cost)
     apply_rate_limit_headers(response, decision)
     response.headers["X-Request-Id"] = request_id
     verified.key.last_used_at = datetime.utcnow()
