@@ -67,11 +67,18 @@ def _direction(clause: str) -> int:
     return 0
 
 
+_CLAUSE_BREAK = re.compile(r"(?:[;?!.]|\s(?:and|e|et|y|but|mas|mais|pero|while)\s)", re.IGNORECASE)
+
+
 def parse_scenario_intents(question: str, position: dict[str, Any]) -> list[dict[str, Any]]:
     """Deterministic what-if extraction. Returns labelled lever sets (max 6).
 
-    Only explicit percentages are used; a question without a number produces
-    no scenario rather than an invented magnitude.
+    Each percentage takes its lever and direction from the words that lead up
+    to it (since the previous percentage), so "prices fall 8% and BRL
+    strengthens 5%" yields a price scenario and an FX scenario. A percentage
+    with no lever words inherits the previous lever and direction ("selling
+    another 10%, 25% and 40%"). Only explicit percentages are used; a question
+    without a number produces no scenario rather than an invented magnitude.
     """
     text = str(question or "")
     matches = list(_PERCENT.finditer(text))
@@ -82,13 +89,20 @@ def parse_scenario_intents(question: str, position: dict[str, Any]) -> list[dict
     scenarios: list[dict[str, Any]] = []
     previous_end = 0
     current_lever: str | None = None
-    for match in matches:
-        window = text[max(previous_end, match.start() - 90):match.end() + 25]
-        lever = _clause_lever(window) or current_lever
-        current_lever = lever
+    current_direction = 0
+    for index, match in enumerate(matches):
+        lead = text[previous_end:match.start()]
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        tail_text = text[match.end():next_start]
+        breaker = _CLAUSE_BREAK.search(tail_text)
+        tail = tail_text[: breaker.start()] if breaker else tail_text[:30]
         previous_end = match.end()
+        lever = _clause_lever(lead) or _clause_lever(tail) or current_lever
         if lever is None:
             continue
+        if lever != current_lever:
+            current_direction = 0
+        current_lever = lever
         raw = match.group(1).replace("−", "-").replace(",", ".")
         value = Decimal(raw)
         explicit_sign = raw.startswith(("-", "+"))
@@ -98,12 +112,13 @@ def parse_scenario_intents(question: str, position: dict[str, Any]) -> list[dict
                 continue
             scenarios.append({"label": f"commit {magnitude}% more", "sell_pct_now": str(magnitude)})
             continue
-        direction = 1 if explicit_sign and value > 0 else -1 if explicit_sign else _direction(window)
+        direction = (1 if value > 0 else -1) if explicit_sign else (_direction(lead) or _direction(tail) or current_direction)
         if direction == 0:
             continue
+        current_direction = direction
         magnitude = abs(value)
         if lever == "fx_pct":
-            mentioned = {code for code in _CURRENCY.findall(window.upper()) if code in {reporting, price_currency}}
+            mentioned = {code for code in _CURRENCY.findall((lead + tail).upper()) if code in {reporting, price_currency}}
             sign = direction
             if mentioned == {reporting} and reporting != price_currency:
                 sign = -direction  # reporting currency strengthening = fewer reporting units per source unit
@@ -175,6 +190,30 @@ _TEMPLATES = {
 }
 
 
+_LEVER_LABELS = {
+    "en": {"price_pct": "price", "yield_pct": "yield", "fx_pct": "FX", "production_cost_pct": "costs", "sell_pct_now": "commit more volume"},
+    "pt": {"price_pct": "preço", "yield_pct": "produtividade", "fx_pct": "câmbio", "production_cost_pct": "custos", "sell_pct_now": "comprometer mais volume"},
+    "es": {"price_pct": "precio", "yield_pct": "rendimiento", "fx_pct": "tipo de cambio", "production_cost_pct": "costos", "sell_pct_now": "comprometer más volumen"},
+    "fr": {"price_pct": "prix", "yield_pct": "rendement", "fx_pct": "change", "production_cost_pct": "coûts", "sell_pct_now": "engager plus de volume"},
+}
+
+
+def scenario_label(assumptions: dict[str, Any], language: str) -> str:
+    """Localized label built from the scenario's own deterministic assumptions."""
+    names = _LEVER_LABELS.get(language, _LEVER_LABELS["en"])
+    parts = []
+    for lever, name in names.items():
+        raw = assumptions.get(lever)
+        if raw in (None, "", "0"):
+            continue
+        value = Decimal(str(raw))
+        if value == 0:
+            continue
+        sign = "" if lever == "sell_pct_now" else ("+" if value > 0 else "")
+        parts.append(f"{name} {sign}{value.normalize():f}%")
+    return ", ".join(parts) or "—"
+
+
 def deterministic_context_lines(context: dict[str, Any], language: str) -> list[str]:
     """Numbers come straight from deterministic results; no model involved."""
     copy = _TEMPLATES.get(language, _TEMPLATES["en"])
@@ -183,11 +222,12 @@ def deterministic_context_lines(context: dict[str, Any], language: str) -> list[
     for item in context.get("scenarios") or []:
         if item.get("status") != "ok":
             continue
+        label = scenario_label(item.get("assumptions") or {}, language)
         if item.get("projected_margin") is not None:
-            lines.append(copy["scenario"].format(label=item["label"], margin=item["projected_margin"], ccy=ccy,
+            lines.append(copy["scenario"].format(label=label, margin=item["projected_margin"], ccy=ccy,
                                                  delta=item.get("delta_projected_margin") or "0.00", exposed=item.get("exposed_revenue") or "-"))
         else:
-            lines.append(copy["scenario_no_margin"].format(label=item["label"], exposed=item.get("exposed_revenue") or "-", ccy=ccy,
+            lines.append(copy["scenario_no_margin"].format(label=label, exposed=item.get("exposed_revenue") or "-", ccy=ccy,
                                                            delta=item.get("delta_exposed_revenue") or "0.00"))
     if context.get("scenarios"):
         lines.append(copy["not_forecast"])

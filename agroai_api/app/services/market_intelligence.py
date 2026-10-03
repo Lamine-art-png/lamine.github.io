@@ -12,7 +12,7 @@ from typing import Any, Iterable
 
 from app.services.market_normalization import canonical_commodity, canonical_unit
 
-CALCULATION_VERSION = "market-economics-2026.09.2"
+CALCULATION_VERSION = "market-economics-2026.10.1"
 FX_QUOTE_CONVENTION = "reporting_currency_per_source_currency"
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -191,6 +191,23 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
 
     warnings: list[str] = []
     missing_inputs: list[str] = []
+
+    # Costs default to the reporting currency (historical behaviour). When an
+    # operation records costs in its local currency (``cost_currency``), every
+    # cost amount converts with the same governed FX rate as the market price;
+    # without that rate, margin is suppressed rather than mixing currencies.
+    cost_currency = str(metadata.get("cost_currency") or reporting_currency).upper()
+    cost_fx = ONE
+    cost_fx_missing = False
+    if cost_currency != reporting_currency:
+        price_currency = str(_attr(position, "price_currency") or reporting_currency).upper()
+        position_fx = _attr(position, "fx_rate_to_reporting")
+        if cost_currency == price_currency and position_fx is not None and dec(position_fx) > ZERO:
+            cost_fx = dec(position_fx)
+        else:
+            cost_fx_missing = True
+            missing_inputs.append("cost_fx")
+            warnings.append("costs are recorded in a different currency and need an FX rate before margin can be reconciled")
     contracted = ZERO
     locked_revenue = ZERO
     weighted_price_numerator = ZERO
@@ -260,9 +277,12 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     cost_behavior = str(metadata.get("production_cost_behavior") or "fixed_total_at_baseline_yield")
     if cost_behavior != "fixed_total_at_baseline_yield":
         raise MarketCalculationError("unsupported production_cost_behavior")
-    fixed_production_cost_total = dec(_attr(position, "fixed_production_cost_total"), expected * cost_per_unit)
+    fixed_production_cost_total = dec(_attr(position, "fixed_production_cost_total"), expected * cost_per_unit) * cost_fx
+    cost_per_unit = cost_per_unit * cost_fx
+    freight_per_unit = freight_per_unit * cost_fx
+    storage_per_unit = storage_per_unit * cost_fx
     inventory_cost_raw = metadata.get("inventory_cost_per_unit")
-    inventory_cost_per_unit = dec(inventory_cost_raw) if inventory_cost_raw is not None else None
+    inventory_cost_per_unit = dec(inventory_cost_raw) * cost_fx if inventory_cost_raw is not None else None
     if inventory > ZERO and inventory_cost_per_unit is None:
         missing_inputs.append("inventory_cost_per_unit")
         warnings.append("carry inventory is included in marketable supply, but margin is suppressed until its cost basis is supplied")
@@ -270,8 +290,8 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     variable_commercial_cost = marketable_supply * (freight_per_unit + storage_per_unit)
     total_cost = fixed_production_cost_total + inventory_cost_total + variable_commercial_cost
     cost_basis_complete = inventory == ZERO or inventory_cost_per_unit is not None
-    break_even = total_cost / marketable_supply if marketable_supply > ZERO and cost_basis_complete else None
-    suppress_margin = over_contracted or missing_contract_fx or expected_revenue is None or (inventory > ZERO and inventory_cost_per_unit is None)
+    break_even = total_cost / marketable_supply if marketable_supply > ZERO and cost_basis_complete and not cost_fx_missing else None
+    suppress_margin = over_contracted or missing_contract_fx or cost_fx_missing or expected_revenue is None or (inventory > ZERO and inventory_cost_per_unit is None)
     gross_margin = None if suppress_margin else expected_revenue - total_cost
     margin_pct = None if gross_margin is None or expected_revenue in {None, ZERO} else _pct(gross_margin, expected_revenue)
     weighted_contract_price = None if contracted <= ZERO or missing_contract_fx else weighted_price_numerator / contracted
@@ -303,6 +323,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         "current_realizable_price": _out(spot_price_reporting) if spot_price_reporting is not None else None,
         "production_cost_per_unit": _out(cost_per_unit),
         "production_cost_behavior": cost_behavior,
+        "cost_currency": cost_currency,
         "fixed_production_cost_total": _out(fixed_production_cost_total, MONEY),
         "inventory_cost_per_unit": _out(inventory_cost_per_unit) if inventory_cost_per_unit is not None else None,
         "freight_per_unit": _out(freight_per_unit),

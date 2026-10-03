@@ -827,3 +827,38 @@ def test_scheduled_cycle_ingests_shared_evidence_once_and_alerts(client, db, mon
     # A second cycle inside the refresh interval does not re-fetch CONAB.
     again = asyncio.run(cycle.run_cycle(time_budget_seconds=120))
     assert again["providers"]["conab_precos"]["status"] == "fresh_enough" and len(calls) == 1
+
+
+def test_mixed_clause_what_if_assigns_each_percentage_to_its_own_lever():
+    intents = parse_scenario_intents("What happens if prices fall 8% and BRL strengthens 5%?", {"reporting_currency": "USD", "price_currency": "BRL"})
+    assert [{k: v for k, v in item.items() if k != "label"} for item in intents] == [{"price_pct": "-8"}, {"fx_pct": "5"}]
+    falls = parse_scenario_intents("What if prices fall 5% or 10%?", {"reporting_currency": "USD"})
+    assert [item["price_pct"] for item in falls] == ["-5", "-10"]
+
+
+def test_local_currency_costs_convert_with_the_governed_price_fx(client, db):
+    seed_fx(db)
+    seed(db,
+         series_point("conab_precos:soybean:em graos:MT:producer_received", "2.36", provider="conab_precos", commodity="soybean",
+                      country="BR", region="MT", unit="kg", currency="BRL"),
+         series_point("bcb_ptax:USD:BRL", "5.00", provider="bcb_ptax", observation_type="fx_rate", unit="BRL/USD", currency="BRL",
+                      base="USD", frequency="daily_business", fresh_days=3, last_known_days=7))
+    act_as(*identity(db, "cost-ccy"))
+    created = onboard(client, crop="soja", country_code="BR", region="Mato Grosso", season="2027", expected_production="1000",
+                      production_cost_per_unit="100", reporting_currency="USD")
+    position = created["position"]
+    assert position["cost_currency"] == "BRL"
+    assert position["current_realizable_price"] == "28.32000000"  # 141.60 BRL / 5.00
+    assert position["break_even_price"] == "20.00000000"  # 100 BRL / 5.00
+    assert position["projected_margin"] == "8320.00"  # 1000 x (28.32 - 20.00)
+    stale_cost = compute_position(SimpleNamespace(**{**_scenario_position().__dict__, "reporting_currency": "USD", "price_currency": "BRL",
+                                                    "fx_rate_to_reporting": None, "metadata_json": {"cost_currency": "BRL", "inventory_cost_per_unit": "95"}}), [])
+    assert "cost_fx" in stale_cost.payload["missing_inputs"] and stale_cost.payload["projected_margin"] is None
+
+
+def test_deterministic_scenario_labels_follow_the_answer_language():
+    from app.services.market_intelligence_ask import scenario_label
+
+    assert scenario_label({"price_pct": "-8"}, "pt") == "preço -8%"
+    assert scenario_label({"fx_pct": "5"}, "fr") == "change +5%"
+    assert scenario_label({"sell_pct_now": "25"}, "es") == "comprometer más volumen 25%"

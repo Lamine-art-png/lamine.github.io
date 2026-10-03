@@ -121,65 +121,84 @@ def _series_row(db: Session, descriptor: Any, cache: dict[str, MarketDataSeries]
 
 
 def persist_points(db: Session, points: Iterable[SeriesPoint]) -> IngestStats:
-    """Idempotently persist provider points. Does not commit."""
+    """Idempotently persist provider points. Does not commit.
+
+    Existing points are loaded once per series (one query per series, not per
+    point), so a 90-day ECB history or a year of CONAB weeks ingests quickly.
+    """
     stats = IngestStats()
     cache: dict[str, MarketDataSeries] = {}
+    by_series: dict[str, list[SeriesPoint]] = {}
     for point in points:
         stats.seen += 1
         if not (point.descriptor.licensing or {}).get("storage_allowed", True):
             continue  # licence forbids storage: evidence may only be used transiently
-        series = _series_row(db, point.descriptor, cache)
+        by_series.setdefault(point.descriptor.series_key, []).append(point)
+    for series_points in by_series.values():
+        series = _series_row(db, series_points[0].descriptor, cache)
         db.flush()
-        observed = _naive(point.observed_at)
-        digest = _content_hash(point)
-        existing = (
-            db.query(MarketDataPoint)
-            .filter(MarketDataPoint.series_id == series.id, MarketDataPoint.observed_at == observed)
-            .first()
-        )
-        if existing is None:
-            try:
-                with db.begin_nested():
-                    db.add(MarketDataPoint(
-                        series_id=series.id,
-                        observed_at=observed,
-                        period_start=_naive(point.period_start) if point.period_start else None,
-                        period_end=_naive(point.period_end) if point.period_end else None,
-                        value=point.value,
-                        raw_value=(point.raw_value or "")[:120] or None,
-                        source_status=point.source_status,
-                        retrieved_at=_naive(point.retrieved_at),
-                        content_hash=digest,
-                        revision=Decimal(0),
-                        upstream_ref=(point.upstream_ref or "")[:600] or None,
-                        quality_json=dict(point.quality),
-                    ))
-                stats.inserted += 1
-            except IntegrityError:
-                stats.duplicates += 1
-        elif existing.content_hash == digest:
-            stats.duplicates += 1
-            existing.retrieved_at = _naive(point.retrieved_at)
-        else:
-            quality = dict(existing.quality_json or {})
-            revisions = list(quality.get("revisions") or [])[-9:]
-            revisions.append({
-                "previous_value": str(existing.value),
-                "previous_retrieved_at": existing.retrieved_at.isoformat() + "Z" if existing.retrieved_at else None,
-                "revised_at": _naive(point.retrieved_at).isoformat() + "Z",
-            })
-            existing.value = point.value
-            existing.raw_value = (point.raw_value or "")[:120] or None
-            existing.content_hash = digest
-            existing.retrieved_at = _naive(point.retrieved_at)
-            existing.revision = Decimal(int(existing.revision or 0) + 1)
-            existing.quality_json = {**dict(point.quality), "revisions": revisions}
-            stats.revised += 1
-        stats.series_touched.add(series.id)
-        if series.last_observed_at is None or observed > series.last_observed_at:
-            series.last_observed_at = observed
-        series.last_retrieved_at = _naive(point.retrieved_at)
+        observed_times = sorted({_naive(point.observed_at) for point in series_points})
+        known: dict[datetime, MarketDataPoint] = {
+            row.observed_at: row
+            for row in db.query(MarketDataPoint).filter(
+                MarketDataPoint.series_id == series.id,
+                MarketDataPoint.observed_at >= observed_times[0],
+                MarketDataPoint.observed_at <= observed_times[-1],
+            )
+        }
+        for point in series_points:
+            stats.series_touched.add(series.id)
+            _persist_point(db, series, point, known, stats)
     return stats
+
+
+def _persist_point(db: Session, series: MarketDataSeries, point: SeriesPoint, known: dict[datetime, MarketDataPoint], stats: IngestStats) -> None:
+    observed = _naive(point.observed_at)
+    digest = _content_hash(point)
+    existing = known.get(observed)
+    if existing is None:
+        try:
+            with db.begin_nested():
+                row = MarketDataPoint(
+                    series_id=series.id,
+                    observed_at=observed,
+                    period_start=_naive(point.period_start) if point.period_start else None,
+                    period_end=_naive(point.period_end) if point.period_end else None,
+                    value=point.value,
+                    raw_value=(point.raw_value or "")[:120] or None,
+                    source_status=point.source_status,
+                    retrieved_at=_naive(point.retrieved_at),
+                    content_hash=digest,
+                    revision=Decimal(0),
+                    upstream_ref=(point.upstream_ref or "")[:600] or None,
+                    quality_json=dict(point.quality),
+                )
+                db.add(row)
+            stats.inserted += 1
+            known[observed] = row  # a repeated row later in the same batch is a duplicate
+        except IntegrityError:
+            stats.duplicates += 1
+    elif existing.content_hash == digest:
+        stats.duplicates += 1
+        existing.retrieved_at = _naive(point.retrieved_at)
+    else:
+        quality = dict(existing.quality_json or {})
+        revisions = list(quality.get("revisions") or [])[-9:]
+        revisions.append({
+            "previous_value": str(existing.value),
+            "previous_retrieved_at": existing.retrieved_at.isoformat() + "Z" if existing.retrieved_at else None,
+            "revised_at": _naive(point.retrieved_at).isoformat() + "Z",
+        })
+        existing.value = point.value
+        existing.raw_value = (point.raw_value or "")[:120] or None
+        existing.content_hash = digest
+        existing.retrieved_at = _naive(point.retrieved_at)
+        existing.revision = Decimal(int(existing.revision or 0) + 1)
+        existing.quality_json = {**dict(point.quality), "revisions": revisions}
+        stats.revised += 1
+    if series.last_observed_at is None or observed > series.last_observed_at:
+        series.last_observed_at = observed
+    series.last_retrieved_at = _naive(point.retrieved_at)
 
 
 def _recent_runs(db: Session, provider_id: str, demand_key: str, limit: int = 6) -> list[MarketProviderRun]:

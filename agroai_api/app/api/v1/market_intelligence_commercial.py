@@ -345,6 +345,10 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
     }
     if payload.inventory_cost_per_unit is not None:
         metadata["inventory_cost_per_unit"] = str(payload.inventory_cost_per_unit)
+    # Operators state costs in the currency they operate in; the engine converts
+    # them with the same governed FX rate as the market price.
+    if local_currency and local_currency != inferred["reporting_currency"]:
+        metadata["cost_currency"] = local_currency
     if payload.fx_rate_to_reporting is not None:
         metadata["fx_source"] = "customer"
     position = MarketPosition(

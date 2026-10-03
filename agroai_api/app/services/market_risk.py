@@ -98,6 +98,13 @@ def historical_move_statistics(values: list[Decimal], *, horizon_periods: int, f
             "tested_windows": tested,
             "inside_band_percent": pct(inside / tested) if tested else None,
             "expected_inside_percent": "90.00",
+            # A band that held far less than 90% of realised moves is a poor
+            # guide for this series (short history, trend or regime change).
+            "warning": (
+                "historical_band_poorly_calibrated"
+                if tested >= 10 and inside / tested < 0.70
+                else ("too_few_windows_to_evaluate" if tested < 10 else None)
+            ),
         },
     }
 
