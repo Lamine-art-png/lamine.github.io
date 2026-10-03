@@ -29,12 +29,22 @@ def test_hardened_composition_replaces_money_moving_runtime() -> None:
 
 
 def test_customer_debit_occurs_only_after_model_result() -> None:
-    source = inspect.getsource(hardened._execute_paid_intelligence)
+    # Sync, streamed and async runs all settle through _complete_paid_run;
+    # authorization happens first in _admit_paid_run (or _readmit_paid_run).
+    source = inspect.getsource(hardened._complete_paid_run)
     model_call = source.index("await legacy._run_ai")
+    structured = source.index("await platform_runtime.structure")
     debit = source.index("locked_wallet.balance_cents -= price_cents")
     charge = source.index('kind="intelligence_charge"')
-    assert model_call < debit < charge
-    assert "context = _validate_and_build_context" in source[:model_call]
+    assert model_call < structured < debit < charge
+    admit = inspect.getsource(hardened._admit_paid_run)
+    assert "context = _validate_and_build_context" in admit
+    assert admit.index("_validate_and_build_context") < admit.index("platform_runtime.resolve") < admit.index("db.add(run)")
+    assert "balance_cents -=" not in admit
+    sync = inspect.getsource(hardened._execute_paid_intelligence)
+    assert sync.index("_admit_paid_run") < sync.index("_complete_paid_run")
+    readmit = inspect.getsource(hardened._readmit_paid_run)
+    assert "_validate_and_build_context" in readmit and "platform_runtime.resolve" in readmit
 
 
 def test_workspace_boundary_is_server_authoritative() -> None:
@@ -82,7 +92,7 @@ def test_bootstrap_key_creation_is_bounded() -> None:
 
 
 def test_concurrent_idempotency_insert_is_resolved_without_second_run() -> None:
-    source = inspect.getsource(hardened._execute_paid_intelligence)
+    source = inspect.getsource(hardened._admit_paid_run)
     assert "except IntegrityError" in source
     assert "db.rollback()" in source
     assert "concurrent.request_hash != request_hash" in source

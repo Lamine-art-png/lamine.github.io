@@ -93,14 +93,30 @@ def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str 
     return None
 
 
-async def _guarded_execute_paid_intelligence(*, payload: Any, **kwargs: Any) -> dict[str, Any]:
-    credential_path = _credential_path(
-        {
-            "question": getattr(payload, "question", ""),
-            "input": getattr(payload, "input", {}),
-        },
-        path="request",
-    )
+def reject_credentials(payload: Any) -> None:
+    """Fail closed on credentials anywhere a caller can place text.
+
+    Covers the question, legacy ``input``, and every Intelligence Platform
+    surface that reaches inference or storage: typed context (including
+    extensions), tool arguments, metadata, and caller output schemas.
+    """
+    response_format = getattr(payload, "response_format", None)
+    surfaces: dict[str, Any] = {
+        "question": getattr(payload, "question", ""),
+        "input": getattr(payload, "input", {}),
+    }
+    context = getattr(payload, "context", None)
+    if context is not None:
+        surfaces["context"] = context.model_dump(mode="json", exclude_none=True)
+    tools = getattr(payload, "tools", None) or []
+    if tools:
+        surfaces["tools"] = [{"name": call.name, "arguments": call.arguments} for call in tools]
+    metadata = getattr(payload, "metadata", None) or {}
+    if metadata:
+        surfaces["metadata"] = metadata
+    if response_format is not None and getattr(response_format, "schema_", None):
+        surfaces["response_format"] = {"schema": response_format.schema_}
+    credential_path = _credential_path(surfaces, path="request")
     if credential_path:
         raise HTTPException(
             status_code=422,
@@ -110,6 +126,15 @@ async def _guarded_execute_paid_intelligence(*, payload: Any, **kwargs: Any) -> 
                 "field": credential_path[:240],
             },
         )
+
+
+def text_contains_credential(value: str) -> bool:
+    """For free text (documents, knowledge): match credential formats anywhere."""
+    return any(pattern.search(value or "") is not None for pattern in _SECRET_VALUE_PATTERNS)
+
+
+async def _guarded_execute_paid_intelligence(*, payload: Any, **kwargs: Any) -> dict[str, Any]:
+    reject_credentials(payload)
     return await _original_execute_paid_intelligence(payload=payload, **kwargs)
 
 
