@@ -190,19 +190,64 @@ MARKET_INTELLIGENCE_CANARY_ORGANIZATION_IDS=
 MARKET_INTELLIGENCE_DEMO_FIXTURES_ENABLED=false
 ```
 
-## Current production boundary
+## Commercial Intelligence platform (October 2026)
 
-The production-shaped module, deterministic engine, persistence, authentication/tenancy, scenario system, grounded multi-model layer, global demo fixtures, provider contracts and portal surface can ship independently of paid market feeds.
+The module now runs as a global Commercial Intelligence layer:
 
-**Live market connectivity is not complete until a real provider adapter is configured with credentials/licensing, freshness policies and verified upstream retrieval.** The product must display `DEMO`, `MANUAL`, `STALE`, `DELAYED`, `UNAVAILABLE` or `NOT_CONFIGURED` honestly until those conditions are met.
+```text
+GLOBAL MARKET DATA PLANE            (shared, tenant-free)
+  provider adapters (series level) -> normalization -> market_data_series / market_data_points
+  scheduled cycle (hourly cron)     -> market_provider_runs (health, backoff, idempotency)
+            |
+            v  governed resolution (freshness + licence aware; never synchronous for slow sources)
+TENANT COMMERCIAL POSITION GRAPH    (organization-scoped)
+  positions, contracts, inventory, costs, linked fields, yield estimates, manual prices
+            |
+            v
+DETERMINISTIC ECONOMICS (Decimal) -> snapshots -> MATERIALITY ENGINE -> alerts / digests
+            |                                              |
+            v                                              v
+SCENARIO ENGINE v2 + HISTORICAL RISK CONTEXT         COMMERCIAL HOME / DATA HEALTH
+            |
+            v
+GROUNDED AI (explains, never calculates) -> Ask AGRO-AI, decision journal
+```
 
-## Next provider work
+### Shared market-data plane
 
-The next production integration phase should prioritize provider coverage by customer decision value, not geography alone:
+- `app/services/market_data_adapters.py`: series-level adapters. Each emits canonical upstream series (one CONAB state/product/week, one EC market/stage/week, one ECB currency/day) with provider, native id, unit, currency, observed/retrieved time, freshness and last-known policy, and licensing flags. Adapters never emit `LIVE`.
+- `app/services/market_data_plane.py`: idempotent persistence (unique series + observation time; changed upstream values become tracked revisions), provider runs with exponential backoff (capped at 24 h), cross-tenant demand de-duplication, freshness states (`DELAYED` fresh, `STALE` within the explicit last-known policy, `UNAVAILABLE` otherwise and never used), FX resolution (BCB PTAX for USD/BRL, ECB cross rates via EUR, exact CFA-franc parity) and physical-price resolution (exact market match, otherwise median of fresh markets, with every contributing point recorded).
+- `app/services/market_normalization.py`: multilingual commodity aliases, unit canonicalization (tonne, kg, bushel, pound, quintal, cwt, short/long ton, 60 kg saca, 90/50 kg bags), locale-aware number parsing that refuses ambiguous values, country currency/timezone defaults.
+- Licensing is enforced in code: `storage_allowed=false` evidence is never persisted, `derived_values_allowed=false` evidence is never used in calculations, `display_allowed=false` values are redacted in every API response.
 
-1. FX source with explicit timestamps and retry/circuit-breaker policy.
-2. U.S. government/cash-market sources and licensed benchmark data where required.
-3. Brazil physical/benchmark/FX sources under appropriate data rights.
-4. specialty-crop physical-market sources.
-5. Australia/Europe/India/Africa regional adapters as customers require them.
-6. background refresh, caching/materiality detection and alert delivery on top of the time-series observations already persisted.
+### Market Packs
+
+`app/services/market_packs.py` maps country + commodity (or commodity family) to market structure, default unit, futures role and evidence plan. Futures are always optional licensed evidence; specialty crops, mandi and local-market packs have no futures dependency. Onboarding infers the pack, unit, currency and sources from plain answers (crop, country, region, season); customers never supply provider report identifiers. Packs: `br_grains_oilseeds`, `br_coffee`, `us_row_crops`, `us_specialty_crops`, `eu_cereals_oilseeds`, `au_grains`, `in_mandi`, `ke_local_markets`, `waemu_local_markets`, `global_livestock_dairy`, `global_physical` (fallback).
+
+### Positions and refresh
+
+`app/services/market_intelligence_refresh.py` resolves each position from the shared plane. A customer-entered price (`price_policy: manual`) is never overwritten; a customer-supplied FX rate is never cleared when no governed source exists (e.g. KES); automation-set values that can no longer be verified are cleared rather than silently aged. Every promoted value writes a tenant-scoped audit observation pointing at the shared series/point.
+
+### Materiality Engine
+
+`app/services/market_materiality.py` (methodology `materiality-2026.10.1`): snapshots deterministic economics, compares with the reference snapshot (latest at least 20 h old), measures impact as the change in projected margin (or exposed revenue) relative to projected revenue, attributes it to drivers by sequential substitution (contributions sum exactly), and assigns LOW/MEDIUM/HIGH/CRITICAL from configurable thresholds (defaults 2/5/10 %) plus qualitative transitions (margin turning negative, price below break-even, over-contracting). Economic alerts computed from STALE or UNAVAILABLE evidence are suppressed and surfaced as data-quality changes. Events are deduplicated and rate-limited (12 h cooldown unless the level escalates).
+
+### Background cycle and alerts
+
+`app/services/market_intelligence_cycle.py` runs after every hourly maintenance call (`/v1/internal/queue/drain-outbox`, as a background task) and on demand (`/v1/internal/queue/market-cycle`, queue token). It holds a PostgreSQL advisory lock, ingests due demands once for all tenants, re-resolves positions without provider calls, evaluates materiality and persists events (in-app). Email digests to owners/admins are opt-in (`MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED`), exist for en/pt/es/fr, and are deferred (never sent in English) for other languages. Disable the whole cycle with `MARKET_INTELLIGENCE_CYCLE_ENABLED=false`.
+
+### Scenarios, risk, journal
+
+- Scenario Engine v2 adds basis/premium, inventory, carry (months x cost), contracted-volume and lock-price levers, full deltas, completeness and warnings; zero change reproduces the baseline exactly. `POST /scenarios/compare` runs up to six side by side without persisting.
+- `app/services/market_risk.py` (`historical-moves-2026.10.1`) reports historical move percentiles, annualised volatility, price percentile and a rolling out-of-sample p5..p95 coverage diagnostic for the governed series behind a position, and stress-tests the position at p5/p95. Minimum 26 observations. Not a forecast.
+- Decision Journal v2 freezes the position, data health and scenario at decision time and records the action taken and later outcome versus the modelled margin.
+
+### Field-to-commercial linkage
+
+Positions can be linked to organization fields (`platform_field` entities). Linked area (excluding synthetic/demo fields) x a yield estimate (customer, Field Intelligence, Crop Intelligence or connector source) recalculates expected production and immediately evaluates materiality. AGRO-AI does not yet produce automated yield estimates; the endpoint is the integration point.
+
+### Ask AGRO-AI
+
+What-if questions with explicit percentages (English, Portuguese, Spanish, French) are parsed deterministically, computed by the scenario engine and supplied as evidence ids the model must cite exactly; the deterministic fallback states the same numbers. Open material changes, evidence freshness, the current price source and saved scenarios are supplied as facts. Without a position id, Ask focuses on the position that most deserves attention. Customer-visible traces never name the serving model vendor.
+
+See `docs/COMMERCIAL_INTELLIGENCE_COVERAGE.md` for the exact provider coverage, validation status and remaining credentials/licences.
