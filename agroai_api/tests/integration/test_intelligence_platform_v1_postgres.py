@@ -1307,3 +1307,33 @@ def test_workspace_scoped_run_cannot_use_a_project_wide_field(platform):
             db.commit()
         finally:
             db.close()
+
+
+def test_workspace_scoped_run_by_project_key_uses_only_that_workspaces_resources(platform):
+    p = platform
+    from app.models.platform_api import PlatformApiKey
+
+    w1, w2 = _workspace_key(p, p.A, "run-w1"), _workspace_key(p, p.A, "run-w2")
+    db = p.Session()
+    try:
+        ws = {k.name: k.workspace_id for k in db.query(PlatformApiKey).filter(PlatformApiKey.name.in_(["run-w1", "run-w2"])).all()}
+    finally:
+        db.close()
+    w2_session = p.client.post("/v1/intelligence/sessions", headers=w2, json={"title": "w2", "context": {"crop": {"name": "w2-secret-crop"}}}).json()["id"]
+    w2_file = p.client.post("/v1/intelligence/files", headers=w2, files={"file": ("w2.txt", io.BytesIO(b"w2 confidential notes"), "text/plain")}).json()["id"]
+    p.client.post("/v1/intelligence/knowledge/documents", headers=w2, json={"collection": "kb", "title": "W2 doc", "text": "nematode w2-only finding"})
+    w1_session = p.client.post("/v1/intelligence/sessions", headers=w1, json={"title": "w1"}).json()["id"]
+
+    before = len(p.state.model_calls)
+    run_in_w1 = lambda extra: p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem()},
+                                            json={"task": "answer", "question": "nematode status", "workspace_id": ws["run-w1"], **extra})
+    assert run_in_w1({"session_id": w2_session}).status_code == 404
+    assert run_in_w1({"attachments": [{"file_id": w2_file}]}).status_code == 404
+    assert len(p.state.model_calls) == before
+    grounded = run_in_w1({"session_id": w1_session, "knowledge": {"collections": ["kb"]}})
+    assert grounded.status_code == 200
+    sent = p.state.model_calls[-1]["user_instruction"]
+    assert "w2-only finding" not in sent and "w2-secret-crop" not in sent
+    # The stored run belongs to W1 and is readable by the W1 key only.
+    assert p.client.get(f"/v1/intelligence/runs/{grounded.json()['id']}", headers=w1).status_code == 200
+    assert p.client.get(f"/v1/intelligence/runs/{grounded.json()['id']}", headers=w2).status_code == 404

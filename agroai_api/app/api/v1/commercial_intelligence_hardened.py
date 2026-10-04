@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
@@ -300,6 +300,9 @@ class AdmittedRun:
     context: EvidenceContext
     resolved: platform_runtime.Resolved
     started: float = field(default_factory=time.monotonic)
+    # Principal narrowed to the run's resolved workspace; every run-scoped
+    # resource lookup (sessions, files, knowledge, data tools) uses it.
+    scope: PlatformPrincipal | None = None
 
 
 @dataclass
@@ -316,6 +319,18 @@ async def _emit(progress: Callable[[str, dict[str, Any]], Awaitable[None]] | Non
             await progress(event, data)
         except Exception:  # noqa: BLE001 - a disconnected listener never affects execution or billing
             pass
+
+
+def _run_scope(principal: PlatformPrincipal, context: EvidenceContext) -> PlatformPrincipal:
+    """The principal as it applies to this run.
+
+    A project-wide key running in workspace W reads only W's resources, so a
+    run stored under W can never contain another workspace's session,
+    attachments, knowledge or observations.
+    """
+    if context.workspace_id and principal.workspace_id != context.workspace_id:
+        return replace(principal, workspace_id=context.workspace_id)
+    return principal
 
 
 def _check_existing(
@@ -371,7 +386,8 @@ def _admit_paid_run(
     # Revalidate the current key's resource boundary (workspace, field, and
     # every platform reference) before returning cached data.
     context = _validate_and_build_context(db, principal, payload)
-    resolved = platform_runtime.resolve(db, principal, payload)
+    scope = _run_scope(principal, context)
+    resolved = platform_runtime.resolve(db, scope, payload)
     price_cents, components = platform_runtime.quote(int(catalog["price_cents"]), payload, resolved)
 
     existing = (
@@ -430,7 +446,7 @@ def _admit_paid_run(
         reclaimed.attempt_count = int(reclaimed.attempt_count or 0) + 1
         db.commit()
         return AdmitOutcome(
-            admitted=AdmittedRun(run_id=retry_failed_run_id, price_cents=price_cents, components=components, context=context, resolved=resolved)
+            admitted=AdmittedRun(run_id=retry_failed_run_id, price_cents=price_cents, components=components, context=context, resolved=resolved, scope=scope)
         )
     mode = "stateful" if payload.field_id or payload.workspace_id or payload.session_id else "stateless"
     run = CommercialIntelligenceRun(
@@ -510,6 +526,7 @@ def _admit_paid_run(
             components=components,
             context=context,
             resolved=resolved,
+            scope=scope,
         )
     )
 
@@ -527,7 +544,8 @@ def _readmit_paid_run(
     at admission stays binding for this run.
     """
     context = _validate_and_build_context(db, principal, payload)
-    resolved = platform_runtime.resolve(db, principal, payload)
+    scope = _run_scope(principal, context)
+    resolved = platform_runtime.resolve(db, scope, payload)
     price_cents, components = platform_runtime.quote(int(legacy.TASK_CATALOG[payload.task]["price_cents"]), payload, resolved)
     if price_cents != int(run.charge_cents):
         components = [{"item": "quoted_at_admission", "quantity": 1, "unit_cents": int(run.charge_cents), "cents": int(run.charge_cents)}]
@@ -537,6 +555,7 @@ def _readmit_paid_run(
         components=components,
         context=context,
         resolved=resolved,
+        scope=scope,
     )
 
 
@@ -674,7 +693,7 @@ async def _complete_paid_run(
 
     try:
         await _emit(progress, "run.started", {"id": run_id, "task": payload.task, "price_cents": price_cents})
-        prepared = await platform_runtime.prepare(db, principal, payload, admitted.resolved, context)
+        prepared = await platform_runtime.prepare(db, admitted.scope or principal, payload, admitted.resolved, context)
         await _emit(
             progress,
             "context.ready",
