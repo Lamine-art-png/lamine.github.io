@@ -854,8 +854,60 @@ def test_concurrent_workers_wait_for_the_slot_ingestion_barrier(db, monkeypatch,
     assert db.query(MarketProviderRun).filter(MarketProviderRun.provider == "conab_precos").count() == 1  # contention is not a provider run
 
 
-def test_deferrals_are_bounded(db, monkeypatch, no_heartbeat):
+def test_barrier_timeout_never_evaluates_on_pre_refresh_evidence(db, monkeypatch, no_heartbeat):
     _, org, _ = identity(db, "bounded-defer")
+    _position(db, org)
+    previous_completion = datetime.utcnow() - timedelta(hours=3)
+    state = MarketCycleOrganizationState(organization_id=org.id, last_completed_at=previous_completion, consecutive_failures=0)
+    db.add(state)
+    db.commit()
+    cycle.schedule_cycle(db)
+    [job] = _jobs(db)
+    ingestion = {"status": "in_progress_elsewhere"}
+
+    async def barrier(db_, slot, **kwargs):
+        return dict(ingestion)
+
+    evaluations = []
+
+    async def spy_evaluate(db_, organization_id, **kwargs):
+        evaluations.append(organization_id)
+        return {"positions": 1, "evaluated": 1, "failed": 0, "complete": True, "events_created": []}
+
+    monkeypatch.setattr(cycle, "ingest_once_per_slot", barrier)
+    monkeypatch.setattr(cycle, "evaluate_organization", spy_evaluate)
+    deliveries = 0
+    while True:
+        deliveries += 1
+        status = cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w")
+        if status != "deferred":
+            break
+        db.query(IngestionJob).filter_by(id=job.id).update({IngestionJob.next_attempt_at: datetime.utcnow() - timedelta(seconds=1)})
+        db.commit()
+    # Fits the real queue budget: wrangler.toml max_retries = 5 -> at most 6 deliveries.
+    assert deliveries == cycle.MAX_SLOT_DEFERRALS + 1 <= 6
+    db.refresh(job)
+    db.refresh(state)
+    assert status == "succeeded"  # the message is acknowledged, not left to dead-letter
+    assert evaluations == []  # zero commercial evaluations on knowingly stale evidence
+    assert job.output_json["status"] == cycle.SHARED_INGESTION_INCOMPLETE and job.output_json["evaluated"] == 0
+    assert job.attempt_count == 0  # contention is not a failed attempt
+    assert state.last_status == cycle.SHARED_INGESTION_INCOMPLETE
+    assert state.last_completed_at == previous_completion and state.consecutive_failures == 0
+    # Still due: the next tick schedules it again, and it evaluates once shared evidence lands.
+    later = datetime.utcnow() + timedelta(hours=1)
+    assert cycle.schedule_cycle(db, now=later)["enqueued"] == 1
+    retry = next(item for item in _jobs(db) if item.id != job.id)
+    ingestion = {"status": "already_ingested_this_slot"}
+    monkeypatch.setattr(cycle, "deliver_alerts", lambda db_, organization_id: {"status": "disabled"})
+    assert cycle.process_market_cycle_job(db, job_id=retry.id, organization_id=org.id, worker_id="w2") == "succeeded"
+    db.refresh(state)
+    assert evaluations == [org.id] and state.last_status == "succeeded" and state.last_completed_at > previous_completion
+
+
+def test_deferred_job_whose_queue_deliveries_ran_out_is_recovered(db, monkeypatch, no_heartbeat):
+    # If the queue gives up redelivering a deferred job, the hourly recovery re-arms it.
+    _, org, _ = identity(db, "defer-recover")
     _position(db, org)
     cycle.schedule_cycle(db)
     [job] = _jobs(db)
@@ -864,14 +916,13 @@ def test_deferrals_are_bounded(db, monkeypatch, no_heartbeat):
         return {"status": "in_progress_elsewhere"}
 
     monkeypatch.setattr(cycle, "ingest_once_per_slot", busy)
-    monkeypatch.setattr(cycle, "evaluate_organization", lambda *a, **k: asyncio.sleep(0, result={"positions": 0, "evaluated": 0, "failed": 0, "complete": True, "events_created": []}))
-    for _ in range(cycle.MAX_SLOT_DEFERRALS):
-        assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "deferred"
-        db.query(IngestionJob).filter_by(id=job.id).update({IngestionJob.next_attempt_at: datetime.utcnow() - timedelta(seconds=1)})
-        db.commit()
-    assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "succeeded"
-    db.refresh(job)
-    assert job.output_json["shared_ingestion_complete"] is False and db.get(MarketCycleOrganizationState, org.id).last_status == "partial"
+    assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "deferred"
+    stale = datetime.utcnow() - timedelta(minutes=30)
+    db.query(IngestionJob).filter_by(id=job.id).update({IngestionJob.updated_at: stale})
+    db.query(TaskOutbox).filter_by(job_id=job.id).update({TaskOutbox.status: "published", TaskOutbox.updated_at: stale})
+    db.commit()
+    assert cycle.recover_stale_jobs(db) == 1
+    assert db.query(TaskOutbox).filter_by(job_id=job.id).one().status == "pending"
 
 
 def test_tick_budget_covers_recovered_and_new_jobs_and_all_admitted_are_published(db, monkeypatch):

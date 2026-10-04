@@ -321,10 +321,16 @@ async def ingest_due_demands(db: Session, *, deadline: float, trigger: str = "sc
 
 SLOT_MARKER_PROVIDER = "__cycle_slot__"
 # Barrier: an organization job never evaluates before the slot's shared
-# ingestion has completed. It is re-queued (not failed) a bounded number of
-# times; after that it evaluates and reports the incomplete ingestion.
+# ingestion has completed. While it is running elsewhere the job is re-queued
+# (no attempt counted) a bounded number of times, within the Cloudflare queue's
+# delivery budget (wrangler.toml max_retries = 5, i.e. at most 6 deliveries).
+# At the bound the job ends explicitly as ``shared_ingestion_incomplete``:
+# zero evaluations, ``last_completed_at`` untouched, so the organization stays
+# due and the next tick schedules it again. It never evaluates on evidence it
+# knows predates the refresh.
 SLOT_DEFER_SECONDS = 30
-MAX_SLOT_DEFERRALS = 20
+MAX_SLOT_DEFERRALS = 4
+SHARED_INGESTION_INCOMPLETE = "shared_ingestion_incomplete"
 
 
 class SlotIngestionPending(Exception):
@@ -614,7 +620,6 @@ async def run_organization_cycle(
     time_budget_seconds: float | None = None,
     trigger: str = "scheduled",
     slot: str | None = None,
-    allow_incomplete_ingestion: bool = False,
 ) -> dict[str, Any]:
     started = time.monotonic()
     deadline = started + (time_budget_seconds if time_budget_seconds is not None else _job_budget())
@@ -622,7 +627,7 @@ async def run_organization_cycle(
     barrier_open = providers.get("status") == "already_ingested_this_slot" or (
         "status" not in providers and all(item.get("status") != "deferred_time_budget" for item in providers.values())
     )
-    if not barrier_open and not allow_incomplete_ingestion:
+    if not barrier_open:
         raise SlotIngestionPending(str(providers.get("status") or "ingestion_incomplete"))
     outcome = await evaluate_organization(db, organization_id, deadline=deadline)
     notifications = deliver_alerts(db, organization_id)
@@ -663,6 +668,34 @@ def _defer_job(db: Session, job_id: str, *, worker_id: str, reason: str) -> str:
     return "deferred"
 
 
+def _end_without_evaluation(db: Session, job_id: str, organization_id: str, *, worker_id: str, reason: str) -> str:
+    """Close a cycle whose shared ingestion never completed, evaluating nothing.
+
+    The job finishes (the queue message is acknowledged) with a machine-readable
+    outcome; the organization's ``last_completed_at`` is not advanced, so it
+    remains due and is rescheduled on the next tick. Not a failure.
+    """
+    db.rollback()
+    job = db.get(IngestionJob, job_id)
+    payload = dict(job.input_json or {}) if job is not None else {}
+    if job is not None and job.status == "running" and job.worker_id == worker_id:
+        job.attempt_count = max(0, int(job.attempt_count or 1) - 1)  # the claim was not a failed attempt
+        db.commit()
+    output = {
+        "status": SHARED_INGESTION_INCOMPLETE,
+        "evaluated": 0,
+        "shared_ingestion_complete": False,
+        "slot": payload.get("slot"),
+        "slot_deferrals": int(payload.get("slot_deferrals") or 0),
+        "reason": reason,
+    }
+    status = _complete(db, job, output, worker_id=worker_id) if job is not None else "deferred"
+    state = _state(db, organization_id)
+    state.last_status = SHARED_INGESTION_INCOMPLETE
+    db.commit()
+    return status
+
+
 def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, worker_id: str) -> str:
     job = _claim(db, job_id=job_id, tenant_id=organization_id, worker_id=worker_id)
     if job is None:
@@ -685,9 +718,10 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
             payload = job.input_json or {}
             output = asyncio.run(run_organization_cycle(
                 db, organization_id, trigger=str(payload.get("trigger") or "scheduled"), slot=payload.get("slot"),
-                allow_incomplete_ingestion=int(payload.get("slot_deferrals") or 0) >= MAX_SLOT_DEFERRALS,
             ))
         except SlotIngestionPending as pending:
+            if int(payload.get("slot_deferrals") or 0) >= MAX_SLOT_DEFERRALS:
+                return _end_without_evaluation(db, job_id, organization_id, worker_id=worker_id, reason=pending.status)
             return _defer_job(db, job_id, worker_id=worker_id, reason=pending.status)
         except Exception as exc:  # noqa: BLE001
             logger.exception("market_cycle_job_failed job=%s", job_id)
@@ -702,7 +736,7 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
     state = _state(db, organization_id)
     if status == "succeeded":
         state.last_completed_at = datetime.utcnow()
-        state.last_status = "succeeded" if output.get("complete") and output.get("shared_ingestion_complete") else "partial"
+        state.last_status = "succeeded" if output.get("complete") else "partial"
         state.consecutive_failures = 0
     db.commit()
     return status
