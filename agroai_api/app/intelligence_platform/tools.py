@@ -525,17 +525,27 @@ class _ToolDeadlineExceeded(Exception):
 
 # Calculation tools are pure Python. Each call runs on its own daemon thread,
 # so a handler stuck past its deadline is abandoned without occupying a shared
-# worker; abandoned-but-alive threads are capped so stuck work cannot grow
-# without bound (beyond the cap, calculations fail fast as timeouts).
-MAX_ABANDONED_CALCULATIONS = 32
-_ABANDONED: list[threading.Thread] = []
-_ABANDONED_LOCK = threading.Lock()
+# worker. Live calculation threads (running or abandoned) are capped and the
+# slot is reserved before a thread starts, so bursts cannot exceed the cap.
+MAX_LIVE_CALCULATIONS = 32
+_LIVE_CALCULATIONS = 0
+_LIVE_LOCK = threading.Lock()
 
 
-def _abandoned_alive() -> int:
-    with _ABANDONED_LOCK:
-        _ABANDONED[:] = [thread for thread in _ABANDONED if thread.is_alive()]
-        return len(_ABANDONED)
+def _reserve_calculation_slot() -> bool:
+    """Atomically reserve one of the live calculation threads (running or abandoned)."""
+    global _LIVE_CALCULATIONS
+    with _LIVE_LOCK:
+        if _LIVE_CALCULATIONS >= MAX_LIVE_CALCULATIONS:
+            return False
+        _LIVE_CALCULATIONS += 1
+        return True
+
+
+def _release_calculation_slot() -> None:
+    global _LIVE_CALCULATIONS
+    with _LIVE_LOCK:
+        _LIVE_CALCULATIONS -= 1
 
 
 def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str, Any], deadline_ms: int) -> dict[str, Any]:
@@ -548,7 +558,7 @@ def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str
       restored afterwards; a cancelled statement becomes ``timeout``.
     """
     if tool.category == "calculation":
-        if _abandoned_alive() >= MAX_ABANDONED_CALCULATIONS:
+        if not _reserve_calculation_slot():
             raise _ToolDeadlineExceeded()
         outcome: dict[str, Any] = {}
 
@@ -557,13 +567,15 @@ def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str
                 outcome["value"] = tool.handler(ctx, arguments)
             except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
                 outcome["error"] = exc
+            finally:
+                # The slot is held until the thread actually ends, so stuck
+                # handlers count against the cap for as long as they live.
+                _release_calculation_slot()
 
         thread = threading.Thread(target=target, name=f"agroai-tool-{tool.name}", daemon=True)
         thread.start()
         thread.join(timeout=deadline_ms / 1000)
         if thread.is_alive():
-            with _ABANDONED_LOCK:
-                _ABANDONED.append(thread)
             raise _ToolDeadlineExceeded()
         if "error" in outcome:
             raise outcome["error"]

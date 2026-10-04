@@ -1613,3 +1613,22 @@ def test_jobs_progress_without_a_queue_via_maintenance(platform, monkeypatch):
     result = cloudflare_queue._run_intelligence_platform_maintenance()
     assert result["jobs"]["executed_inline"] >= 1, result
     assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "completed"
+
+
+def test_repeated_retrieval_of_a_passage_stays_citable(platform):
+    p = platform
+    doc = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"],
+                        json={"collection": "dup", "title": "Drip SOP", "text": "flush drip filters weekly during hull split"}).json()
+    hit = p.client.post("/v1/intelligence/knowledge/search", headers=p.keys["A"], json={"collections": ["dup"], "query": "drip filters"}).json()["data"][0]
+    p.state.json_replies = [json.dumps({"agroai_structured_output": {"claims": [{"statement": "Flush weekly", "support": "supported", "evidence_ids": [hit["id"]]}], "gaps": []}})]
+    search = {"name": "knowledge.search.v1", "arguments": {"collections": ["dup"], "query": "drip filters"}}
+    run = _run(p, "A", {"task": "answer", "question": "drip filters?", "tools": [search, search],
+                        "knowledge": {"collections": ["dup"], "query": "drip filters"},
+                        "response_format": {"type": "agroai_schema", "name": "evidence_summary"}})
+    assert run.status_code == 200, run.text
+    body = run.json()
+    assert body["structured_output_status"] == "valid"
+    assert body["structured_output"]["claims"][0]["evidence_ids"] == [hit["id"]], "still citable"
+    matches = [s for s in body["provenance"]["sources"] if s["id"] == hit["id"]]
+    assert len(matches) == 1 and matches[0].get("status") != "ambiguous_id" and matches[0]["document_id"] == doc["id"]
+    assert p.state.model_calls[-1]["user_instruction"].count(f"KNOWLEDGE id={hit['id']}") == 1

@@ -204,6 +204,9 @@ async def prepare(
     now = datetime.utcnow()
     # (text, citable ids). Each citable id belongs to exactly one section.
     sections: list[tuple[str, set[str]]] = []
+    # A knowledge passage retrieved more than once (repeated tool search, or
+    # tool + direct retrieval) is the same evidence: one source, one section.
+    seen_passages: set[str] = set()
 
     for citation in context.citations:
         prepared.known_ids.add(citation.source_id)
@@ -310,6 +313,8 @@ async def prepare(
             if result["name"] == "knowledge.search.v1":
                 # Every citable passage is also a resolvable provenance source.
                 for hit in (result.get("output") or {}).get("results") or []:
+                    if hit["id"] in seen_passages:
+                        continue
                     prepared.known_ids.add(hit["id"])
                     prepared.sources.append(
                         {
@@ -345,6 +350,9 @@ async def prepare(
                 {evidence_id},
             ))
             for hit in hits:
+                if hit["id"] in seen_passages:
+                    continue
+                seen_passages.add(hit["id"])
                 sections.append((
                     f"KNOWLEDGE id={hit['id']} via={evidence_id} document={_clean(hit['title'], 200)} collection={hit['collection']} "
                     f"observed_at={hit['observed_at'] or 'unknown'}\n{_clean(hit['text'], 1_500)}",
@@ -368,6 +376,9 @@ async def prepare(
         if not hits:
             prepared.limitations.append("No matching passages were found in the requested knowledge collections.")
         for hit in hits:
+            if hit["id"] in seen_passages:
+                continue
+            seen_passages.add(hit["id"])
             prepared.known_ids.add(hit["id"])
             prepared.sources.append(
                 {

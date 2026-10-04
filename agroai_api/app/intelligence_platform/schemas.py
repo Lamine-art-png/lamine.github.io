@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 import json
-from urllib.parse import unquote
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -270,39 +269,40 @@ def validate_caller_schema(schema: dict[str, Any]) -> None:
     _resolve_local_refs(schema, schema)
 
 
-def _resolve_pointer(document: Any, ref: str) -> None:
-    pointer = ref[1:]
-    if pointer == "":
-        return  # "#" is the document root; "#/" is the property named "".
-    if not pointer.startswith("/"):
-        raise SchemaRejected(
-            f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
-            "use a JSON pointer such as '#/$defs/name'"
+def _resolve_local_refs(node: Any, root: dict[str, Any], resolver: Any = None) -> None:
+    """Every local $ref must resolve at admission (422), not mid-run.
+
+    Uses the validator's own reference resolver, so a schema is admitted
+    exactly when validation will be able to resolve its references.
+    """
+    if resolver is None:
+        from referencing import Registry, Resource
+        from referencing.jsonschema import DRAFT202012
+
+        resolver = (
+            Registry()
+            .with_resource("urn:agroai:response-schema", Resource(contents=root, specification=DRAFT202012))
+            .resolver(base_uri="urn:agroai:response-schema")
         )
-    node = document
-    # A local $ref is a URI fragment: percent-decode it first, then apply
-    # JSON Pointer's ~1 / ~0 unescaping per token.
-    for raw in unquote(pointer)[1:].split("/"):
-        part = raw.replace("~1", "/").replace("~0", "~")
-        if isinstance(node, dict) and part in node:
-            node = node[part]
-        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
-            node = node[int(part)]
-        else:
-            raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve")
-
-
-def _resolve_local_refs(node: Any, root: dict[str, Any]) -> None:
-    """Every permitted local $ref must resolve at admission (422), not mid-run."""
     if isinstance(node, dict):
         ref = node.get("$ref")
         if isinstance(ref, str):
-            _resolve_pointer(root, ref)
+            from referencing.exceptions import NoSuchAnchor, Unresolvable
+
+            try:
+                resolver.lookup(ref)
+            except NoSuchAnchor as exc:
+                raise SchemaRejected(
+                    f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
+                    "use a JSON pointer such as '#/$defs/name'"
+                ) from exc
+            except Unresolvable as exc:
+                raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
         for child in node.values():
-            _resolve_local_refs(child, root)
+            _resolve_local_refs(child, root, resolver)
     elif isinstance(node, list):
         for child in node:
-            _resolve_local_refs(child, root)
+            _resolve_local_refs(child, root, resolver)
 
 
 def resolve_schema(response_format: Any) -> tuple[str, dict[str, Any]] | None:

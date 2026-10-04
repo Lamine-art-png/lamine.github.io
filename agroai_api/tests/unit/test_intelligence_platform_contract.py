@@ -430,3 +430,54 @@ def test_percent_encoded_local_refs_resolve():
     schemas.validate_caller_schema(schema)
     assert schemas.validation_errors({"p": "ok", "q": 3}, schema) == []
     assert schemas.validation_errors({"p": 1}, schema)
+
+
+def test_calculation_slots_are_reserved_atomically_under_bursts(monkeypatch):
+    import threading
+
+    release = threading.Event()
+    peak = {"value": 0}
+    real_reserve = tools._reserve_calculation_slot
+
+    def tracking_reserve():
+        granted = real_reserve()
+        peak["value"] = max(peak["value"], tools._LIVE_CALCULATIONS)
+        return granted
+
+    monkeypatch.setattr(tools, "_reserve_calculation_slot", tracking_reserve)
+    monkeypatch.setattr(tools, "MAX_LIVE_CALCULATIONS", 8)
+    stuck = tools.PlatformTool(name="burst.calc.v1", version="1", category="calculation", description="",
+                               input_schema={"type": "object"}, handler=lambda c, a: (release.wait(10), {"status": "completed", "output": {}})[1],
+                               timeout_ms=100)
+    monkeypatch.setitem(tools.REGISTRY._tools, stuck.name, stuck)
+    ctx = SimpleNamespace(db=None, principal=None)
+    callers = [threading.Thread(target=lambda: tools.execute(ctx, [ToolCall(name="burst.calc.v1", arguments={})])) for _ in range(30)]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join()
+    try:
+        assert peak["value"] <= 8, peak
+        assert tools._LIVE_CALCULATIONS <= 8
+    finally:
+        release.set()
+    import time as _time
+    deadline = _time.monotonic() + 5
+    while tools._LIVE_CALCULATIONS and _time.monotonic() < deadline:
+        _time.sleep(0.05)
+    assert tools._LIVE_CALCULATIONS == 0, "slots are released when threads finish"
+
+
+def test_admission_and_validation_agree_on_every_reference_form():
+    """Accepted at admission <=> resolvable by the validator (never a mid-run failure)."""
+    defs = {"foo": {"type": "string"}, "a b": {"type": "string"}, "x/y": {"type": "integer"}}
+    for ref in ("#/$defs/foo", "#/$defs/a%20b", "#/$defs/x~1y", "#%2F$defs%2Ffoo", "#/$defs/missing", "#nope", "#/"):
+        schema = {"type": "object", "$defs": defs, "properties": {"p": {"$ref": ref}}}
+        try:
+            schemas.validate_caller_schema(schema)
+            admitted = True
+        except schemas.SchemaRejected:
+            admitted = False
+        errors = schemas.validation_errors({"p": "probe"}, schema)
+        resolvable = not any("could not complete" in item for item in errors)
+        assert admitted == resolvable, (ref, admitted, errors)
