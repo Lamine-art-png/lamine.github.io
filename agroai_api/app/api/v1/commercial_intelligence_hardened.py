@@ -516,18 +516,14 @@ def _admit_paid_run(
                 status_code=503,
                 detail={"code": "intelligence_idempotency_state_unavailable"},
             )
-        if concurrent.request_hash != request_hash:
-            raise HTTPException(status_code=409, detail={"code": "idempotency_key_reused_with_different_request"})
-        if concurrent.workspace_id != context.workspace_id:
-            raise HTTPException(status_code=403, detail={"code": "workspace_restricted"})
-        if concurrent.response_json is not None:
-            return AdmitOutcome(replay=dict(concurrent.response_json))
-        if execution == "async" and concurrent.execution == "async":
-            return AdmitOutcome(pending_run_id=concurrent.id)
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "intelligence_run_in_progress", "run_id": concurrent.id},
+        # Same checks as any existing run (hash, workspace, restricted-key
+        # ownership) before replaying or returning the concurrent winner.
+        checked = _check_existing(
+            concurrent, request_hash=request_hash, context=context, principal=principal, db=db, execution=execution
         )
+        if checked.retry_failed_run_id is not None:
+            raise HTTPException(status_code=409, detail={"code": "intelligence_run_in_progress", "run_id": concurrent.id})
+        return checked
     return AdmitOutcome(
         admitted=AdmittedRun(
             run_id=run.id,

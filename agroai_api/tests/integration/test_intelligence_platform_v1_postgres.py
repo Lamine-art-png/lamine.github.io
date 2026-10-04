@@ -1485,3 +1485,73 @@ def test_session_history_reaches_hosted_runtime_prompt(platform, monkeypatch):
     _run(p, "A", {"task": "answer", "question": "Which emitters did I mention?", "session_id": sid})
     assert "PRIOR SESSION TURNS" in p.state.model_calls[-1]["user_instruction"]
     assert "Block 9 uses micro sprinklers" in p.state.model_calls[-1]["user_instruction"]
+
+
+def test_insert_race_never_hands_a_restricted_key_another_keys_run(platform, monkeypatch):
+    import threading
+    import time as _time
+
+    from app.api.v1 import commercial_intelligence as legacy
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.platform_api.keys import create_platform_key
+
+    p = platform
+    db = p.Session()
+    try:
+        project = db.get(ApiProject, p.A.project_id)
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=p.A.project_id).first()
+        _key, secret = create_platform_key(db, project=project, service_account=account, name="racer",
+                                           scopes=["intelligence:run"], created_by_user_id=p.A.user_id,
+                                           resource_restrictions={"field_ids": ["only-this-field"]})
+        db.commit()
+    finally:
+        db.close()
+    restricted = {"Authorization": f"Bearer {secret}"}
+    real_wallet = legacy._wallet
+    calls = {"n": 0}
+    lock = threading.Lock()
+
+    def slow_wallet(*args, **kwargs):  # both requests pass the lookup before either inserts
+        with lock:
+            calls["n"] += 1
+            delay = 0.1 if calls["n"] == 1 else 0.7
+        _time.sleep(delay)
+        return real_wallet(*args, **kwargs)
+
+    monkeypatch.setattr(legacy, "_wallet", slow_wallet)
+    body = {"task": "answer", "question": "race for the same key"}
+    results = {}
+
+    def send(name, headers, delay):
+        _time.sleep(delay)
+        results[name] = p.client.post("/v1/intelligence", headers={**headers, "Idempotency-Key": "race-key"}, json=body)
+
+    threads = [threading.Thread(target=send, args=("winner", p.keys["A"], 0)), threading.Thread(target=send, args=("restricted", restricted, 0.05))]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results["winner"].status_code == 200, results["winner"].text
+    loser = results["restricted"]
+    assert loser.status_code == 409 and loser.json()["detail"]["code"] == "idempotency_key_in_use", loser.text
+    assert results["winner"].json()["id"] not in loser.text
+
+
+def test_expired_lease_with_pending_cancel_closes_as_canceled(platform):
+    p = platform
+    from app.intelligence_platform import jobs
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "long runner"}).json()
+    db = p.Session()
+    try:
+        row = db.get(CommercialIntelligenceRun, job["id"])
+        row.status = "processing"
+        row.cancel_requested_at = datetime.utcnow()
+        row.lease_expires_at = datetime.utcnow() - timedelta(seconds=1)
+        db.commit()
+        jobs.sweep(db)
+    finally:
+        db.close()
+    assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "canceled"
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)

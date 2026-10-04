@@ -95,8 +95,13 @@ def test_concurrent_idempotency_insert_is_resolved_without_second_run() -> None:
     source = inspect.getsource(hardened._admit_paid_run)
     assert "except IntegrityError" in source
     assert "db.rollback()" in source
-    assert "concurrent.request_hash != request_hash" in source
+    # The concurrent winner goes through the same checks as any existing run.
+    assert "_check_existing(\n            concurrent" in source
     assert '"intelligence_run_in_progress"' in source
+    checks = inspect.getsource(hardened._check_existing)
+    assert "existing.request_hash != request_hash" in checks
+    assert "existing.workspace_id != context.workspace_id" in checks
+    assert "is_resource_restricted(principal) and existing.api_key_id != principal.api_key_id" in checks
 
 
 def _tenant_context(db):

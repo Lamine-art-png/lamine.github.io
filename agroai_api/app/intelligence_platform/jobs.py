@@ -304,9 +304,14 @@ def sweep(db: Session, *, limit: int = 25) -> dict[str, int]:
     )
     for run in expired:
         # Nothing was charged: the debit only exists inside the completion
-        # transaction, which never committed for an expired lease.
-        run.status = "timeout"
-        run.error_code = "intelligence_job_timeout"
+        # transaction, which never committed for an expired lease. A cancel
+        # requested while it ran is honoured as the outcome.
+        if run.cancel_requested_at is not None:
+            run.status = "canceled"
+            run.error_code = "intelligence_job_canceled"
+        else:
+            run.status = "timeout"
+            run.error_code = "intelligence_job_timeout"
         run.completed_at = now
         run.request_payload_json = None
         timed_out += 1
