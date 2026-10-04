@@ -107,6 +107,7 @@ async function stub(page, { locale = "en", positions = [POSITION], changes = [CH
     if (path === "/v1/market-intelligence/fields") return json({ fields: [] });
     if (path === "/v1/market-intelligence/onboarding/infer") {
       const body = request.postDataJSON();
+      if (body.crop === "durum_wheat") await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow, soon-superseded answer
       const almonds = /almond/i.test(body.crop);
       if (body.country_code === "ZW") {
         return json({ pack_id: "global_physical", commodity: "corn", commodity_recognised: true, local_currency: body.local_currency || null,
@@ -278,4 +279,19 @@ test("countries with several tender currencies ask for the operating currency", 
   await create.click();
   await expect.poll(() => calls.onboarding.length).toBe(1);
   expect(calls.onboarding[0].local_currency).toBe("ZWG");
+});
+
+test("a slow superseded inference never overwrites the current selection", async ({ page }) => {
+  await stub(page, { positions: [], changes: [] });
+  await page.goto(`${APP}/market-intelligence`);
+  const onboarding = page.getByTestId("commercial-onboarding");
+  await expect(onboarding.getByText("Set up Commercial Intelligence")).toBeVisible({ timeout: 25_000 });
+  await onboarding.getByLabel("What do you grow?").selectOption("durum_wheat");
+  await page.waitForTimeout(500); // the slow request is in flight
+  await onboarding.getByLabel("What do you grow?").selectOption("almonds");
+  const inference = page.getByTestId("onboarding-inference");
+  await expect(inference.getByText("United States specialty crops")).toBeVisible();
+  await page.waitForTimeout(2000); // the older response arrives after the newer one
+  await expect(inference.getByText("United States specialty crops")).toBeVisible();
+  await expect(inference.getByText(/pounds/)).toBeVisible();
 });

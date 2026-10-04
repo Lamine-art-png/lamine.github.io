@@ -134,6 +134,22 @@ def _dec(value: Any) -> Decimal | None:
         return None
 
 
+def _observation_state(row: MarketObservation, now: datetime | None = None) -> str:
+    """Declared status, downgraded to STALE once the observation outlives its
+    own freshness policy (a customer quote is not current forever)."""
+    status = str(row.source_status or "UNAVAILABLE").upper()
+    quality = row.quality_json if isinstance(row.quality_json, dict) else {}
+    metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    raw = metadata.get("freshness_max_age_minutes", quality.get("freshness_max_age_minutes"))
+    if raw is None or row.observed_at is None or status in {"UNAVAILABLE", "STALE"}:
+        return status
+    try:
+        limit = timedelta(minutes=float(raw))
+    except (TypeError, ValueError):
+        return status
+    return "STALE" if (now or datetime.utcnow()) - row.observed_at > limit else status
+
+
 def evidence_states(db: Session, position: MarketPosition, contracts: list[MarketContractPosition] | None = None) -> dict[str, Any]:
     """Freshness of the evidence currently driving price, FX, cost FX and contract FX.
 
@@ -143,7 +159,8 @@ def evidence_states(db: Session, position: MarketPosition, contracts: list[Marke
     """
     metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
     price_state = metadata.get("price_state")
-    if price_state is None:
+    customer_priced = str(metadata.get("price_policy") or "") == "manual" or price_state in (None, "MANUAL")
+    if customer_priced and price_state not in {"SELECTION_REQUIRED", "STALE", "UNAVAILABLE"}:
         latest_manual = (
             db.query(MarketObservation)
             .filter(
@@ -154,7 +171,10 @@ def evidence_states(db: Session, position: MarketPosition, contracts: list[Marke
             .order_by(MarketObservation.observed_at.desc())
             .first()
         )
-        price_state = latest_manual.source_status if latest_manual else ("MANUAL" if position.current_realizable_price is not None else "UNAVAILABLE")
+        if latest_manual is not None:
+            price_state = _observation_state(latest_manual)
+        elif price_state is None:
+            price_state = "MANUAL" if position.current_realizable_price is not None else "UNAVAILABLE"
     fx_needed = str(position.price_currency or position.reporting_currency).upper() != str(position.reporting_currency).upper()
     fx_state = metadata.get("fx_state") if fx_needed else "NOT_REQUIRED"
     if fx_needed and fx_state is None:

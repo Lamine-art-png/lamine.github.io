@@ -102,16 +102,20 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
 
   useEffect(() => {
     if (!form.crop.trim()) { setInferred(null); return; }
+    // Responses for superseded inputs are ignored, so a slow older answer can
+    // never overwrite the pack, unit or currency of the current selection.
+    let superseded = false;
     const timer = window.setTimeout(() => {
       void apiClient.post<Inferred>("/v1/market-intelligence/onboarding/infer", {
         crop: form.crop.trim(), country_code: form.country_code, region: form.region.trim() || undefined,
         reporting_currency: form.reporting_currency || undefined, local_currency: form.local_currency || undefined,
       }).then((value) => {
+        if (superseded) return;
         setInferred(value);
         setForm((current) => ({ ...current, quantity_unit: unitChosen && current.quantity_unit ? current.quantity_unit : value.quantity_unit, reporting_currency: current.reporting_currency || value.reporting_currency }));
-      }).catch(() => setInferred(null));
+      }).catch(() => { if (!superseded) setInferred(null); });
     }, 350);
-    return () => window.clearTimeout(timer);
+    return () => { superseded = true; window.clearTimeout(timer); };
   }, [form.crop, form.country_code, form.region, form.reporting_currency, form.local_currency, unitChosen]);
 
   // Several tender currencies (e.g. ZW, PA): the customer chooses; never assumed.

@@ -422,20 +422,9 @@ def _retry_at(now: datetime, attempts: int) -> datetime:
     return now + min(timedelta(hours=12), timedelta(minutes=15) * (2 ** max(0, attempts - 1)))
 
 
-def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> None:
-    urgent = (
-        db.query(MarketMaterialityEvent)
-        .filter(
-            MarketMaterialityEvent.organization_id == organization_id,
-            MarketMaterialityEvent.status == "open",
-            MarketMaterialityEvent.level.in_(("HIGH", "CRITICAL")),
-            MarketMaterialityEvent.created_at >= now - ALERT_WINDOW,
-        )
-        .all()
-    )
-    if not urgent:
-        return
-    recipients = (
+def _eligible_recipients(db: Session, organization_id: str) -> list[User]:
+    """Owners/admins who may receive commercial alerts right now."""
+    return (
         db.query(User)
         .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
         .filter(
@@ -450,6 +439,22 @@ def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> N
         )
         .all()
     )
+
+
+def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> None:
+    urgent = (
+        db.query(MarketMaterialityEvent)
+        .filter(
+            MarketMaterialityEvent.organization_id == organization_id,
+            MarketMaterialityEvent.status == "open",
+            MarketMaterialityEvent.level.in_(("HIGH", "CRITICAL")),
+            MarketMaterialityEvent.created_at >= now - ALERT_WINDOW,
+        )
+        .all()
+    )
+    if not urgent:
+        return
+    recipients = _eligible_recipients(db, organization_id)
     existing = {
         (row.event_id, row.user_id)
         for row in db.query(MarketAlertDelivery.event_id, MarketAlertDelivery.user_id).filter(
@@ -549,6 +554,13 @@ def deliver_alerts(db: Session, organization_id: str, *, now: datetime | None = 
         position.id: position.name
         for position in db.query(MarketPosition).filter(MarketPosition.id.in_({event.position_id for event in events.values()}))
     }
+    # Re-check eligibility at send time: a recipient suspended, restricted or
+    # removed since the delivery was created must not receive retries.
+    eligible = {user.id for user in _eligible_recipients(db, organization_id)}
+    ineligible = [row for row in due if row.user_id not in eligible]
+    for row in ineligible:
+        row.status, row.next_attempt_at = "cancelled_recipient_ineligible", None
+    due = [row for row in due if row.user_id in eligible]
     by_user: dict[str, list[MarketAlertDelivery]] = {}
     for row in due:
         by_user.setdefault(row.user_id, []).append(row)

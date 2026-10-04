@@ -1046,3 +1046,37 @@ def test_home_shows_newest_changes_first_within_a_severity(client, db):
     assert changes[0]["level"] == "CRITICAL"
     highs = [item["created_at"] for item in changes[1:]]
     assert highs == sorted(highs, reverse=True) and highs[0].startswith((base + timedelta(minutes=11)).isoformat()[:16])
+
+
+def test_customer_price_goes_stale_after_its_freshness_policy(client, db):
+    from app.models.market_intelligence import MarketObservation
+    from tests.test_commercial_intelligence_global import onboard
+
+    user, org, membership = identity(db, "manual-stale")
+    act_as(user, org, membership)
+    created = onboard(client, crop="maize", country_code="KE", region="Rift Valley", season="2026", expected_production="400",
+                      local_price="4200", reporting_currency="KES")
+    position = db.get(MarketPosition, created["id"])
+    assert evidence_states(db, position, [])["price"] == "MANUAL"
+    db.query(MarketObservation).filter_by(position_id=position.id).update({MarketObservation.observed_at: datetime.utcnow() - timedelta(days=8)})
+    db.commit()
+    assert evidence_states(db, position, [])["price"] == "STALE"  # 7-day policy recorded at onboarding
+    health = client.get("/v1/market-intelligence/home").json()["data_health"]["positions_with_stale_or_missing_evidence"]
+    assert health and health[0]["degraded_evidence"]["price"] == "STALE"
+
+
+def test_alert_retries_revalidate_the_recipient(db, monkeypatch):
+    user, org, _ = identity(db, "alert-revalidate")
+    _urgent_event(db, org, _position(db, org))
+    monkeypatch.setenv("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED", "true")
+    sent = []
+    monkeypatch.setattr("app.services.email_delivery.send_email", lambda **kwargs: sent.append(kwargs["to_email"]) or {"ok": False, "reason": "smtp_timeout"})
+    now = datetime.utcnow()
+    cycle.deliver_alerts(db, org.id, now=now)
+    [delivery] = db.query(MarketAlertDelivery).all()
+    assert delivery.status == "retrying" and len(sent) == 1
+    user.account_status = "suspended"
+    db.commit()
+    cycle.deliver_alerts(db, org.id, now=now + timedelta(days=1))
+    db.refresh(delivery)
+    assert delivery.status == "cancelled_recipient_ineligible" and len(sent) == 1
