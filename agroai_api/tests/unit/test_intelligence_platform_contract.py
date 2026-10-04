@@ -316,7 +316,33 @@ def test_truncated_sections_are_not_citable_and_are_marked_omitted():
     statuses = {s["id"]: s.get("status") for s in prepared.sources}
     assert all(statuses[i] == "omitted_from_analysis" for i in omitted)
     assert not ({c.source_id for c in context.citations} & omitted)
+    sent = next(item for item in context.evidence if item["type"] == "agricultural_context")["data"]
+    assert {o["id"] for o in sent["observations"]} == included, "omitted records never reach the model"
     _out, _errors, removed = schemas.finalize_structured_output(
         {"claims": [{"statement": "s", "support": "supported", "evidence_ids": [sorted(omitted)[0], sorted(included)[0]]}], "gaps": []},
         schemas.BUILTIN_SCHEMAS["evidence_summary"], prepared.known_ids)
     assert removed == [sorted(omitted)[0]]
+
+
+@pytest.mark.parametrize(
+    "context, code",
+    [
+        ({"observations": [{"id": "a", "type": "t"}, {"id": "a", "type": "t"}]}, "duplicate_evidence_id"),
+        ({"observations": [{"id": "a", "type": "t"}], "sources": [{"id": "a"}]}, "duplicate_evidence_id"),
+        ({"observations": [{"id": "tool_1", "type": "t"}]}, "reserved_evidence_id"),
+        ({"sources": [{"id": "chunk_abc"}]}, "reserved_evidence_id"),
+        ({"observations": [{"id": "123e4567-e89b-12d3-a456-426614174000", "type": "t"}]}, "reserved_evidence_id"),
+    ],
+)
+def test_colliding_or_reserved_evidence_ids_are_rejected_before_admission(context, code):
+    with pytest.raises(HTTPException) as exc:
+        runtime.resolve(None, None, _request(context=context))
+    assert exc.value.status_code == 422 and exc.value.detail["code"] == code
+
+
+def test_explicit_empty_and_null_context_overrides_win_over_session():
+    session = SimpleNamespace(context_json={"observations": [{"id": "old", "type": "t"}], "crop": {"name": "almond"}, "sources": [{"id": "s1"}]})
+    merged = runtime._merged_context(session, _request(context={"observations": [], "crop": None}))
+    assert merged["observations"] == [] and "crop" not in merged and merged["sources"] == [{"id": "s1"}]
+    untouched = runtime._merged_context(session, _request(context={"market": {"commodity": "almonds"}}))
+    assert untouched["observations"] == [{"id": "old", "type": "t"}]
