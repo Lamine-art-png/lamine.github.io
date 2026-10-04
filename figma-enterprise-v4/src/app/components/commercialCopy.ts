@@ -170,8 +170,8 @@ export const ATTENTION_COPY: Record<string, { title: string; summary: string }> 
 export const IMPORTANCE_LABELS: Record<string, string> = { high: "High priority", medium: "Medium priority", low: "Low priority" };
 
 const FACT_TEMPLATES = {
-  exposed: "Commercially exposed: {percent}% of expected production.",
-  margin: "Projected margin is {percent}% under the current inputs.",
+  exposed: "Not yet sold or contracted: {share} of expected production.",
+  margin: "Projected margin under the current inputs: {share}.",
   position_warnings: "Review these warnings before relying on projected margin: {warnings}",
   missing_data: "More market or cost data is needed for a complete margin view.",
   scenario: "Scenario {label}: projected margin {margin}, change versus today {delta}. Exposed revenue {exposed}.",
@@ -205,7 +205,13 @@ export const COMMERCIAL_COPY: readonly string[] = [
 type Translate = (value: string) => string;
 type Format = (template: string, values: Record<string, string | number | undefined>) => string;
 type NumberFormat = (value: string | number | null | undefined, digits?: number) => string;
-export type FactFormatters = { number: NumberFormat; money: (value: string | number | null | undefined, currency: string) => string };
+export type FactFormatters = {
+  number: NumberFormat;
+  money: (value: string | number | null | undefined, currency: string) => string;
+  // Locale-formatted percentage including its sign ("80 %", "80٪"), so the
+  // symbol can never be separated from the number by translation.
+  percent: (value: string | number | null | undefined) => string;
+};
 
 export function stateLabel(tx: Translate, code?: string | null): string {
   const key = String(code || "UNKNOWN").toUpperCase();
@@ -273,7 +279,7 @@ export function renderFacts(tx: Translate, tf: Format, fmt: FactFormatters, fact
     switch (fact.code) {
       case "exposed":
       case "margin":
-        lines.push(tf(FACT_TEMPLATES[fact.code], { percent: number(p.percent, 2) }));
+        lines.push(tf(FACT_TEMPLATES[fact.code], { share: fmt.percent(p.percent) }));
         break;
       case "position_warnings":
         lines.push(tf(FACT_TEMPLATES.position_warnings, { warnings: (p.codes || []).map((code: string) => warningLabel(tx, code)).join(" ") }));
@@ -357,6 +363,11 @@ export function useCommercialFormatters(locale: string) {
       const parsed = new Date(value);
       return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(parsed);
     };
-    return { money, number, date };
+    const percent = (value: string | number | null | undefined) => {
+      if (value === null || value === undefined || value === "") return "—";
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? new Intl.NumberFormat(language, { style: "percent", maximumFractionDigits: 1 }).format(parsed / 100) : "—";
+    };
+    return { money, number, date, percent };
   }, [locale]);
 }

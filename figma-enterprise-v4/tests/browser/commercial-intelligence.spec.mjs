@@ -236,7 +236,7 @@ test("deterministic answers render from facts in the viewer's language, never th
   await askBox.fill("Que se passe-t-il si le prix baisse de 8 % ?");
   await askBox.press("Enter");
   const answer = page.getByTestId("commercial-answer");
-  await expect(answer).toContainText("Commercially exposed: 80% of expected production.");
+  await expect(answer).toContainText("Not yet sold or contracted: 80% of expected production.");
   await expect(answer).toContainText("Evidence needing attention: Contract USD-1 exchange rate: Unavailable.");
   await expect(answer).toContainText("Current price source: Weekly state producer prices from CONAB, Delayed, observed 2026-09-25.");
   await expect(answer).toContainText("Free-text what-if questions are understood in English, Portuguese, Spanish and French.");
