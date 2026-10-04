@@ -105,7 +105,10 @@ def _validate_and_build_context(
             raise HTTPException(status_code=404, detail={"code": "field_not_found"})
 
     resolved_workspace = key_workspace or project_workspace or requested_workspace or (field.workspace_id if field else None)
-    if field is not None and field.workspace_id and resolved_workspace and field.workspace_id != resolved_workspace:
+    # Exact workspace match whenever the request is workspace-scoped (as
+    # /v1/platform/fields and fields.get.v1): a project-wide field (NULL
+    # workspace) is not visible to a workspace-scoped request.
+    if field is not None and resolved_workspace and field.workspace_id != resolved_workspace:
         raise HTTPException(status_code=404, detail={"code": "field_not_found"})
 
     normalized = payload.model_copy(update={"workspace_id": resolved_workspace})

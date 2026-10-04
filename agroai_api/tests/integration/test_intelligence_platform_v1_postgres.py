@@ -1275,3 +1275,35 @@ def test_every_request_string_is_credential_scanned(platform):
     assert upload.status_code == 422 and upload.json()["detail"]["field"] == "filename"
     assert p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": secret}).status_code == 422
     assert _wallet(p.Session, p.A.org_id) == (500, 0)
+
+
+def test_workspace_scoped_run_cannot_use_a_project_wide_field(platform):
+    p = platform
+    from app.models.saas import ManagedEntity
+
+    db = p.Session()
+    try:
+        field = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field",
+                              display_name="Project-wide block", status="active",
+                              metadata_json={"api_project_id": p.A.project_id, "crop": "pistachio", "boundary": {"type": "Point", "coordinates": [0, 0]}})
+        db.add(field)
+        db.commit()
+        field_id = field.id
+    finally:
+        db.close()
+    try:
+        restricted = _workspace_key(p, p.A, "scoped-runs")
+        before = len(p.state.model_calls)
+        denied = p.client.post("/v1/intelligence", headers={**restricted, **_idem()}, json={"task": "answer", "question": "field?", "field_id": field_id})
+        assert denied.status_code == 404 and len(p.state.model_calls) == before
+        job = p.client.post("/v1/intelligence/jobs", headers={**restricted, **_idem()}, json={"task": "answer", "question": "field?", "field_id": field_id})
+        assert job.status_code == 404
+        ok = _run(p, "A", {"task": "answer", "question": "field?", "field_id": field_id})
+        assert ok.status_code == 200 and "pistachio" in json.dumps(p.state.model_calls[-1]["context"].model_dump(mode="json"))
+    finally:
+        db = p.Session()
+        try:
+            db.query(ManagedEntity).filter(ManagedEntity.id == field_id).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
