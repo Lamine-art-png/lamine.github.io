@@ -35,6 +35,9 @@ function primeKnownLocale(locale: string) {
   primeLocaleCatalogFromCache(locale, "full");
 }
 
+// Monotonic id of the most recent locale activation request (see activateLocale).
+let localeActivationSequence = 0;
+
 export function useLocale() {
   const [selectedLocale, setSelectedLocaleState] = useState(getStoredLocale());
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -168,12 +171,16 @@ export function useLocale() {
 
   const activateLocale = async (nextLocale: string) => {
     explicitLocaleActivated = true;
+    // Only the latest choice may become active: a slower activation (catalog
+    // still loading) must never land after the user has already moved on.
+    const sequence = ++localeActivationSequence;
     const canonical = canonicalizeSelectedLocale(nextLocale);
     const current = getStoredLocale();
     setCatalogError(null);
 
     if (canonical === current) {
       primeKnownLocale(canonical);
+      setCatalogLoading(false);
       return current;
     }
 
@@ -189,10 +196,12 @@ export function useLocale() {
         // locales are bundled, so this is normally synchronous/instant. The
         // dynamic path remains a recovery/authoring fallback only.
         await ensureLocaleCatalog(canonical, "full");
+        if (sequence !== localeActivationSequence) return canonical; // superseded: leave the newer choice active
         if (!hasCompleteLocaleCatalog(canonical)) {
           throw new Error(`Full UI translation incomplete for ${canonical}`);
         }
       } catch (cause) {
+        if (sequence !== localeActivationSequence) return getStoredLocale();
         const message = cause instanceof Error ? cause.message : "UI translation unavailable";
         console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, { locale: canonical, phase: "activation", error: message });
         reportLocaleEvent("locale_switch_failed", { selectedLocale: canonical, effectiveLocale: targetLocale, success: false, latencyMs: performance.now() - started });
