@@ -557,3 +557,15 @@ def test_failed_image_analysis_is_not_citable():
     assert "file_img1" not in prepared.known_ids
     assert "file_img1" not in {c.source_id for c in context.citations}
     assert any(s["id"] == "file_img1" and s["status"] == "unavailable" for s in prepared.sources)
+
+
+@pytest.mark.parametrize("target, admitted", [("#/examples", False), ("#/required", False), ("#/$defs/flag", True), ("#/$defs/obj", True)])
+def test_references_must_point_to_schemas(target, admitted):
+    schema = {"type": "object", "examples": [], "required": [], "$defs": {"flag": True, "obj": {"type": "string"}},
+              "properties": {"x": {"$ref": target}}}
+    if admitted:
+        schemas.validate_caller_schema(schema)
+        assert not any("could not complete" in e for e in schemas.validation_errors({"x": "v"}, schema))
+    else:
+        with pytest.raises(schemas.SchemaRejected, match="does not point to a schema"):
+            schemas.validate_caller_schema(schema)

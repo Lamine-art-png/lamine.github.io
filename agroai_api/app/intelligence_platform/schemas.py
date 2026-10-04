@@ -312,7 +312,11 @@ def _check_schema_graph(root: dict[str, Any]) -> None:
                 ) from exc
             except Unresolvable as exc:
                 raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
-            if isinstance(target, dict) and id(target) not in visited:
+            if isinstance(target, bool):
+                continue  # boolean schemas are valid targets
+            if not isinstance(target, dict):
+                raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not point to a schema")
+            if id(target) not in visited:
                 pending.append(target)
 
 
