@@ -1338,3 +1338,38 @@ def test_workspace_scoped_run_by_project_key_uses_only_that_workspaces_resources
     # The stored run belongs to W1 and is readable by the W1 key only.
     assert p.client.get(f"/v1/intelligence/runs/{grounded.json()['id']}", headers=w1).status_code == 200
     assert p.client.get(f"/v1/intelligence/runs/{grounded.json()['id']}", headers=w2).status_code == 404
+
+
+def test_workspace_bound_project_keys_use_their_own_resources_in_runs(platform):
+    p = platform
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.models.saas import Workspace
+    from app.platform_api.keys import create_platform_key
+
+    db = p.Session()
+    try:
+        workspace = Workspace(organization_id=p.A.org_id, name="bound", mode="evaluation")
+        db.add(workspace)
+        db.flush()
+        project = ApiProject(organization_id=p.A.org_id, workspace_id=workspace.id, name="Bound", slug=f"bound-{uuid.uuid4().hex[:6]}",
+                             environment="live", status="active", default_rate_limit_policy={}, created_by_user_id=p.A.user_id)
+        db.add(project)
+        db.flush()
+        account = ApiServiceAccount(organization_id=p.A.org_id, api_project_id=project.id, workspace_id=None, name="bound",
+                                    status="active", scopes=["intelligence:run"], created_by_user_id=p.A.user_id)
+        db.add(account)
+        db.flush()
+        _key, secret = create_platform_key(db, project=project, service_account=account, name="bound-key",
+                                           scopes=["intelligence:run"], created_by_user_id=p.A.user_id)
+        db.commit()
+    finally:
+        db.close()
+    bound = {"Authorization": f"Bearer {secret}"}
+    sid = p.client.post("/v1/intelligence/sessions", headers=bound, json={"title": "bound"}).json()["id"]
+    fid = p.client.post("/v1/intelligence/files", headers=bound, files={"file": ("b.txt", io.BytesIO(b"bound notes"), "text/plain")}).json()["id"]
+    run = p.client.post("/v1/intelligence", headers={**bound, **_idem()},
+                        json={"task": "answer", "question": "use my session and file", "session_id": sid, "attachments": [{"file_id": fid}]})
+    assert run.status_code == 200, run.text
+    assert p.client.get(f"/v1/intelligence/runs/{run.json()['id']}", headers=bound).status_code == 200
+    job = p.client.post("/v1/intelligence/jobs", headers={**bound, **_idem()}, json={"task": "answer", "question": "job uses session", "session_id": sid}).json()
+    assert _execute(p, job["id"], p.A.org_id) == "completed"
