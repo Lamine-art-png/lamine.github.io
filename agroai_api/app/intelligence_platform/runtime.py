@@ -137,6 +137,10 @@ def _merged_context(session: Any | None, payload: Any) -> dict[str, Any]:
     return merged
 
 
+# Marks the id-less base-context section. A non-string sentinel: no caller id
+# can ever equal it.
+_BASE_CONTEXT = object()
+
 _RESERVED_ID_PREFIXES = ("tool_", "ctx_obs_", "chunk_", "file_", "doc_", "ses_", "turn_", "run_")
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -253,7 +257,7 @@ async def prepare(
         # either fully in the analysed data or not citable at all.
         base = {key: value for key, value in agctx.items() if key not in {"observations", "sources"}}
         if base:
-            sections.append(("AGRICULTURAL_CONTEXT " + json.dumps(base, default=str, ensure_ascii=False), {"__base_context__"}))
+            sections.append(("AGRICULTURAL_CONTEXT " + json.dumps(base, default=str, ensure_ascii=False), {_BASE_CONTEXT}))
         for observation in agctx.get("observations") or []:
             sections.append(("OBSERVATION " + json.dumps(observation, default=str, ensure_ascii=False), {str(observation["id"])}))
         for source in agctx.get("sources") or []:
@@ -401,13 +405,13 @@ async def prepare(
             if used + cost <= DATA_BLOCK_MAX_CHARS:
                 included.append(text)
                 used += cost
-            elif ids == {"__base_context__"} and DATA_BLOCK_MAX_CHARS - used > 500:
+            elif ids == {_BASE_CONTEXT} and DATA_BLOCK_MAX_CHARS - used > 500:
                 # Id-less base context may be shortened to fit, but then it is
                 # only analysed as shortened: the full copy is not sent anywhere.
                 included.append(text[: DATA_BLOCK_MAX_CHARS - used - 2])
                 used = DATA_BLOCK_MAX_CHARS
                 prepared.truncated = True
-                omitted_ids.add("__base_context__")
+                omitted_ids.add(_BASE_CONTEXT)
             else:
                 omitted_ids |= ids
                 prepared.truncated = True
@@ -415,8 +419,8 @@ async def prepare(
             prepared.limitations.append(
                 "Supplied data exceeded the per-request analysis window; "
                 + (
-                    f"{len(omitted_ids - {'__base_context__'})} cited item(s) were not analysed and cannot be cited."
-                    if omitted_ids - {"__base_context__"}
+                    f"{len(omitted_ids - {_BASE_CONTEXT})} cited item(s) were not analysed and cannot be cited."
+                    if omitted_ids - {_BASE_CONTEXT}
                     else "context was shortened."
                 )
             )
@@ -440,7 +444,7 @@ async def prepare(
         # selected: omitted context records and attachments are pruned.
         context.evidence = [item for item in context.evidence if str(item.get("file_id") or "") not in omitted_ids]
         if agctx:
-            selected = dict(agctx) if "__base_context__" not in omitted_ids else {
+            selected = dict(agctx) if _BASE_CONTEXT not in omitted_ids else {
                 key: value for key, value in agctx.items() if key in {"observations", "sources"}
             }
             for key in ("observations", "sources"):

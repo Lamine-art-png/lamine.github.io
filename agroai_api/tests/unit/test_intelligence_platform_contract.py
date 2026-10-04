@@ -361,3 +361,20 @@ def test_shortened_base_context_is_not_sent_in_full():
     assert prepared.truncated and "END-OF-EXTENSION" not in prepared.data_block
     sent = json.dumps(context.model_dump(mode="json"))
     assert "END-OF-EXTENSION" not in sent, "shortened base context never reaches the model in full"
+
+
+def test_caller_id_equal_to_internal_marker_is_whole_or_nothing():
+    import asyncio
+
+    from app.schemas.ai import EvidenceContext
+
+    observations = [{"id": f"pad_{i}", "type": "t", "value": "p" * 1500} for i in range(10)]
+    observations.append({"id": "__base_context__", "type": "t", "value": "TAIL-" + "q" * 4000})
+    payload = _request(context={"observations": observations})
+    context = EvidenceContext(organization_id="org")
+    prepared = asyncio.run(runtime.prepare(None, SimpleNamespace(organization_id="org", api_project_id="p", workspace_id=None),
+                                           payload, runtime.Resolved(), context))
+    in_block = '"id": "__base_context__"' in prepared.data_block
+    complete = "TAIL-" + "q" * 4000 in prepared.data_block
+    assert in_block == complete, "a citable item is wholly included or wholly omitted"
+    assert ("__base_context__" in prepared.known_ids) == complete
