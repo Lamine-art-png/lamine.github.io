@@ -266,12 +266,45 @@ class AgroAI(_Base):
             return _parse(response)
         raise AgroAIError("unreachable")
 
-    def _stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> Iterator[APIObject]:
-        with self._http.stream("POST", f"{self.base_url}{path}", json=body, headers=self._headers(idempotency_key, {"Accept": "text/event-stream"}), timeout=self.timeout) as response:
-            if not response.is_success:
+    def _open_stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> httpx.Response:
+        # Establishing the stream follows the same retry policy as _request
+        # (safe: the Idempotency-Key is reused); once events flow, no retry.
+        attempts = 1 + self.max_retries
+        for attempt in range(attempts):
+            request = self._http.build_request(
+                "POST", f"{self.base_url}{path}", json=body,
+                headers=self._headers(idempotency_key, {"Accept": "text/event-stream"}), timeout=self.timeout,
+            )
+            try:
+                response = self._http.send(request, stream=True)
+            except httpx.TimeoutException as exc:
+                if attempt + 1 >= attempts:
+                    raise APITimeoutError("Request to AGRO-AI timed out") from exc
+                time.sleep(_retry_delay(attempt, None))
+                continue
+            except httpx.TransportError as exc:
+                if attempt + 1 >= attempts:
+                    raise APIConnectionError(f"Could not reach AGRO-AI: {exc.__class__.__name__}") from exc
+                time.sleep(_retry_delay(attempt, None))
+                continue
+            if response.is_success:
+                return response
+            try:
                 response.read()
-                _parse(response)
+            finally:
+                response.close()
+            if attempt + 1 < attempts and _should_retry(response):
+                time.sleep(_retry_delay(attempt, response))
+                continue
+            _parse(response)
+        raise AgroAIError("unreachable")
+
+    def _stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> Iterator[APIObject]:
+        response = self._open_stream(path, body, idempotency_key)
+        try:
             yield from _sse_events(response.iter_lines())
+        finally:
+            response.close()
 
     def _wait(self, job_id: str, *, timeout: float, poll_interval: float) -> APIObject:
         deadline = time.monotonic() + timeout
@@ -330,11 +363,42 @@ class AsyncAgroAI(_Base):
             return _parse(response)
         raise AgroAIError("unreachable")
 
-    async def _stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> AsyncIterator[APIObject]:
-        async with self._http.stream("POST", f"{self.base_url}{path}", json=body, headers=self._headers(idempotency_key, {"Accept": "text/event-stream"}), timeout=self.timeout) as response:
-            if not response.is_success:
+    async def _open_stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> httpx.Response:
+        # Establishing the stream follows the same retry policy as _request
+        # (safe: the Idempotency-Key is reused); once events flow, no retry.
+        attempts = 1 + self.max_retries
+        for attempt in range(attempts):
+            request = self._http.build_request(
+                "POST", f"{self.base_url}{path}", json=body,
+                headers=self._headers(idempotency_key, {"Accept": "text/event-stream"}), timeout=self.timeout,
+            )
+            try:
+                response = await self._http.send(request, stream=True)
+            except httpx.TimeoutException as exc:
+                if attempt + 1 >= attempts:
+                    raise APITimeoutError("Request to AGRO-AI timed out") from exc
+                await asyncio.sleep(_retry_delay(attempt, None))
+                continue
+            except httpx.TransportError as exc:
+                if attempt + 1 >= attempts:
+                    raise APIConnectionError(f"Could not reach AGRO-AI: {exc.__class__.__name__}") from exc
+                await asyncio.sleep(_retry_delay(attempt, None))
+                continue
+            if response.is_success:
+                return response
+            try:
                 await response.aread()
-                _parse(response)
+            finally:
+                await response.aclose()
+            if attempt + 1 < attempts and _should_retry(response):
+                await asyncio.sleep(_retry_delay(attempt, response))
+                continue
+            _parse(response)
+        raise AgroAIError("unreachable")
+
+    async def _stream(self, path: str, body: dict[str, Any], idempotency_key: str) -> AsyncIterator[APIObject]:
+        response = await self._open_stream(path, body, idempotency_key)
+        try:
             parser = _SSEParser()
             async for line in response.aiter_lines():
                 item = parser.feed(line)
@@ -343,6 +407,8 @@ class AsyncAgroAI(_Base):
             tail = parser.flush()
             if tail is not None:
                 yield tail
+        finally:
+            await response.aclose()
 
     async def _wait(self, job_id: str, *, timeout: float, poll_interval: float) -> APIObject:
         deadline = time.monotonic() + timeout

@@ -8,6 +8,7 @@ import pytest
 
 from agroai import (
     AgroAI,
+    AgroAIError,
     AsyncAgroAI,
     ConflictError,
     InsufficientBalanceError,
@@ -228,3 +229,89 @@ def test_delete_retry_after_lost_response_is_success(monkeypatch):
 def test_first_attempt_delete_404_is_still_an_error():
     with pytest.raises(NotFoundError):
         _client(lambda r: httpx.Response(404, json={"detail": {"code": "file_not_found"}})).intelligence.files.delete("nope")
+
+
+_SSE_OK = b'event: run.created\ndata: {"id":"r"}\n\nevent: run.completed\ndata: {"id":"r"}\n\n'
+
+
+def test_stream_open_retries_with_the_same_key(monkeypatch):
+    monkeypatch.setattr("agroai._client.time.sleep", lambda _s: None)
+    keys = []
+
+    def handler(request):
+        keys.append(request.headers["Idempotency-Key"])
+        if len(keys) == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        if len(keys) == 2:
+            return httpx.Response(409, json={"detail": {"code": "intelligence_run_in_progress"}})
+        return httpx.Response(200, content=_SSE_OK, headers={"content-type": "text/event-stream"})
+
+    events = list(_client(handler, max_retries=2).intelligence.stream("x?"))
+    assert [event.event for event in events] == ["run.created", "run.completed"]
+    assert len(keys) == 3 and len(set(keys)) == 1
+
+
+def test_stream_open_honours_max_retries_and_non_retryable(monkeypatch):
+    monkeypatch.setattr("agroai._client.time.sleep", lambda _s: None)
+    calls = []
+
+    def unavailable(request):
+        calls.append(1)
+        return httpx.Response(503, json={"detail": {"code": "intelligence_temporarily_unavailable"}})
+
+    with pytest.raises(AgroAIError):
+        list(_client(unavailable, max_retries=0).intelligence.stream("x?"))
+    assert len(calls) == 1
+    calls.clear()
+
+    def changed(request):
+        calls.append(1)
+        return httpx.Response(409, json={"detail": {"code": "idempotency_key_reused"}})
+
+    with pytest.raises(AgroAIError):
+        list(_client(changed, max_retries=3).intelligence.stream("x?"))
+    assert len(calls) == 1, "a changed request under the same key is never retried"
+
+
+def test_stream_is_not_retried_once_events_flow(monkeypatch):
+    monkeypatch.setattr("agroai._client.time.sleep", lambda _s: None)
+    calls = []
+
+    class Broken(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'event: run.created\ndata: {"id":"r"}\n\n'
+            raise httpx.ReadError("connection dropped")
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(200, stream=Broken(), headers={"content-type": "text/event-stream"})
+
+    seen = []
+    with pytest.raises(httpx.ReadError):
+        for event in _client(handler, max_retries=3).intelligence.stream("x?"):
+            seen.append(event.event)
+    assert seen == ["run.created"] and len(calls) == 1
+
+
+def test_async_stream_open_retries(monkeypatch):
+    async def no_sleep(_s):
+        return None
+
+    monkeypatch.setattr("agroai._client.asyncio.sleep", no_sleep)
+    keys = []
+
+    async def handler(request):
+        keys.append(request.headers["Idempotency-Key"])
+        if len(keys) == 1:
+            raise httpx.ConnectError("refused", request=request)
+        if len(keys) == 2:
+            return httpx.Response(429, json={"detail": {"code": "rate_limited"}})
+        return httpx.Response(200, content=_SSE_OK, headers={"content-type": "text/event-stream"})
+
+    async def main():
+        async with AsyncAgroAI(api_key="k", base_url="https://api.test", max_retries=2,
+                               http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler))) as client:
+            return [event.event async for event in client.intelligence.stream("x?")]
+
+    assert asyncio.run(main()) == ["run.created", "run.completed"]
+    assert len(keys) == 3 and len(set(keys)) == 1
