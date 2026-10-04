@@ -198,12 +198,16 @@ async def intelligence_api(
         # Billing is identical to a non-streamed run (charged only on completion).
         worker_db = sessionmaker(bind=bind, autocommit=False, autoflush=False)()
         try:
-            run = worker_db.get(CommercialIntelligenceRun, run_id)
             try:
+                run = worker_db.get(CommercialIntelligenceRun, run_id)
                 fresh = hardened._readmit_paid_run(payload=payload, principal=principal, db=worker_db, run=run)
             except HTTPException as exc:
                 code = exc.detail.get("code") if isinstance(exc.detail, dict) else "intelligence_reference_invalid"
                 hardened._fail_unstarted_run(worker_db, run_id=run_id, code=str(code))
+                raise
+            except Exception as exc:  # noqa: BLE001 - e.g. transient DB error: close the run now, never charged
+                logger.warning("intelligence_stream_readmission_failed run_id=%s error=%s", run_id, exc.__class__.__name__)
+                hardened._settle_unexpected_failure(worker_db, run_id=run_id, exc=exc)
                 raise
             result = await hardened._complete_paid_run(payload=payload, principal=principal, db=worker_db, admitted=fresh, progress=progress)
             await queue.put((f"run.{result.get('status') or 'completed'}", result))

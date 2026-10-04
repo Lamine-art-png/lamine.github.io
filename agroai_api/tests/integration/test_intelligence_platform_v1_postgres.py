@@ -1658,3 +1658,32 @@ def test_unexpected_readmission_failure_retries_then_fails_uncharged(platform, m
     detail = p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()
     assert detail["status"] == "failed" and detail["attempts"] == 3
     assert _wallet(p.Session, p.A.org_id) == (500, 0)
+
+
+def test_unexpected_stream_readmission_failure_settles_run_uncharged(platform, monkeypatch):
+    p = platform
+    from app.api.v1 import commercial_intelligence_hardened as hardened
+
+    real_readmit = hardened._readmit_paid_run
+
+    def broken_readmit(**kwargs):
+        raise RuntimeError("database connection reset")
+
+    monkeypatch.setattr(hardened, "_readmit_paid_run", broken_readmit)
+    with p.client.stream("POST", "/v1/intelligence", headers={**p.keys["A"], "Idempotency-Key": "stream-flaky"},
+                         json={"task": "answer", "question": "Stream flaky", "stream": True}) as resp:
+        assert resp.status_code == 200
+        raw = "".join(resp.iter_text())
+    events = [line[len("event: "):] for line in raw.splitlines() if line.startswith("event: ")]
+    assert events == ["run.created", "error"], events
+    run_id = json.loads([line for line in raw.splitlines() if line.startswith("data: ")][0][6:])["id"]
+    # The durable run is closed immediately (not left "processing"), never charged.
+    detail = p.client.get(f"/v1/intelligence/runs/{run_id}", headers=p.keys["A"]).json()
+    assert detail["status"] == "failed" and detail["charged"] is False, detail
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)
+    # The same key can be reclaimed straight away once the fault clears.
+    monkeypatch.setattr(hardened, "_readmit_paid_run", real_readmit)
+    retry = p.client.post("/v1/intelligence", headers={**p.keys["A"], "Idempotency-Key": "stream-flaky"},
+                          json={"task": "answer", "question": "Stream flaky"})
+    assert retry.status_code == 200, retry.text
+    assert _wallet(p.Session, p.A.org_id) == (495, 1)
