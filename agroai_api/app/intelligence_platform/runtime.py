@@ -87,6 +87,14 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
             raise HTTPException(status_code=422, detail={"code": "duplicate_attachment", "file_id": attachment.file_id})
         seen.add(attachment.file_id)
         row = platform_files.owned_file(db, principal, attachment.file_id)
+        if row.kind != "image" and not (row.extracted_text or "").strip():
+            # Nothing to analyse (e.g. a scanned PDF without a text layer):
+            # reject before admission rather than bill and cite an empty file.
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "attachment_has_no_text", "file_id": row.id,
+                        "message": "This document has no extractable text. Upload a text-based PDF or a text file."},
+            )
         resolved.files.append(row)
     _validate_evidence_ids(_merged_context(resolved.session, payload), resolved.files)
     if payload.tools:
@@ -124,7 +132,17 @@ def _merged_context(session: Any | None, payload: Any) -> dict[str, Any]:
         # Explicitly set sections override the session's, including explicit
         # empties ("observations": []) and explicit nulls (remove the section).
         request = payload.context.model_dump(mode="json", exclude_unset=True)
-        extensions = {**dict(merged.get("extensions") or {}), **dict(request.pop("extensions", None) or {})}
+        extensions = dict(merged.get("extensions") or {})
+        if "extensions" in request:
+            supplied = request.pop("extensions")
+            if not supplied:
+                extensions = {}  # explicit {} (or null) clears pinned extensions
+            else:
+                for namespace, value in supplied.items():
+                    if value is None:
+                        extensions.pop(namespace, None)  # explicit null removes one namespace
+                    else:
+                        extensions[namespace] = value
         for key, value in request.items():
             if value is None:
                 merged.pop(key, None)

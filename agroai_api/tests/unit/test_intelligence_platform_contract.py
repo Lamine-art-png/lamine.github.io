@@ -569,3 +569,25 @@ def test_references_must_point_to_schemas(target, admitted):
     else:
         with pytest.raises(schemas.SchemaRejected, match="does not point to a schema"):
             schemas.validate_caller_schema(schema)
+
+
+def test_extensions_overrides_clear_and_remove_namespaces():
+    session = SimpleNamespace(context_json={"extensions": {"acme.a": {"x": 1}, "acme.b": {"y": 2}}})
+    assert "extensions" not in runtime._merged_context(session, _request(context={"extensions": {}}))
+    removed = runtime._merged_context(session, _request(context={"extensions": {"acme.a": None, "acme.c": {"z": 3}}}))
+    assert removed["extensions"] == {"acme.b": {"y": 2}, "acme.c": {"z": 3}}
+    assert runtime._merged_context(session, _request(context={"crop": {"name": "fig"}}))["extensions"] == session.context_json["extensions"]
+
+
+def test_attachments_without_text_are_rejected_before_admission():
+    from app.intelligence_platform import files as platform_files
+
+    empty = SimpleNamespace(id="file_empty", kind="document", extracted_text="   ")
+    original = platform_files.owned_file
+    platform_files.owned_file = lambda db, principal, file_id: empty
+    try:
+        with pytest.raises(HTTPException) as exc:
+            runtime.resolve(None, None, _request(attachments=[{"file_id": "file_empty"}]))
+    finally:
+        platform_files.owned_file = original
+    assert exc.value.status_code == 422 and exc.value.detail["code"] == "attachment_has_no_text"

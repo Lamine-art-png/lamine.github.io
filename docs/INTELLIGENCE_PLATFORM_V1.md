@@ -178,7 +178,9 @@ client.intelligence.run("Interpret the photo and lab report together.",
 Not supported in v1: audio, video, remote URLs (AGRO-AI never fetches a URL you
 send — no SSRF surface). Type is decided by content sniffing; a declared type
 that disagrees is rejected (415). Files containing credentials or private keys
-are rejected (422). Per project (all workspaces): at most 1,000 active files,
+are rejected (422). A document with no extractable text (e.g. a scan without
+a text layer) can be uploaded but is rejected as an attachment (422
+`attachment_has_no_text`), so it is never billed or cited. Per project (all workspaces): at most 1,000 active files,
 1 GB of stored images, and 25 million characters of extracted document text
 (409 when exceeded). Files expire after 30 days; `DELETE /v1/intelligence/files/{id}`
 removes them immediately. Original document bytes are not retained, only
@@ -195,7 +197,9 @@ client.intelligence.sessions.delete(session.id)                                 
 ```
 
 A session holds pinned context you set explicitly (merged under each request's
-own context, request sections win) and a bounded history written only by
+own context: a section the request sets replaces the pinned one, `[]`/`null`
+clears it; `extensions` merge by namespace, `{}` clears them all and a
+namespace set to `null` is removed) and a bounded history written only by
 completed runs: the latest 8 turns are used, at most 200 are stored, each
 turn ≤ 4,000 characters. Sessions expire after `retention_days` (1–90) of
 inactivity. Use sessions for state; use the request `context` for per-call data.
