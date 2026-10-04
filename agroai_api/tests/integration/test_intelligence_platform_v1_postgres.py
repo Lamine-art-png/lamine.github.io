@@ -79,13 +79,13 @@ def _cleanup(Session, org_ids, user_ids):
         IntelligenceFile, IntelligenceSession, IntelligenceSessionTurn, KnowledgeChunk, KnowledgeDocument,
     )
     from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
-    from app.models.saas import Organization, OrganizationMembership, User
+    from app.models.saas import Organization, OrganizationMembership, User, Workspace
 
     db = Session()
     try:
         for model in (KnowledgeChunk, KnowledgeDocument, IntelligenceSessionTurn, IntelligenceSession, IntelligenceFile,
                       IntelligenceWalletLedger, CommercialIntelligenceRun, IntelligenceWallet, PlatformApiKey,
-                      ApiServiceAccount, ApiProject, OrganizationMembership):
+                      ApiServiceAccount, ApiProject, OrganizationMembership, Workspace):
             db.query(model).filter(model.organization_id.in_(org_ids)).delete(synchronize_session=False)
         db.query(Organization).filter(Organization.id.in_(org_ids)).delete(synchronize_session=False)
         db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
@@ -1316,7 +1316,8 @@ def test_workspace_scoped_run_by_project_key_uses_only_that_workspaces_resources
     w1, w2 = _workspace_key(p, p.A, "run-w1"), _workspace_key(p, p.A, "run-w2")
     db = p.Session()
     try:
-        ws = {k.name: k.workspace_id for k in db.query(PlatformApiKey).filter(PlatformApiKey.name.in_(["run-w1", "run-w2"])).all()}
+        ws = {k.name: k.workspace_id for k in db.query(PlatformApiKey).filter(
+            PlatformApiKey.organization_id == p.A.org_id, PlatformApiKey.name.in_(["run-w1", "run-w2"])).all()}
     finally:
         db.close()
     w2_session = p.client.post("/v1/intelligence/sessions", headers=w2, json={"title": "w2", "context": {"crop": {"name": "w2-secret-crop"}}}).json()["id"]
