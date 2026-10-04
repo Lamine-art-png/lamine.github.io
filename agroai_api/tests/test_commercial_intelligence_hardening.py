@@ -562,3 +562,21 @@ def test_outbox_publish_can_be_scoped_to_cycle_jobs(db, monkeypatch):
     assert task_outbox_service.publish_pending_outbox(db, limit=10, task_types=(cycle.TASK_TYPE,)) == {"published": 1, "failed": 0}
     assert sent == [cycle.TASK_TYPE]
     assert db.query(TaskOutbox).filter_by(task_type="connector_provider_sync").one().status == "pending"
+
+
+def test_cycle_job_for_a_disabled_cycle_completes_without_running(db, monkeypatch, no_heartbeat):
+    _, org, _ = identity(db, "skip-disabled")
+    _position(db, org)
+    cycle.schedule_cycle(db)
+    [job] = _jobs(db)
+    ran = []
+
+    async def should_not_run(*args, **kwargs):
+        ran.append(1)
+        return {"complete": True}
+
+    monkeypatch.setattr(cycle, "run_organization_cycle", should_not_run)
+    monkeypatch.setenv("MARKET_INTELLIGENCE_CYCLE_ENABLED", "false")
+    assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "succeeded"
+    db.refresh(job)
+    assert job.output_json == {"status": "skipped"} and ran == []

@@ -565,13 +565,15 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
         return job.status
     if job.job_type != TASK_TYPE:
         raise ValueError("unsupported market intelligence job type")
+    # Check before touching per-organization state (it references the
+    # organization): a deleted organization or a disabled cycle completes cleanly.
+    if db.get(Organization, organization_id) is None or not cycle_enabled():
+        return _complete(db, job, {"status": "skipped"}, worker_id=worker_id)
     state = _state(db, organization_id)
     state.last_started_at = datetime.utcnow()
     state.last_job_id = job_id
     state.last_status = "running"
     db.commit()
-    if db.get(Organization, organization_id) is None or not cycle_enabled():
-        return _complete(db, job, {"status": "skipped"}, worker_id=worker_id)
     with job_lease_heartbeat(job_id=job_id, tenant_id=organization_id, worker_id=worker_id):
         try:
             payload = job.input_json or {}
