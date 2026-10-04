@@ -252,6 +252,12 @@ async def execute_job(db: Session, *, run_id: str, organization_id: str, worker_
         code = exc.detail.get("code") if isinstance(exc.detail, dict) else "intelligence_job_reference_invalid"
         hardened._fail_unstarted_run(db, run_id=run_id, code=str(code))
         return "failed"
+    except Exception as exc:  # noqa: BLE001 - transient (e.g. DB) error: bounded retry, never charged
+        logger.warning("intelligence_job_readmission_failed run_id=%s error=%s", run_id, exc.__class__.__name__)
+        hardened._settle_unexpected_failure(db, run_id=run_id, exc=exc)
+        final = db.query(CommercialIntelligenceRun).filter(CommercialIntelligenceRun.id == run_id).populate_existing().one()
+        db.commit()
+        return public_status(final)
     try:
         await hardened._complete_paid_run(payload=payload, principal=principal, db=db, admitted=admitted)
     except HTTPException:

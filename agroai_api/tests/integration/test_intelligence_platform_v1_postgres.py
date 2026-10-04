@@ -1632,3 +1632,29 @@ def test_repeated_retrieval_of_a_passage_stays_citable(platform):
     matches = [s for s in body["provenance"]["sources"] if s["id"] == hit["id"]]
     assert len(matches) == 1 and matches[0].get("status") != "ambiguous_id" and matches[0]["document_id"] == doc["id"]
     assert p.state.model_calls[-1]["user_instruction"].count(f"KNOWLEDGE id={hit['id']}") == 1
+
+
+def test_unexpected_readmission_failure_retries_then_fails_uncharged(platform, monkeypatch):
+    p = platform
+    from app.api.v1 import commercial_intelligence_hardened as hardened
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "flaky readmit"}).json()
+
+    def broken_readmit(**kwargs):
+        raise RuntimeError("database connection reset")
+
+    monkeypatch.setattr(hardened, "_readmit_paid_run", broken_readmit)
+    statuses = []
+    for _ in range(3):
+        db = p.Session()
+        try:
+            db.get(CommercialIntelligenceRun, job["id"]).next_attempt_at = datetime.utcnow() - timedelta(seconds=1)
+            db.commit()
+        finally:
+            db.close()
+        statuses.append(_execute(p, job["id"], p.A.org_id))
+    assert statuses == ["queued", "queued", "failed"], statuses
+    detail = p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()
+    assert detail["status"] == "failed" and detail["attempts"] == 3
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)

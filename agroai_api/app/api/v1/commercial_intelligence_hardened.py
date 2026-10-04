@@ -583,6 +583,43 @@ def _fail_unstarted_run(db: Session, *, run_id: str, code: str) -> None:
     db.commit()
 
 
+def _settle_unexpected_failure(db: Session, *, run_id: str, exc: BaseException) -> None:
+    """Close or requeue a processing run after an unexpected error (never charged).
+
+    A pending cancel wins; an async job with attempts left returns to the queue
+    with backoff (its payload is kept for a faithful retry); otherwise failed.
+    """
+    db.rollback()
+    failed_run = (
+        db.query(CommercialIntelligenceRun)
+        .filter(CommercialIntelligenceRun.id == run_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if failed_run is None or failed_run.status != "processing":
+        db.rollback()
+        return
+    failed_run.error_detail = exc.__class__.__name__
+    if failed_run.cancel_requested_at is not None:
+        failed_run.status = "canceled"
+        failed_run.error_code = "intelligence_job_canceled"
+        failed_run.completed_at = datetime.utcnow()
+        failed_run.request_payload_json = None
+    elif failed_run.execution == "async" and int(failed_run.attempt_count or 0) < JOB_MAX_ATTEMPTS:
+        backoff = _JOB_RETRY_BACKOFF_SECONDS[min(int(failed_run.attempt_count or 1) - 1, len(_JOB_RETRY_BACKOFF_SECONDS) - 1)]
+        failed_run.status = "queued"
+        failed_run.error_code = "intelligence_execution_retrying"
+        failed_run.lease_expires_at = None
+        failed_run.next_attempt_at = datetime.utcnow() + timedelta(seconds=backoff)
+    else:
+        failed_run.status = "failed"
+        failed_run.error_code = "intelligence_execution_failed"
+        failed_run.completed_at = datetime.utcnow()
+        failed_run.request_payload_json = None
+    db.commit()
+
+
 def _decision_text(public: dict[str, Any]) -> str:
     decision = public.get("decision")
     if isinstance(decision, str):
@@ -869,37 +906,7 @@ async def _complete_paid_run(
     except HTTPException:
         raise
     except Exception as exc:
-        db.rollback()
-        failed_run = (
-            db.query(CommercialIntelligenceRun)
-            .filter(CommercialIntelligenceRun.id == run_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-        if failed_run is not None and failed_run.status == "processing":
-            failed_run.error_detail = exc.__class__.__name__
-            if failed_run.cancel_requested_at is not None:
-                # A cancel requested while computing wins over any retry.
-                failed_run.status = "canceled"
-                failed_run.error_code = "intelligence_job_canceled"
-                failed_run.completed_at = datetime.utcnow()
-                failed_run.request_payload_json = None
-            elif failed_run.execution == "async" and int(failed_run.attempt_count or 0) < JOB_MAX_ATTEMPTS:
-                # Bounded retry: return the job to the queue with backoff. The
-                # retained request payload is still present (cleared only on
-                # terminal states), so a retry is a faithful re-execution.
-                backoff = _JOB_RETRY_BACKOFF_SECONDS[min(int(failed_run.attempt_count or 1) - 1, len(_JOB_RETRY_BACKOFF_SECONDS) - 1)]
-                failed_run.status = "queued"
-                failed_run.error_code = "intelligence_execution_retrying"
-                failed_run.lease_expires_at = None
-                failed_run.next_attempt_at = datetime.utcnow() + timedelta(seconds=backoff)
-            else:
-                failed_run.status = "failed"
-                failed_run.error_code = "intelligence_execution_failed"
-                failed_run.completed_at = datetime.utcnow()
-                failed_run.request_payload_json = None
-            db.commit()
+        _settle_unexpected_failure(db, run_id=run_id, exc=exc)
         raise HTTPException(status_code=503, detail={"code": "intelligence_temporarily_unavailable"}) from exc
 
 
