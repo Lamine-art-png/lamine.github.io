@@ -71,17 +71,29 @@ def job_public(run: CommercialIntelligenceRun) -> dict[str, Any]:
     }
 
 
-def owned_run(db: Session, principal: PlatformPrincipal, run_id: str, *, execution: str | None = None) -> CommercialIntelligenceRun:
-    query = db.query(CommercialIntelligenceRun).filter(
-        CommercialIntelligenceRun.id == run_id,
+def visible_runs(query: Any, principal: PlatformPrincipal) -> Any:
+    """Runs a principal may read or cancel.
+
+    Organization + project, exact workspace for workspace-restricted keys, and
+    for keys with any resource allow/deny list only the runs that key created:
+    a stored result can contain data derived from fields the key may not see.
+    """
+    query = query.filter(
         CommercialIntelligenceRun.organization_id == principal.organization_id,
         CommercialIntelligenceRun.api_project_id == principal.api_project_id,
     )
+    if principal.workspace_id:
+        query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
+    restrictions = principal.resource_restrictions if isinstance(principal.resource_restrictions, dict) else {"invalid": []}
+    if any(str(key).endswith("_ids") or key == "invalid" for key in restrictions):
+        query = query.filter(CommercialIntelligenceRun.api_key_id == principal.api_key_id)
+    return query
+
+
+def owned_run(db: Session, principal: PlatformPrincipal, run_id: str, *, execution: str | None = None) -> CommercialIntelligenceRun:
+    query = visible_runs(db.query(CommercialIntelligenceRun), principal).filter(CommercialIntelligenceRun.id == run_id)
     if execution is not None:
         query = query.filter(CommercialIntelligenceRun.execution == execution)
-    if principal.workspace_id:
-        # Exact match: a workspace-restricted key never sees project-wide runs.
-        query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
     row = query.first()
     if row is None:
         raise HTTPException(status_code=404, detail={"code": "intelligence_job_not_found" if execution == "async" else "intelligence_run_not_found"})

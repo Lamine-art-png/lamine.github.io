@@ -256,6 +256,10 @@ class AgroAI(_Base):
                     raise APIConnectionError(f"Could not reach AGRO-AI: {exc.__class__.__name__}") from exc
                 time.sleep(_retry_delay(attempt, None))
                 continue
+            if attempt > 0 and method == "DELETE" and response.status_code == 404:
+                # The earlier attempt deleted it but its response was lost:
+                # the requested end state holds, so the delete succeeded.
+                return None
             if attempt + 1 < attempts and _should_retry(response):
                 time.sleep(_retry_delay(attempt, response))
                 continue
@@ -316,6 +320,10 @@ class AsyncAgroAI(_Base):
                     raise APIConnectionError(f"Could not reach AGRO-AI: {exc.__class__.__name__}") from exc
                 await asyncio.sleep(_retry_delay(attempt, None))
                 continue
+            if attempt > 0 and method == "DELETE" and response.status_code == 404:
+                # The earlier attempt deleted it but its response was lost:
+                # the requested end state holds, so the delete succeeded.
+                return None
             if attempt + 1 < attempts and _should_retry(response):
                 await asyncio.sleep(_retry_delay(attempt, response))
                 continue

@@ -1136,6 +1136,19 @@ def test_key_resource_allowlists_are_enforced_on_intelligence(platform):
         assert ok.status_code == 200
         sent = json.dumps(p.state.model_calls[-1]["context"].model_dump(mode="json"))
         assert "allowed-obs" in sent and "blocked-obs" not in sent and "fieldless-obs" not in sent
+        # Stored runs: a restricted key sees only runs it created itself.
+        foreign_run = p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem()},
+                                    json={"task": "answer", "question": "about blocked", "field_id": blocked_id}).json()
+        foreign_job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()},
+                                    json={"task": "answer", "question": "queued for blocked", "field_id": blocked_id}).json()
+        assert p.client.get(f"/v1/intelligence/runs/{foreign_run['id']}", headers=limited).status_code == 404
+        assert p.client.get(f"/v1/intelligence/jobs/{foreign_job['id']}", headers=limited).status_code == 404
+        assert p.client.post(f"/v1/intelligence/jobs/{foreign_job['id']}/cancel", headers=limited).status_code == 404
+        listed = {r["id"] for r in p.client.get("/v1/intelligence/runs", headers=limited, params={"limit": 100}).json()["data"]}
+        assert ok.json()["id"] in listed and foreign_run["id"] not in listed and foreign_job["id"] not in listed
+        assert foreign_job["id"] not in {j["id"] for j in p.client.get("/v1/intelligence/jobs", headers=limited).json()["data"]}
+        assert p.client.get(f"/v1/intelligence/runs/{ok.json()['id']}", headers=limited).status_code == 200
+        assert p.client.get(f"/v1/intelligence/runs/{foreign_run['id']}", headers=p.keys["A"]).status_code == 200
         # Unrestricted project key still sees everything.
         full = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"], json={"name": "observations.query.v1", "arguments": {"evidence_type": "ra"}}).json()
         assert {o["title"] for o in full["output"]["observations"]} == {"allowed-obs", "blocked-obs", "fieldless-obs"}
@@ -1170,3 +1183,28 @@ def test_session_quota_is_race_safe(platform, monkeypatch):
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda headers: p.client.post("/v1/intelligence/sessions", headers=headers, json={"title": "q"}).status_code, keys))
     assert codes.count(201) == 3 and codes.count(409) == 5, codes
+
+
+def test_run_cursor_never_skips_tied_timestamps(platform):
+    p = platform
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+
+    ids = [_run(p, "A", {"task": "answer", "question": f"tie {index}"}).json()["id"] for index in range(4)]
+    db = p.Session()
+    try:
+        tied = datetime(2026, 10, 3, 9, 0, 0)
+        for row in db.query(CommercialIntelligenceRun).filter(CommercialIntelligenceRun.id.in_(ids)).all():
+            row.created_at = tied
+        db.commit()
+    finally:
+        db.close()
+    seen, cursor = [], None
+    for _ in range(10):
+        params = {"limit": 1, **({"before": cursor} if cursor else {})}
+        page = p.client.get("/v1/intelligence/runs", headers=p.keys["A"], params=params).json()
+        seen.extend(item["id"] for item in page["data"])
+        cursor = page["next_before"]
+        if not page["has_more"]:
+            break
+    assert sorted(seen) == sorted(ids) and len(seen) == len(set(seen)), seen
+    assert p.client.get("/v1/intelligence/runs", headers=p.keys["A"], params={"before": "not-a-cursor"}).status_code == 422

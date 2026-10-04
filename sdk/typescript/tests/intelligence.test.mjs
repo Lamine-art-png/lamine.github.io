@@ -98,3 +98,15 @@ test("runs.list forwards the before cursor", async () => {
   assert.equal(url.searchParams.get("before"), "2026-10-03T12:00:00");
   assert.equal(url.searchParams.get("limit"), "5");
 });
+
+test("a DELETE retried after a lost response treats 404 as success", async () => {
+  let calls = 0;
+  const result = await client(async () => {
+    calls += 1;
+    if (calls === 1) throw new TypeError("socket hang up");
+    return json(404, { detail: { code: "file_not_found" } });
+  }).intelligence.files.delete("file_1");
+  assert.equal(result, undefined);
+  assert.equal(calls, 2);
+  await assert.rejects(client(async () => json(404, { detail: { code: "file_not_found" } })).intelligence.files.delete("nope"), NotFoundError);
+});

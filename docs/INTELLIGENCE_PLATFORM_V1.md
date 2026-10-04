@@ -304,7 +304,9 @@ knowledge search, file/knowledge/session management are not billed.
 
 Every response carries `X-Request-Id`; include it in support requests.
 `GET /v1/intelligence/usage` and `GET /v1/intelligence/runs` give per-task
-volumes, charges, statuses and latency. `GET /v1/intelligence/capabilities`
+volumes, charges, statuses and latency (`runs` pages with the opaque
+`next_before` cursor). Keys with resource allow/deny lists see and cancel only
+the runs and jobs they created, and only ground on evidence of allowed fields. `GET /v1/intelligence/capabilities`
 describes modalities, schemas, tools and limits.
 
 ## 13. Production recommendations

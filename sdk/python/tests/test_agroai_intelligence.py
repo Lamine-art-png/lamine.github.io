@@ -209,3 +209,22 @@ def test_runs_list_forwards_the_before_cursor():
     client.intelligence.runs.list(limit=5, before="2026-10-03T12:00:00", execution="async")
     assert seen[0] == {"limit": "5"}
     assert seen[1] == {"limit": "5", "before": "2026-10-03T12:00:00", "execution": "async"}
+
+
+def test_delete_retry_after_lost_response_is_success(monkeypatch):
+    monkeypatch.setattr("agroai._client.time.sleep", lambda _s: None)
+    calls = []
+
+    def handler(request):
+        calls.append(request.method)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("response lost", request=request)
+        return httpx.Response(404, json={"detail": {"code": "file_not_found"}})
+
+    assert _client(handler).intelligence.files.delete("file_1") is None
+    assert calls == ["DELETE", "DELETE"]
+
+
+def test_first_attempt_delete_404_is_still_an_error():
+    with pytest.raises(NotFoundError):
+        _client(lambda r: httpx.Response(404, json={"detail": {"code": "file_not_found"}})).intelligence.files.delete("nope")

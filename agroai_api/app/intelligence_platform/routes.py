@@ -278,24 +278,38 @@ def get_run(
 @router.get("/intelligence/runs")
 def list_runs(
     limit: int = Query(default=20, ge=1, le=100),
-    before: datetime | None = Query(default=None),
+    before: str | None = Query(default=None, max_length=200, description="next_before cursor from the previous page, or an ISO-8601 instant"),
     execution: Literal["sync", "async"] | None = Query(default=None),
     principal: PlatformPrincipal = Depends(_key("intelligence.runs.read")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    query = db.query(CommercialIntelligenceRun).filter(
-        CommercialIntelligenceRun.organization_id == principal.organization_id,
-        CommercialIntelligenceRun.api_project_id == principal.api_project_id,
-    )
-    if principal.workspace_id:
-        query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
+    query = platform_jobs.visible_runs(db.query(CommercialIntelligenceRun), principal)
     if execution:
         query = query.filter(CommercialIntelligenceRun.execution == execution)
     if before:
-        query = query.filter(CommercialIntelligenceRun.created_at < to_naive_utc(before))
-    rows = query.order_by(CommercialIntelligenceRun.created_at.desc()).limit(limit + 1).all()
+        # Cursor = "<created_at>~<id>": (created_at, id) is a total order, so
+        # runs sharing a timestamp are neither skipped nor repeated.
+        instant_text, _, before_id = before.partition("~")
+        try:
+            instant = to_naive_utc(datetime.fromisoformat(instant_text.replace("Z", "+00:00")))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail={"code": "invalid_cursor"}) from exc
+        if before_id:
+            query = query.filter(
+                (CommercialIntelligenceRun.created_at < instant)
+                | ((CommercialIntelligenceRun.created_at == instant) & (CommercialIntelligenceRun.id < before_id))
+            )
+        else:
+            query = query.filter(CommercialIntelligenceRun.created_at < instant)
+    rows = query.order_by(CommercialIntelligenceRun.created_at.desc(), CommercialIntelligenceRun.id.desc()).limit(limit + 1).all()
     data = [_run_summary(row) for row in rows[:limit]]
-    return {"object": "list", "data": data, "has_more": len(rows) > limit, "next_before": data[-1]["created_at"] if len(rows) > limit else None}
+    last = rows[limit - 1] if len(rows) > limit else None
+    return {
+        "object": "list",
+        "data": data,
+        "has_more": last is not None,
+        "next_before": f"{last.created_at.isoformat()}~{last.id}" if last is not None else None,
+    }
 
 
 @router.get("/intelligence/usage")
@@ -395,16 +409,12 @@ def list_jobs(
     principal: PlatformPrincipal = Depends(_key("intelligence.jobs.read")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    query = db.query(CommercialIntelligenceRun).filter(
-        CommercialIntelligenceRun.organization_id == principal.organization_id,
-        CommercialIntelligenceRun.api_project_id == principal.api_project_id,
-        CommercialIntelligenceRun.execution == "async",
+    query = platform_jobs.visible_runs(db.query(CommercialIntelligenceRun), principal).filter(
+        CommercialIntelligenceRun.execution == "async"
     )
-    if principal.workspace_id:
-        query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
     if job_status:
         query = query.filter(CommercialIntelligenceRun.status == ("processing" if job_status == "running" else job_status))
-    rows = query.order_by(CommercialIntelligenceRun.created_at.desc()).limit(limit).all()
+    rows = query.order_by(CommercialIntelligenceRun.created_at.desc(), CommercialIntelligenceRun.id.desc()).limit(limit).all()
     return {"object": "list", "data": [platform_jobs.job_public(row) | {"result": None} for row in rows]}
 
 

@@ -252,6 +252,10 @@ export class AgroAI {
         throw new APIConnectionError(`Could not reach AGRO-AI: ${String(error)}`);
       }
       clearTimeout(timer);
+      if (attempt > 0 && method === "DELETE" && response.status === 404) {
+        // An earlier attempt deleted it but its response was lost: success.
+        return new Response(null, { status: 204 });
+      }
       if (attempt + 1 < attempts && (RETRY_STATUS.has(response.status) || (response.status === 409 && (await this.inProgress(response))))) {
         const retryAfter = Number(response.headers.get("Retry-After"));
         await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 30) * 1000 : this.backoff(attempt));
