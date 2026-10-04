@@ -295,3 +295,28 @@ def test_freshness_bounds_use_instants_and_keep_original_strings():
     ordered = _instant_ordered(values)
     # 05:00+02:00 = 03:00Z < 03:30Z(naive) < 04:00Z < 00:00-08:00 = 08:00Z
     assert ordered == ["2026-01-01T05:00:00+02:00", "2026-01-01T03:30:00", "2026-01-01T04:00:00Z", "2026-01-01T00:00:00-08:00"]
+
+
+def test_truncated_sections_are_not_citable_and_are_marked_omitted():
+    import asyncio
+
+    from app.schemas.ai import EvidenceContext
+
+    observations = [{"id": f"obs_{i}", "type": "note", "value": "x" * 900} for i in range(40)]  # ~38 KB
+    payload = _request(context={"observations": observations, "crop": {"name": "almond"}})
+    context = EvidenceContext(organization_id="org")
+    prepared = asyncio.run(runtime.prepare(None, SimpleNamespace(organization_id="org", api_project_id="p", workspace_id=None),
+                                           payload, runtime.Resolved(), context))
+    block = prepared.data_block
+    included = {o["id"] for o in observations if f'"id": "{o["id"]}"' in block}
+    omitted = {o["id"] for o in observations} - included
+    assert included and omitted, "window holds some but not all observations"
+    assert len(block) <= runtime.DATA_BLOCK_MAX_CHARS + 400
+    assert included <= prepared.known_ids and not (omitted & prepared.known_ids)
+    statuses = {s["id"]: s.get("status") for s in prepared.sources}
+    assert all(statuses[i] == "omitted_from_analysis" for i in omitted)
+    assert not ({c.source_id for c in context.citations} & omitted)
+    _out, _errors, removed = schemas.finalize_structured_output(
+        {"claims": [{"statement": "s", "support": "supported", "evidence_ids": [sorted(omitted)[0], sorted(included)[0]]}], "gaps": []},
+        schemas.BUILTIN_SCHEMAS["evidence_summary"], prepared.known_ids)
+    assert removed == [sorted(omitted)[0]]

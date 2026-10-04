@@ -641,7 +641,8 @@ def _platform_fields(
         public["structured_output_errors"] = structured.errors[:8]
     observed = _instant_ordered(item.get("observed_at") for item in prepared.sources)
     public["provenance"] = {
-        "sources": prepared.sources[:100],
+        # Every source, so every citable id resolves to its provenance.
+        "sources": prepared.sources,
         "tools": [platform_tools.audit_record(item) | {"evidence_id": item["id"]} for item in prepared.tool_results],
         "removed_unverifiable_citations": (structured.removed_citations[:20] if structured is not None else []),
         "assumptions": [str(item) for item in (public.get("output") or {}).get("assumptions") or []][:20]

@@ -1555,3 +1555,12 @@ def test_expired_lease_with_pending_cancel_closes_as_canceled(platform):
         db.close()
     assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "canceled"
     assert _wallet(p.Session, p.A.org_id) == (500, 0)
+
+
+def test_provenance_lists_every_source(platform):
+    p = platform
+    observations = [{"id": f"o{i}", "type": "t", "value": i} for i in range(150)]
+    run = _run(p, "A", {"task": "answer", "question": "many sources", "context": {"observations": observations}})
+    assert run.status_code == 200
+    ids = {source["id"] for source in run.json()["provenance"]["sources"]}
+    assert {f"o{i}" for i in range(150)} <= ids
