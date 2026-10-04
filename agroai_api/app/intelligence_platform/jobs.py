@@ -159,6 +159,10 @@ def _principal_for(db: Session, run: CommercialIntelligenceRun) -> PlatformPrinc
         if service_account is None or service_account.status != "active":
             return None
         workspace_id = key.workspace_id
+        resource_restrictions = dict(key.resource_restrictions_json or {})
+        provider_restrictions = dict(key.provider_restrictions_json or {})
+    else:
+        resource_restrictions, provider_restrictions = {}, {}
     return PlatformPrincipal(
         authentication_type="platform_api_key" if run.api_key_id else "portal_user",
         organization_id=run.organization_id,
@@ -168,6 +172,8 @@ def _principal_for(db: Session, run: CommercialIntelligenceRun) -> PlatformPrinc
         scopes=frozenset({"intelligence:run"}),
         environment="live",
         request_id=run.request_id or run.id,
+        resource_restrictions=resource_restrictions,
+        provider_restrictions=provider_restrictions,
         actor_metadata={"commercial_intelligence": True, "async_job": True},
     )
 

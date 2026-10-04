@@ -1086,3 +1086,87 @@ def test_file_byte_quotas_are_project_wide_and_race_safe(platform, monkeypatch):
     assert text().status_code == 201
     second = text()
     assert second.status_code == 409 and second.json()["detail"]["code"] == "file_text_quota_exceeded"
+
+
+def test_key_resource_allowlists_are_enforced_on_intelligence(platform):
+    p = platform
+    from app.models.operational_records import EvidenceRecord
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.models.saas import ManagedEntity
+    from app.platform_api.keys import create_platform_key
+
+    db = p.Session()
+    try:
+        allowed = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field", display_name="Allowed",
+                                status="active", metadata_json={"api_project_id": p.A.project_id, "crop": "almond"})
+        blocked = ManagedEntity(organization_id=p.A.org_id, workspace_id=None, entity_type="platform_field", display_name="Blocked",
+                                status="active", metadata_json={"api_project_id": p.A.project_id, "crop": "secret-crop"})
+        db.add_all([allowed, blocked])
+        db.flush()
+        records = [
+            EvidenceRecord(tenant_id=p.A.org_id, evidence_type="ra", title=title, summary="s", citation_label="c", field_id=fid,
+                           occurred_at=datetime.utcnow(), value_json={}, quality_status="usable",
+                           metadata_json={"platform_api_project_id": p.A.project_id})
+            for title, fid in (("allowed-obs", allowed.id), ("blocked-obs", blocked.id), ("fieldless-obs", None))
+        ]
+        db.add_all(records)
+        project = db.get(ApiProject, p.A.project_id)
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=p.A.project_id).first()
+        account.resource_restrictions_json = {}
+        key, secret = create_platform_key(db, project=project, service_account=account, name="field-limited",
+                                          scopes=["intelligence:run"], created_by_user_id=p.A.user_id,
+                                          resource_restrictions={"field_ids": [allowed.id]})
+        db.commit()
+        allowed_id, blocked_id, record_ids = allowed.id, blocked.id, [r.id for r in records]
+    finally:
+        db.close()
+    limited = {"Authorization": f"Bearer {secret}"}
+    try:
+        tool = lambda name, args: p.client.post("/v1/intelligence/tools/execute", headers=limited, json={"name": name, "arguments": args}).json()
+        assert tool("fields.get.v1", {"field_id": allowed_id})["status"] == "completed"
+        assert tool("fields.get.v1", {"field_id": blocked_id})["status"] == "not_found"
+        titles = {o["title"] for o in tool("observations.query.v1", {"evidence_type": "ra"})["output"]["observations"]}
+        assert titles == {"allowed-obs"}, titles
+        assert tool("observations.query.v1", {"field_id": blocked_id})["status"] == "not_found"
+
+        before = len(p.state.model_calls)
+        denied = p.client.post("/v1/intelligence", headers={**limited, **_idem()}, json={"task": "answer", "question": "blocked field", "field_id": blocked_id})
+        assert denied.status_code in {403, 404} and len(p.state.model_calls) == before
+        ok = p.client.post("/v1/intelligence", headers={**limited, **_idem()}, json={"task": "answer", "question": "what is recorded?"})
+        assert ok.status_code == 200
+        sent = json.dumps(p.state.model_calls[-1]["context"].model_dump(mode="json"))
+        assert "allowed-obs" in sent and "blocked-obs" not in sent and "fieldless-obs" not in sent
+        # Unrestricted project key still sees everything.
+        full = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"], json={"name": "observations.query.v1", "arguments": {"evidence_type": "ra"}}).json()
+        assert {o["title"] for o in full["output"]["observations"]} == {"allowed-obs", "blocked-obs", "fieldless-obs"}
+    finally:
+        db = p.Session()
+        try:
+            db.query(EvidenceRecord).filter(EvidenceRecord.id.in_(record_ids)).delete(synchronize_session=False)
+            db.query(ManagedEntity).filter(ManagedEntity.id.in_([allowed_id, blocked_id])).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+
+
+def test_session_quota_is_race_safe(platform, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.intelligence_platform import sessions as platform_sessions
+
+    p = platform
+    import time as _time
+
+    monkeypatch.setattr(platform_sessions, "MAX_ACTIVE_SESSIONS_PER_PROJECT", 3)
+    real_timedelta = platform_sessions.timedelta
+
+    def slow_timedelta(*args, **kwargs):  # widens the count -> insert window
+        _time.sleep(0.2)
+        return real_timedelta(*args, **kwargs)
+
+    monkeypatch.setattr(platform_sessions, "timedelta", slow_timedelta)
+    # Distinct keys: requests on one key already serialize on its last-used update.
+    keys = [_workspace_key(p, p.A, f"s{index}") for index in range(7)] + [p.keys["A"]]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        codes = list(pool.map(lambda headers: p.client.post("/v1/intelligence/sessions", headers=headers, json={"title": "q"}).status_code, keys))
+    assert codes.count(201) == 3 and codes.count(409) == 5, codes

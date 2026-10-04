@@ -504,6 +504,11 @@ class Runs:
     def retrieve(self, run_id: str) -> Any:
         return self._client._request("GET", f"/v1/intelligence/runs/{run_id}")
 
-    def list(self, *, limit: int = 20, execution: str | None = None) -> Any:
-        params = {"limit": limit, **({"execution": execution} if execution else {})}
+    def list(self, *, limit: int = 20, execution: str | None = None, before: str | None = None) -> Any:
+        """One page of runs, newest first. Pass the previous page's ``next_before`` as ``before``."""
+        params: dict[str, Any] = {"limit": limit}
+        if execution:
+            params["execution"] = execution
+        if before:
+            params["before"] = before
         return self._client._request("GET", "/v1/intelligence/runs", params=params)

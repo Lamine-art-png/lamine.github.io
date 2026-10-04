@@ -276,8 +276,19 @@ def _observations_query(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str
     )
     if ctx.principal.workspace_id:
         query = query.filter(EvidenceRecord.workspace_id == ctx.principal.workspace_id)
+    from app.platform_api.restrictions import enforce_resource_access, resource_allowlist
+
     if arguments.get("field_id"):
+        try:
+            enforce_resource_access(ctx.principal, resource_id=str(arguments["field_id"]), resource_type="field")
+        except HTTPException:
+            return {"status": "not_found", "output": {}}
         query = query.filter(EvidenceRecord.field_id == str(arguments["field_id"]))
+    allowed_fields, denied_fields = resource_allowlist(ctx.principal, "field")
+    if allowed_fields is not None:
+        query = query.filter(EvidenceRecord.field_id.in_(sorted(allowed_fields) or [""]))
+    if denied_fields:
+        query = query.filter(~EvidenceRecord.field_id.in_(sorted(denied_fields)) | EvidenceRecord.field_id.is_(None))
     if arguments.get("evidence_type"):
         query = query.filter(EvidenceRecord.evidence_type == str(arguments["evidence_type"]))
     if arguments.get("since"):
@@ -310,7 +321,12 @@ def _observations_query(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str
 
 def _field_get(ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
     from app.models.saas import ManagedEntity
+    from app.platform_api.restrictions import enforce_resource_access
 
+    try:
+        enforce_resource_access(ctx.principal, resource_id=str(arguments["field_id"]), resource_type="field")
+    except HTTPException:
+        return {"status": "not_found", "output": {}}
     row = (
         ctx.db.query(ManagedEntity)
         .filter(

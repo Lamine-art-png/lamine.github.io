@@ -66,7 +66,11 @@ def _query(db: Session, principal: PlatformPrincipal):
 
 
 def create_session(db: Session, principal: PlatformPrincipal, payload: SessionCreate) -> IntelligenceSession:
-    # Quota is per project by design: deliberately not workspace-scoped.
+    # Quota is per project by design: deliberately not workspace-scoped, and
+    # decided under the project row lock so concurrent creates serialize.
+    from app.intelligence_platform.files import lock_project
+
+    lock_project(db, principal)
     active = (
         db.query(IntelligenceSession)
         .filter(

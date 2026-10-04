@@ -78,8 +78,12 @@ def _validate_and_build_context(
             # Do not disclose whether a foreign-tenant workspace exists.
             raise HTTPException(status_code=404, detail={"code": "workspace_not_found"})
 
+    from app.platform_api.restrictions import enforce_resource_access
+
     field: ManagedEntity | None = None
     if payload.field_id:
+        # Key allowlists (e.g. field_ids) apply before ownership lookups.
+        enforce_resource_access(principal, resource_id=payload.field_id, resource_type="field")
         field = (
             db.query(ManagedEntity)
             .filter(

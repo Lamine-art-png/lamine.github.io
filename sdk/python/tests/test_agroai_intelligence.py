@@ -195,3 +195,17 @@ def test_upload_infers_supported_types_and_preserves_explicit(filename, explicit
     path.write_bytes(b"a,b\n1,2\n")
     _client(handler).intelligence.files.upload(str(path), content_type=explicit)
     assert f"Content-Type: {expected}".encode() in seen["body"]
+
+
+def test_runs_list_forwards_the_before_cursor():
+    seen = []
+
+    def handler(request):
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json={"data": [], "has_more": False, "next_before": None})
+
+    client = _client(handler)
+    client.intelligence.runs.list(limit=5)
+    client.intelligence.runs.list(limit=5, before="2026-10-03T12:00:00", execution="async")
+    assert seen[0] == {"limit": "5"}
+    assert seen[1] == {"limit": "5", "before": "2026-10-03T12:00:00", "execution": "async"}

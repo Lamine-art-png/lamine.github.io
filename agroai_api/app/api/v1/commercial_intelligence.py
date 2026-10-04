@@ -403,6 +403,10 @@ def _advisory_key_principal(
         scopes=frozenset(verified.key.scopes or []),
         environment="live",
         request_id=request_id,
+        # The key's resource/provider allowlists travel with the principal so
+        # every Intelligence surface enforces them like the Platform routes.
+        resource_restrictions=dict(verified.key.resource_restrictions_json or {}),
+        provider_restrictions=dict(verified.key.provider_restrictions_json or {}),
         actor_metadata={"key_fingerprint": verified.key.fingerprint, "commercial_intelligence": True},
     )
     decision = enforce_rate_limit(principal, route_id=route_id, cost=cost)
@@ -482,6 +486,14 @@ def _context(
         evidence_query = evidence_query.filter(EvidenceRecord.workspace_id == resolved_workspace_id)
     if payload.field_id:
         evidence_query = evidence_query.filter(EvidenceRecord.field_id == payload.field_id)
+    from app.platform_api.restrictions import resource_allowlist
+
+    allowed_fields, denied_fields = resource_allowlist(principal, "field")
+    if allowed_fields is not None:
+        # A field-restricted key only ever grounds on evidence of allowed fields.
+        evidence_query = evidence_query.filter(EvidenceRecord.field_id.in_(sorted(allowed_fields) or [""]))
+    if denied_fields:
+        evidence_query = evidence_query.filter(~EvidenceRecord.field_id.in_(sorted(denied_fields)) | EvidenceRecord.field_id.is_(None))
     records = evidence_query.order_by(EvidenceRecord.occurred_at.desc().nullslast(), EvidenceRecord.created_at.desc()).limit(40).all()
     if records:
         evidence.append(

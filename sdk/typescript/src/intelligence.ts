@@ -424,5 +424,6 @@ class Tools {
 class Runs {
   constructor(private readonly client: AgroAI) {}
   retrieve(id: string) { return this.client.request("GET", `/v1/intelligence/runs/${encodeURIComponent(id)}`); }
-  list(options: { limit?: number; execution?: "sync" | "async" } = {}) { return this.client.request("GET", "/v1/intelligence/runs", { query: options }); }
+  /** One page of runs, newest first. Pass the previous page's `next_before` as `before`. */
+  list(options: { limit?: number; execution?: "sync" | "async"; before?: string } = {}) { return this.client.request("GET", "/v1/intelligence/runs", { query: options }); }
 }

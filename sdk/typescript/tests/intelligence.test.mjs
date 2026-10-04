@@ -90,3 +90,11 @@ test("files.upload sends the requested content type even for an existing untyped
   assert.equal(part.name, "notes.txt");
   assert.equal(await part.text(), "scouted rows");
 });
+
+test("runs.list forwards the before cursor", async () => {
+  let url;
+  await client(async (u) => { url = new URL(u); return json(200, { data: [], has_more: false }); })
+    .intelligence.runs.list({ limit: 5, before: "2026-10-03T12:00:00" });
+  assert.equal(url.searchParams.get("before"), "2026-10-03T12:00:00");
+  assert.equal(url.searchParams.get("limit"), "5");
+});

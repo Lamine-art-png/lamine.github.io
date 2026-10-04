@@ -57,6 +57,33 @@ def enforce_provider_access(principal: PlatformPrincipal, provider_id: str) -> N
         raise _denied(principal, "provider_restricted", "This API key is not permitted to access the requested provider.")
 
 
+def resource_allowlist(principal: PlatformPrincipal, resource_type: str) -> tuple[set[str] | None, set[str]]:
+    """(allowed ids or None when unrestricted, denied ids) — same rules as enforce_resource_access.
+
+    For bulk queries that cannot check one id at a time.
+    """
+    restrictions = principal.resource_restrictions
+    if not isinstance(restrictions, dict):
+        return set(), set()
+    allow_keys = [
+        key
+        for key, value in restrictions.items()
+        if key.endswith("_ids") and not key.startswith("deny") and isinstance(value, list)
+    ]
+    preferred = {"resource_ids", f"{resource_type}_ids"}
+    if any(key in restrictions for key in preferred):
+        allow_keys = [key for key in allow_keys if key in preferred]
+    denied = {
+        str(item)
+        for key, values in restrictions.items()
+        if key.startswith("deny") and key.endswith("_ids") and isinstance(values, list)
+        for item in values
+    }
+    if not allow_keys:
+        return None, denied
+    return {str(item) for key in allow_keys for item in restrictions.get(key, [])}, denied
+
+
 def enforce_resource_access(
     principal: PlatformPrincipal,
     *,
