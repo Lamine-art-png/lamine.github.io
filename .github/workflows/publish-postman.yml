@@ -32,7 +32,7 @@ jobs:
           test "$(jq -r '[.variable[]? | select(.key == "api_key") | .value] | first // ""' "$COLLECTION_FILE")" = ""
           jq -e '.info.schema == "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"' "$COLLECTION_FILE" >/dev/null
 
-      - name: Find or create public workspace
+      - name: Find or create workspace
         id: workspace
         run: |
           set -euo pipefail
@@ -40,9 +40,15 @@ jobs:
           workspaces="$(curl --fail-with-body -sS "https://api.getpostman.com/workspaces" "${auth[@]}")"
           workspace_id="$(jq -r --arg name "$WORKSPACE_NAME" '.workspaces[]? | select(.name == $name) | .id' <<<"$workspaces" | head -1)"
           if [ -z "$workspace_id" ]; then
-            payload="$(jq -n --arg name "$WORKSPACE_NAME" '{workspace:{name:$name,type:"public",description:"Official AGRO-AI Platform API workspace. Build agricultural intelligence into software with APIs for fields, observations, recommendations, reports, provider workflows, usage, and auditable operations."}}')"
-            created="$(curl --fail-with-body -sS -X POST "https://api.getpostman.com/workspaces" "${auth[@]}" -d "$payload")"
-            workspace_id="$(jq -r '.workspace.id // .workspace.uid // empty' <<<"$created")"
+            payload="$(jq -n --arg name "$WORKSPACE_NAME" '{workspace:{name:$name,type:"team",description:"Official AGRO-AI Platform API workspace. Build agricultural intelligence into software with APIs for fields, observations, recommendations, reports, provider workflows, usage, and auditable operations.",about:"Official AGRO-AI Platform API workspace."}}')"
+            response_file="$(mktemp)"
+            status="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST "https://api.getpostman.com/workspaces" "${auth[@]}" -d "$payload")"
+            if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+              jq -c '{error:(.error // .)}' "$response_file" || sed -n '1,20p' "$response_file"
+              echo "::error::Postman workspace creation failed with HTTP $status."
+              exit 1
+            fi
+            workspace_id="$(jq -r '.workspace.id // .workspace.uid // empty' "$response_file")"
           fi
           test -n "$workspace_id"
           echo "workspace_id=$workspace_id" >> "$GITHUB_OUTPUT"
@@ -65,10 +71,26 @@ jobs:
           test -n "$collection_uid"
           echo "collection_uid=$collection_uid" >> "$GITHUB_OUTPUT"
 
+      - name: Make workspace public
+        run: |
+          set -euo pipefail
+          auth=(-H "X-Api-Key: $POSTMAN_API_KEY" -H "Content-Type: application/json")
+          workspace_id="${{ steps.workspace.outputs.workspace_id }}"
+          current="$(curl --fail-with-body -sS "https://api.getpostman.com/workspaces/$workspace_id" "${auth[@]}")"
+          payload="$(jq '{workspace:{name:.workspace.name,type:"public",description:(.workspace.description // ""),about:(.workspace.about // "")}}' <<<"$current")"
+          response_file="$(mktemp)"
+          status="$(curl -sS -o "$response_file" -w '%{http_code}' -X PUT "https://api.getpostman.com/workspaces/$workspace_id" "${auth[@]}" -d "$payload")"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            jq -c '{error:(.error // .)}' "$response_file" || sed -n '1,20p' "$response_file"
+            echo "::error::Collection was uploaded, but Postman rejected public visibility with HTTP $status."
+            exit 1
+          fi
+
       - name: Verify Postman resources
         run: |
           set -euo pipefail
           auth=(-H "X-Api-Key: $POSTMAN_API_KEY")
-          curl --fail-with-body -sS "https://api.getpostman.com/workspaces/${{ steps.workspace.outputs.workspace_id }}" "${auth[@]}" | jq -e '.workspace' >/dev/null
+          workspace="$(curl --fail-with-body -sS "https://api.getpostman.com/workspaces/${{ steps.workspace.outputs.workspace_id }}" "${auth[@]}")"
+          jq -e '.workspace.type == "public"' <<<"$workspace" >/dev/null
           curl --fail-with-body -sS "https://api.getpostman.com/collections/${{ steps.collection.outputs.collection_uid }}" "${auth[@]}" | jq -e '.collection' >/dev/null
-          echo "Postman workspace and collection verified through the Postman API."
+          echo "Postman public workspace and collection verified through the Postman API."
