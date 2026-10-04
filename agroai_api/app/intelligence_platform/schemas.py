@@ -21,7 +21,10 @@ MAX_SCHEMA_NODES = 1_500
 # Caller regexes would execute against model output inside AGRO-AI; remote or
 # dynamic references could reach outside the request. Neither is needed for
 # agricultural result shapes.
-_FORBIDDEN_KEYWORDS = {"pattern", "patternProperties", "$dynamicRef", "$recursiveRef", "$dynamicAnchor", "$recursiveAnchor", "$anchor"}
+# $id/$anchor would create nested resolution scopes; result shapes never need
+# them, and forbidding them keeps admission and validation resolving refs
+# identically (always against the one caller schema).
+_FORBIDDEN_KEYWORDS = {"pattern", "patternProperties", "$dynamicRef", "$recursiveRef", "$dynamicAnchor", "$recursiveAnchor", "$anchor", "$id"}
 
 
 class SchemaRejected(ValueError):

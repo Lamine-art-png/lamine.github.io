@@ -105,7 +105,7 @@ Schema): `diagnosis`, `recommendations`, `risk_assessment`,
 
 Your own schema: `{"type": "json_schema", "name": "lender_summary", "schema": {...}}`
 — JSON Schema draft 2020-12, root `type: object`, ≤ 32 KB, ≤ 12 levels.
-`pattern`, `patternProperties`, `$anchor` (plain-name references), dynamic and remote `$ref` are rejected (they
+`pattern`, `patternProperties`, `$id`, `$anchor` (plain-name references), dynamic and remote `$ref` are rejected (they
 would execute caller regexes or reach outside the request).
 
 Guarantees:

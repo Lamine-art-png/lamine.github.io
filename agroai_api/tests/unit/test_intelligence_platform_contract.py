@@ -481,3 +481,12 @@ def test_admission_and_validation_agree_on_every_reference_form():
         errors = schemas.validation_errors({"p": "probe"}, schema)
         resolvable = not any("could not complete" in item for item in errors)
         assert admitted == resolvable, (ref, admitted, errors)
+
+
+def test_nested_id_scopes_are_rejected_so_refs_resolve_one_way():
+    nested = {"type": "object", "properties": {"sub": {"$id": "urn:example:sub", "$defs": {"x": {"type": "string"}},
+                                                        "type": "object", "properties": {"v": {"$ref": "#/$defs/x"}}}}}
+    with pytest.raises(schemas.SchemaRejected, match=r"\$id"):
+        schemas.validate_caller_schema(nested)
+    with pytest.raises(schemas.SchemaRejected, match=r"\$id"):
+        schemas.validate_caller_schema({"$id": "urn:example:root", "type": "object"})
