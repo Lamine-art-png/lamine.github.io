@@ -35,6 +35,8 @@ from app.services.market_intelligence import MarketCalculationError, scenario_po
 
 METHODOLOGY_VERSION = "historical-moves-2026.10.1"
 MIN_OBSERVATIONS = 26
+# Horizon moves needed before percentiles mean anything.
+MIN_HORIZON_MOVES = 10
 PERIODS_PER_YEAR = {"daily": 252, "daily_business": 252, "weekly": 52, "monthly": 12}
 
 
@@ -59,6 +61,15 @@ def historical_move_statistics(values: list[Decimal], *, horizon_periods: int, f
         math.exp(log_prices[i + horizon_periods] - log_prices[i]) - 1
         for i in range(len(log_prices) - horizon_periods)
     )
+    if len(horizon_moves) < MIN_HORIZON_MOVES:
+        # A long horizon can leave too few non-overlapping-start moves to
+        # describe a range, even when the series passes the minimum length.
+        return {
+            "status": "insufficient_history",
+            "observations": len(prices),
+            "minimum_observations": horizon_periods + MIN_HORIZON_MOVES,
+            "horizon_periods": horizon_periods,
+        }
     mean = sum(period_returns) / len(period_returns)
     variance = sum((r - mean) ** 2 for r in period_returns) / max(1, len(period_returns) - 1)
     annualised = math.sqrt(variance) * math.sqrt(PERIODS_PER_YEAR.get(frequency, 52))

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import urllib.error
@@ -611,6 +612,13 @@ _USDA_COMMODITY_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+# MARS row fields that distinguish separate quotes within one report.
+_USDA_QUOTE_DIMENSIONS = (
+    "grade", "class", "variety", "quality", "protein", "item_size", "package", "organic",
+    "delivery_period", "delivery_point", "current", "trans_mode", "sale_type", "basis_type",
+)
+
+
 class USDAMyMarketNewsSeries(SeriesProvider):
     provider_id = "usda_mymarketnews"
     name = "USDA AMS MyMarketNews / MARS"
@@ -692,10 +700,15 @@ class USDAMyMarketNewsSeries(SeriesProvider):
                 if observed is None:
                     continue
                 location = str(lookup.get("location") or lookup.get("office_city") or selector.get("region") or "").strip()
+                # One report can quote the same commodity, location and date
+                # several times (grades, classes, delivery periods, sale types);
+                # each quote is its own series, never a "revision" of another.
+                qualifiers = {key: str(lookup[key]).strip() for key in _USDA_QUOTE_DIMENSIONS if str(lookup.get(key) or "").strip()}
+                qualifier_id = hashlib.sha256(json.dumps(qualifiers, sort_keys=True).encode()).hexdigest()[:12] if qualifiers else "base"
                 descriptor = SeriesDescriptor(
                     provider=self.provider_id,
                     # Stable, content-derived identity (independent of row order).
-                    series_key=f"usda_mymarketnews:{slug}:{commodity}:{fold(location)}:{unit.quantity_unit}",
+                    series_key=f"usda_mymarketnews:{slug}:{commodity}:{fold(location)}:{unit.quantity_unit}:{qualifier_id}",
                     source_name=f"{self.name} report {slug}",
                     observation_type="physical_price",
                     native_id=f"MARS report {slug}",
@@ -710,7 +723,7 @@ class USDAMyMarketNewsSeries(SeriesProvider):
                     freshness_max_age_minutes=4 * MINUTES_PER_DAY,
                     last_known_max_age_minutes=14 * MINUTES_PER_DAY,
                     licensing=self.license,
-                    metadata={"report_slug": slug, "source_url": f"{USDA_MARS_BASE}/{slug}"},
+                    metadata={"report_slug": slug, "source_url": f"{USDA_MARS_BASE}/{slug}", "quote": qualifiers},
                 )
                 points.append(SeriesPoint(
                     descriptor=descriptor, observed_at=observed, value=price, retrieved_at=retrieved,

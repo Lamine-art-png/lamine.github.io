@@ -697,11 +697,14 @@ def _linked_area_hectares(db: Session, org_id: str, position_id: str) -> tuple[D
     for _link, field in links:
         metadata = field.metadata_json if isinstance(field.metadata_json, dict) else {}
         area = _dec(metadata.get("area_hectares"))
-        usable = area is not None and area > 0 and _field_operational(field)
+        # Archived/inactive fields stay linked for history but never add area.
+        active = str(field.status or "").lower() == "active"
+        usable = area is not None and area > 0 and active and _field_operational(field)
         if usable:
             total += area
+        reason = None if usable else ("inactive" if not active else "synthetic_or_demo" if not _field_operational(field) else "missing_area")
         detail.append({"field_id": field.id, "name": field.display_name, "area_hectares": str(area) if area is not None else None,
-                       "counted": usable, "reason": None if usable else ("synthetic_or_demo" if not _field_operational(field) else "missing_area")})
+                       "counted": usable, "reason": reason})
     return total, detail
 
 

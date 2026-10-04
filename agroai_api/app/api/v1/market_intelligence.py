@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
@@ -174,20 +175,31 @@ def _position_payloads(db: Session, org_id: str, rows: list[MarketPosition]) -> 
     # Data health only needs recent evidence; a bounded window keeps portfolio
     # reads fast as time series accumulate.
     window_start = datetime.utcnow() - timedelta(days=180)
-    for observation in (
-        db.query(MarketObservation)
+    # The newest 100 observations *per position* (a window partitioned by
+    # position), so one high-frequency position cannot crowd out the others.
+    ranked = (
+        db.query(
+            MarketObservation.id.label("id"),
+            func.row_number().over(
+                partition_by=MarketObservation.position_id,
+                order_by=(MarketObservation.observed_at.desc(), MarketObservation.id.desc()),
+            ).label("rank"),
+        )
         .filter(
             MarketObservation.organization_id == org_id,
             MarketObservation.position_id.in_(position_ids),
             MarketObservation.observed_at >= window_start,
         )
+        .subquery()
+    )
+    for observation in (
+        db.query(MarketObservation)
+        .join(ranked, ranked.c.id == MarketObservation.id)
+        .filter(ranked.c.rank <= 100, MarketObservation.organization_id == org_id)
         .order_by(MarketObservation.observed_at.desc())
-        .limit(100 * len(position_ids))
         .all()
     ):
-        bucket = observations_by_position[observation.position_id]
-        if len(bucket) < 100:
-            bucket.append(observation)
+        observations_by_position[observation.position_id].append(observation)
     return [
         _position_payload(
             db,

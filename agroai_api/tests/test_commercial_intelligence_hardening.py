@@ -580,3 +580,99 @@ def test_cycle_job_for_a_disabled_cycle_completes_without_running(db, monkeypatc
     assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "succeeded"
     db.refresh(job)
     assert job.output_json == {"status": "skipped"} and ran == []
+
+
+# ---------------------------------------------------------------------------
+# Review findings (PR #528)
+# ---------------------------------------------------------------------------
+
+
+def test_distinct_usda_quotes_in_one_report_are_separate_series_not_revisions(db):
+    from app.services.market_data_adapters import USDAMyMarketNewsSeries
+
+    report = json.dumps({"results": [
+        {"commodity": "Yellow Corn", "grade": "US #2", "price_unit": "$/bu", "avg_price": "4.21", "report_date": "10/01/2026", "location": "Central Iowa"},
+        {"commodity": "Yellow Corn", "grade": "US #3", "price_unit": "$/bu", "avg_price": "4.05", "report_date": "10/01/2026", "location": "Central Iowa"},
+        {"commodity": "Yellow Corn", "grade": "US #2", "delivery_period": "Nov", "price_unit": "$/bu", "avg_price": "4.30", "report_date": "10/01/2026", "location": "Central Iowa"},
+    ]})
+    adapter = USDAMyMarketNewsSeries(api_key="k", fetch_text=lambda url, headers, timeout: report)
+    points = asyncio.run(adapter.collect([{"commodity": "corn", "region": "Iowa"}]))
+    assert len({p.descriptor.series_key for p in points}) == 3
+    stats = plane.persist_points(db, points)
+    db.commit()
+    assert (stats.inserted, stats.revised) == (3, 0) and db.query(MarketDataPointRevision).count() == 0
+    again = asyncio.run(adapter.collect([{"commodity": "corn", "region": "Iowa"}]))
+    assert {p.descriptor.series_key for p in again} == {p.descriptor.series_key for p in points}  # stable identity
+
+
+def test_observation_window_is_partitioned_per_position(db):
+    from app.api.v1.market_intelligence import _position_payloads
+    from app.models.market_intelligence import MarketObservation
+
+    _, org, _ = identity(db, "obs-window")
+    busy = _position(db, org, name="Busy")
+    quiet = _position(db, org, name="Quiet")
+    now = datetime.utcnow()
+    for index in range(250):  # more than the old global limit (100 x 2 positions)
+        db.add(MarketObservation(organization_id=org.id, position_id=busy.id, evidence_id=f"busy-{index}", observation_type="cash_price",
+                                 provider="customer", source_name="Customer", source_status="MANUAL", value=Decimal("1"), unit="saca_60kg",
+                                 currency="BRL", observed_at=now - timedelta(minutes=index), retrieved_at=now, quality_json={}, licensing_json={}, metadata_json={}))
+    for index in range(3):
+        db.add(MarketObservation(organization_id=org.id, position_id=quiet.id, evidence_id=f"quiet-{index}", observation_type="cash_price",
+                                 provider="customer", source_name="Customer", source_status="MANUAL", value=Decimal("1"), unit="saca_60kg",
+                                 currency="BRL", observed_at=now - timedelta(days=10, minutes=index), retrieved_at=now, quality_json={}, licensing_json={}, metadata_json={}))
+    db.commit()
+    payloads = {item["name"]: item for item in _position_payloads(db, org.id, [busy, quiet])}
+    assert payloads["Quiet"]["data_health"]["status"] != "missing"
+    assert len(payloads["Quiet"]["data_health"].get("sources") or []) >= 1
+
+
+def test_clearing_manual_inputs_clears_the_manual_evidence_claim(client, db):
+    user, org, membership = identity(db, "clear-manual")
+    act_as(user, org, membership)
+    position = _position(db, org, reporting="USD", price_currency="BRL", metadata={})
+    patch = lambda body: client.patch(f"/v1/market-intelligence/positions/{position.id}", json=body)
+    assert patch({"current_realizable_price": "130", "fx_rate_to_reporting": "0.19"}).status_code == 200
+    db.refresh(position)
+    assert position.metadata_json["price_state"] == "MANUAL" and position.metadata_json["fx_state"] == "MANUAL"
+    assert patch({"current_realizable_price": None, "fx_rate_to_reporting": None}).status_code == 200
+    db.refresh(position)
+    metadata = position.metadata_json
+    assert metadata["price_policy"] == "automatic" and metadata["price_state"] == "UNAVAILABLE"
+    assert "price_source" not in metadata and "fx_state" not in metadata and "fx_source" not in metadata
+    assert evidence_states(db, position, []) == {"price": "UNAVAILABLE", "fx": "UNAVAILABLE"}
+    contract = _contract(db, position, code="USD-9", currency="USD", fx="5.1")
+    client.patch(f"/v1/market-intelligence/contracts/{contract.id}", json={"fx_rate_to_reporting": "5.2"})
+    client.patch(f"/v1/market-intelligence/contracts/{contract.id}", json={"fx_rate_to_reporting": None})
+    db.refresh(contract)
+    assert contract.fx_rate_to_reporting is None and "fx_state" not in (contract.metadata_json or {})
+
+
+def test_archived_fields_do_not_count_toward_linked_acreage(client, db):
+    from app.models.saas import ManagedEntity
+
+    user, org, membership = identity(db, "archived-field")
+    act_as(user, org, membership)
+    position = _position(db, org)
+    active = ManagedEntity(organization_id=org.id, entity_type="platform_field", display_name="North", status="active", metadata_json={"area_hectares": 100})
+    archived = ManagedEntity(organization_id=org.id, entity_type="platform_field", display_name="South", status="active", metadata_json={"area_hectares": 50})
+    db.add_all([active, archived])
+    db.commit()
+    linked = client.put(f"/v1/market-intelligence/positions/{position.id}/fields", json={"field_ids": [active.id, archived.id]}).json()
+    assert linked["linked_area_hectares"] == "150"
+    archived.status = "archived"
+    db.commit()
+    estimate = client.post(f"/v1/market-intelligence/positions/{position.id}/yield-estimates", json={"yield_per_area": "50", "quantity_unit": "saca"}).json()
+    assert Decimal(estimate["expected_production"]) == Decimal("5000")  # 100 ha only, not 150
+    fields = {item["name"]: item for item in estimate.get("fields", [])} if estimate.get("fields") else {}
+    if fields:
+        assert fields["South"]["counted"] is False and fields["South"]["reason"] == "inactive"
+
+
+def test_risk_with_horizon_equal_to_history_is_insufficient_not_an_error():
+    from app.services.market_risk import MIN_OBSERVATIONS, historical_move_statistics
+
+    values = [Decimal(100 + index) for index in range(MIN_OBSERVATIONS)]
+    result = historical_move_statistics(values, horizon_periods=MIN_OBSERVATIONS, frequency="weekly")
+    assert result["status"] == "insufficient_history" and result["horizon_periods"] == MIN_OBSERVATIONS
+    assert historical_move_statistics(values + [Decimal(130)] * 20, horizon_periods=4, frequency="weekly")["status"] != "insufficient_history"
