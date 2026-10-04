@@ -1373,3 +1373,115 @@ def test_workspace_bound_project_keys_use_their_own_resources_in_runs(platform):
     assert p.client.get(f"/v1/intelligence/runs/{run.json()['id']}", headers=bound).status_code == 200
     job = p.client.post("/v1/intelligence/jobs", headers={**bound, **_idem()}, json={"task": "answer", "question": "job uses session", "session_id": sid}).json()
     assert _execute(p, job["id"], p.A.org_id) == "completed"
+
+
+def test_review_round_replay_cancel_purge_tools_lastused_history(platform, monkeypatch):
+    p = platform
+    from app.intelligence_platform import jobs
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+    from app.models.platform_api import PlatformApiKey
+
+    # Replay of a completed run survives deletion of a referenced session/file.
+    sid = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "r"}).json()["id"]
+    fid = p.client.post("/v1/intelligence/files", headers=p.keys["A"], files={"file": ("r.txt", io.BytesIO(b"replay notes"), "text/plain")}).json()["id"]
+    headers = {**p.keys["A"], "Idempotency-Key": "replay-after-delete"}
+    body = {"task": "answer", "question": "replay me", "session_id": sid, "attachments": [{"file_id": fid}]}
+    first = p.client.post("/v1/intelligence", headers=headers, json=body)
+    assert first.status_code == 200
+    p.client.delete(f"/v1/intelligence/sessions/{sid}", headers=p.keys["A"])
+    p.client.delete(f"/v1/intelligence/files/{fid}", headers=p.keys["A"])
+    replay = p.client.post("/v1/intelligence", headers=headers, json=body)
+    assert replay.status_code == 200 and replay.json()["id"] == first.json()["id"]
+    # ...but a new request still needs live references.
+    assert p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem()}, json=body).status_code == 404
+
+    # Cancel requested while running beats a transient failure's retry.
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "cancel race"}).json()
+    async def raising_after_cancel(**kwargs):
+        db2 = p.Session()
+        try:
+            row = db2.get(CommercialIntelligenceRun, job["id"])
+            row.cancel_requested_at = datetime.utcnow()
+            db2.commit()
+        finally:
+            db2.close()
+        raise RuntimeError("provider exploded")
+    from app.api.v1 import commercial_intelligence as legacy
+    monkeypatch.setattr(legacy, "_run_ai", raising_after_cancel)
+    assert _execute(p, job["id"], p.A.org_id) == "canceled"
+    assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "canceled"
+
+    # Purge advances past already-purged stubs.
+    db = p.Session()
+    try:
+        old = datetime.utcnow() - timedelta(days=40)
+        ids = []
+        for index in range(3):
+            row = CommercialIntelligenceRun(organization_id=p.A.org_id, api_project_id=p.A.project_id, idempotency_key=f"old-{index}-{uuid.uuid4().hex}",
+                                            request_hash="h", task="answer", mode="stateless", status="completed", execution="async",
+                                            charge_cents=0, request_safe_json={}, response_json={"secret": "full result"}, completed_at=old)
+            db.add(row)
+            db.flush()
+            ids.append(row.id)
+        db.commit()
+        assert jobs.purge_expired_payloads_and_results(db, limit=2) == 2
+        assert jobs.purge_expired_payloads_and_results(db, limit=2) >= 1, "next batch reaches the remaining row"
+        db.expire_all()
+        assert all(db.get(CommercialIntelligenceRun, i).response_json.get("result_expired") for i in ids)
+    finally:
+        db.close()
+
+    # tools/execute validation errors are 422, not 500.
+    assert p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"], json={"name": "x", "arguments": {}}).status_code == 422
+
+    # Key last-used tracking survives upload and tool routes.
+    db = p.Session()
+    try:
+        main_key = db.query(PlatformApiKey).filter_by(organization_id=p.A.org_id, name="Production intelligence").first()
+        main_key.last_used_at = None
+        db.commit()
+    finally:
+        db.close()
+    p.client.post("/v1/intelligence/files", headers=p.keys["A"], files={"file": ("u.txt", io.BytesIO(b"usage"), "text/plain")})
+    db = p.Session()
+    try:
+        assert db.query(PlatformApiKey).filter_by(organization_id=p.A.org_id, name="Production intelligence").first().last_used_at is not None
+    finally:
+        db.close()
+
+
+def test_restricted_key_cannot_replay_another_keys_idempotency_key(platform):
+    p = platform
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.platform_api.keys import create_platform_key
+
+    db = p.Session()
+    try:
+        project = db.get(ApiProject, p.A.project_id)
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=p.A.project_id).first()
+        _key, secret = create_platform_key(db, project=project, service_account=account, name="replayer",
+                                           scopes=["intelligence:run"], created_by_user_id=p.A.user_id,
+                                           resource_restrictions={"field_ids": ["only-this-field"]})
+        db.commit()
+    finally:
+        db.close()
+    restricted = {"Authorization": f"Bearer {secret}"}
+    body = {"task": "answer", "question": "shared idempotency"}
+    first = p.client.post("/v1/intelligence", headers={**p.keys["A"], "Idempotency-Key": "shared-idem"}, json=body)
+    assert first.status_code == 200
+    replay = p.client.post("/v1/intelligence", headers={**restricted, "Idempotency-Key": "shared-idem"}, json=body)
+    assert replay.status_code == 409 and replay.json()["detail"]["code"] == "idempotency_key_in_use", replay.text
+    assert first.json()["id"] not in replay.text
+    assert p.client.post("/v1/intelligence", headers={**restricted, **_idem()}, json=body).status_code == 200, "its own runs work"
+
+
+def test_session_history_reaches_hosted_runtime_prompt(platform, monkeypatch):
+    p = platform
+    import app.api.v1.brain as brain
+
+    monkeypatch.setattr(brain, "is_local_ai", lambda: False)
+    sid = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "hosted"}).json()["id"]
+    _run(p, "A", {"task": "answer", "question": "Block 9 uses micro sprinklers", "session_id": sid})
+    _run(p, "A", {"task": "answer", "question": "Which emitters did I mention?", "session_id": sid})
+    assert "PRIOR SESSION TURNS" in p.state.model_calls[-1]["user_instruction"]
+    assert "Block 9 uses micro sprinklers" in p.state.model_calls[-1]["user_instruction"]

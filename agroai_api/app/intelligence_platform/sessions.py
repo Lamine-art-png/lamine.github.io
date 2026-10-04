@@ -63,8 +63,9 @@ class SessionUpdate(BaseModel):
 
 def visible_sessions(db: Session, principal: PlatformPrincipal):
     query = owned(db.query(IntelligenceSession), IntelligenceSession, principal)
-    restrictions = principal.resource_restrictions if isinstance(principal.resource_restrictions, dict) else {"invalid": []}
-    if any(str(key).endswith("_ids") or key == "invalid" for key in restrictions):
+    from app.platform_api.restrictions import is_resource_restricted
+
+    if is_resource_restricted(principal):
         # Session history holds answers derived from whatever its runs could
         # see; a resource-restricted key uses only sessions it created.
         query = query.filter(IntelligenceSession.created_by_api_key_id == principal.api_key_id)

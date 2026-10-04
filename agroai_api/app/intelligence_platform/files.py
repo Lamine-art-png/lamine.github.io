@@ -193,7 +193,7 @@ async def accept_upload(
         raise HTTPException(status_code=422, detail={"code": "file_purpose_invalid"})
     # Fast fail before reading the body; authoritative re-check below.
     early = _quota_error(project_file_usage(db, principal), object_bytes=0, text_chars=0)
-    db.rollback()
+    db.commit()  # ends the read; keeps the key's last-used update
     if early is not None:
         raise HTTPException(status_code=409, detail=early)
 

@@ -189,15 +189,6 @@ def _crop_margin(_ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]
             "margin_per_ha": round(margin / area, 2),
         }
 
-    def finite(value: Any) -> bool:
-        if isinstance(value, float):
-            return math.isfinite(value)
-        if isinstance(value, dict):
-            return all(finite(item) for item in value.values())
-        if isinstance(value, list):
-            return all(finite(item) for item in value)
-        return True
-
     result = {
         "status": "completed",
         "output": {
@@ -214,7 +205,7 @@ def _crop_margin(_ctx: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]
         },
         "method": "Partial budget: revenue = yield x area x price; margin = revenue - sum(costs); breakeven from totals.",
     }
-    if not finite(result["output"]):
+    if not _finite_numbers(result["output"]):
         return {"status": "invalid_input", "invalid_inputs": ["magnitude"], "output": {}}
     return result
 

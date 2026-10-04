@@ -121,10 +121,8 @@ def list_tools(response: Response) -> dict[str, Any]:
     return {"object": "list", "data": [tool.public() for tool in platform_tools.REGISTRY.all()]}
 
 
-class ToolExecuteRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    name: str
-    arguments: dict[str, Any] = Field(default_factory=dict)
+class ToolExecuteRequest(ToolCall):
+    """Same validation as a tool call on a run (name pattern, 32 KB arguments)."""
 
 
 @router.post("/intelligence/tools/execute")
@@ -134,12 +132,12 @@ def execute_tool(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Run one deterministic, side-effect-free tool directly. Not billed."""
-    call = ToolCall(name=payload.name, arguments=payload.arguments)
+    call = payload
 
     reject_credentials(payload)
     platform_tools.validate_calls([call])
     result = platform_tools.execute(platform_tools.ToolContext(db=db, principal=principal), [call])[0]
-    db.rollback()  # tools are read-only; never persist incidental state
+    db.commit()  # tools are read-only; this only persists the key's last-used update
     _log("intelligence.tool.executed", principal, tool=result["name"], status=result["status"], duration_ms=result["duration_ms"])
     return {"object": "agroai.tool_result", "request_id": principal.request_id, **result}
 

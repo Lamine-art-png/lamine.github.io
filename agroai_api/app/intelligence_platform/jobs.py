@@ -84,8 +84,9 @@ def visible_runs(query: Any, principal: PlatformPrincipal) -> Any:
     )
     if principal.workspace_id:
         query = query.filter(CommercialIntelligenceRun.workspace_id == principal.workspace_id)
-    restrictions = principal.resource_restrictions if isinstance(principal.resource_restrictions, dict) else {"invalid": []}
-    if any(str(key).endswith("_ids") or key == "invalid" for key in restrictions):
+    from app.platform_api.restrictions import is_resource_restricted
+
+    if is_resource_restricted(principal):
         query = query.filter(CommercialIntelligenceRun.api_key_id == principal.api_key_id)
     return query
 
@@ -223,6 +224,8 @@ async def execute_job(db: Session, *, run_id: str, organization_id: str, worker_
         status = public_status(run)
         db.rollback()
         return status
+    if run.cancel_requested_at is not None:
+        return _close(db, run, "canceled", "intelligence_job_canceled")
     if run.next_attempt_at and run.next_attempt_at > now + timedelta(seconds=5):
         db.rollback()
         return "queued"
@@ -327,6 +330,9 @@ def sweep(db: Session, *, limit: int = 25) -> dict[str, int]:
 def purge_expired_payloads_and_results(db: Session, *, limit: int = 500) -> int:
     """Result retention: drop stored responses of async jobs older than the retention window."""
     cutoff = datetime.utcnow() - timedelta(days=RESULT_RETENTION_DAYS)
+    from sqlalchemy import or_
+
+    expired_marker = CommercialIntelligenceRun.response_json["result_expired"].as_boolean()
     rows = (
         db.query(CommercialIntelligenceRun)
         .filter(
@@ -334,7 +340,11 @@ def purge_expired_payloads_and_results(db: Session, *, limit: int = 500) -> int:
             CommercialIntelligenceRun.completed_at.isnot(None),
             CommercialIntelligenceRun.completed_at < cutoff,
             CommercialIntelligenceRun.response_json.isnot(None),
+            # Already-purged stubs never match again, so the batch always
+            # advances to the next expired results.
+            or_(expired_marker.is_(None), expired_marker.is_(False)),
         )
+        .order_by(CommercialIntelligenceRun.completed_at.asc(), CommercialIntelligenceRun.id.asc())
         .limit(limit)
         .with_for_update(skip_locked=True)
         .all()

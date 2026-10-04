@@ -309,7 +309,16 @@ volumes, charges, statuses and latency (`runs` pages with the opaque
 the runs, jobs and sessions they created, and only ground on evidence of
 allowed fields. A run grounds on its own API project's evidence plus
 organization-level evidence that belongs to no API project (portal uploads,
-connectors) — never on another API project's records. `GET /v1/intelligence/capabilities`
+connectors) — never on another API project's records.
+
+Workspace scope: a run is workspace-scoped when the key is workspace-bound,
+the request sets `workspace_id`, or the referenced field belongs to a
+workspace. A workspace-scoped run uses only that workspace's sessions, files,
+knowledge and fields; project-wide resources (created by a project-wide key)
+are not visible inside it, so its stored result can be read safely by that
+workspace's keys. Fields must carry this API project's tag and, for a
+workspace-scoped run, the same workspace — the same rules as
+`/v1/platform/fields`. `GET /v1/intelligence/capabilities`
 describes modalities, schemas, tools and limits.
 
 ## 13. Production recommendations
