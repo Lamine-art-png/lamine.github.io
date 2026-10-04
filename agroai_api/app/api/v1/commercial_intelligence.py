@@ -480,7 +480,14 @@ def _context(
             )
         )
 
-    evidence_query = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == principal.organization_id)
+    project_tag = EvidenceRecord.metadata_json["platform_api_project_id"].as_string()
+    evidence_query = db.query(EvidenceRecord).filter(
+        EvidenceRecord.tenant_id == principal.organization_id,
+        # Never another API project's records. Organization-level evidence
+        # (portal uploads, connectors) carries no project tag and keeps
+        # grounding runs, as before.
+        (project_tag == principal.api_project_id) | project_tag.is_(None),
+    )
     resolved_workspace_id = payload.workspace_id or principal.workspace_id or (field.workspace_id if field else None)
     if resolved_workspace_id:
         evidence_query = evidence_query.filter(EvidenceRecord.workspace_id == resolved_workspace_id)

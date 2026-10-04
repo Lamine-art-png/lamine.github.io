@@ -61,8 +61,14 @@ class SessionUpdate(BaseModel):
         return validate_metadata(value) if value is not None else value
 
 
-def _query(db: Session, principal: PlatformPrincipal):
-    return owned(db.query(IntelligenceSession), IntelligenceSession, principal)
+def visible_sessions(db: Session, principal: PlatformPrincipal):
+    query = owned(db.query(IntelligenceSession), IntelligenceSession, principal)
+    restrictions = principal.resource_restrictions if isinstance(principal.resource_restrictions, dict) else {"invalid": []}
+    if any(str(key).endswith("_ids") or key == "invalid" for key in restrictions):
+        # Session history holds answers derived from whatever its runs could
+        # see; a resource-restricted key uses only sessions it created.
+        query = query.filter(IntelligenceSession.created_by_api_key_id == principal.api_key_id)
+    return query
 
 
 def create_session(db: Session, principal: PlatformPrincipal, payload: SessionCreate) -> IntelligenceSession:
@@ -111,7 +117,7 @@ def owned_session(
     *,
     for_update: bool = False,
 ) -> IntelligenceSession:
-    query = _query(db, principal).filter(IntelligenceSession.id == session_id)
+    query = visible_sessions(db, principal).filter(IntelligenceSession.id == session_id)
     if for_update:
         query = query.with_for_update().populate_existing()
     row = query.first()

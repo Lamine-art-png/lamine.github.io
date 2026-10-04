@@ -1149,6 +1149,14 @@ def test_key_resource_allowlists_are_enforced_on_intelligence(platform):
         assert foreign_job["id"] not in {j["id"] for j in p.client.get("/v1/intelligence/jobs", headers=limited).json()["data"]}
         assert p.client.get(f"/v1/intelligence/runs/{ok.json()['id']}", headers=limited).status_code == 200
         assert p.client.get(f"/v1/intelligence/runs/{foreign_run['id']}", headers=p.keys["A"]).status_code == 200
+        # Sessions: a restricted key cannot read or continue another key's session history.
+        shared = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "project-wide"}).json()["id"]
+        assert p.client.get(f"/v1/intelligence/sessions/{shared}", headers=limited).status_code == 404
+        assert p.client.get(f"/v1/intelligence/sessions/{shared}/turns", headers=limited).status_code == 404
+        assert p.client.post("/v1/intelligence", headers={**limited, **_idem()}, json={"task": "answer", "question": "continue", "session_id": shared}).status_code == 404
+        own = p.client.post("/v1/intelligence/sessions", headers=limited, json={"title": "mine"}).json()["id"]
+        assert p.client.get(f"/v1/intelligence/sessions/{own}", headers=limited).status_code == 200
+        assert shared not in {item["id"] for item in p.client.get("/v1/intelligence/sessions", headers=limited).json()["data"]}
         # Unrestricted project key still sees everything.
         full = p.client.post("/v1/intelligence/tools/execute", headers=p.keys["A"], json={"name": "observations.query.v1", "arguments": {"evidence_type": "ra"}}).json()
         assert {o["title"] for o in full["output"]["observations"]} == {"allowed-obs", "blocked-obs", "fieldless-obs"}
@@ -1208,3 +1216,35 @@ def test_run_cursor_never_skips_tied_timestamps(platform):
             break
     assert sorted(seen) == sorted(ids) and len(seen) == len(set(seen)), seen
     assert p.client.get("/v1/intelligence/runs", headers=p.keys["A"], params={"before": "not-a-cursor"}).status_code == 422
+
+
+def test_run_grounding_never_uses_another_api_projects_evidence(platform):
+    p = platform
+    from app.models.operational_records import EvidenceRecord
+
+    db = p.Session()
+    try:
+        rows = [
+            EvidenceRecord(tenant_id=p.A.org_id, evidence_type="g", title=title, summary="s", citation_label="c",
+                           occurred_at=datetime.utcnow(), value_json={}, quality_status="usable", metadata_json=meta)
+            for title, meta in (("this-project-obs", {"platform_api_project_id": p.A.project_id}),
+                                ("other-project-obs", {"platform_api_project_id": "another-api-project"}),
+                                ("org-portal-obs", {}))
+        ]
+        db.add_all(rows)
+        db.commit()
+        ids = [row.id for row in rows]
+    finally:
+        db.close()
+    try:
+        assert _run(p, "A", {"task": "answer", "question": "what was observed?"}).status_code == 200
+        sent = json.dumps(p.state.model_calls[-1]["context"].model_dump(mode="json"))
+        assert "this-project-obs" in sent and "org-portal-obs" in sent
+        assert "other-project-obs" not in sent
+    finally:
+        db = p.Session()
+        try:
+            db.query(EvidenceRecord).filter(EvidenceRecord.id.in_(ids)).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()

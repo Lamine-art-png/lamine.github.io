@@ -453,7 +453,7 @@ def list_sessions(
     from app.models.intelligence_platform import IntelligenceSession
 
     rows = (
-        owned(db.query(IntelligenceSession), IntelligenceSession, principal)
+        platform_sessions.visible_sessions(db, principal)
         .filter(
             IntelligenceSession.status == "active",
             IntelligenceSession.expires_at > datetime.utcnow(),
