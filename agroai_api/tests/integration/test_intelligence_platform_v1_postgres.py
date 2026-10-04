@@ -1248,3 +1248,30 @@ def test_run_grounding_never_uses_another_api_projects_evidence(platform):
             db.commit()
         finally:
             db.close()
+
+
+def test_every_request_string_is_credential_scanned(platform):
+    p = platform
+    secret = "sk_" + "live_" + "A1b2C3d4E5f6G7h8"  # assembled so repository secret scanning stays clean
+    file_id = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                            files={"file": ("ok.txt", io.BytesIO(b"plain notes"), "text/plain")}).json()["id"]
+    bodies = [
+        {"response_format": {"type": "json_schema", "name": secret, "schema": {"type": "object"}}},
+        {"response_format": {"type": "json_schema", "name": "x", "description": secret, "schema": {"type": "object"}}},
+        {"attachments": [{"file_id": file_id, "label": secret}]},
+        {"knowledge": {"collections": ["c"], "query": f"find {secret}"}},
+        {"language": secret},
+        {"metadata": {"ref": secret}},
+    ]
+    before = len(p.state.model_calls)
+    for extra in bodies:
+        resp = _run(p, "A", {"task": "answer", "question": "probe question", **extra})
+        assert resp.status_code == 422 and "credential_like_input_rejected" in resp.text, (extra, resp.status_code, resp.text)
+        job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "probe question", **extra})
+        assert job.status_code == 422, (extra, job.text)
+    assert len(p.state.model_calls) == before
+    upload = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                           files={"file": (f"{secret}.txt", io.BytesIO(b"plain notes"), "text/plain")})
+    assert upload.status_code == 422 and upload.json()["detail"]["field"] == "filename"
+    assert p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": secret}).status_code == 422
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)

@@ -96,26 +96,32 @@ def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str 
 def reject_credentials(payload: Any) -> None:
     """Fail closed on credentials anywhere a caller can place text.
 
-    Covers the question, legacy ``input``, and every Intelligence Platform
-    surface that reaches inference or storage: typed context (including
-    extensions), tool arguments, metadata, and caller output schemas.
+    For a validated request model the *entire* request is scanned — every
+    field, nested value and key (question, input, context, tools, schemas and
+    their names, attachment labels, knowledge query, language, metadata, …),
+    so a field added later is covered without remembering to list it here.
     """
-    response_format = getattr(payload, "response_format", None)
-    surfaces: dict[str, Any] = {
-        "question": getattr(payload, "question", ""),
-        "input": getattr(payload, "input", {}),
-    }
-    context = getattr(payload, "context", None)
-    if context is not None:
-        surfaces["context"] = context.model_dump(mode="json", exclude_none=True)
-    tools = getattr(payload, "tools", None) or []
-    if tools:
-        surfaces["tools"] = [{"name": call.name, "arguments": call.arguments} for call in tools]
-    metadata = getattr(payload, "metadata", None) or {}
-    if metadata:
-        surfaces["metadata"] = metadata
-    if response_format is not None and getattr(response_format, "schema_", None):
-        surfaces["response_format"] = {"schema": response_format.schema_}
+    from pydantic import BaseModel
+
+    if isinstance(payload, BaseModel):
+        surfaces: dict[str, Any] = payload.model_dump(mode="json", by_alias=True, exclude_none=True)
+    else:  # lightweight probes built by routes for partial payloads
+        surfaces = {
+            "question": getattr(payload, "question", ""),
+            "input": getattr(payload, "input", {}),
+        }
+        context = getattr(payload, "context", None)
+        if context is not None:
+            surfaces["context"] = context.model_dump(mode="json", exclude_none=True)
+        tools = getattr(payload, "tools", None) or []
+        if tools:
+            surfaces["tools"] = [{"name": call.name, "arguments": call.arguments} for call in tools]
+        metadata = getattr(payload, "metadata", None) or {}
+        if metadata:
+            surfaces["metadata"] = metadata
+        response_format = getattr(payload, "response_format", None)
+        if response_format is not None:
+            surfaces["response_format"] = response_format.model_dump(mode="json", by_alias=True, exclude_none=True)
     credential_path = _credential_path(surfaces, path="request")
     if credential_path:
         raise HTTPException(

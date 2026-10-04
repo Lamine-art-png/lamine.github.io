@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from types import SimpleNamespace
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -137,7 +136,7 @@ def execute_tool(
     """Run one deterministic, side-effect-free tool directly. Not billed."""
     call = ToolCall(name=payload.name, arguments=payload.arguments)
 
-    reject_credentials(SimpleNamespace(question="", input={}, context=None, tools=[call], metadata={}, response_format=None))
+    reject_credentials(payload)
     platform_tools.validate_calls([call])
     result = platform_tools.execute(platform_tools.ToolContext(db=db, principal=principal), [call])[0]
     db.rollback()  # tools are read-only; never persist incidental state
@@ -439,7 +438,7 @@ def create_session(
     principal: PlatformPrincipal = Depends(_key("intelligence.sessions.write")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    reject_credentials(SimpleNamespace(question="", input={}, context=payload.context, tools=[], metadata=payload.metadata, response_format=None))
+    reject_credentials(payload)
     row = platform_sessions.create_session(db, principal, payload)
     return platform_sessions.public_session(row)
 
@@ -481,7 +480,7 @@ def update_session(
     principal: PlatformPrincipal = Depends(_key("intelligence.sessions.write")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    reject_credentials(SimpleNamespace(question="", input={}, context=payload.context, tools=[], metadata=payload.metadata or {}, response_format=None))
+    reject_credentials(payload)
     return platform_sessions.public_session(platform_sessions.update_session(db, principal, session_id, payload))
 
 
@@ -517,6 +516,9 @@ async def upload_file(
     principal: PlatformPrincipal = Depends(_key("intelligence.files.upload", cost=5)),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    # The filename is shown to inference with the file; scan it before storing anything.
+    if text_contains_credential(file.filename or ""):
+        raise HTTPException(status_code=422, detail={"code": "credential_like_input_rejected", "field": "filename"})
     row = await platform_files.accept_upload(db, principal, file, purpose=purpose)
     if row.extracted_text and text_contains_credential(row.extracted_text):
         platform_files.delete_file(db, principal, row.id)
@@ -593,7 +595,7 @@ def create_document(
     for name, value in scanned.items():
         if value and text_contains_credential(value):
             raise HTTPException(status_code=422, detail={"code": "credential_like_input_rejected", "field": name})
-    reject_credentials(SimpleNamespace(question="", input={}, context=None, tools=[], metadata=payload.metadata, response_format=None))
+    reject_credentials(payload)
     document, changed = platform_knowledge.ingest(db, principal, payload)
     if not changed:
         response.status_code = status.HTTP_200_OK
