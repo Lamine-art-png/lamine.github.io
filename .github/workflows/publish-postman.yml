@@ -1,0 +1,70 @@
+name: Publish AGRO-AI Platform API to Postman
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+      COLLECTION_FILE: platform-api/distribution/AGRO-AI-Platform-API.postman_collection.json
+      WORKSPACE_NAME: AGRO-AI Platform API
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Postman API key
+        run: |
+          if [ -z "$POSTMAN_API_KEY" ]; then
+            echo "::error::Repository secret POSTMAN_API_KEY is required."
+            exit 1
+          fi
+
+      - name: Validate safe public collection
+        run: |
+          test "$(jq -r '[.variable[]? | select(.key == "api_key") | .value] | first // ""' "$COLLECTION_FILE")" = ""
+          jq -e '.info.schema == "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"' "$COLLECTION_FILE" >/dev/null
+
+      - name: Find or create public workspace
+        id: workspace
+        run: |
+          set -euo pipefail
+          auth=(-H "X-Api-Key: $POSTMAN_API_KEY" -H "Content-Type: application/json")
+          workspaces="$(curl --fail-with-body -sS "https://api.getpostman.com/workspaces" "${auth[@]}")"
+          workspace_id="$(jq -r --arg name "$WORKSPACE_NAME" '.workspaces[]? | select(.name == $name) | .id' <<<"$workspaces" | head -1)"
+          if [ -z "$workspace_id" ]; then
+            payload="$(jq -n --arg name "$WORKSPACE_NAME" '{workspace:{name:$name,type:"public",description:"Official AGRO-AI Platform API workspace. Build agricultural intelligence into software with APIs for fields, observations, recommendations, reports, provider workflows, usage, and auditable operations."}}')"
+            created="$(curl --fail-with-body -sS -X POST "https://api.getpostman.com/workspaces" "${auth[@]}" -d "$payload")"
+            workspace_id="$(jq -r '.workspace.id // .workspace.uid // empty' <<<"$created")"
+          fi
+          test -n "$workspace_id"
+          echo "workspace_id=$workspace_id" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update official collection
+        id: collection
+        run: |
+          set -euo pipefail
+          auth=(-H "X-Api-Key: $POSTMAN_API_KEY" -H "Content-Type: application/json")
+          workspace_id="${{ steps.workspace.outputs.workspace_id }}"
+          collections="$(curl --fail-with-body -sS "https://api.getpostman.com/collections?workspace=$workspace_id" "${auth[@]}")"
+          existing_uid="$(jq -r --arg name "AGRO-AI Platform API" '.collections[]? | select(.name == $name) | .uid' <<<"$collections" | head -1)"
+          payload="$(jq '{collection:.}' "$COLLECTION_FILE")"
+          if [ -n "$existing_uid" ]; then
+            response="$(curl --fail-with-body -sS -X PUT "https://api.getpostman.com/collections/$existing_uid" "${auth[@]}" -d "$payload")"
+          else
+            response="$(curl --fail-with-body -sS -X POST "https://api.getpostman.com/collections?workspace=$workspace_id" "${auth[@]}" -d "$payload")"
+          fi
+          collection_uid="$(jq -r '.collection.uid // empty' <<<"$response")"
+          test -n "$collection_uid"
+          echo "collection_uid=$collection_uid" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Postman resources
+        run: |
+          set -euo pipefail
+          auth=(-H "X-Api-Key: $POSTMAN_API_KEY")
+          curl --fail-with-body -sS "https://api.getpostman.com/workspaces/${{ steps.workspace.outputs.workspace_id }}" "${auth[@]}" | jq -e '.workspace' >/dev/null
+          curl --fail-with-body -sS "https://api.getpostman.com/collections/${{ steps.collection.outputs.collection_uid }}" "${auth[@]}" | jq -e '.collection' >/dev/null
+          echo "Postman workspace and collection verified through the Postman API."
