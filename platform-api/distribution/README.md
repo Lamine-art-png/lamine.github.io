@@ -4,7 +4,7 @@ This directory is the source-of-truth package for distributing the AGRO-AI Platf
 
 ## Ready artifacts
 - `AGRO-AI-Platform-API.postman_collection.json` — generated from the curated Platform API contract.
-- `marketplace_openapi.json` — the same curated contract with an absolute production server URL for marketplace imports.
+- `marketplace_openapi.json` — the same curated contract with an absolute production server URL for modern marketplace imports.\n- `rapidapi_openapi_3_0_2.json` — generated OpenAPI 3.0.2 compatibility artifact for RapidAPI import.
 - `marketplace-listing.md` — canonical copy, positioning, pricing, URLs, keywords, and channel rules.
 
 ## Channel state
@@ -13,7 +13,7 @@ This directory is the source-of-truth package for distributing the AGRO-AI Platf
 | --- | --- | --- |
 | AGRO-AI direct | Ready; production billing has a verified evidence trail | Public acquisition/indexing remains governed by the protected launch state |
 | Postman | Import-ready collection | Publish from AGRO-AI's Postman workspace/account |
-| RapidAPI | Import-ready OpenAPI + listing copy | Create/authorize the provider listing, configure proxy/auth/plan mapping, publish |
+| RapidAPI | Import-ready OpenAPI 3.0.2 + listing copy | Create/authorize the provider listing, configure proxy/auth/plan mapping, publish |
 | AWS Marketplace | Listing copy + API contract ready | Seller registration, banking/tax/legal acceptance, SaaS entitlement/metering adapter, AWS review |
 | Microsoft Marketplace | Listing copy + API contract ready | Partner Center Marketplace enrollment, payout/tax profile, SaaS fulfillment/SSO/webhook integration, Microsoft review |
 
