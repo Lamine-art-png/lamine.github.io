@@ -136,7 +136,9 @@ async def ensure_position_evidence(
     metadata = _metadata(position)
     pack = resolve_pack(position.country_code, position.commodity)
     selectors = position_selectors(pack, country_code=position.country_code, commodity=position.commodity, region=position.region, metadata=metadata)
-    demands: dict[str, list[dict[str, Any]]] = {pid: [sel] for pid, sel in selectors.items()}
+    demands: dict[str, list[dict[str, Any]]] = {
+        pid: [sel] for pid, sel in selectors.items() if pid not in ADAPTERS or ADAPTERS[pid].covers(sel)
+    }
     contracts = contracts if contracts is not None else _active_contracts(db, position)
     foreign = plane.position_fx_currencies(position, contracts)
     for provider_id, selector in plane.fx_demands(str(position.reporting_currency or ""), foreign).items():
@@ -268,6 +270,8 @@ async def refresh_position_market_data(
                 # Derived use is allowed (the plane filtered that); display may not be.
                 "price_display_allowed": all((item.get("licensing") or {}).get("display_allowed", True) is not False for item in price.evidence),
                 "price_resolved_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                # The governed series actually pricing the position (risk history reads it).
+                "price_series_id": (price.evidence[0] or {}).get("series_id") if price.evidence else None,
             })
             position.metadata_json = metadata
             position_updates.extend(["current_realizable_price", "price_currency"])
@@ -277,6 +281,7 @@ async def refresh_position_market_data(
         # applies; a previously automated price is not kept as if it were current.
         metadata = _metadata(position)
         metadata["price_state"] = "SELECTION_REQUIRED"
+        metadata.pop("price_series_id", None)
         if str(metadata.get("price_source") or "").startswith(AUTOMATED_FX_PREFIX) and position.current_realizable_price is not None:
             position.current_realizable_price = None
             position_updates.append("current_realizable_price")
@@ -287,6 +292,7 @@ async def refresh_position_market_data(
         # presenting it as current.
         metadata = _metadata(position)
         metadata["price_state"] = "UNAVAILABLE"
+        metadata.pop("price_series_id", None)
         position.metadata_json = metadata
         position.current_realizable_price = None
         position_updates.append("current_realizable_price")

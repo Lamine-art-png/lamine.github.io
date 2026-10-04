@@ -971,3 +971,78 @@ def test_acknowledged_alert_stops_pending_email_retries(client, db, monkeypatch)
     cycle.deliver_alerts(db, org.id, now=now + timedelta(days=3))
     statuses = {row.event_id: row.status for row in db.query(MarketAlertDelivery)}
     assert statuses[other.id] == "cancelled_alert_closed" and len(outcomes) == 2
+
+
+def test_inference_reports_physical_sources_unavailable_for_commodities_they_cannot_serve(client, db, monkeypatch):
+    monkeypatch.setenv("USDA_MMN_API_KEY", "configured")
+    act_as(*identity(db, "coverage"))
+
+    def physical(crop, region):
+        body = client.post("/v1/market-intelligence/onboarding/infer", json={"crop": crop, "country_code": "US", "region": region}).json()
+        return {slot["provider_id"]: slot["status"] for slot in body["evidence_plan"] if slot["role"] == "physical_price"}
+
+    assert physical("almonds", "California")["usda_mymarketnews"] == "NOT_COVERED"  # no almond MARS report
+    assert physical("corn", "Iowa")["usda_mymarketnews"] == "DELAYED"
+    assert physical("corn", "Atlantis")["usda_mymarketnews"] == "NOT_COVERED"  # no report for that region
+    assert not ADAPTERS["usda_mymarketnews"].covers({"commodity": "almonds", "region": "California"})
+
+
+def test_budget_cancelled_provider_run_is_closed_and_not_treated_as_an_outage(db):
+    class Slow(BCBPtaxSeries):
+        async def collect(self, selectors):
+            await asyncio.sleep(5)
+            return []
+
+    adapter = Slow()
+
+    async def run():
+        await asyncio.wait_for(plane.ingest(db, "bcb_ptax", [{}], trigger="test", adapter=adapter), timeout=0.2)
+
+    with pytest.raises(asyncio.TimeoutError):
+        asyncio.run(run())
+    db.rollback()
+    [row] = db.query(MarketProviderRun).all()
+    assert row.status == "cancelled_budget" and row.finished_at is not None
+    assert plane.provider_due(db, adapter, plane.demand_identity(adapter, [{}])[0]) is True  # no failure backoff
+
+
+def test_risk_uses_the_series_actually_pricing_the_position(db, client):
+    user, org, membership = identity(db, "risk-series")
+    rows = [("A", "240"), ("B", "250")]
+    for name, base in rows:
+        seed(db, *[_physical_series(f"eu_agrifood:FR:BLT:rouen:{name}", str(Decimal(base) + index), provider="eu_agrifood", commodity="wheat",
+                                    country="FR", market="Rouen", unit="tonne", currency="EUR", price_basis=f"Stage {name}",
+                                    metadata={"product_label": "Breadmaking wheat"}, days_ago=(60 - index) if name == "A" else (59 - index))
+                   for index in range(40)])
+    position = _position(db, org, country="FR", commodity="wheat", reporting="EUR", price_currency="EUR", price=None, region="Rouen",
+                         metadata={"price_policy": "automatic"})
+    position.quantity_unit = "tonne"
+    db.commit()
+    act_as(user, org, membership)
+    candidates = client.get(f"/v1/market-intelligence/positions/{position.id}/provenance").json()["price_selection"]["candidates"]
+    stage_a = next(c for c in candidates if c["series_key"].endswith(":A"))
+    client.put(f"/v1/market-intelligence/positions/{position.id}/price-source", json={"series_key": stage_a["series_key"]})
+    risk = client.get(f"/v1/market-intelligence/positions/{position.id}/risk").json()
+    from app.models.market_intelligence import MarketDataSeries
+
+    assert risk["series"]["series_id"] == db.query(MarketDataSeries).filter_by(series_key=stage_a["series_key"]).one().id  # not the newer B row
+    manual = _position(db, org, name="Manual", metadata={"price_policy": "manual"})
+    assert client.get(f"/v1/market-intelligence/positions/{manual.id}/risk").json()["status"] == "manual_price"
+
+
+def test_home_shows_newest_changes_first_within_a_severity(client, db):
+    user, org, membership = identity(db, "home-order")
+    position = _position(db, org)
+    base = datetime.utcnow() - timedelta(days=1)
+    for index in range(12):
+        event = _urgent_event(db, org, position)
+        event.dedupe_key, event.created_at = f"d-{index}", base + timedelta(minutes=index)
+    critical = _urgent_event(db, org, position, level="CRITICAL")
+    critical.created_at = base
+    db.commit()
+    act_as(user, org, membership)
+    home = client.get("/v1/market-intelligence/home").json()
+    changes = home["material_changes"]
+    assert changes[0]["level"] == "CRITICAL"
+    highs = [item["created_at"] for item in changes[1:]]
+    assert highs == sorted(highs, reverse=True) and highs[0].startswith((base + timedelta(minutes=11)).isoformat()[:16])

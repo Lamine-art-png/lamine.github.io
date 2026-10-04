@@ -166,6 +166,10 @@ class SeriesProvider:
     async def collect(self, selectors: list[dict[str, Any]]) -> list[SeriesPoint]:
         raise NotImplementedError
 
+    def covers(self, selector: dict[str, Any]) -> bool:
+        """Whether this adapter can return evidence for the selector at all."""
+        return True
+
     def status(self) -> str:
         if self.access in {"commercial_license_required", "no_machine_readable_source"}:
             return "NOT_CONFIGURED"
@@ -377,6 +381,9 @@ class EUAgriFoodPricesSeries(SeriesProvider):
     }
     license = EU_LICENSE
 
+    def covers(self, selector: dict[str, Any]) -> bool:
+        return canonical_commodity(selector.get("commodity")) in _EU_PRODUCTS and len(str(selector.get("member_state") or "")) == 2
+
     def __init__(self, fetch_text: Callable[..., str] | None = None) -> None:
         self._fetch_text = fetch_text or http_get_text
 
@@ -498,6 +505,9 @@ class CONABWeeklyPricesSeries(SeriesProvider):
         "unit": "BRL/kg",
     }
     license = CONAB_LICENSE
+
+    def covers(self, selector: dict[str, Any]) -> bool:
+        return canonical_commodity(selector.get("commodity")) in _CONAB_PRODUCTS and len(str(selector.get("uf") or "")) == 2
 
     def __init__(self, iter_lines: Callable[..., Iterable[str]] | None = None) -> None:
         self._iter_lines = iter_lines or http_iter_lines
@@ -629,6 +639,9 @@ class USDAMyMarketNewsSeries(SeriesProvider):
     coverage = {"countries": ["US"], "commodities": sorted(_USDA_COMMODITY_ALIASES), "observation_types": ["physical_price"], "regions": sorted(_USDA_REGION_REPORTS)}
     license = USDA_LICENSE
 
+    def covers(self, selector: dict[str, Any]) -> bool:
+        return canonical_commodity(selector.get("commodity")) in _USDA_COMMODITY_ALIASES and self._slug(selector) is not None
+
     def __init__(self, fetch_text: Callable[..., str] | None = None, api_key: str | None = None) -> None:
         self._fetch_text = fetch_text or http_get_text
         self._api_key = api_key
@@ -752,6 +765,9 @@ class USDANASSQuickStatsSeries(SeriesProvider):
         attribution_required=False,
     )
 
+    def covers(self, selector: dict[str, Any]) -> bool:
+        return canonical_commodity(selector.get("commodity")) in _NASS_COMMODITIES and bool(str(selector.get("state") or "").strip())
+
     def __init__(self, fetch_text: Callable[..., str] | None = None, api_key: str | None = None) -> None:
         self._fetch_text = fetch_text or http_get_text
         self._api_key = api_key
@@ -837,6 +853,9 @@ class IndiaAgmarknetSeries(SeriesProvider):
         license_url="https://data.gov.in/government-open-data-license-india",
         attribution="Source: AGMARKNET, Directorate of Marketing & Inspection, Government of India (data.gov.in)",
     )
+
+    def covers(self, selector: dict[str, Any]) -> bool:
+        return canonical_commodity(selector.get("commodity")) in _AGMARKNET_COMMODITIES and bool(str(selector.get("state") or "").strip())
 
     def __init__(self, fetch_text: Callable[..., str] | None = None, api_key: str | None = None) -> None:
         self._fetch_text = fetch_text or http_get_text

@@ -29,7 +29,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.market_intelligence import MarketDataSeries, MarketObservation, MarketPosition, MarketContractPosition
+from app.models.market_intelligence import MarketDataSeries, MarketPosition, MarketContractPosition
 from app.services.market_data_plane import series_history, utc_now
 from app.services.market_intelligence import MarketCalculationError, scenario_position
 
@@ -131,17 +131,14 @@ def position_risk(db: Session, position: MarketPosition, *, horizon_periods: int
             "Stress results reuse current production, contracts and costs; they do not model correlated yield or FX moves.",
         ],
     }
-    audit = (
-        db.query(MarketObservation)
-        .filter(
-            MarketObservation.organization_id == position.organization_id,
-            MarketObservation.position_id == position.id,
-            MarketObservation.observation_type == "physical_price",
-        )
-        .order_by(MarketObservation.observed_at.desc())
-        .first()
-    )
-    series_id = ((audit.metadata_json or {}).get("series_id") if audit else None)
+    metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
+    if str(metadata.get("price_policy") or "") == "manual":
+        # A customer-entered price has no governed history of its own; another
+        # series' moves would describe a different product or market.
+        return {**base, "status": "manual_price", "reason": "The position uses a customer-entered price; risk context needs a governed series pricing it."}
+    # Only the series recorded as currently pricing the position, never the
+    # latest-dated audit row (which may belong to an unselected candidate).
+    series_id = metadata.get("price_series_id") if metadata.get("price_state") not in {"SELECTION_REQUIRED", "UNAVAILABLE"} else None
     series = db.get(MarketDataSeries, series_id) if series_id else None
     if series is None:
         return {**base, "status": "no_governed_series", "reason": "The position is not priced from a governed shared series; risk context needs one."}

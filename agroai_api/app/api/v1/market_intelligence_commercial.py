@@ -55,7 +55,7 @@ from app.services.market_intelligence import (
 from app.services.market_intelligence_refresh import refresh_position_market_data
 from app.services.market_materiality import DEGRADED_STATES, METHODOLOGY_VERSION, evaluate_position, event_payload, evidence_states
 from app.services.market_normalization import canonical_unit, validate_country_code, validate_currency_code
-from app.services.market_packs import catalog as pack_catalog, infer_onboarding, resolve_pack
+from app.services.market_packs import catalog as pack_catalog, infer_onboarding, position_selectors, resolve_pack
 from app.services.market_risk import position_risk
 
 router = APIRouter(
@@ -129,10 +129,13 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
     )
     names = {row.id: row.name for row in rows}
     level_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    # Most severe first; newest first within each severity (stable two-pass sort).
     material = sorted(
         (event_payload(event) | {"position_name": names.get(event.position_id)} for event in events if event.position_id in names),
-        key=lambda item: (level_rank.get(item["level"], 9), item["created_at"] or ""),
+        key=lambda item: item["created_at"] or "",
+        reverse=True,
     )
+    material.sort(key=lambda item: level_rank.get(item["level"], 9))
 
     totals: dict[str, dict[str, Any]] = {}
     for item in positions:
@@ -238,12 +241,29 @@ class InferRequest(BaseModel):
         return validate_currency_code(value) if value is not None else None
 
 
-def _provider_availability(plan: list[dict[str, Any]], *, local_currency: str | None, reporting_currency: str | None) -> list[dict[str, Any]]:
-    """Real status per evidence slot. FX slots are judged for the actual pair:
-    a configured provider that does not cover it (e.g. ECB for UGX) is
-    NOT_COVERED, so the portal asks for the customer's own rate."""
+_SELECTOR_SOURCES = {"eu_agrifood", "conab_precos", "usda_mymarketnews", "usda_nass", "india_agmarknet"}
+
+
+def _provider_availability(
+    plan: list[dict[str, Any]],
+    *,
+    local_currency: str | None,
+    reporting_currency: str | None,
+    country_code: str | None = None,
+    commodity: str | None = None,
+    region: str | None = None,
+) -> list[dict[str, Any]]:
+    """Real status per evidence slot, judged for this position.
+
+    FX slots are judged for the actual pair (ECB has no UGX rate); data
+    sources for the actual commodity and region (USDA MARS has no almond
+    report). Anything the source cannot serve is NOT_COVERED, so the portal
+    asks for the customer's own price or rate instead of implying one comes.
+    """
     coverage = plane.fx_pair_coverage(local_currency, reporting_currency)
     same_currency = bool(local_currency) and str(local_currency).upper() == str(reporting_currency or "").upper()
+    selectors = position_selectors(resolve_pack(country_code, commodity), country_code=str(country_code or ""), commodity=str(commodity or ""),
+                                   region=region, metadata={}) if country_code else {}
     result = []
     for slot in plan:
         adapter = ADAPTERS.get(slot["provider_id"])
@@ -252,6 +272,10 @@ def _provider_availability(plan: list[dict[str, Any]], *, local_currency: str | 
             if same_currency:
                 status = "NOT_REQUIRED"
             elif not coverage.get(slot["provider_id"], False):
+                status = "NOT_COVERED"
+        elif adapter is not None and slot["provider_id"] in _SELECTOR_SOURCES:
+            selector = selectors.get(slot["provider_id"])
+            if selector is None or not adapter.covers(selector):
                 status = "NOT_COVERED"
         result.append({**slot, "status": status})
     return result
@@ -268,7 +292,10 @@ def onboarding_infer(payload: InferRequest, ctx: AuthContext = Depends(get_auth_
     _org_id(ctx)
     inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region,
                                 reporting_currency=payload.reporting_currency, local_currency=payload.local_currency)
-    inferred["evidence_plan"] = _provider_availability(inferred["evidence_plan"], local_currency=inferred["local_currency"], reporting_currency=inferred["reporting_currency"])
+    inferred["evidence_plan"] = _provider_availability(
+        inferred["evidence_plan"], local_currency=inferred["local_currency"], reporting_currency=inferred["reporting_currency"],
+        country_code=payload.country_code, commodity=inferred["commodity"], region=payload.region,
+    )
     return inferred
 
 
@@ -472,7 +499,8 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
         "id": position.id,
         "status": "created",
         "inferred": {k: inferred[k] for k in ("pack_id", "commodity", "local_currency", "reporting_currency", "market_structure", "futures_role")} | {"quantity_unit": unit},
-        "evidence_plan": _provider_availability(inferred["evidence_plan"], local_currency=local_currency, reporting_currency=position.reporting_currency),
+        "evidence_plan": _provider_availability(inferred["evidence_plan"], local_currency=local_currency, reporting_currency=position.reporting_currency,
+                                                country_code=position.country_code, commodity=position.commodity, region=position.region),
         "refresh": refresh,
         "position": _position_payload(db, org_id, position),
     }

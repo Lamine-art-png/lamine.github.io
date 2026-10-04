@@ -14,6 +14,7 @@ GLOBAL PROVIDER INGESTION  ->  NORMALIZED SERIES/POINTS  ->  TENANT RESOLUTION
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -258,7 +259,10 @@ def provider_due(db: Session, adapter: SeriesProvider, demand_key: str, now: dat
     upstream is not hammered by every scheduled cycle.
     """
     now = _naive(now or utc_now())
-    runs = _recent_runs(db, adapter.provider_id, demand_key)
+    # A run cancelled by the cycle's own time budget, or one still marked
+    # running (in progress elsewhere or abandoned by a crashed worker), says
+    # nothing about the upstream: neither counts as a provider failure.
+    runs = [run for run in _recent_runs(db, adapter.provider_id, demand_key, limit=12) if run.status not in {"running", "cancelled_budget"}]
     if not runs:
         return True
     last = runs[0]
@@ -307,7 +311,18 @@ async def ingest(
     db.add(run)
     db.commit()
     try:
-        points = await adapter.collect(selectors)
+        try:
+            points = await adapter.collect(selectors)
+        except asyncio.CancelledError:
+            # Cancelled by the caller's time budget: close the run explicitly so
+            # it is never left "running" and is not mistaken for an outage.
+            db.rollback()
+            cancelled = db.get(MarketProviderRun, run.id)
+            if cancelled is not None:
+                cancelled.status = "cancelled_budget"
+                cancelled.finished_at = _naive(utc_now())
+                db.commit()
+            raise
         stats = persist_points(db, points, provider_run_id=run.id)
         run.status = "ok" if points or not selectors else "partial"
         run.observations_seen = Decimal(stats.seen)
@@ -406,8 +421,8 @@ def demand_set(db: Session, *, organization_id: str | None = None) -> dict[str, 
         )
         for provider_id, selector in selectors.items():
             adapter = ADAPTERS.get(provider_id)
-            if adapter is None:
-                continue
+            if adapter is None or not adapter.covers(selector):
+                continue  # never request what the source cannot serve
             demands.setdefault(provider_id, {})[json.dumps(selector, sort_keys=True, default=str)] = selector
         foreign = position_fx_currencies(position, contracts.get(position.id, []))
         for provider_id, selector in fx_demands(str(position.reporting_currency or ""), foreign).items():
