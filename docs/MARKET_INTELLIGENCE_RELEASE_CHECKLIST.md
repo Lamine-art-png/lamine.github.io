@@ -23,15 +23,17 @@
 
 ## Commercial Intelligence (October 2026)
 
-- [x] shared market-data plane (series, points, provider runs) with idempotent ingestion and revisions
+- [x] shared market-data plane (series, points, provider runs) with idempotent ingestion and append-only revision history
 - [x] market packs and customer-language onboarding (no provider identifiers)
 - [x] ECB 90-day FX, BCB PTAX, EU agri-food weekly prices and CONAB weekly producer prices live-verified on 2026-10-03
 - [x] USDA MyMarketNews, USDA NASS and AGMARKNET adapters implemented; NOT_CONFIGURED until keys are set
 - [x] licensed exchange/indicator adapters exist as truthful NOT_CONFIGURED boundaries
-- [x] materiality engine, deduplicated alerts, hourly background cycle, opt-in email digests
+- [x] materiality engine, deduplicated alerts, durable fair hourly cycle on the job queue, opt-in email with per-recipient delivery retries
+- [x] contract- and cost-currency FX demand with per-contract data health
+- [x] worldwide onboarding (ISO 3166-1 / ISO 4217 registries) and identifier-based localization
 - [x] Scenario Engine v2, historical risk context, Decision Journal v2, field-to-commercial linkage
 - [x] Commercial Intelligence home, provenance, mobile and RTL browser contracts
-- [ ] production evidence that the hourly cycle populated the shared plane after deploy (requires an authenticated session or operator database access)
+- [ ] production evidence that scheduled cycle jobs ran and populated the shared plane after deploy (requires an authenticated session or operator database access)
 
 ## Production evidence — 2026-09-17
 

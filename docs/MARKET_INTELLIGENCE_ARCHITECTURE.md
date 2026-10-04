@@ -217,7 +217,7 @@ GROUNDED AI (explains, never calculates) -> Ask AGRO-AI, decision journal
 
 - `app/services/market_data_adapters.py`: series-level adapters. Each emits canonical upstream series (one CONAB state/product/week, one EC market/stage/week, one ECB currency/day) with provider, native id, unit, currency, observed/retrieved time, freshness and last-known policy, and licensing flags. Adapters never emit `LIVE`.
 - `app/services/market_data_plane.py`: idempotent persistence (unique series + observation time; changed upstream values become tracked revisions), provider runs with exponential backoff (capped at 24 h), cross-tenant demand de-duplication, freshness states (`DELAYED` fresh, `STALE` within the explicit last-known policy, `UNAVAILABLE` otherwise and never used), FX resolution (BCB PTAX for USD/BRL, ECB cross rates via EUR, exact CFA-franc parity) and physical-price resolution (exact market match, otherwise median of fresh markets, with every contributing point recorded).
-- `app/services/market_normalization.py`: multilingual commodity aliases, unit canonicalization (tonne, kg, bushel, pound, quintal, cwt, short/long ton, 60 kg saca, 90/50 kg bags), locale-aware number parsing that refuses ambiguous values, country currency/timezone defaults.
+- `app/services/market_normalization.py`: provider-label commodity aliases (customers pick a canonical crop), unit canonicalization (tonne, kg, bushel, pound, quintal, cwt, short/long ton, 60 kg saca, 90/50 kg bags), locale-aware number parsing that refuses ambiguous values, country currency/timezone defaults from the shared ISO registries.
 - Licensing is enforced in code: `storage_allowed=false` evidence is never persisted, `derived_values_allowed=false` evidence is never used in calculations, `display_allowed=false` values are redacted in every API response.
 
 ### Market Packs
@@ -232,9 +232,21 @@ GROUNDED AI (explains, never calculates) -> Ask AGRO-AI, decision journal
 
 `app/services/market_materiality.py` (methodology `materiality-2026.10.1`): snapshots deterministic economics, compares with the reference snapshot (latest at least 20 h old), measures impact as the change in projected margin (or exposed revenue) relative to projected revenue, attributes it to drivers by sequential substitution (contributions sum exactly), and assigns LOW/MEDIUM/HIGH/CRITICAL from configurable thresholds (defaults 2/5/10 %) plus qualitative transitions (margin turning negative, price below break-even, over-contracting). Economic alerts computed from STALE or UNAVAILABLE evidence are suppressed and surfaced as data-quality changes. Events are deduplicated and rate-limited (12 h cooldown unless the level escalates).
 
-### Background cycle and alerts
+### Durable scheduled cycle and alerts
 
-`app/services/market_intelligence_cycle.py` runs after every hourly maintenance call (`/v1/internal/queue/drain-outbox`, as a background task) and on demand (`/v1/internal/queue/market-cycle`, queue token). It holds a PostgreSQL advisory lock, ingests due demands once for all tenants, re-resolves positions without provider calls, evaluates materiality and persists events (in-app). Email digests to owners/admins are opt-in (`MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED`), exist for en/pt/es/fr, and are deferred (never sent in English) for other languages. Disable the whole cycle with `MARKET_INTELLIGENCE_CYCLE_ENABLED=false`.
+`app/services/market_intelligence_cycle.py` runs on AGRO-AI's durable job queue, not in a background task. The hourly maintenance call (`/v1/internal/queue/drain-outbox`) only *schedules*: it enqueues one `ingestion_jobs` + `task_outbox` row per due organization (`job_type`/`task_type` `market_intelligence_cycle`, one per organization per hour slot, unique idempotency key, never two open jobs per organization). The outbox publishes to the Cloudflare Queue, which delivers each job to `/v1/internal/queue/connector-task`. `/v1/internal/queue/market-cycle` (queue token) enqueues on the same path.
+
+- **Durability:** jobs are claimed with a lease and heartbeat (`ingestion_job_runner`); a process killed mid-run leaves the row, its lease expires and the next scheduling tick re-arms its outbox row. Failures retry with backoff up to `TASK_QUEUE_MAX_ATTEMPTS`, then stay visibly `failed` in the job row and `market_cycle_organization_state`.
+- **Fairness:** each tick enqueues at most `MARKET_INTELLIGENCE_CYCLE_BATCH` (default 200) organizations, oldest-due first (never run, then the oldest completion). Inside a job, positions are refreshed least-recently-refreshed first under `MARKET_INTELLIGENCE_CYCLE_JOB_BUDGET_SECONDS` (default 90 s, inside the queue consumer's 120 s), so partial progress rotates.
+- **Shared ingestion:** the first job of a tick ingests due provider demands for all tenants under a per-provider lock; other jobs find the evidence fresh. Demands are keyed by a sha256 of the canonical selector set (readable labels are kept in the run trace). FX demand covers price, cost and every active/priced/committed contract currency.
+- **Alerts:** in-app always. Email to owners/admins is opt-in (`MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED`). `market_alert_deliveries` records one row per event, recipient and channel: attempts are counted separately from `delivered_at`, failures retry with bounded backoff (5 attempts), and recipients whose language has no reviewed template (en/pt/es/fr) are recorded as `deferred_unsupported_language`, never sent English.
+- Disable the cycle with `MARKET_INTELLIGENCE_CYCLE_ENABLED=false`.
+
+Upstream corrections append to `market_data_point_revisions` (append-only, unbounded, linked to the provider run); `market_data_points` keeps the latest value for fast reads.
+
+### Worldwide coverage and localization
+
+Countries and currencies come from `shared/registries/` (ISO 3166-1 plus XK, ISO 4217 tender currencies; generated by `scripts/generate_iso_registries.py` from tzdata and Unicode CLDR). Any country can be onboarded; countries without a specific pack resolve to `global_physical`. APIs return identifiers (pack, provider, canonical commodity, warning, missing-input, attention and deterministic-fact codes); the portal renders them from `figma-enterprise-v4/src/app/components/commercialCopy.ts`, which is authored into every advertised locale. The deterministic Ask fallback returns language-neutral `facts`; free-text what-if parsing covers en/pt/es/fr and reports `unsupported_language` explicitly elsewhere (the What-if panel works in every locale).
 
 ### Scenarios, risk, journal
 

@@ -61,3 +61,6 @@ Evaluated and not adopted: WFP market prices on HDX (CC BY-IGO) — the publishe
 6. **A licensed or public Australian physical grain feed** and a **machine-readable KES FX source**.
 7. **Authenticated production smoke:** set the `MARKET_INTELLIGENCE_SMOKE_TOKEN` repository secret to a real AEP session for an organization in the Market Intelligence release cohort, then run the *Market Intelligence Authenticated Smoke* workflow. Production has no QA tenant; an operator must invite a test mailbox.
 8. **Optional:** set `MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED=true` to send HIGH/CRITICAL digests by email (in-app alerts work without it).
+9. **Edge gateway deploy:** the scheduled cycle uses the `market_intelligence_cycle` queue task type, which the Cloudflare edge gateway must allow (`cloudflare/edge-gateway/src/index.ts`, deployed by *Deploy Platform API Edge* on merge). Until the edge is deployed, cycle jobs stay safely pending in `task_outbox` and publish with backoff once it is.
+
+Every ISO 3166-1 country (plus Kosovo) and ISO 4217 tender currency is accepted at onboarding (`shared/registries/`); rows above are the countries with a specific Market Pack, and every other country uses `global_physical`.
