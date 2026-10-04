@@ -145,10 +145,9 @@ def _principal_for(db: Session, run: CommercialIntelligenceRun) -> PlatformPrinc
     after enqueue must stop the job before it reaches inference.
     """
     from app.core.organization_access import organization_access_allowed
-    from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
+    from app.models.platform_api import ApiProject, PlatformApiKey
     from app.models.saas import Organization
 
-    now = datetime.utcnow()
     project = db.get(ApiProject, run.api_project_id)
     if project is None or project.organization_id != run.organization_id or project.status != "active":
         return None
@@ -156,20 +155,20 @@ def _principal_for(db: Session, run: CommercialIntelligenceRun) -> PlatformPrinc
         return None
     workspace_id = None
     if run.api_key_id:
+        from app.platform_api.keys import validate_platform_key_row
+
         key = db.get(PlatformApiKey, run.api_key_id)
+        # Exactly the checks request authentication applies (status, expiry,
+        # service-account scope/restriction narrowing, lineage, organization
+        # access), so a key that could no longer authenticate cannot act now.
+        verified = validate_platform_key_row(db, key) if key is not None else None
         if (
-            key is None
-            or key.status != "active"
-            or key.revoked_at is not None
+            verified is None
             or key.organization_id != run.organization_id
             or key.api_project_id != run.api_project_id
+            or key.environment != "live"
             or "intelligence:run" not in set(key.scopes or [])
-            or (key.expires_at is not None and key.expires_at <= now)
-            or (key.overlap_expires_at is not None and key.overlap_expires_at <= now)
         ):
-            return None
-        service_account = db.get(ApiServiceAccount, key.service_account_id)
-        if service_account is None or service_account.status != "active":
             return None
         workspace_id = key.workspace_id
         resource_restrictions = dict(key.resource_restrictions_json or {})

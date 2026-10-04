@@ -346,3 +346,18 @@ def test_explicit_empty_and_null_context_overrides_win_over_session():
     assert merged["observations"] == [] and "crop" not in merged and merged["sources"] == [{"id": "s1"}]
     untouched = runtime._merged_context(session, _request(context={"market": {"commodity": "almonds"}}))
     assert untouched["observations"] == [{"id": "old", "type": "t"}]
+
+
+def test_shortened_base_context_is_not_sent_in_full():
+    import asyncio
+
+    from app.schemas.ai import EvidenceContext
+
+    big = {"acme.notes": {"text": "y" * 30_000, "marker": "END-OF-EXTENSION"}}
+    payload = _request(context={"extensions": big, "observations": [{"id": "obs_small", "type": "t", "value": 1}]})
+    context = EvidenceContext(organization_id="org")
+    prepared = asyncio.run(runtime.prepare(None, SimpleNamespace(organization_id="org", api_project_id="p", workspace_id=None),
+                                           payload, runtime.Resolved(), context))
+    assert prepared.truncated and "END-OF-EXTENSION" not in prepared.data_block
+    sent = json.dumps(context.model_dump(mode="json"))
+    assert "END-OF-EXTENSION" not in sent, "shortened base context never reaches the model in full"

@@ -253,7 +253,7 @@ async def prepare(
         # either fully in the analysed data or not citable at all.
         base = {key: value for key, value in agctx.items() if key not in {"observations", "sources"}}
         if base:
-            sections.append(("AGRICULTURAL_CONTEXT " + json.dumps(base, default=str, ensure_ascii=False), set()))
+            sections.append(("AGRICULTURAL_CONTEXT " + json.dumps(base, default=str, ensure_ascii=False), {"__base_context__"}))
         for observation in agctx.get("observations") or []:
             sections.append(("OBSERVATION " + json.dumps(observation, default=str, ensure_ascii=False), {str(observation["id"])}))
         for source in agctx.get("sources") or []:
@@ -401,17 +401,24 @@ async def prepare(
             if used + cost <= DATA_BLOCK_MAX_CHARS:
                 included.append(text)
                 used += cost
-            elif not ids and DATA_BLOCK_MAX_CHARS - used > 500:
+            elif ids == {"__base_context__"} and DATA_BLOCK_MAX_CHARS - used > 500:
+                # Id-less base context may be shortened to fit, but then it is
+                # only analysed as shortened: the full copy is not sent anywhere.
                 included.append(text[: DATA_BLOCK_MAX_CHARS - used - 2])
                 used = DATA_BLOCK_MAX_CHARS
                 prepared.truncated = True
+                omitted_ids.add("__base_context__")
             else:
                 omitted_ids |= ids
                 prepared.truncated = True
         if prepared.truncated:
             prepared.limitations.append(
                 "Supplied data exceeded the per-request analysis window; "
-                + (f"{len(omitted_ids)} cited item(s) were not analysed and cannot be cited." if omitted_ids else "context was shortened.")
+                + (
+                    f"{len(omitted_ids - {'__base_context__'})} cited item(s) were not analysed and cannot be cited."
+                    if omitted_ids - {"__base_context__"}
+                    else "context was shortened."
+                )
             )
         # Runtime safety net: an id registered by more than one source (e.g. a
         # retrieved id equal to a caller id) is ambiguous and never citable.
@@ -433,7 +440,9 @@ async def prepare(
         # selected: omitted context records and attachments are pruned.
         context.evidence = [item for item in context.evidence if str(item.get("file_id") or "") not in omitted_ids]
         if agctx:
-            selected = dict(agctx)
+            selected = dict(agctx) if "__base_context__" not in omitted_ids else {
+                key: value for key, value in agctx.items() if key in {"observations", "sources"}
+            }
             for key in ("observations", "sources"):
                 if key in selected:
                     selected[key] = [item for item in selected[key] if str(item.get("id")) not in omitted_ids]

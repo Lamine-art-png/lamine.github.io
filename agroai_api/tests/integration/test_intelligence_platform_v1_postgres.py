@@ -1564,3 +1564,28 @@ def test_provenance_lists_every_source(platform):
     assert run.status_code == 200
     ids = {source["id"] for source in run.json()["provenance"]["sources"]}
     assert {f"o{i}" for i in range(150)} <= ids
+
+
+@pytest.mark.parametrize("narrowing", ["resource_restrictions", "scopes"])
+def test_job_stops_when_service_account_is_narrowed_after_enqueue(platform, narrowing):
+    p = platform
+    from app.models.platform_api import ApiServiceAccount
+
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "narrowed later"}).json()
+    db = p.Session()
+    try:
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=p.A.project_id).first()
+        if narrowing == "resource_restrictions":
+            account.resource_restrictions_json = {"field_ids": ["only-one-field"]}
+        else:
+            account.scopes = ["fields:read"]
+        db.commit()
+    finally:
+        db.close()
+    # The key itself can no longer authenticate...
+    assert p.client.get("/v1/intelligence/usage", headers=p.keys["A"]).status_code in {401, 403}
+    calls = len(p.state.model_calls)
+    # ...so the queued job must not act on its stale authority either.
+    assert _execute(p, job["id"], p.A.org_id) == "failed"
+    assert len(p.state.model_calls) == calls
+    assert _wallet(p.Session, p.A.org_id) == (500, 0)

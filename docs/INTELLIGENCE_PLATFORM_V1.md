@@ -153,7 +153,11 @@ no section goes in `extensions` under a namespaced key.
 
 Give observations and sources an `id`: AGRO-AI cites them by id, reports their
 age in `provenance.sources[].freshness_hours`, and validates structured
-citations against them. Bounds: 256 KB per context, finite numbers, physical
+citations against them. Ids must be unique within a request and may not use
+AGRO-AI prefixes (`tool_`, `ctx_obs_`, `chunk_`, `file_`, `doc_`, `ses_`,
+`turn_`, `run_`) or UUIDs (422). If the supplied data exceeds the analysis
+window, whole items are left out: they are marked `omitted_from_analysis` in
+provenance and cannot be cited. Bounds: 256 KB per context, finite numbers, physical
 ranges (e.g. latitude ±90, pH 0–14) enforced.
 
 ## 5. Files and multimodal input

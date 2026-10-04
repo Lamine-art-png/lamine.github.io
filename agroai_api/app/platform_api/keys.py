@@ -120,7 +120,18 @@ def verify_platform_key(db: Session, plaintext: str) -> VerifiedPlatformKey | No
         return None
     key_hash = _digest(plaintext)
     row = db.query(PlatformApiKey).filter(PlatformApiKey.key_hash == key_hash).first()
-    if row is None or row.status != "active" or row.revoked_at is not None:
+    if row is None:
+        return None
+    return validate_platform_key_row(db, row)
+
+
+def validate_platform_key_row(db: Session, row: PlatformApiKey) -> VerifiedPlatformKey | None:
+    """Every authority check applied to a key after it is identified.
+
+    Shared by request authentication and deferred work (async jobs), so a key
+    that could no longer authenticate can never act later.
+    """
+    if row.status != "active" or row.revoked_at is not None:
         return None
     now = datetime.utcnow()
     if row.expires_at and row.expires_at <= now:
