@@ -277,6 +277,7 @@ async def prepare(
                 )
             except Exception:  # noqa: BLE001 - an unanalysed attachment degrades the run (no charge)
                 prepared.degraded_reasons.append(f"image_analysis_unavailable:{row.id}")
+                prepared.known_ids.discard(row.id)  # never analysed: not evidence, not citable
                 source["status"] = "unavailable"
                 prepared.sources.append(source)
                 continue
@@ -469,7 +470,7 @@ async def prepare(
             f"<<<AGROAI_DATA\n{body}\nAGROAI_DATA>>>"
         )
         for source in prepared.sources:
-            if source["id"] in omitted_ids:
+            if source["id"] in omitted_ids or source.get("status") == "unavailable":
                 continue
             if source["type"] in {"knowledge", "tool_result", "context_observation", "context_source"} or str(source["type"]).startswith("file_"):
                 context.citations.append(

@@ -236,7 +236,7 @@ BUILTIN_DESCRIPTIONS = {
 # never mistaken for a keyword, and data keywords (const, enum, default,
 # examples) are never interpreted as schemas.
 _SUBSCHEMA = ("items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames",
-              "unevaluatedItems", "unevaluatedProperties", "additionalItems")
+              "unevaluatedItems", "unevaluatedProperties", "additionalItems", "contentSchema")
 _SUBSCHEMA_MAPS = ("properties", "patternProperties", "$defs", "definitions", "dependentSchemas")
 _SUBSCHEMA_LISTS = ("allOf", "anyOf", "oneOf", "prefixItems", "items")
 
@@ -262,14 +262,58 @@ def _schema_objects(schema: Any):
                 yield from _schema_objects(child)
 
 
-def _check_keywords(schema: dict[str, Any]) -> None:
-    for node in _schema_objects(schema):
-        for key in node:
-            if key in _FORBIDDEN_KEYWORDS:
-                raise SchemaRejected(f"response_format.schema keyword '{key}' is not supported")
-        ref = node.get("$ref")
-        if "$ref" in node and not (isinstance(ref, str) and ref.startswith("#")):
-            raise SchemaRejected("response_format.schema supports only local '#/...' references")
+def _response_schema_resolver(root: dict[str, Any]) -> Any:
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
+
+    return (
+        Registry()
+        .with_resource("urn:agroai:response-schema", Resource(contents=root, specification=DRAFT202012))
+        .resolver(base_uri="urn:agroai:response-schema")
+    )
+
+
+def _check_schema_graph(root: dict[str, Any]) -> None:
+    """Check every schema the validator could evaluate.
+
+    Starts at the root and follows each local $ref to its target (which may
+    live anywhere in the document, even under a data keyword), checking the
+    keywords of every schema object reached. A reference must resolve with the
+    validator's own resolver, so admission never accepts what validation
+    cannot resolve, and no forbidden keyword can hide behind a reference.
+    """
+    from referencing.exceptions import NoSuchAnchor, Unresolvable
+
+    resolver = _response_schema_resolver(root)
+    pending: list[Any] = [root]
+    visited: set[int] = set()
+    while pending:
+        start = pending.pop()
+        if not isinstance(start, dict) or id(start) in visited:
+            continue
+        for node in _schema_objects(start):
+            if id(node) in visited and node is not start:
+                continue
+            visited.add(id(node))
+            for key in node:
+                if key in _FORBIDDEN_KEYWORDS:
+                    raise SchemaRejected(f"response_format.schema keyword '{key}' is not supported")
+            if "$ref" not in node:
+                continue
+            ref = node.get("$ref")
+            if not (isinstance(ref, str) and ref.startswith("#")):
+                raise SchemaRejected("response_format.schema supports only local '#/...' references")
+            try:
+                target = resolver.lookup(ref).contents
+            except NoSuchAnchor as exc:
+                raise SchemaRejected(
+                    f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
+                    "use a JSON pointer such as '#/$defs/name'"
+                ) from exc
+            except Unresolvable as exc:
+                raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
+            if isinstance(target, dict) and id(target) not in visited:
+                pending.append(target)
 
 
 def _depth_and_nodes(value: Any, depth: int = 0) -> tuple[int, int]:
@@ -300,46 +344,13 @@ def validate_caller_schema(schema: dict[str, Any]) -> None:
     _depth, nodes = _depth_and_nodes(schema)
     if nodes > MAX_SCHEMA_NODES:
         raise SchemaRejected("response_format.schema is too large")
-    _check_keywords(schema)
     if schema.get("type") != "object":
         raise SchemaRejected("response_format.schema root must be {\"type\": \"object\"}")
     try:
         Draft202012Validator.check_schema(schema)
     except SchemaError as exc:
         raise SchemaRejected(f"response_format.schema is not valid JSON Schema: {exc.message[:200]}") from exc
-    _resolve_local_refs(schema, schema)
-
-
-def _resolve_local_refs(node: Any, root: dict[str, Any], resolver: Any = None) -> None:
-    """Every local $ref must resolve at admission (422), not mid-run.
-
-    Uses the validator's own reference resolver, so a schema is admitted
-    exactly when validation will be able to resolve its references.
-    """
-    if resolver is None:
-        from referencing import Registry, Resource
-        from referencing.jsonschema import DRAFT202012
-
-        resolver = (
-            Registry()
-            .with_resource("urn:agroai:response-schema", Resource(contents=root, specification=DRAFT202012))
-            .resolver(base_uri="urn:agroai:response-schema")
-        )
-    from referencing.exceptions import NoSuchAnchor, Unresolvable
-
-    for schema_node in _schema_objects(node):
-        ref = schema_node.get("$ref")
-        if not isinstance(ref, str):
-            continue
-        try:
-            resolver.lookup(ref)
-        except NoSuchAnchor as exc:
-            raise SchemaRejected(
-                f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
-                "use a JSON pointer such as '#/$defs/name'"
-            ) from exc
-        except Unresolvable as exc:
-            raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
+    _check_schema_graph(schema)
 
 
 def resolve_schema(response_format: Any) -> tuple[str, dict[str, Any]] | None:

@@ -516,3 +516,44 @@ def test_keyword_names_as_output_properties_are_allowed():
 def test_forbidden_keywords_rejected_in_every_schema_position(position, bad):
     with pytest.raises(schemas.SchemaRejected):
         schemas.validate_caller_schema(position(dict(bad)))
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "object", "properties": {"carrier": {"type": "string", "contentSchema": {"type": "string", "pattern": "(a+)+$"}},
+                                          "victim": {"$ref": "#/properties/carrier/contentSchema"}}},
+        {"type": "object", "default": {"evil": {"type": "string", "pattern": "(a+)+$"}}, "properties": {"v": {"$ref": "#/default/evil"}}},
+        {"type": "object", "examples": [{"type": "object", "$id": "urn:hidden"}], "properties": {"v": {"$ref": "#/examples/0"}}},
+        {"type": "object", "const": {"$ref": "https://evil.example/x"}, "properties": {"v": {"$ref": "#/const"}}},
+    ],
+)
+def test_forbidden_keywords_cannot_hide_behind_references(schema):
+    with pytest.raises(schemas.SchemaRejected):
+        schemas.validate_caller_schema(schema)
+
+
+def test_recursive_local_references_are_admitted():
+    schema = {"type": "object", "$defs": {"node": {"type": "object", "properties": {"child": {"$ref": "#/$defs/node"}, "name": {"type": "string"}}}},
+              "properties": {"tree": {"$ref": "#/$defs/node"}}}
+    schemas.validate_caller_schema(schema)
+    assert schemas.validation_errors({"tree": {"name": "a", "child": {"name": "b"}}}, schema) == []
+
+
+def test_failed_image_analysis_is_not_citable():
+    import asyncio
+
+    from app.schemas.ai import EvidenceContext
+
+    image = SimpleNamespace(id="file_img1", kind="image", filename="leaf.jpg", content_type="image/jpeg", extracted_text=None, storage_uri="s3://x")
+    original = runtime._analyze_image
+    runtime._analyze_image = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("vision down"))
+    try:
+        context = EvidenceContext(organization_id="org")
+        prepared = asyncio.run(runtime.prepare(None, SimpleNamespace(organization_id="org", api_project_id="p", workspace_id=None),
+                                               _request(context={"crop": {"name": "almond"}}), runtime.Resolved(files=[image]), context))
+    finally:
+        runtime._analyze_image = original
+    assert "file_img1" not in prepared.known_ids
+    assert "file_img1" not in {c.source_id for c in context.citations}
+    assert any(s["id"] == "file_img1" and s["status"] == "unavailable" for s in prepared.sources)
