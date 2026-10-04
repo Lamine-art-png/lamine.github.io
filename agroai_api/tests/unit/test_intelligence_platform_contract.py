@@ -286,3 +286,12 @@ def test_retries_share_one_deadline(monkeypatch):
     assert result["status"] in {"timeout", "failed"}
     assert len(calls) == 2, "the second attempt starts inside the 200 ms deadline; a third would not"
     assert _time.monotonic() - started < 0.45
+
+
+def test_freshness_bounds_use_instants_and_keep_original_strings():
+    from app.api.v1.commercial_intelligence_hardened import _instant_ordered
+
+    values = ["2026-01-01T04:00:00Z", "2026-01-01T00:00:00-08:00", "2026-01-01T05:00:00+02:00", None, "not-a-date", "2026-01-01T03:30:00"]
+    ordered = _instant_ordered(values)
+    # 05:00+02:00 = 03:00Z < 03:30Z(naive) < 04:00Z < 00:00-08:00 = 08:00Z
+    assert ordered == ["2026-01-01T05:00:00+02:00", "2026-01-01T03:30:00", "2026-01-01T04:00:00Z", "2026-01-01T00:00:00-08:00"]

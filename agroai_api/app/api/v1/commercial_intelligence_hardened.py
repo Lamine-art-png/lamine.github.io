@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 import stripe
@@ -559,6 +559,28 @@ def _decision_text(public: dict[str, Any]) -> str:
     return json.dumps(decision, default=str, ensure_ascii=False)
 
 
+def _instant_ordered(values: Any) -> list[str]:
+    """Order timestamps by the instant they denote (not their text).
+
+    Returns the original strings, so outward timestamps stay exactly as
+    supplied; naive values are taken as UTC; unparseable values are ignored.
+    """
+    keyed: list[tuple[datetime, str]] = []
+    for value in values:
+        if not value:
+            continue
+        text = str(value)
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        keyed.append((parsed, text))
+    keyed.sort(key=lambda item: item[0])
+    return [text for _instant, text in keyed]
+
+
 def _platform_fields(
     public: dict[str, Any],
     *,
@@ -586,7 +608,7 @@ def _platform_fields(
     public["structured_output_schema"] = schema[0] if schema else None
     if structured is not None and structured.errors:
         public["structured_output_errors"] = structured.errors[:8]
-    observed = sorted(str(item["observed_at"]) for item in prepared.sources if item.get("observed_at"))
+    observed = _instant_ordered(item.get("observed_at") for item in prepared.sources)
     public["provenance"] = {
         "sources": prepared.sources[:100],
         "tools": [platform_tools.audit_record(item) | {"evidence_id": item["id"]} for item in prepared.tool_results],

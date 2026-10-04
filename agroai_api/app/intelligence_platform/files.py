@@ -40,6 +40,10 @@ MAX_EXTRACTED_CHARS = 200_000
 MAX_PDF_PAGES = 200
 DEFAULT_RETENTION_DAYS = 30
 MAX_ACTIVE_FILES_PER_PROJECT = 1_000
+# Aggregate per-project bounds (independent of the 50 MB knowledge quota):
+# stored object bytes (R2) and extracted text kept in PostgreSQL.
+MAX_OBJECT_BYTES_PER_PROJECT = 1024 * 1024 * 1024
+MAX_EXTRACTED_TEXT_CHARS_PER_PROJECT = 25_000_000
 
 _TEXT_TYPES = {"text/plain", "text/csv", "text/markdown", "application/json"}
 _IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -130,6 +134,46 @@ def extract_pdf_text(data: bytes) -> tuple[str, int]:
     return "\n\n".join(parts)[:MAX_EXTRACTED_CHARS], pages
 
 
+def project_file_usage(db: Session, principal: PlatformPrincipal) -> dict[str, int]:
+    """Project-wide usage (all workspaces). A 'deleting' tombstone still
+    occupies object storage until its delete succeeds."""
+    from sqlalchemy import func
+
+    base = db.query(IntelligenceFile).filter(
+        IntelligenceFile.organization_id == principal.organization_id,
+        IntelligenceFile.api_project_id == principal.api_project_id,
+    )
+    files = base.filter(IntelligenceFile.status == "available").count()
+    object_bytes = (
+        base.filter(IntelligenceFile.status.in_(["available", "deleting"]), IntelligenceFile.storage_uri.isnot(None))
+        .with_entities(func.coalesce(func.sum(IntelligenceFile.size_bytes), 0))
+        .scalar()
+    )
+    text_chars = (
+        base.filter(IntelligenceFile.status == "available")
+        .with_entities(func.coalesce(func.sum(func.length(IntelligenceFile.extracted_text)), 0))
+        .scalar()
+    )
+    return {"files": int(files), "object_bytes": int(object_bytes or 0), "text_chars": int(text_chars or 0)}
+
+
+def _quota_error(usage: dict[str, int], *, object_bytes: int, text_chars: int) -> dict[str, Any] | None:
+    if usage["files"] + 1 > MAX_ACTIVE_FILES_PER_PROJECT:
+        return {"code": "file_quota_exceeded", "limit": MAX_ACTIVE_FILES_PER_PROJECT}
+    if usage["object_bytes"] + object_bytes > MAX_OBJECT_BYTES_PER_PROJECT:
+        return {"code": "file_storage_quota_exceeded", "limit_bytes": MAX_OBJECT_BYTES_PER_PROJECT, "used_bytes": usage["object_bytes"]}
+    if usage["text_chars"] + text_chars > MAX_EXTRACTED_TEXT_CHARS_PER_PROJECT:
+        return {"code": "file_text_quota_exceeded", "limit_characters": MAX_EXTRACTED_TEXT_CHARS_PER_PROJECT, "used_characters": usage["text_chars"]}
+    return None
+
+
+def lock_project(db: Session, principal: PlatformPrincipal) -> None:
+    """Serialize quota decisions for one API project (row lock until commit)."""
+    from app.models.platform_api import ApiProject
+
+    db.query(ApiProject.id).filter(ApiProject.id == principal.api_project_id).with_for_update().first()
+
+
 def _object_store():
     from app.services.object_storage import get_object_store, object_storage_configured
 
@@ -147,17 +191,11 @@ async def accept_upload(
 ) -> IntelligenceFile:
     if purpose not in {"attachment", "knowledge"}:
         raise HTTPException(status_code=422, detail={"code": "file_purpose_invalid"})
-    active = (
-        db.query(IntelligenceFile)
-        .filter(
-            IntelligenceFile.organization_id == principal.organization_id,
-            IntelligenceFile.api_project_id == principal.api_project_id,
-            IntelligenceFile.status == "available",
-        )
-        .count()
-    )
-    if active >= MAX_ACTIVE_FILES_PER_PROJECT:
-        raise HTTPException(status_code=409, detail={"code": "file_quota_exceeded", "limit": MAX_ACTIVE_FILES_PER_PROJECT})
+    # Fast fail before reading the body; authoritative re-check below.
+    early = _quota_error(project_file_usage(db, principal), object_bytes=0, text_chars=0)
+    db.rollback()
+    if early is not None:
+        raise HTTPException(status_code=409, detail=early)
 
     head = await upload.read(512)
     sniffed = sniff(head, upload.content_type)
@@ -250,6 +288,27 @@ async def accept_upload(
             text = text.replace("\x00", "").strip()
             row.extracted_text = text
             row.extraction_status = "extracted" if text else "empty"
+        # Authoritative quota decision, serialized per project: concurrent
+        # uploads cannot all pass a check made before any of them committed.
+        lock_project(db, principal)
+        exceeded = _quota_error(
+            project_file_usage(db, principal),
+            object_bytes=size if row.storage_uri else 0,
+            text_chars=len(row.extracted_text or ""),
+        )
+        if exceeded is not None:
+            db.rollback()
+            if row.storage_uri:
+                try:
+                    await asyncio.to_thread(
+                        _object_store().delete,
+                        row.storage_uri,
+                        tenant_id=str(principal.organization_id),
+                        connection_id=_namespace(principal),
+                    )
+                except Exception:  # noqa: BLE001 - pending marker lets the reconciler remove it
+                    pass
+            raise HTTPException(status_code=409, detail=exceeded)
         db.add(row)
         db.commit()
         if row.storage_uri:

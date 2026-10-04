@@ -171,7 +171,11 @@ def ingest(db: Session, principal: PlatformPrincipal, payload: KnowledgeDocument
             .first()
         )
 
-    # Quota is per project by design: deliberately not workspace-scoped.
+    # Quota is per project by design: deliberately not workspace-scoped, and
+    # decided under the project row lock so concurrent ingests serialize.
+    from app.intelligence_platform.files import lock_project
+
+    lock_project(db, principal)
     used_docs, used_bytes = (
         db.query(KnowledgeDocument)
         .filter(

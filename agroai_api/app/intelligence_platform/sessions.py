@@ -152,7 +152,9 @@ def history(db: Session, session: IntelligenceSession) -> list[dict[str, str]]:
             IntelligenceSessionTurn.organization_id == session.organization_id,
         )
         .order_by(IntelligenceSessionTurn.created_at.desc(), IntelligenceSessionTurn.id.desc())
-        .limit(HISTORY_TURNS * 2)
+        # Each stored row (user or assistant) is one turn; the contract is the
+        # latest HISTORY_TURNS turns, exactly.
+        .limit(HISTORY_TURNS)
         .all()
     )
     return [{"role": row.role, "content": row.content} for row in reversed(rows)]

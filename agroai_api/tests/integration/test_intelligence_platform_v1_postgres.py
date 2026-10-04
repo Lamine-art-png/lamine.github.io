@@ -1027,3 +1027,62 @@ def test_data_tool_statement_timeout_bounds_a_stalled_query(platform, monkeypatc
     finally:
         db.rollback()
         db.close()
+
+
+def test_knowledge_title_and_metadata_are_credential_scanned(platform):
+    p = platform
+    token = "gh" + "p_" + "A" * 36  # assembled so repository secret scanning stays clean
+    base = {"collection": "c", "title": "Safe title", "text": "irrigation notes"}
+    for body in ({**base, "title": f"notes {token}"},
+                 {**base, "source": {"type": "doc", "label": f"exported with {token}"}},
+                 {**base, "source": {"type": "doc", "uri": f"https://example.test/x?key={token}"}},
+                 {**base, "metadata": {"api_token": "abcdefghijklmnopqrstuvwxyz"}}):
+        resp = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"], json=body)
+        assert resp.status_code == 422 and "credential_like_input_rejected" in resp.text, (body, resp.text)
+    assert p.client.get("/v1/intelligence/knowledge/documents", headers=p.keys["A"]).json()["data"] == []
+
+
+def test_session_history_sends_exactly_the_latest_eight_turns(platform):
+    p = platform
+    sid = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "long"}).json()["id"]
+    for index in range(6):  # 12 stored turns
+        assert _run(p, "A", {"task": "answer", "question": f"question number {index}", "session_id": sid}).status_code == 200
+    _run(p, "A", {"task": "answer", "question": "final question", "session_id": sid})
+    history = p.state.model_calls[-1]["history"]
+    assert len(history) == 8, len(history)
+    assert history[-1]["role"] == "assistant" and history[-2] == {"role": "user", "content": "question number 5"}
+    assert {"role": "user", "content": "question number 1"} not in history, "older turns stay out of context"
+
+
+def test_file_byte_quotas_are_project_wide_and_race_safe(platform, monkeypatch):
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.intelligence_platform import files as platform_files
+
+    p = platform
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 292  # 300 bytes
+    monkeypatch.setattr(platform_files, "MAX_OBJECT_BYTES_PER_PROJECT", 1000)  # room for exactly 3
+    original_put = p.store.put_path
+
+    def slow_put(*args, **kwargs):
+        _time.sleep(0.3)  # every upload passes the early check before any commits
+        return original_put(*args, **kwargs)
+
+    p.store.put_path = slow_put
+    w1, w2 = _workspace_key(p, p.A, "qa"), _workspace_key(p, p.A, "qb")
+    keys = [w1, w2, p.keys["A"]] * 2
+
+    def upload(headers):
+        return p.client.post("/v1/intelligence/files", headers=headers, files={"file": ("x.png", io.BytesIO(png), "image/png")}).status_code
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        codes = list(pool.map(upload, keys))
+    assert codes.count(201) == 3 and codes.count(409) == 3, codes
+    assert len(p.store.objects) == 3, "rejected uploads leave no stored object"
+
+    monkeypatch.setattr(platform_files, "MAX_EXTRACTED_TEXT_CHARS_PER_PROJECT", 30)
+    text = lambda: p.client.post("/v1/intelligence/files", headers=p.keys["A"], files={"file": ("n.txt", io.BytesIO(b"x" * 20), "text/plain")})
+    assert text().status_code == 201
+    second = text()
+    assert second.status_code == 409 and second.json()["detail"]["code"] == "file_text_quota_exceeded"

@@ -88,6 +88,11 @@ def capabilities(response: Response) -> dict[str, Any]:
             "text_files": {"content_types": ["text/plain", "text/csv", "text/markdown", "application/json"], "max_bytes": platform_files.TEXT_MAX_BYTES},
             "audio": False,
             "remote_urls": False,
+            "project_limits": {
+                "active_files": platform_files.MAX_ACTIVE_FILES_PER_PROJECT,
+                "stored_object_bytes": platform_files.MAX_OBJECT_BYTES_PER_PROJECT,
+                "extracted_text_characters": platform_files.MAX_EXTRACTED_TEXT_CHARS_PER_PROJECT,
+            },
         },
         "structured_output": {
             "builtin_schemas": [{"name": name, "description": platform_schemas.BUILTIN_DESCRIPTIONS[name]} for name in platform_schemas.BUILTIN_SCHEMAS],
@@ -564,8 +569,21 @@ def create_document(
     principal: PlatformPrincipal = Depends(_key("intelligence.knowledge.write", cost=5)),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    if payload.text and text_contains_credential(payload.text):
-        raise HTTPException(status_code=422, detail={"code": "credential_like_input_rejected"})
+    # Every caller-supplied string that is stored and can reach inference or a
+    # response: the title is prefixed to each searchable chunk, so it is
+    # scanned exactly like the body. Metadata keys/values go through the same
+    # structural guard as request input.
+    scanned = {
+        "title": payload.title,
+        "text": payload.text or "",
+        "source.label": payload.source.label or "",
+        "source.uri": payload.source.uri or "",
+        "external_id": payload.external_id or "",
+    }
+    for name, value in scanned.items():
+        if value and text_contains_credential(value):
+            raise HTTPException(status_code=422, detail={"code": "credential_like_input_rejected", "field": name})
+    reject_credentials(SimpleNamespace(question="", input={}, context=None, tools=[], metadata=payload.metadata, response_format=None))
     document, changed = platform_knowledge.ingest(db, principal, payload)
     if not changed:
         response.status_code = status.HTTP_200_OK

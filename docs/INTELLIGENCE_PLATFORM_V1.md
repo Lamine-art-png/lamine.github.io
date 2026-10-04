@@ -174,7 +174,9 @@ client.intelligence.run("Interpret the photo and lab report together.",
 Not supported in v1: audio, video, remote URLs (AGRO-AI never fetches a URL you
 send — no SSRF surface). Type is decided by content sniffing; a declared type
 that disagrees is rejected (415). Files containing credentials or private keys
-are rejected (422). Files expire after 30 days; `DELETE /v1/intelligence/files/{id}`
+are rejected (422). Per project (all workspaces): at most 1,000 active files,
+1 GB of stored images, and 25 million characters of extracted document text
+(409 when exceeded). Files expire after 30 days; `DELETE /v1/intelligence/files/{id}`
 removes them immediately. Original document bytes are not retained, only
 bounded extracted text.
 
