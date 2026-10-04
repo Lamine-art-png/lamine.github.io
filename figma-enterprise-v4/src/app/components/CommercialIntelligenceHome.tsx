@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BookmarkPlus, Check, CircleDot, FileSearch, Loader2, Send, SlidersHorizontal, X } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
+import { COMMERCIAL_COPY, answerText, driverLabel, evidenceLabel, levelLabel, stateLabel, missingInputLabel, providerLabel, unsupportedScenarioLanguage, useCommercialFormatters } from "./commercialCopy";
 
 // Commercial Intelligence Home: answers "is anything materially affecting my
 // business?" first. Every number shown here comes from the deterministic
@@ -40,6 +41,7 @@ type PositionCard = {
   missing_inputs?: string[];
   price_state?: string;
   fx_state?: string;
+  evidence_states?: Record<string, string>;
 };
 type Home = {
   status: "attention" | "review" | "steady";
@@ -98,7 +100,7 @@ const COPY = [
   "Value hidden by data licence",
   "Market price",
   "Yield",
-  "FX",
+  "Exchange rate",
   "Commit more volume",
   "Run",
   "Scenarios are deterministic what-ifs, not forecasts.",
@@ -108,7 +110,6 @@ const COPY = [
   "Over-contracted",
   "Incomplete inputs",
   "Price evidence",
-  "FX evidence",
   "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "Unable to load Commercial Intelligence.",
   "Retry",
@@ -121,21 +122,6 @@ const COPY = [
   "Evidence became {state}: {evidence}.",
   "Inputs are incomplete: {inputs}.",
   "Driver",
-  "production",
-  "price",
-  "fx",
-  "costs",
-  "contracts",
-  "other",
-  "LOW",
-  "MEDIUM",
-  "HIGH",
-  "CRITICAL",
-  "DELAYED",
-  "STALE",
-  "MANUAL",
-  "UNAVAILABLE",
-  "NOT_REQUIRED",
 ] as const;
 
 const LEVEL_STYLE: Record<string, { bg: string; fg: string }> = {
@@ -152,40 +138,13 @@ const STATE_STYLE: Record<string, { bg: string; fg: string }> = {
   NOT_REQUIRED: { bg: "#EEF2EC", fg: "#46574B" },
 };
 
-function useFormatters(locale: string) {
-  return useMemo(() => {
-    const language = !locale || locale === "auto" ? undefined : locale;
-    const money = (value: string | null | undefined, currency: string) => {
-      if (value === null || value === undefined || value === "") return "—";
-      const number = Number(value);
-      if (!Number.isFinite(number)) return "—";
-      try {
-        return new Intl.NumberFormat(language, { style: "currency", currency, maximumFractionDigits: Math.abs(number) >= 1000 ? 0 : 2 }).format(number);
-      } catch {
-        return `${number.toFixed(2)} ${currency}`;
-      }
-    };
-    const number = (value: string | null | undefined, digits = 1) => {
-      if (value === null || value === undefined || value === "") return "—";
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(parsed) : "—";
-    };
-    const date = (value: string | null | undefined) => {
-      if (!value) return "—";
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(parsed);
-    };
-    return { money, number, date };
-  }, [locale]);
-}
-
 function Badge({ label, style }: { label: string; style: { bg: string; fg: string } }) {
   return <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide" style={{ background: style.bg, color: style.fg }}>{label}</span>;
 }
 
 export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { canWrite: boolean; onOpenOnboarding?: () => void }) {
-  const { tx, tf, locale } = usePortalCopy([], COPY as unknown as string[]);
-  const fmt = useFormatters(locale);
+  const { tx, tf, locale } = usePortalCopy([], [...COPY, ...COMMERCIAL_COPY]);
+  const fmt = useCommercialFormatters(locale);
   const [home, setHome] = useState<Home | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -230,9 +189,9 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
       case "over_contracted":
         return tf("Contracted volume {contracted} exceeds marketable supply {supply} {unit}.", { contracted: fmt.number(reason.contracted_quantity, 0), supply: fmt.number(reason.marketable_supply, 0), unit: reason.unit || "" });
       case "evidence_degraded":
-        return tf("Evidence became {state}: {evidence}.", { state: tx(String(reason.state || "")), evidence: tx(reason.evidence === "fx" ? "FX evidence" : "Price evidence") });
+        return tf("Evidence became {state}: {evidence}.", { state: stateLabel(tx, reason.state), evidence: evidenceLabel(tx, tf, String(reason.evidence || "")) });
       case "missing_inputs":
-        return tf("Inputs are incomplete: {inputs}.", { inputs: (reason.inputs || []).join(", ") });
+        return tf("Inputs are incomplete: {inputs}.", { inputs: (reason.inputs || []).map((code: string) => missingInputLabel(tx, code)).join(", ") });
       default:
         return null;
     }
@@ -253,7 +212,9 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
     setAsking(true);
     try {
       const response = await apiClient.post<any>("/v1/market-intelligence/ask", { question: question.trim(), language: locale && locale !== "auto" ? locale : "en" });
-      setAnswer({ summary: response?.intelligence?.summary || "", scenarios: response?.scenarios });
+      const lines = [answerText(tx, tf, fmt, response?.intelligence)];
+      if (response?.scenario_parse?.status === "unsupported_language") lines.push(unsupportedScenarioLanguage(tx));
+      setAnswer({ summary: lines.filter(Boolean).join("\n"), scenarios: response?.scenarios });
     } catch (cause) {
       setAnswer({ summary: (cause as ApiError)?.message || tx("Unable to load Commercial Intelligence.") });
     } finally {
@@ -289,7 +250,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
             return (
               <article key={change.id} className="rounded-xl border border-[#E2E7DE] bg-white p-3 sm:p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge label={tx(change.level)} style={LEVEL_STYLE[change.level] || LEVEL_STYLE.LOW} />
+                  <Badge label={levelLabel(tx, change.level)} style={LEVEL_STYLE[change.level] || LEVEL_STYLE.LOW} />
                   <span className="min-w-0 break-words text-sm font-semibold text-[#10231B]">{change.position_name}</span>
                 </div>
                 <ul className="mt-2 space-y-1 text-sm text-[#2F3E35]">
@@ -297,7 +258,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
                 </ul>
                 {change.impact?.drivers?.length ? (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {change.impact.drivers.map((driver) => <span key={driver.driver} className="rounded-lg bg-[#F3F1EA] px-2 py-1 text-[11px] text-[#46574B]">{tx(driver.driver)}: {fmt.money(driver.contribution, change.impact.currency || position?.reporting_currency || "USD")}</span>)}
+                    {change.impact.drivers.map((driver) => <span key={driver.driver} className="rounded-lg bg-[#F3F1EA] px-2 py-1 text-[11px] text-[#46574B]">{driverLabel(tx, driver.driver)}: {fmt.money(driver.contribution, change.impact.currency || position?.reporting_currency || "USD")}</span>)}
                   </div>
                 ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -332,7 +293,10 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
                 <div className="flex flex-wrap gap-1">
                   {position.over_contracted ? <Badge label={tx("Over-contracted")} style={LEVEL_STYLE.HIGH} /> : null}
                   {!position.data_complete ? <Badge label={tx("Incomplete inputs")} style={LEVEL_STYLE.MEDIUM} /> : null}
-                  <Badge label={`${tx("Price evidence")}: ${tx(position.price_state || "UNAVAILABLE")}`} style={STATE_STYLE[position.price_state || "UNAVAILABLE"] || STATE_STYLE.UNAVAILABLE} />
+                  <Badge label={`${tx("Price evidence")}: ${stateLabel(tx, position.price_state || "UNAVAILABLE")}`} style={STATE_STYLE[position.price_state || "UNAVAILABLE"] || STATE_STYLE.UNAVAILABLE} />
+                  {Object.entries(position.evidence_states || {}).filter(([key, state]) => key !== "price" && (state === "STALE" || state === "UNAVAILABLE")).map(([key, state]) => (
+                    <Badge key={key} label={`${evidenceLabel(tx, tf, key)}: ${stateLabel(tx, state)}`} style={STATE_STYLE[state] || STATE_STYLE.UNAVAILABLE} />
+                  ))}
                 </div>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-3">
@@ -366,7 +330,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
           <h3 className="text-sm font-semibold text-[#10231B]">{tx("Ask AGRO-AI")}</h3>
           <p className="mt-1 text-xs text-[#65736A]">{tx("Ask about your commercial position, scenarios or sources.")}</p>
           <div className="mt-3 flex gap-2">
-            <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void ask(); }} className="min-w-0 flex-1 rounded-xl border border-[#D6DDD0] bg-white px-3 py-2 text-sm" />
+            <input aria-label={tx("Ask AGRO-AI")} value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void ask(); }} className="min-w-0 flex-1 rounded-xl border border-[#D6DDD0] bg-white px-3 py-2 text-sm" />
             <button onClick={() => void ask()} disabled={asking || !question.trim()} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#10231B] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{asking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}{tx("Ask")}</button>
           </div>
           {answer ? <p className="mt-3 whitespace-pre-line break-words text-sm text-[#2F3E35]" data-testid="commercial-answer">{answer.summary}</p> : null}
@@ -404,18 +368,18 @@ function ProvenancePanel({ tx, fmt, data, position, onClose }: { tx: (value: str
   return (
     <Sheet title={`${tx("Where these numbers come from")} · ${position.name}`} onClose={onClose} tx={tx}>
       <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-        {[["Realizable price", data.numbers.current_realizable_price], ["FX", data.numbers.fx_rate_to_reporting]].map(([label, item]: any) => (
+        {[["Realizable price", data.numbers.current_realizable_price], ["Exchange rate", data.numbers.fx_rate_to_reporting]].map(([label, item]: any) => (
           <div key={label} className="rounded-xl border border-[#E2E7DE] bg-white p-3">
             <dt className="text-xs text-[#65736A]">{tx(label)}</dt>
             <dd className="font-semibold text-[#10231B]">{item?.value ? fmt.number(item.value, 4) : "—"}</dd>
-            <dd className="text-xs text-[#65736A]">{tx("Origin")}: {originLabel(item?.origin)}{item?.state ? ` · ${tx(String(item.state))}` : ""}</dd>
+            <dd className="text-xs text-[#65736A]">{tx("Origin")}: {originLabel(item?.origin)}{item?.state ? ` · ${stateLabel(tx, String(item.state))}` : ""}</dd>
           </div>
         ))}
       </dl>
       <ul className="mt-4 space-y-2" data-testid="provenance-sources">
         {data.sources.map((source) => (
           <li key={source.evidence_id} className="rounded-xl border border-[#E2E7DE] bg-white p-3 text-xs text-[#2F3E35]">
-            <div className="flex flex-wrap items-center gap-2"><Badge label={tx(source.state)} style={STATE_STYLE[source.state] || STATE_STYLE.UNAVAILABLE} /><span className="min-w-0 break-words font-semibold">{source.source_name}</span></div>
+            <div className="flex flex-wrap items-center gap-2"><Badge label={stateLabel(tx, source.state)} style={STATE_STYLE[source.state] || STATE_STYLE.UNAVAILABLE} /><span className="min-w-0 break-words font-semibold">{providerLabel(tx, source.provider, source.source_name)}</span></div>
             <div className="mt-1 break-words">{source.redacted ? tx("Value hidden by data licence") : `${source.value ?? "—"} ${source.currency ?? ""}${source.unit ? ` / ${source.unit}` : ""}`}{source.market_name ? ` · ${source.market_name}` : ""}</div>
             <div className="mt-1 text-[#65736A]">{tx("Observed")}: {fmt.date(source.observed_at)} · {tx("Retrieved")}: {fmt.date(source.retrieved_at)}</div>
             {source.attribution ? <div className="mt-1 text-[#7B877F]">{source.attribution}</div> : null}
@@ -490,7 +454,7 @@ function DecisionPanel({ tx, position, change, onClose, onSaved }: { tx: (value:
   };
   return (
     <Sheet title={`${tx("Save decision")} · ${position.name}`} onClose={onClose} tx={tx}>
-      {change ? <div className="mb-3 flex items-center gap-2 text-xs text-[#8A4300]"><AlertTriangle className="h-3.5 w-3.5" />{tx(change.level)}</div> : null}
+      {change ? <div className="mb-3 flex items-center gap-2 text-xs text-[#8A4300]"><AlertTriangle className="h-3.5 w-3.5" />{levelLabel(tx, change.level)}</div> : null}
       <label className="block text-xs text-[#65736A]">{tx("Decision")}<textarea value={decision} onChange={(event) => setDecision(event.target.value)} rows={2} className="mt-1 w-full rounded-xl border border-[#D6DDD0] bg-white px-3 py-2 text-sm text-[#10231B]" /></label>
       <label className="mt-3 block text-xs text-[#65736A]">{tx("Rationale (optional)")}<textarea value={rationale} onChange={(event) => setRationale(event.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-[#D6DDD0] bg-white px-3 py-2 text-sm text-[#10231B]" /></label>
       <button onClick={() => void save()} disabled={saving || !decision.trim()} className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#10231B] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookmarkPlus className="h-3.5 w-3.5" />}{tx("Save decision")}</button>

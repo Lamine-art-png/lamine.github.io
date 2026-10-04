@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.services.market_normalization import validate_country_code, validate_currency_code
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.models.market_intelligence import MarketContractPosition, MarketPosition
@@ -48,10 +49,7 @@ def _position(db: Session, org_id: str, position_id: str) -> MarketPosition:
 def _currency(value: str | None) -> str | None:
     if value is None:
         return None
-    code = str(value).strip().upper()
-    if len(code) != 3 or not code.isalpha():
-        raise ValueError("currency must be a 3-letter ISO code")
-    return code
+    return validate_currency_code(value)
 
 
 class PositionPatch(BaseModel):
@@ -95,10 +93,7 @@ class PositionPatch(BaseModel):
     def validate_country(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        code = value.strip().upper()
-        if len(code) != 2 or not code.isalpha():
-            raise ValueError("country_code must be ISO-3166 alpha-2")
-        return code
+        return validate_country_code(value)
 
     @field_validator("local_currency", "reporting_currency", "price_currency")
     @classmethod

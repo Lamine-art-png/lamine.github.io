@@ -243,11 +243,15 @@ def _observation_payload(row: MarketObservation) -> dict[str, Any]:
 
 
 def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
+    # ``code``/``params`` are what the portal renders (in every locale); the
+    # English title/summary remain for API consumers.
     findings: list[dict[str, Any]] = []
     if position.get("over_contracted"):
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "over_contracted",
+            "params": {},
             "title": "Contracted volume exceeds expected production",
             "summary": "Projected margin is suppressed until production or contract volume is reconciled.",
         })
@@ -256,6 +260,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "missing_inputs",
+            "params": {"inputs": missing[:3]},
             "title": "Commercial position has missing inputs",
             "summary": "Complete " + ", ".join(missing[:3]) + " before relying on margin calculations.",
         })
@@ -267,6 +273,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "medium",
             "position_id": position.get("position_id"),
+            "code": "exposure",
+            "params": {"percent": str(position.get("exposed_percent"))},
             "title": "Most expected production remains commercially exposed",
             "summary": f"{position.get('exposed_percent')}% remains uncontracted under the current structured position.",
         })
@@ -275,6 +283,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "data_health",
+            "params": {},
             "title": "Market data health needs attention",
             "summary": "One or more source observations are stale, unavailable, not configured, or missing.",
         })
@@ -655,7 +665,7 @@ async def ask_market_intelligence(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    from app.services.market_intelligence_ask import requested_language
+    from app.services.market_intelligence_ask import requested_language, scenario_parse_status
 
     org_id = _org_id(ctx)
     if payload.position_id:
@@ -685,6 +695,7 @@ async def ask_market_intelligence(
         "position": visible_payload,
         "evidence": evidence,
         "scenarios": context["scenarios"],
+        "scenario_parse": scenario_parse_status(payload.question, payload.language, context["scenarios"]),
         "data_states": context["data_states"],
         "intelligence": result,
         "notice": "Commercial decision support only. No trade execution or personalized derivatives instruction is provided.",

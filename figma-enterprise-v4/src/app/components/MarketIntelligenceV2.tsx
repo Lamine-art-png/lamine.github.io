@@ -5,6 +5,7 @@ import { usePortalCopy } from "../hooks/usePortalCopy";
 import { MarketIntelligence } from "./MarketIntelligence";
 import { CommercialIntelligenceHome } from "./CommercialIntelligenceHome";
 import { CommercialOnboarding } from "./CommercialOnboarding";
+import { ACCESS_HINTS, COMMERCIAL_COPY, providerLabel, stateLabel } from "./commercialCopy";
 
 type PositionSummary = {
   position_id: string;
@@ -20,7 +21,7 @@ type PositionSummary = {
 
 type Overview = { position_count: number; positions: PositionSummary[] };
 type Capabilities = { can_write?: boolean; role?: string; release_state?: string; cohort?: string };
-type ProviderState = { status?: string; name?: string; source_name?: string; configured?: boolean; configuration_hint?: string; newest_observation_at?: string | null };
+type ProviderState = { status?: string; access?: string; source_name?: string; configured?: boolean; newest_observation_at?: string | null };
 type ProvidersResponse = { providers?: Record<string, ProviderState> };
 
 const COPY = [
@@ -75,16 +76,16 @@ function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#65736A]">{children}</label>;
 }
 
-function ProviderBadge({ state }: { state: ProviderState }) {
+function ProviderBadge({ state, label }: { state: ProviderState; label: string }) {
   const status = String(state.status || "UNKNOWN").toUpperCase();
   const positive = ["LIVE", "DELAYED", "OK"].includes(status);
   const background = positive ? "#E7F4EC" : status === "NOT_CONFIGURED" ? "#FFF3D8" : "#FDECE7";
   const color = positive ? "#1F6A45" : status === "NOT_CONFIGURED" ? "#8A5A00" : "#A13F24";
-  return <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide" style={{ background, color }}>{status}</span>;
+  return <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide" style={{ background, color }}>{label}</span>;
 }
 
 export function MarketIntelligenceV2() {
-  const { tx } = usePortalCopy([], COPY as unknown as string[]);
+  const { tx, locale } = usePortalCopy([], [...COPY, ...COMMERCIAL_COPY]);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [providers, setProviders] = useState<Record<string, ProviderState>>({});
@@ -290,7 +291,7 @@ export function MarketIntelligenceV2() {
                 <div>
                   <div className="mb-5"><h2 className="text-lg font-semibold text-[#10231B]">{tx("Data sources")}</h2><p className="mt-1 text-sm text-[#65736A]">{tx("Governed sources refresh automatically on a schedule. Each source shows its real status: available, not configured, or customer-supplied.")}</p></div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {Object.entries(providers).map(([key, state]) => <div key={key} className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="break-words text-sm font-semibold text-[#10231B]">{state.name || state.source_name || key}</div>{state.configuration_hint ? <div className="mt-1 break-words text-xs leading-5 text-[#7B877F]">{state.configuration_hint}</div> : null}{state.newest_observation_at ? <div className="mt-1 text-xs text-[#65736A]">{tx("Latest observation")}: {new Date(state.newest_observation_at).toLocaleDateString()}</div> : null}</div><ProviderBadge state={state} /></div></div>)}
+                    {Object.entries(providers).map(([key, state]) => <div key={key} className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="break-words text-sm font-semibold text-[#10231B]">{providerLabel(tx, key, state.source_name)}</div>{state.access && ACCESS_HINTS[state.access] && state.status !== "DELAYED" ? <div className="mt-1 break-words text-xs leading-5 text-[#7B877F]">{tx(ACCESS_HINTS[state.access])}</div> : null}{state.newest_observation_at ? <div className="mt-1 text-xs text-[#65736A]">{tx("Latest observation")}: {new Date(state.newest_observation_at).toLocaleDateString(locale && locale !== "auto" ? locale : undefined)}</div> : null}</div><ProviderBadge state={state} label={stateLabel(tx, state.status)} /></div></div>)}
                   </div>
                   <button onClick={() => void refreshAll()} disabled={refreshing || !overview?.position_count} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#C7D2C9] bg-white px-3.5 py-2 text-xs font-semibold text-[#234224] disabled:opacity-50">{refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}{refreshing ? tx("Refreshing…") : tx("Refresh market data")}</button>
                   <div className="mt-4 flex items-start gap-3 rounded-2xl bg-[#F3F7F2] p-4 text-xs leading-6 text-[#526057]"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2D6A4F]" /><span>{tx("Government and reference sources are labelled with their actual freshness. AGRO-AI never presents manual or delayed data as live.")}</span></div>

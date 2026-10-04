@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.services.market_normalization import validate_country_code, validate_currency_code
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.market_intelligence import enforce_market_intelligence_release
 from app.db.base import get_db
@@ -41,10 +42,7 @@ def _scope(ctx: AuthContext) -> str:
 
 
 def _currency(value: str) -> str:
-    code = str(value or "").strip().upper()
-    if len(code) != 3 or not code.isalpha():
-        raise ValueError("currency must be a 3-letter ISO code")
-    return code
+    return validate_currency_code(value)
 
 
 def _clean_required(value: str, field_name: str) -> str:
@@ -85,10 +83,7 @@ class PositionInput(BaseModel):
     @field_validator("country_code")
     @classmethod
     def validate_country(cls, value: str) -> str:
-        code = value.strip().upper()
-        if len(code) != 2 or not code.isalpha():
-            raise ValueError("country_code must be ISO-3166 alpha-2")
-        return code
+        return validate_country_code(value)
 
     @field_validator("local_currency", "reporting_currency", "price_currency")
     @classmethod

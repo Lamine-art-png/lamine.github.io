@@ -192,6 +192,9 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         raise MarketCalculationError("cost values cannot be negative")
 
     warnings: list[str] = []
+    # Stable identifiers for every warning: clients localize these; the English
+    # sentences remain for API consumers and logs.
+    warning_codes: list[str] = []
     missing_inputs: list[str] = []
 
     # Costs default to the reporting currency (historical behaviour). When an
@@ -214,6 +217,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
             cost_fx_missing = True
             missing_inputs.append("cost_fx")
             warnings.append("costs are recorded in a different currency and need an FX rate before margin can be reconciled")
+            warning_codes.append("cost_fx_missing")
     contracted = ZERO
     locked_revenue = ZERO
     weighted_price_numerator = ZERO
@@ -255,8 +259,10 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     uncontracted = max(ZERO, marketable_supply - contracted)
     if over_contracted:
         warnings.append("contracted volume exceeds marketable supply")
+        warning_codes.append("over_contracted")
     if missing_contract_fx:
         warnings.append("one or more contracts require an FX rate before revenue and margin can be reconciled")
+        warning_codes.append("contract_fx_missing")
         missing_inputs.append("contract_fx")
 
     spot_price_reporting: Decimal | None = None
@@ -274,6 +280,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         except MarketCalculationError:
             missing_inputs.append("market_fx")
             warnings.append("current market price cannot be translated to reporting currency without FX")
+            warning_codes.append("market_fx_missing")
 
     exposed_revenue = uncontracted * spot_price_reporting if spot_price_reporting is not None else None
     expected_revenue: Decimal | None = None
@@ -292,6 +299,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     if inventory > ZERO and inventory_cost_per_unit is None:
         missing_inputs.append("inventory_cost_per_unit")
         warnings.append("carry inventory is included in marketable supply, but margin is suppressed until its cost basis is supplied")
+        warning_codes.append("inventory_cost_missing")
     inventory_cost_total = inventory * inventory_cost_per_unit if inventory_cost_per_unit is not None else ZERO
     variable_commercial_cost = marketable_supply * (freight_per_unit + storage_per_unit)
     total_cost = fixed_production_cost_total + inventory_cost_total + variable_commercial_cost
@@ -346,6 +354,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
         "data_complete": data_complete,
         "missing_inputs": sorted(set(missing_inputs)),
         "warnings": warnings,
+        "warning_codes": warning_codes,
         "contract_count": contract_rows,
     }
     evidence = {
@@ -432,6 +441,7 @@ def scenario_position(position: Any, contracts: list[Any], assumptions: dict[str
             "result": result,
             "delta": delta,
             "warnings": list(result.get("warnings") or []),
+            "warning_codes": list(result.get("warning_codes") or []),
             "completeness": {
                 "data_complete": bool(result.get("data_complete")),
                 "missing_inputs": list(result.get("missing_inputs") or []),

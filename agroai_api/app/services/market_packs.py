@@ -311,17 +311,17 @@ def infer_onboarding(*, crop: str, country_code: str, region: str | None = None,
     canonical = canonical_commodity(crop)
     pack = resolve_pack(country, crop)
     local_currency = country_default_currency(country)
+    # Stable codes only: the portal renders each in the viewer's locale.
     warnings: list[str] = []
     if canonical is None:
-        warnings.append("crop_not_recognised: the position will use customer-supplied physical prices only")
+        warnings.append("crop_not_recognised")
     if local_currency is None:
-        warnings.append("currency_not_inferred: choose the currency you normally sell in")
+        warnings.append("currency_not_inferred")
     if pack.pack_id.startswith("br_") and region and brazil_state_code(region) is None:
-        warnings.append("state_not_recognised: CONAB producer prices need a Brazilian state")
+        warnings.append("state_not_recognised")
     return {
         "packs_version": PACKS_VERSION,
         "pack_id": pack.pack_id,
-        "pack_name": pack.name,
         "commodity": canonical or str(crop or "").strip().lower(),
         "commodity_recognised": canonical is not None,
         "country_code": country,
@@ -331,11 +331,7 @@ def infer_onboarding(*, crop: str, country_code: str, region: str | None = None,
         "quantity_unit": pack.default_unit,
         "market_structure": pack.market_structure,
         "futures_role": pack.futures_role,
-        "evidence_plan": [
-            {"role": slot.role, "provider_id": slot.provider_id, "description": slot.description}
-            for slot in pack.evidence
-        ],
-        "notes": pack.notes,
+        "evidence_plan": [{"role": slot.role, "provider_id": slot.provider_id} for slot in pack.evidence],
         "warnings": warnings,
     }
 
@@ -344,6 +340,8 @@ def catalog() -> list[dict[str, Any]]:
     return [
         {
             "pack_id": pack.pack_id,
+            # English reference documentation for API users; the portal
+            # renders pack and provider names from pack_id/provider_id.
             "name": pack.name,
             "countries": sorted(pack.countries) or ["*"],
             "commodities": sorted(pack.commodities),

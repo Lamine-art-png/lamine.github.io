@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Sprout, Trash2 } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
+import countryRegistry from "../../../../shared/registries/countries.json";
+import currencyRegistry from "../../../../shared/registries/currencies.json";
+import { COMMERCIAL_COPY, COMMODITY_LABELS, packLabel, providerLabel, warningLabel } from "./commercialCopy";
 
 // Customer-language onboarding for Commercial Intelligence. Operators answer
 // what they know (crop, place, season, volumes, costs, sales); AGRO-AI infers
 // currency, units, market structure and sources. Provider identifiers never
-// appear here.
+// appear here. Every ISO 3166-1 country and ISO 4217 currency is selectable
+// (shared/registries); names are localized by Intl.DisplayNames, and countries
+// without a specific Market Pack resolve to the global physical pack.
 
 type Inferred = {
   pack_id: string;
-  pack_name: string;
   commodity: string;
   commodity_recognised: boolean;
   local_currency: string | null;
@@ -18,14 +22,15 @@ type Inferred = {
   quantity_unit: string;
   market_structure: string;
   futures_role: string;
-  evidence_plan: { role: string; provider_id: string; description: string; status: string }[];
+  evidence_plan: { role: string; provider_id: string; status: string }[];
   warnings: string[];
 };
 type Field = { id: string; name: string; crop?: string | null; area_hectares?: number | null; operational: boolean };
-type ContractRow = { buyer: string; quantity: string; price: string };
+type ContractRow = { buyer: string; quantity: string; price: string; currency: string };
 
-const COUNTRIES = ["US", "BR", "AR", "CA", "MX", "FR", "DE", "ES", "IT", "PT", "NL", "BE", "PL", "RO", "HU", "GB", "UA", "AU", "NZ", "IN", "CN", "ID", "TH", "VN", "KE", "SN", "CI", "ML", "BF", "CM", "NG", "GH", "ET", "TZ", "UG", "ZA", "MA", "EG", "CO", "PE", "CL", "PY", "UY"];
-const CURRENCIES = ["USD", "EUR", "BRL", "ARS", "CAD", "MXN", "GBP", "PLN", "RON", "HUF", "UAH", "AUD", "NZD", "INR", "CNY", "IDR", "THB", "VND", "KES", "XOF", "XAF", "NGN", "GHS", "ETB", "TZS", "UGX", "ZAR", "MAD", "EGP", "COP", "PEN", "CLP", "PYG", "UYU"];
+const COUNTRIES: string[] = countryRegistry.countries.map((row) => row.code);
+const CURRENCIES: string[] = currencyRegistry.currencies.map((row) => row.code);
+const OTHER_CROP = "__other__";
 const UNITS: [string, string][] = [
   ["tonne", "tonnes"], ["kg", "kilograms"], ["bushel", "bushels"], ["pound", "pounds"], ["quintal", "quintals (100 kg)"],
   ["saca_60kg", "60 kg sacks"], ["bag_90kg", "90 kg bags"], ["bag_50kg", "50 kg bags"], ["cwt", "hundredweight (cwt)"],
@@ -35,6 +40,10 @@ const COPY = [
   "Set up Commercial Intelligence",
   "Answer a few questions about your operation. AGRO-AI infers currency, units, market structure and data sources.",
   "What do you grow?",
+  "Other crop",
+  "Name of your crop",
+  "Choose a crop",
+  "Currency",
   "Country",
   "Region, state or market",
   "Which season?",
@@ -77,13 +86,19 @@ const COPY = [
 ] as const;
 
 export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
-  const { tx, locale } = usePortalCopy([], COPY as unknown as string[]);
+  const { tx, locale } = usePortalCopy([], [...COPY, ...COMMERCIAL_COPY]);
   const language = !locale || locale === "auto" ? undefined : locale;
   const regionNames = useMemo(() => { try { return new Intl.DisplayNames(language, { type: "region" }); } catch { return null; } }, [language]);
   const currencyNames = useMemo(() => { try { return new Intl.DisplayNames(language, { type: "currency" }); } catch { return null; } }, [language]);
   const countries = useMemo(() => COUNTRIES.map((code) => [code, regionNames?.of(code) || code] as const).sort((a, b) => a[1].localeCompare(b[1], language)), [regionNames, language]);
+  const currencies = useMemo(() => CURRENCIES.map((code) => [code, currencyNames?.of(code) || code] as const).sort((a, b) => a[1].localeCompare(b[1], language)), [currencyNames, language]);
+  const crops = useMemo(() => Object.entries(COMMODITY_LABELS).map(([id, name]) => [id, tx(name)] as const).sort((a, b) => a[1].localeCompare(b[1], language)), [tx, language]);
+  const localeCountry = (locale || "").split("-")[1]?.toUpperCase() || "";
+  const [cropChoice, setCropChoice] = useState("");
+  // The unit follows the inferred market convention until the user picks one.
+  const [unitChosen, setUnitChosen] = useState(false);
 
-  const [form, setForm] = useState({ crop: "", country_code: "US", region: "", season: String(new Date().getFullYear()), expected_production: "", quantity_unit: "", inventory_quantity: "0", production_cost_per_unit: "", reporting_currency: "", local_price: "", fx_rate_to_reporting: "" });
+  const [form, setForm] = useState({ crop: "", country_code: COUNTRIES.includes(localeCountry) ? localeCountry : "US", region: "", season: String(new Date().getFullYear()), expected_production: "", quantity_unit: "", inventory_quantity: "0", production_cost_per_unit: "", reporting_currency: "", local_price: "", fx_rate_to_reporting: "" });
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [fieldIds, setFieldIds] = useState<string[]>([]);
@@ -103,11 +118,11 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
         reporting_currency: form.reporting_currency || undefined,
       }).then((value) => {
         setInferred(value);
-        setForm((current) => ({ ...current, quantity_unit: current.quantity_unit || value.quantity_unit, reporting_currency: current.reporting_currency || value.reporting_currency }));
+        setForm((current) => ({ ...current, quantity_unit: unitChosen && current.quantity_unit ? current.quantity_unit : value.quantity_unit, reporting_currency: current.reporting_currency || value.reporting_currency }));
       }).catch(() => setInferred(null));
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [form.crop, form.country_code, form.region, form.reporting_currency]);
+  }, [form.crop, form.country_code, form.region, form.reporting_currency, unitChosen]);
 
   const localCurrency = inferred?.local_currency || form.reporting_currency;
   const fxSlots = inferred?.evidence_plan.filter((slot) => slot.role === "fx_rate") || [];
@@ -130,7 +145,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
         local_price: form.local_price || undefined,
         local_price_currency: form.local_price ? localCurrency || undefined : undefined,
         fx_rate_to_reporting: needsCustomerFx && form.fx_rate_to_reporting ? form.fx_rate_to_reporting : undefined,
-        contracts: contracts.filter((row) => row.quantity && row.price).map((row) => ({ buyer: row.buyer || undefined, quantity: row.quantity, price: row.price, currency: localCurrency || undefined })),
+        contracts: contracts.filter((row) => row.quantity && row.price).map((row) => ({ buyer: row.buyer || undefined, quantity: row.quantity, price: row.price, currency: row.currency || localCurrency || undefined })),
         field_ids: fieldIds,
       });
       onCreated();
@@ -151,7 +166,9 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
       <p className="mt-1 text-sm text-[#65736A]">{tx("Answer a few questions about your operation. AGRO-AI infers currency, units, market structure and data sources.")}</p>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className={label}>{tx("What do you grow?")}<input className={input} value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })} /></label>
+        <label className={label}>{tx("What do you grow?")}<select className={input} value={cropChoice} onChange={(e) => { setCropChoice(e.target.value); setForm({ ...form, crop: e.target.value === OTHER_CROP ? "" : e.target.value }); }}><option value="" disabled>{tx("Choose a crop")}</option>{crops.map(([id, name]) => <option key={id} value={id}>{name}</option>)}<option value={OTHER_CROP}>{tx("Other crop")}</option></select>
+          {cropChoice === OTHER_CROP ? <input aria-label={tx("Name of your crop")} placeholder={tx("Name of your crop")} className={input} value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })} /> : null}
+        </label>
         <label className={label}>{tx("Country")}<select className={input} value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value, reporting_currency: "", quantity_unit: "" })}>{countries.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label>
         <label className={label}>{tx("Region, state or market")}<input className={input} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></label>
         <label className={label}>{tx("Which season?")}<input className={input} value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} /></label>
@@ -159,20 +176,21 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
 
       {inferred ? (
         <div className="mt-4 rounded-xl border border-[#D9E6DC] bg-[#F4F9F5] p-3 text-sm text-[#1F4A33]" data-testid="onboarding-inference">
-          <div className="font-semibold">{tx("AGRO-AI will use")}: {inferred.pack_name}</div>
+          <div className="font-semibold">{tx("AGRO-AI will use")}: {packLabel(tx, inferred.pack_id)}</div>
           <div className="mt-1 text-xs">{currencyNames?.of(inferred.local_currency || inferred.reporting_currency) || inferred.local_currency} · {tx(UNITS.find(([key]) => key === inferred.quantity_unit)?.[1] || inferred.quantity_unit)}</div>
           {inferred.futures_role === "none" ? <div className="mt-1 text-xs">{tx("No futures market is required for this crop.")}</div> : null}
+          {inferred.warnings.length ? <ul className="mt-1 space-y-0.5 text-xs text-[#77520E]">{inferred.warnings.map((code) => <li key={code}>{warningLabel(tx, code)}</li>)}</ul> : null}
           <div className="mt-2 text-xs font-semibold">{tx("Data sources")}</div>
-          <ul className="mt-1 space-y-1 text-xs">{inferred.evidence_plan.map((slot) => <li key={`${slot.role}-${slot.provider_id}`} className="flex flex-wrap justify-between gap-2"><span className="min-w-0 break-words">{slot.description}</span><span className="font-semibold">{statusLabel(slot.status)}</span></li>)}</ul>
+          <ul className="mt-1 space-y-1 text-xs">{inferred.evidence_plan.map((slot) => <li key={`${slot.role}-${slot.provider_id}`} className="flex flex-wrap justify-between gap-2"><span className="min-w-0 break-words">{providerLabel(tx, slot.provider_id)}</span><span className="font-semibold">{statusLabel(slot.status)}</span></li>)}</ul>
         </div>
       ) : null}
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className={label}>{tx("Expected production")}<input inputMode="decimal" className={input} value={form.expected_production} onChange={(e) => setForm({ ...form, expected_production: e.target.value })} /></label>
-        <label className={label}>{tx("Unit")}<select className={input} value={form.quantity_unit} onChange={(e) => setForm({ ...form, quantity_unit: e.target.value })}>{UNITS.map(([key, name]) => <option key={key} value={key}>{tx(name)}</option>)}</select></label>
+        <label className={label}>{tx("Unit")}<select className={input} value={form.quantity_unit} onChange={(e) => { setUnitChosen(true); setForm({ ...form, quantity_unit: e.target.value }); }}>{UNITS.map(([key, name]) => <option key={key} value={key}>{tx(name)}</option>)}</select></label>
         <label className={label}>{tx("Current inventory")}<input inputMode="decimal" className={input} value={form.inventory_quantity} onChange={(e) => setForm({ ...form, inventory_quantity: e.target.value })} /></label>
         <label className={label}>{tx("Approximate production cost per unit (optional)")}<input inputMode="decimal" className={input} value={form.production_cost_per_unit} onChange={(e) => setForm({ ...form, production_cost_per_unit: e.target.value })} /></label>
-        <label className={label}>{tx("Reporting currency")}<select className={input} value={form.reporting_currency} onChange={(e) => setForm({ ...form, reporting_currency: e.target.value })}>{CURRENCIES.map((code) => <option key={code} value={code}>{currencyNames?.of(code) || code} ({code})</option>)}</select></label>
+        <label className={label}>{tx("Reporting currency")}<select className={input} value={form.reporting_currency} onChange={(e) => setForm({ ...form, reporting_currency: e.target.value })}>{currencies.map(([code, name]) => <option key={code} value={code}>{name} ({code})</option>)}</select></label>
         <label className={label}>{tx("Current local market price (optional)")}<input inputMode="decimal" className={input} value={form.local_price} onChange={(e) => setForm({ ...form, local_price: e.target.value })} /><span className="mt-1 block font-normal text-[11px] text-[#7B877F]">{tx("Leave empty and AGRO-AI will use governed market sources where available.")}</span></label>
       </div>
 
@@ -183,14 +201,15 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
       <div className="mt-5">
         <div className="text-sm font-semibold text-[#10231B]">{tx("What have you already sold or committed?")}</div>
         {contracts.map((row, index) => (
-          <div key={index} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div key={index} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
             <input aria-label={tx("Buyer")} placeholder={tx("Buyer")} className={input} value={row.buyer} onChange={(e) => setContracts(contracts.map((item, i) => i === index ? { ...item, buyer: e.target.value } : item))} />
             <input aria-label={tx("Quantity")} placeholder={tx("Quantity")} inputMode="decimal" className={input} value={row.quantity} onChange={(e) => setContracts(contracts.map((item, i) => i === index ? { ...item, quantity: e.target.value } : item))} />
             <input aria-label={tx("Price per unit")} placeholder={tx("Price per unit")} inputMode="decimal" className={input} value={row.price} onChange={(e) => setContracts(contracts.map((item, i) => i === index ? { ...item, price: e.target.value } : item))} />
+            <select aria-label={tx("Currency")} className={input} value={row.currency || localCurrency || ""} onChange={(e) => setContracts(contracts.map((item, i) => i === index ? { ...item, currency: e.target.value } : item))}>{currencies.map(([code, name]) => <option key={code} value={code}>{code} · {name}</option>)}</select>
             <button onClick={() => setContracts(contracts.filter((_, i) => i !== index))} aria-label={tx("Remove")} className="mt-1 inline-flex items-center justify-center rounded-xl border border-[#E2E7DE] px-3 text-[#8B321B]"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
-        <button onClick={() => setContracts([...contracts, { buyer: "", quantity: "", price: "" }])} className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-[#C7D2C9] bg-white px-3 py-2 text-xs font-semibold text-[#234224]"><Plus className="h-3.5 w-3.5" />{tx("Add a sale or contract")}</button>
+        <button onClick={() => setContracts([...contracts, { buyer: "", quantity: "", price: "", currency: "" }])} className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-[#C7D2C9] bg-white px-3 py-2 text-xs font-semibold text-[#234224]"><Plus className="h-3.5 w-3.5" />{tx("Add a sale or contract")}</button>
       </div>
 
       {fields.length ? (

@@ -1,0 +1,2266 @@
+{
+ "schema": "agroai.iso3166-1.v1",
+ "as_of": "2026-10-03",
+ "sources": {
+  "countries": "tzdata iso3166.tab/zone.tab (pytz 2026.5)",
+  "currencies": "Unicode CLDR territory currencies (Babel 2.18.0)"
+ },
+ "count": 250,
+ "countries": [
+  {
+   "code": "AD",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Andorra",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AE",
+   "default_currency": "AED",
+   "currencies": [
+    "AED"
+   ],
+   "timezone": "Asia/Dubai",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AF",
+   "default_currency": "AFN",
+   "currencies": [
+    "AFN"
+   ],
+   "timezone": "Asia/Kabul",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AG",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/Antigua",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AI",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/Anguilla",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AL",
+   "default_currency": "ALL",
+   "currencies": [
+    "ALL"
+   ],
+   "timezone": "Europe/Tirane",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AM",
+   "default_currency": "AMD",
+   "currencies": [
+    "AMD"
+   ],
+   "timezone": "Asia/Yerevan",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AO",
+   "default_currency": "AOA",
+   "currencies": [
+    "AOA"
+   ],
+   "timezone": "Africa/Luanda",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AQ",
+   "default_currency": null,
+   "currencies": [],
+   "timezone": "Antarctica/McMurdo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AR",
+   "default_currency": "ARS",
+   "currencies": [
+    "ARS"
+   ],
+   "timezone": "America/Argentina/Buenos_Aires",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AS",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Pago_Pago",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Vienna",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AU",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Australia/Lord_Howe",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AW",
+   "default_currency": "AWG",
+   "currencies": [
+    "AWG"
+   ],
+   "timezone": "America/Aruba",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AX",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Mariehamn",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "AZ",
+   "default_currency": "AZN",
+   "currencies": [
+    "AZN"
+   ],
+   "timezone": "Asia/Baku",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BA",
+   "default_currency": "BAM",
+   "currencies": [
+    "BAM"
+   ],
+   "timezone": "Europe/Sarajevo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BB",
+   "default_currency": "BBD",
+   "currencies": [
+    "BBD"
+   ],
+   "timezone": "America/Barbados",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BD",
+   "default_currency": "BDT",
+   "currencies": [
+    "BDT"
+   ],
+   "timezone": "Asia/Dhaka",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BE",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Brussels",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BF",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Ouagadougou",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BG",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Sofia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BH",
+   "default_currency": "BHD",
+   "currencies": [
+    "BHD"
+   ],
+   "timezone": "Asia/Bahrain",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BI",
+   "default_currency": "BIF",
+   "currencies": [
+    "BIF"
+   ],
+   "timezone": "Africa/Bujumbura",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BJ",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Porto-Novo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BL",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/St_Barthelemy",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BM",
+   "default_currency": "BMD",
+   "currencies": [
+    "BMD"
+   ],
+   "timezone": "Atlantic/Bermuda",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BN",
+   "default_currency": "BND",
+   "currencies": [
+    "BND"
+   ],
+   "timezone": "Asia/Brunei",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BO",
+   "default_currency": "BOB",
+   "currencies": [
+    "BOB"
+   ],
+   "timezone": "America/La_Paz",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BQ",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/Kralendijk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BR",
+   "default_currency": "BRL",
+   "currencies": [
+    "BRL"
+   ],
+   "timezone": "America/Noronha",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BS",
+   "default_currency": "BSD",
+   "currencies": [
+    "BSD"
+   ],
+   "timezone": "America/Nassau",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BT",
+   "default_currency": "INR",
+   "currencies": [
+    "INR",
+    "BTN"
+   ],
+   "timezone": "Asia/Thimphu",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BV",
+   "default_currency": "NOK",
+   "currencies": [
+    "NOK"
+   ],
+   "timezone": "UTC",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BW",
+   "default_currency": "BWP",
+   "currencies": [
+    "BWP"
+   ],
+   "timezone": "Africa/Gaborone",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BY",
+   "default_currency": "BYN",
+   "currencies": [
+    "BYN"
+   ],
+   "timezone": "Europe/Minsk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "BZ",
+   "default_currency": "BZD",
+   "currencies": [
+    "BZD"
+   ],
+   "timezone": "America/Belize",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CA",
+   "default_currency": "CAD",
+   "currencies": [
+    "CAD"
+   ],
+   "timezone": "America/St_Johns",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CC",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Indian/Cocos",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CD",
+   "default_currency": "CDF",
+   "currencies": [
+    "CDF"
+   ],
+   "timezone": "Africa/Kinshasa",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CF",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Bangui",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CG",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Brazzaville",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CH",
+   "default_currency": "CHF",
+   "currencies": [
+    "CHF"
+   ],
+   "timezone": "Europe/Zurich",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CI",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Abidjan",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CK",
+   "default_currency": "NZD",
+   "currencies": [
+    "NZD"
+   ],
+   "timezone": "Pacific/Rarotonga",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CL",
+   "default_currency": "CLP",
+   "currencies": [
+    "CLP"
+   ],
+   "timezone": "America/Santiago",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CM",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Douala",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CN",
+   "default_currency": "CNY",
+   "currencies": [
+    "CNY"
+   ],
+   "timezone": "Asia/Shanghai",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CO",
+   "default_currency": "COP",
+   "currencies": [
+    "COP"
+   ],
+   "timezone": "America/Bogota",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CR",
+   "default_currency": "CRC",
+   "currencies": [
+    "CRC"
+   ],
+   "timezone": "America/Costa_Rica",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CU",
+   "default_currency": "CUP",
+   "currencies": [
+    "CUP"
+   ],
+   "timezone": "America/Havana",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CV",
+   "default_currency": "CVE",
+   "currencies": [
+    "CVE"
+   ],
+   "timezone": "Atlantic/Cape_Verde",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CW",
+   "default_currency": "XCG",
+   "currencies": [
+    "XCG"
+   ],
+   "timezone": "America/Curacao",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CX",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Indian/Christmas",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CY",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Asia/Nicosia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "CZ",
+   "default_currency": "CZK",
+   "currencies": [
+    "CZK"
+   ],
+   "timezone": "Europe/Prague",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DE",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Berlin",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DJ",
+   "default_currency": "DJF",
+   "currencies": [
+    "DJF"
+   ],
+   "timezone": "Africa/Djibouti",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DK",
+   "default_currency": "DKK",
+   "currencies": [
+    "DKK"
+   ],
+   "timezone": "Europe/Copenhagen",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DM",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/Dominica",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DO",
+   "default_currency": "DOP",
+   "currencies": [
+    "DOP"
+   ],
+   "timezone": "America/Santo_Domingo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "DZ",
+   "default_currency": "DZD",
+   "currencies": [
+    "DZD"
+   ],
+   "timezone": "Africa/Algiers",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "EC",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/Guayaquil",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "EE",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Tallinn",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "EG",
+   "default_currency": "EGP",
+   "currencies": [
+    "EGP"
+   ],
+   "timezone": "Africa/Cairo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "EH",
+   "default_currency": "MAD",
+   "currencies": [
+    "MAD"
+   ],
+   "timezone": "Africa/El_Aaiun",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ER",
+   "default_currency": "ERN",
+   "currencies": [
+    "ERN"
+   ],
+   "timezone": "Africa/Asmara",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ES",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Madrid",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ET",
+   "default_currency": "ETB",
+   "currencies": [
+    "ETB"
+   ],
+   "timezone": "Africa/Addis_Ababa",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FI",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Helsinki",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FJ",
+   "default_currency": "FJD",
+   "currencies": [
+    "FJD"
+   ],
+   "timezone": "Pacific/Fiji",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FK",
+   "default_currency": "FKP",
+   "currencies": [
+    "FKP"
+   ],
+   "timezone": "Atlantic/Stanley",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FM",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Chuuk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FO",
+   "default_currency": "DKK",
+   "currencies": [
+    "DKK"
+   ],
+   "timezone": "Atlantic/Faroe",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "FR",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Paris",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GA",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Libreville",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GB",
+   "default_currency": "GBP",
+   "currencies": [
+    "GBP"
+   ],
+   "timezone": "Europe/London",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GD",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/Grenada",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GE",
+   "default_currency": "GEL",
+   "currencies": [
+    "GEL"
+   ],
+   "timezone": "Asia/Tbilisi",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GF",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/Cayenne",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GG",
+   "default_currency": "GBP",
+   "currencies": [
+    "GBP"
+   ],
+   "timezone": "Europe/Guernsey",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GH",
+   "default_currency": "GHS",
+   "currencies": [
+    "GHS"
+   ],
+   "timezone": "Africa/Accra",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GI",
+   "default_currency": "GIP",
+   "currencies": [
+    "GIP"
+   ],
+   "timezone": "Europe/Gibraltar",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GL",
+   "default_currency": "DKK",
+   "currencies": [
+    "DKK"
+   ],
+   "timezone": "America/Nuuk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GM",
+   "default_currency": "GMD",
+   "currencies": [
+    "GMD"
+   ],
+   "timezone": "Africa/Banjul",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GN",
+   "default_currency": "GNF",
+   "currencies": [
+    "GNF"
+   ],
+   "timezone": "Africa/Conakry",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GP",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/Guadeloupe",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GQ",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Malabo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GR",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Athens",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GS",
+   "default_currency": "GBP",
+   "currencies": [
+    "GBP"
+   ],
+   "timezone": "Atlantic/South_Georgia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GT",
+   "default_currency": "GTQ",
+   "currencies": [
+    "GTQ"
+   ],
+   "timezone": "America/Guatemala",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GU",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Guam",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GW",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Bissau",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "GY",
+   "default_currency": "GYD",
+   "currencies": [
+    "GYD"
+   ],
+   "timezone": "America/Guyana",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HK",
+   "default_currency": "HKD",
+   "currencies": [
+    "HKD"
+   ],
+   "timezone": "Asia/Hong_Kong",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HM",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "UTC",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HN",
+   "default_currency": "HNL",
+   "currencies": [
+    "HNL"
+   ],
+   "timezone": "America/Tegucigalpa",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HR",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Zagreb",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HT",
+   "default_currency": "HTG",
+   "currencies": [
+    "HTG",
+    "USD"
+   ],
+   "timezone": "America/Port-au-Prince",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "HU",
+   "default_currency": "HUF",
+   "currencies": [
+    "HUF"
+   ],
+   "timezone": "Europe/Budapest",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ID",
+   "default_currency": "IDR",
+   "currencies": [
+    "IDR"
+   ],
+   "timezone": "Asia/Jakarta",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IE",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Dublin",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IL",
+   "default_currency": "ILS",
+   "currencies": [
+    "ILS"
+   ],
+   "timezone": "Asia/Jerusalem",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IM",
+   "default_currency": "GBP",
+   "currencies": [
+    "GBP"
+   ],
+   "timezone": "Europe/Isle_of_Man",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IN",
+   "default_currency": "INR",
+   "currencies": [
+    "INR"
+   ],
+   "timezone": "Asia/Kolkata",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IO",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Indian/Chagos",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IQ",
+   "default_currency": "IQD",
+   "currencies": [
+    "IQD"
+   ],
+   "timezone": "Asia/Baghdad",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IR",
+   "default_currency": "IRR",
+   "currencies": [
+    "IRR"
+   ],
+   "timezone": "Asia/Tehran",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IS",
+   "default_currency": "ISK",
+   "currencies": [
+    "ISK"
+   ],
+   "timezone": "Atlantic/Reykjavik",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "IT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Rome",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "JE",
+   "default_currency": "GBP",
+   "currencies": [
+    "GBP"
+   ],
+   "timezone": "Europe/Jersey",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "JM",
+   "default_currency": "JMD",
+   "currencies": [
+    "JMD"
+   ],
+   "timezone": "America/Jamaica",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "JO",
+   "default_currency": "JOD",
+   "currencies": [
+    "JOD"
+   ],
+   "timezone": "Asia/Amman",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "JP",
+   "default_currency": "JPY",
+   "currencies": [
+    "JPY"
+   ],
+   "timezone": "Asia/Tokyo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KE",
+   "default_currency": "KES",
+   "currencies": [
+    "KES"
+   ],
+   "timezone": "Africa/Nairobi",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KG",
+   "default_currency": "KGS",
+   "currencies": [
+    "KGS"
+   ],
+   "timezone": "Asia/Bishkek",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KH",
+   "default_currency": "KHR",
+   "currencies": [
+    "KHR"
+   ],
+   "timezone": "Asia/Phnom_Penh",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KI",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Pacific/Tarawa",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KM",
+   "default_currency": "KMF",
+   "currencies": [
+    "KMF"
+   ],
+   "timezone": "Indian/Comoro",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KN",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/St_Kitts",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KP",
+   "default_currency": "KPW",
+   "currencies": [
+    "KPW"
+   ],
+   "timezone": "Asia/Pyongyang",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KR",
+   "default_currency": "KRW",
+   "currencies": [
+    "KRW"
+   ],
+   "timezone": "Asia/Seoul",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KW",
+   "default_currency": "KWD",
+   "currencies": [
+    "KWD"
+   ],
+   "timezone": "Asia/Kuwait",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KY",
+   "default_currency": "KYD",
+   "currencies": [
+    "KYD"
+   ],
+   "timezone": "America/Cayman",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "KZ",
+   "default_currency": "KZT",
+   "currencies": [
+    "KZT"
+   ],
+   "timezone": "Asia/Almaty",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LA",
+   "default_currency": "LAK",
+   "currencies": [
+    "LAK"
+   ],
+   "timezone": "Asia/Vientiane",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LB",
+   "default_currency": "LBP",
+   "currencies": [
+    "LBP"
+   ],
+   "timezone": "Asia/Beirut",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LC",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/St_Lucia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LI",
+   "default_currency": "CHF",
+   "currencies": [
+    "CHF"
+   ],
+   "timezone": "Europe/Vaduz",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LK",
+   "default_currency": "LKR",
+   "currencies": [
+    "LKR"
+   ],
+   "timezone": "Asia/Colombo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LR",
+   "default_currency": "LRD",
+   "currencies": [
+    "LRD"
+   ],
+   "timezone": "Africa/Monrovia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LS",
+   "default_currency": "ZAR",
+   "currencies": [
+    "ZAR",
+    "LSL"
+   ],
+   "timezone": "Africa/Maseru",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Vilnius",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LU",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Luxembourg",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LV",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Riga",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "LY",
+   "default_currency": "LYD",
+   "currencies": [
+    "LYD"
+   ],
+   "timezone": "Africa/Tripoli",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MA",
+   "default_currency": "MAD",
+   "currencies": [
+    "MAD"
+   ],
+   "timezone": "Africa/Casablanca",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MC",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Monaco",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MD",
+   "default_currency": "MDL",
+   "currencies": [
+    "MDL"
+   ],
+   "timezone": "Europe/Chisinau",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ME",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Podgorica",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MF",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/Marigot",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MG",
+   "default_currency": "MGA",
+   "currencies": [
+    "MGA"
+   ],
+   "timezone": "Indian/Antananarivo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MH",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Majuro",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MK",
+   "default_currency": "MKD",
+   "currencies": [
+    "MKD"
+   ],
+   "timezone": "Europe/Skopje",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ML",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Bamako",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MM",
+   "default_currency": "MMK",
+   "currencies": [
+    "MMK"
+   ],
+   "timezone": "Asia/Yangon",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MN",
+   "default_currency": "MNT",
+   "currencies": [
+    "MNT"
+   ],
+   "timezone": "Asia/Ulaanbaatar",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MO",
+   "default_currency": "MOP",
+   "currencies": [
+    "MOP"
+   ],
+   "timezone": "Asia/Macau",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MP",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Saipan",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MQ",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/Martinique",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MR",
+   "default_currency": "MRU",
+   "currencies": [
+    "MRU"
+   ],
+   "timezone": "Africa/Nouakchott",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MS",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/Montserrat",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Malta",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MU",
+   "default_currency": "MUR",
+   "currencies": [
+    "MUR"
+   ],
+   "timezone": "Indian/Mauritius",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MV",
+   "default_currency": "MVR",
+   "currencies": [
+    "MVR"
+   ],
+   "timezone": "Indian/Maldives",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MW",
+   "default_currency": "MWK",
+   "currencies": [
+    "MWK"
+   ],
+   "timezone": "Africa/Blantyre",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MX",
+   "default_currency": "MXN",
+   "currencies": [
+    "MXN"
+   ],
+   "timezone": "America/Mexico_City",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MY",
+   "default_currency": "MYR",
+   "currencies": [
+    "MYR"
+   ],
+   "timezone": "Asia/Kuala_Lumpur",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "MZ",
+   "default_currency": "MZN",
+   "currencies": [
+    "MZN"
+   ],
+   "timezone": "Africa/Maputo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NA",
+   "default_currency": "ZAR",
+   "currencies": [
+    "ZAR",
+    "NAD"
+   ],
+   "timezone": "Africa/Windhoek",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NC",
+   "default_currency": "XPF",
+   "currencies": [
+    "XPF"
+   ],
+   "timezone": "Pacific/Noumea",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NE",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Niamey",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NF",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Pacific/Norfolk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NG",
+   "default_currency": "NGN",
+   "currencies": [
+    "NGN"
+   ],
+   "timezone": "Africa/Lagos",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NI",
+   "default_currency": "NIO",
+   "currencies": [
+    "NIO"
+   ],
+   "timezone": "America/Managua",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NL",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Amsterdam",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NO",
+   "default_currency": "NOK",
+   "currencies": [
+    "NOK"
+   ],
+   "timezone": "Europe/Oslo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NP",
+   "default_currency": "NPR",
+   "currencies": [
+    "NPR"
+   ],
+   "timezone": "Asia/Kathmandu",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NR",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Pacific/Nauru",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NU",
+   "default_currency": "NZD",
+   "currencies": [
+    "NZD"
+   ],
+   "timezone": "Pacific/Niue",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "NZ",
+   "default_currency": "NZD",
+   "currencies": [
+    "NZD"
+   ],
+   "timezone": "Pacific/Auckland",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "OM",
+   "default_currency": "OMR",
+   "currencies": [
+    "OMR"
+   ],
+   "timezone": "Asia/Muscat",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PA",
+   "default_currency": "PAB",
+   "currencies": [
+    "PAB",
+    "USD"
+   ],
+   "timezone": "America/Panama",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PE",
+   "default_currency": "PEN",
+   "currencies": [
+    "PEN"
+   ],
+   "timezone": "America/Lima",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PF",
+   "default_currency": "XPF",
+   "currencies": [
+    "XPF"
+   ],
+   "timezone": "Pacific/Tahiti",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PG",
+   "default_currency": "PGK",
+   "currencies": [
+    "PGK"
+   ],
+   "timezone": "Pacific/Port_Moresby",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PH",
+   "default_currency": "PHP",
+   "currencies": [
+    "PHP"
+   ],
+   "timezone": "Asia/Manila",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PK",
+   "default_currency": "PKR",
+   "currencies": [
+    "PKR"
+   ],
+   "timezone": "Asia/Karachi",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PL",
+   "default_currency": "PLN",
+   "currencies": [
+    "PLN"
+   ],
+   "timezone": "Europe/Warsaw",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PM",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "America/Miquelon",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PN",
+   "default_currency": "NZD",
+   "currencies": [
+    "NZD"
+   ],
+   "timezone": "Pacific/Pitcairn",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PR",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/Puerto_Rico",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PS",
+   "default_currency": "ILS",
+   "currencies": [
+    "ILS",
+    "JOD"
+   ],
+   "timezone": "Asia/Gaza",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Lisbon",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PW",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Palau",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "PY",
+   "default_currency": "PYG",
+   "currencies": [
+    "PYG"
+   ],
+   "timezone": "America/Asuncion",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "QA",
+   "default_currency": "QAR",
+   "currencies": [
+    "QAR"
+   ],
+   "timezone": "Asia/Qatar",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "RE",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Indian/Reunion",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "RO",
+   "default_currency": "RON",
+   "currencies": [
+    "RON"
+   ],
+   "timezone": "Europe/Bucharest",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "RS",
+   "default_currency": "RSD",
+   "currencies": [
+    "RSD"
+   ],
+   "timezone": "Europe/Belgrade",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "RU",
+   "default_currency": "RUB",
+   "currencies": [
+    "RUB"
+   ],
+   "timezone": "Europe/Kaliningrad",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "RW",
+   "default_currency": "RWF",
+   "currencies": [
+    "RWF"
+   ],
+   "timezone": "Africa/Kigali",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SA",
+   "default_currency": "SAR",
+   "currencies": [
+    "SAR"
+   ],
+   "timezone": "Asia/Riyadh",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SB",
+   "default_currency": "SBD",
+   "currencies": [
+    "SBD"
+   ],
+   "timezone": "Pacific/Guadalcanal",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SC",
+   "default_currency": "SCR",
+   "currencies": [
+    "SCR"
+   ],
+   "timezone": "Indian/Mahe",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SD",
+   "default_currency": "SDG",
+   "currencies": [
+    "SDG"
+   ],
+   "timezone": "Africa/Khartoum",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SE",
+   "default_currency": "SEK",
+   "currencies": [
+    "SEK"
+   ],
+   "timezone": "Europe/Stockholm",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SG",
+   "default_currency": "SGD",
+   "currencies": [
+    "SGD"
+   ],
+   "timezone": "Asia/Singapore",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SH",
+   "default_currency": "SHP",
+   "currencies": [
+    "SHP"
+   ],
+   "timezone": "Atlantic/St_Helena",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SI",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Ljubljana",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SJ",
+   "default_currency": "NOK",
+   "currencies": [
+    "NOK"
+   ],
+   "timezone": "Arctic/Longyearbyen",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SK",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Bratislava",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SL",
+   "default_currency": "SLE",
+   "currencies": [
+    "SLE"
+   ],
+   "timezone": "Africa/Freetown",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SM",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/San_Marino",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SN",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Dakar",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SO",
+   "default_currency": "SOS",
+   "currencies": [
+    "SOS"
+   ],
+   "timezone": "Africa/Mogadishu",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SR",
+   "default_currency": "SRD",
+   "currencies": [
+    "SRD"
+   ],
+   "timezone": "America/Paramaribo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SS",
+   "default_currency": "SSP",
+   "currencies": [
+    "SSP"
+   ],
+   "timezone": "Africa/Juba",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ST",
+   "default_currency": "STN",
+   "currencies": [
+    "STN"
+   ],
+   "timezone": "Africa/Sao_Tome",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SV",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/El_Salvador",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SX",
+   "default_currency": "XCG",
+   "currencies": [
+    "XCG"
+   ],
+   "timezone": "America/Lower_Princes",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SY",
+   "default_currency": "SYP",
+   "currencies": [
+    "SYP"
+   ],
+   "timezone": "Asia/Damascus",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "SZ",
+   "default_currency": "SZL",
+   "currencies": [
+    "SZL"
+   ],
+   "timezone": "Africa/Mbabane",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TC",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/Grand_Turk",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TD",
+   "default_currency": "XAF",
+   "currencies": [
+    "XAF"
+   ],
+   "timezone": "Africa/Ndjamena",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TF",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Indian/Kerguelen",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TG",
+   "default_currency": "XOF",
+   "currencies": [
+    "XOF"
+   ],
+   "timezone": "Africa/Lome",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TH",
+   "default_currency": "THB",
+   "currencies": [
+    "THB"
+   ],
+   "timezone": "Asia/Bangkok",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TJ",
+   "default_currency": "TJS",
+   "currencies": [
+    "TJS"
+   ],
+   "timezone": "Asia/Dushanbe",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TK",
+   "default_currency": "NZD",
+   "currencies": [
+    "NZD"
+   ],
+   "timezone": "Pacific/Fakaofo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TL",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Asia/Dili",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TM",
+   "default_currency": "TMT",
+   "currencies": [
+    "TMT"
+   ],
+   "timezone": "Asia/Ashgabat",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TN",
+   "default_currency": "TND",
+   "currencies": [
+    "TND"
+   ],
+   "timezone": "Africa/Tunis",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TO",
+   "default_currency": "TOP",
+   "currencies": [
+    "TOP"
+   ],
+   "timezone": "Pacific/Tongatapu",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TR",
+   "default_currency": "TRY",
+   "currencies": [
+    "TRY"
+   ],
+   "timezone": "Europe/Istanbul",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TT",
+   "default_currency": "TTD",
+   "currencies": [
+    "TTD"
+   ],
+   "timezone": "America/Port_of_Spain",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TV",
+   "default_currency": "AUD",
+   "currencies": [
+    "AUD"
+   ],
+   "timezone": "Pacific/Funafuti",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TW",
+   "default_currency": "TWD",
+   "currencies": [
+    "TWD"
+   ],
+   "timezone": "Asia/Taipei",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "TZ",
+   "default_currency": "TZS",
+   "currencies": [
+    "TZS"
+   ],
+   "timezone": "Africa/Dar_es_Salaam",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "UA",
+   "default_currency": "UAH",
+   "currencies": [
+    "UAH"
+   ],
+   "timezone": "Europe/Simferopol",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "UG",
+   "default_currency": "UGX",
+   "currencies": [
+    "UGX"
+   ],
+   "timezone": "Africa/Kampala",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "UM",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "Pacific/Midway",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "US",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/New_York",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "UY",
+   "default_currency": "UYU",
+   "currencies": [
+    "UYU"
+   ],
+   "timezone": "America/Montevideo",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "UZ",
+   "default_currency": "UZS",
+   "currencies": [
+    "UZS"
+   ],
+   "timezone": "Asia/Samarkand",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VA",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Vatican",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VC",
+   "default_currency": "XCD",
+   "currencies": [
+    "XCD"
+   ],
+   "timezone": "America/St_Vincent",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VE",
+   "default_currency": "VES",
+   "currencies": [
+    "VES"
+   ],
+   "timezone": "America/Caracas",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VG",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/Tortola",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VI",
+   "default_currency": "USD",
+   "currencies": [
+    "USD"
+   ],
+   "timezone": "America/St_Thomas",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VN",
+   "default_currency": "VND",
+   "currencies": [
+    "VND"
+   ],
+   "timezone": "Asia/Ho_Chi_Minh",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "VU",
+   "default_currency": "VUV",
+   "currencies": [
+    "VUV"
+   ],
+   "timezone": "Pacific/Efate",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "WF",
+   "default_currency": "XPF",
+   "currencies": [
+    "XPF"
+   ],
+   "timezone": "Pacific/Wallis",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "WS",
+   "default_currency": "WST",
+   "currencies": [
+    "WST"
+   ],
+   "timezone": "Pacific/Apia",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "XK",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Europe/Belgrade",
+   "iso3166_assigned": false
+  },
+  {
+   "code": "YE",
+   "default_currency": "YER",
+   "currencies": [
+    "YER"
+   ],
+   "timezone": "Asia/Aden",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "YT",
+   "default_currency": "EUR",
+   "currencies": [
+    "EUR"
+   ],
+   "timezone": "Indian/Mayotte",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ZA",
+   "default_currency": "ZAR",
+   "currencies": [
+    "ZAR"
+   ],
+   "timezone": "Africa/Johannesburg",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ZM",
+   "default_currency": "ZMW",
+   "currencies": [
+    "ZMW"
+   ],
+   "timezone": "Africa/Lusaka",
+   "iso3166_assigned": true
+  },
+  {
+   "code": "ZW",
+   "default_currency": "USD",
+   "currencies": [
+    "USD",
+    "ZWG"
+   ],
+   "timezone": "Africa/Harare",
+   "iso3166_assigned": true
+  }
+ ]
+}

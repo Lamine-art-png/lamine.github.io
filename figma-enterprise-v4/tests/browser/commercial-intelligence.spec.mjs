@@ -56,7 +56,7 @@ const CHANGE = {
 };
 
 async function stub(page, { locale = "en", positions = [POSITION], changes = [CHANGE] } = {}) {
-  const calls = { acknowledged: [], compare: [], journal: [], onboarding: [] };
+  const calls = { acknowledged: [], compare: [], journal: [], onboarding: [], ask: [] };
   await page.addInitScript(({ token, selected }) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", selected);
@@ -74,7 +74,14 @@ async function stub(page, { locale = "en", positions = [POSITION], changes = [CH
     if (path === "/v1/workspaces") return json({ workspaces: [] });
     if (path === "/v1/market-intelligence/capabilities") return json({ can_write: true, role: "owner", release_state: "general" });
     if (path === "/v1/market-intelligence/overview") return json({ position_count: positions.length, positions, portfolio_by_reporting_currency: [], attention: [], data_health: { status: "healthy" } });
-    if (path === "/v1/market-intelligence/providers") return json({ providers: { conab_precos: { name: "CONAB weekly state agricultural prices", status: "DELAYED" }, cme_futures: { name: "CME Group / CBOT futures", status: "NOT_CONFIGURED", configuration_hint: "Requires a CME market-data licence." } } });
+    if (path === "/v1/market-intelligence/providers") return json({ providers: { conab_precos: { name: "CONAB weekly state agricultural prices", access: "public_no_key", status: "DELAYED" }, cme_futures: { name: "CME Group / CBOT futures", access: "commercial_license_required", status: "NOT_CONFIGURED", configuration_hint: "Requires a CME market-data licence." } } });
+    if (path === "/v1/market-intelligence/ask") {
+      calls.ask.push(request.postDataJSON());
+      return json({ position_id: "pos-1", scenarios: [], scenario_parse: { status: "unsupported_language" }, intelligence: {
+        status: "deterministic", summary: "SERVER ENGLISH SUMMARY", response_language: "en", client_render_required: true,
+        facts: [{ code: "exposed", params: { percent: "80" } }, { code: "stale", params: { items: [{ evidence: "contract_fx:USD-1", state: "UNAVAILABLE" }] } },
+                { code: "source", params: { provider: "conab_precos", source_name: "CONAB weekly state agricultural prices", state: "DELAYED", observed: "2026-09-25" } }] } });
+    }
     if (path === "/v1/market-intelligence/home") {
       return json({
         status: changes.length ? "attention" : "steady", generated_at: new Date().toISOString(), material_changes: changes, material_change_count: changes.length,
@@ -96,10 +103,11 @@ async function stub(page, { locale = "en", positions = [POSITION], changes = [CH
     if (path === "/v1/market-intelligence/onboarding/infer") {
       const body = request.postDataJSON();
       const almonds = /almond/i.test(body.crop);
-      return json({ pack_id: almonds ? "us_specialty_crops" : "us_row_crops", pack_name: almonds ? "United States specialty crops" : "United States row crops", commodity: almonds ? "almonds" : "corn",
-        commodity_recognised: true, local_currency: "USD", reporting_currency: "USD", quantity_unit: almonds ? "pound" : "bushel", market_structure: almonds ? "physical" : "hybrid",
-        futures_role: almonds ? "none" : "optional_licensed", warnings: [],
-        evidence_plan: [{ role: "physical_price", provider_id: "usda_mymarketnews", description: "USDA AMS MyMarketNews specialty-crop reports where published", status: "NOT_CONFIGURED" }] });
+      const known = ["almonds", "corn"].includes(body.crop);
+      return json({ pack_id: almonds ? "us_specialty_crops" : known ? "us_row_crops" : "global_physical", commodity: almonds ? "almonds" : body.crop,
+        commodity_recognised: known, local_currency: "USD", reporting_currency: "USD", quantity_unit: almonds ? "pound" : "bushel", market_structure: almonds ? "physical" : "hybrid",
+        futures_role: almonds ? "none" : "optional_licensed", warnings: known ? [] : ["crop_not_recognised"],
+        evidence_plan: [{ role: "physical_price", provider_id: "usda_mymarketnews", status: "NOT_CONFIGURED" }] });
     }
     if (path === "/v1/market-intelligence/onboarding") { calls.onboarding.push(request.postDataJSON()); return json({ id: "new", status: "created" }, 201); }
     if (request.method() === "GET") return json({ items: [], data: [], results: [], positions: [], scenarios: [], entries: [] });
@@ -122,13 +130,15 @@ test("home leads with material changes and explains them with evidence", async (
   await expect(home.getByText("Is anything materially affecting your business?")).toBeVisible({ timeout: 25_000 });
   await expect(home.getByText("Material changes need your attention")).toBeVisible();
   const changes = page.getByTestId("material-changes");
-  await expect(changes.getByText("HIGH")).toBeVisible();
+  await expect(changes.getByText("High", { exact: true })).toBeVisible();
   await expect(changes.getByText(/Projected margin changed by -115,200 BRL\. This equals 8\.32% of projected revenue\./)).toBeVisible();
   await expect(changes.getByText(/Realizable price changed by -10\.17%: from 141\.6 to 127\.2 BRL\./)).toBeVisible();
 
   await page.getByTestId("position-cards").getByRole("button", { name: "Sources" }).click();
   const sources = page.getByTestId("provenance-sources");
-  await expect(sources.getByText("CONAB weekly state agricultural prices")).toBeVisible();
+  // Provider names are localized from provider_id, never the API's English name.
+  await expect(sources.getByText("Weekly state producer prices from CONAB")).toBeVisible();
+  await expect(sources.getByText("CONAB weekly state agricultural prices")).toHaveCount(0);
   await expect(sources.getByText("Fonte: Conab")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
@@ -156,19 +166,37 @@ test("onboarding asks plain questions and never asks for provider identifiers", 
   const onboarding = page.getByTestId("commercial-onboarding");
   await expect(onboarding.getByText("Set up Commercial Intelligence")).toBeVisible({ timeout: 25_000 });
   await expect(page.getByText(/report slug|USDA MyMarketNews report/i)).toHaveCount(0);
-  await onboarding.getByLabel("What do you grow?").fill("almonds");
-  await expect(page.getByTestId("onboarding-inference").getByText("No futures market is required for this crop.")).toBeVisible();
-  await expect(page.getByTestId("onboarding-inference").getByText("Not configured")).toBeVisible();
+  // Worldwide: every ISO 3166-1 country and ISO 4217 currency is selectable.
+  const country = onboarding.getByLabel("Country");
+  expect(await country.locator("option").count()).toBeGreaterThanOrEqual(249);
+  for (const code of ["NP", "MN", "FJ", "ZW", "BG", "XK"]) await expect(country.locator(`option[value="${code}"]`)).toHaveCount(1);
+  expect(await onboarding.getByLabel("Reporting currency").locator("option").count()).toBeGreaterThanOrEqual(150);
+  await expect(onboarding.getByLabel("Reporting currency").locator('option[value="ZWG"]')).toHaveCount(1);
+  // Canonical crop selector, with free text for anything else.
+  await onboarding.getByLabel("What do you grow?").selectOption("__other__");
+  await onboarding.getByLabel("Name of your crop").fill("teff");
+  await expect(page.getByTestId("onboarding-inference").getByText("Physical market in any country")).toBeVisible();
+  await expect(page.getByTestId("onboarding-inference").getByText("This crop has no governed market source yet. AGRO-AI will use prices you verify.")).toBeVisible();
+  await onboarding.getByLabel("What do you grow?").selectOption("almonds");
+  const inference = page.getByTestId("onboarding-inference");
+  await expect(inference.getByText("United States specialty crops")).toBeVisible();
+  await expect(inference.getByText("USDA Market News prices")).toBeVisible();
+  await expect(inference.getByText("No futures market is required for this crop.")).toBeVisible();
+  await expect(inference.getByText("Not configured")).toBeVisible();
   await onboarding.getByLabel("Expected production").fill("2000000");
   await onboarding.getByRole("button", { name: "Add a sale or contract" }).click();
   await onboarding.getByLabel("Quantity").fill("600000");
   await onboarding.getByLabel("Price per unit").fill("2.31");
+  await onboarding.getByRole("button", { name: "Add a sale or contract" }).click();
+  await onboarding.getByLabel("Quantity").nth(1).fill("100000");
+  await onboarding.getByLabel("Price per unit").nth(1).fill("2.10");
+  await onboarding.getByLabel("Currency", { exact: true }).nth(1).selectOption("EUR");
   await onboarding.getByRole("button", { name: "Create commercial position" }).click();
   await expect.poll(() => calls.onboarding.length).toBe(1);
   const body = calls.onboarding[0];
   expect(body.crop).toBe("almonds");
   expect(body.quantity_unit).toBe("pound");
-  expect(body.contracts).toEqual([{ quantity: "600000", price: "2.31", currency: "USD" }]);
+  expect(body.contracts).toEqual([{ quantity: "600000", price: "2.31", currency: "USD" }, { quantity: "100000", price: "2.10", currency: "EUR" }]);
   expect(JSON.stringify(body)).not.toMatch(/slug|usda|report_id|source_overrides/i);
 });
 
@@ -195,4 +223,20 @@ test("numbers follow the customer's locale formatting", async ({ page }) => {
   const summary = page.getByTestId("portfolio-summary");
   await expect(summary).toBeVisible({ timeout: 25_000 });
   await expect(summary.getByText(/R\$\s?280\.000/)).toBeVisible();
+});
+
+test("deterministic answers render from facts in the viewer's language, never the server's English", async ({ page }) => {
+  const calls = await stub(page);
+  await page.goto(`${APP}/market-intelligence`);
+  await expect(page.getByTestId("commercial-home")).toBeVisible({ timeout: 25_000 });
+  const askBox = page.getByRole("textbox", { name: "Ask AGRO-AI" });
+  await askBox.fill("Que se passe-t-il si le prix baisse de 8 % ?");
+  await askBox.press("Enter");
+  const answer = page.getByTestId("commercial-answer");
+  await expect(answer).toContainText("Commercially exposed: 80% of expected production.");
+  await expect(answer).toContainText("Evidence needing attention: Contract USD-1 exchange rate: Unavailable.");
+  await expect(answer).toContainText("Current price source: Weekly state producer prices from CONAB, Delayed, observed 2026-09-25.");
+  await expect(answer).toContainText("Free-text what-if questions are understood in English, Portuguese, Spanish and French.");
+  await expect(answer).not.toContainText("SERVER ENGLISH SUMMARY");
+  expect(calls.ask.length).toBe(1);
 });

@@ -184,25 +184,36 @@ def deterministic_brief(
     response_language = lang if lang in templates else "en"
     copy = templates[response_language]
     lines: list[str] = []
+    facts: list[dict[str, Any]] = []
     if exposed is not None:
         lines.append(copy["exposed"].format(value=exposed))
+        facts.append({"code": "exposed", "params": {"percent": str(exposed)}})
     if margin is not None:
         lines.append(copy["margin"].format(value=margin))
+        facts.append({"code": "margin", "params": {"percent": str(margin)}})
     if warnings:
         lines.append(copy["warning"])
+        facts.append({"code": "position_warnings", "params": {"codes": list(position.get("warning_codes") or [])}})
     if context:
-        from app.services.market_intelligence_ask import deterministic_context_lines
+        from app.services.market_intelligence_ask import deterministic_context_facts, deterministic_context_lines
 
         lines.extend(deterministic_context_lines(context, response_language))
+        facts.extend(deterministic_context_facts(context))
     if not lines:
         lines.append(copy["missing"])
+        facts.append({"code": "missing_data", "params": {}})
     return {
         "status": "deterministic",
         "prompt_version": PROMPT_VERSION,
         "summary": " ".join(lines),
+        # Language-neutral facts: the portal renders them for every advertised
+        # locale, so a locale without server templates never falls back to English.
+        "facts": facts,
         "insights": [],
         "question": question,
         "response_language": response_language,
+        "requested_language": lang,
+        "client_render_required": lang != response_language,
         "model_trace": {"provider": "deterministic", "model": None, "grounded": True},
     }
 

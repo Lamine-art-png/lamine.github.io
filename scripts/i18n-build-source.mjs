@@ -36,16 +36,26 @@ function plausible(text) {
     && !/(?:=>|className=|\b(?:const|import|export) |\b(?:rgba?|var)\(|\.[jt]sx?$)/.test(text)
     && !/^[A-Za-z0-9_.:/-]+$/.test(text.replace(/^[A-Z][a-z]+$/, ''));
 }
-function walk(node) {
+// Explicit copy tables (`const COPY = [...]`, `*_LABELS`, `*_COPY`,
+// `*_TEMPLATES`, `*_HINTS`) are customer copy by declaration: every string
+// value inside them is a source string whatever its casing ("tonnes",
+// "Customer-supplied", "AGRO-AI will use"). Object keys are identifiers.
+const COPY_TABLE = /^(?:COPY|[A-Z][A-Z0-9_]*_(?:LABELS|COPY|TEMPLATES|HINTS))$/;
+function plausibleCopy(text) {
+  return text.length > 1 && text.length < 2000 && /\p{L}/u.test(text);
+}
+function walk(node, inCopy = false) {
   if (!node || typeof node !== 'object') return;
+  if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier' && COPY_TABLE.test(node.id.name)) inCopy = true;
   if (node.type === 'JSXText' || node.type === 'StringLiteral') {
     const value = normalize(node.value);
-    const ok = node.type === 'JSXText' ? plausibleJsxText(value) : plausible(value);
+    const ok = node.type === 'JSXText' ? plausibleJsxText(value) : (inCopy ? plausibleCopy(value) : plausible(value));
     if (ok && !knownValues.has(value)) literals[literalKey(value)] = value;
   }
   for (const [key,value] of Object.entries(node)) {
     if (['loc','start','end','extra','comments'].includes(key)) continue;
-    if (Array.isArray(value)) value.forEach(walk); else if (value && typeof value === 'object') walk(value);
+    if (inCopy && key === 'key' && node.type === 'ObjectProperty') continue;
+    if (Array.isArray(value)) value.forEach((child) => walk(child, inCopy)); else if (value && typeof value === 'object') walk(value, inCopy);
   }
 }
 // Non-English translation tables (hand-authored fr-FR/pt copy) are not sources.

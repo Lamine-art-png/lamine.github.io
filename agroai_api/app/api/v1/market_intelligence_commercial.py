@@ -54,7 +54,7 @@ from app.services.market_intelligence import (
 )
 from app.services.market_intelligence_refresh import refresh_position_market_data
 from app.services.market_materiality import METHODOLOGY_VERSION, evaluate_position, event_payload, evidence_states
-from app.services.market_normalization import canonical_unit
+from app.services.market_normalization import canonical_unit, validate_country_code, validate_currency_code
 from app.services.market_packs import catalog as pack_catalog, infer_onboarding, resolve_pack
 from app.services.market_risk import position_risk
 
@@ -112,7 +112,7 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
         try:
             payload, _ = apply_display_policy(compute_position(row, contracts_by_position[row.id]).payload, None, row)
         except MarketCalculationError as exc:
-            payload = {"position_id": row.id, "name": row.name, "error": str(exc)}
+            payload = {"position_id": row.id, "name": row.name, "error": str(exc), "error_code": "calculation_error"}
         states = evidence_states(db, row, contracts_by_position[row.id])
         payload["evidence_states"] = states
         payload["price_state"] = states["price"]
@@ -229,10 +229,7 @@ class InferRequest(BaseModel):
     @field_validator("country_code")
     @classmethod
     def country(cls, value: str) -> str:
-        code = value.strip().upper()
-        if not code.isalpha():
-            raise ValueError("country_code must be ISO-3166 alpha-2")
-        return code
+        return validate_country_code(value)
 
 
 def _provider_availability(plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -267,6 +264,11 @@ class OnboardingContract(BaseModel):
     delivery_start: datetime | None = None
     delivery_end: datetime | None = None
 
+    @field_validator("currency")
+    @classmethod
+    def contract_currency(cls, value: str | None) -> str | None:
+        return validate_currency_code(value) if value is not None else None
+
 
 class OnboardingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -293,20 +295,14 @@ class OnboardingRequest(BaseModel):
     @field_validator("country_code")
     @classmethod
     def country(cls, value: str) -> str:
-        code = value.strip().upper()
-        if not code.isalpha():
-            raise ValueError("country_code must be ISO-3166 alpha-2")
-        return code
+        return validate_country_code(value)
 
     @field_validator("reporting_currency", "local_price_currency")
     @classmethod
     def currency(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        code = value.strip().upper()
-        if not code.isalpha():
-            raise ValueError("currency must be a 3-letter ISO code")
-        return code
+        return validate_currency_code(value)
 
 
 def _org_fields(db: Session, org_id: str, field_ids: list[str]) -> list[ManagedEntity]:
@@ -419,7 +415,7 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
     return {
         "id": position.id,
         "status": "created",
-        "inferred": {k: inferred[k] for k in ("pack_id", "pack_name", "commodity", "local_currency", "reporting_currency", "market_structure", "futures_role")} | {"quantity_unit": unit},
+        "inferred": {k: inferred[k] for k in ("pack_id", "commodity", "local_currency", "reporting_currency", "market_structure", "futures_role")} | {"quantity_unit": unit},
         "evidence_plan": _provider_availability(inferred["evidence_plan"]),
         "refresh": refresh,
         "position": _position_payload(db, org_id, position),

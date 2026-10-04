@@ -42,6 +42,25 @@ _LANGUAGE_REQUESTS = {
 _CURRENCY = re.compile(r"\b([A-Z]{3})\b")
 
 
+# Free-text what-if phrasing is understood in these languages; in any other
+# advertised locale the response says so explicitly and the portal points to
+# the structured What-if panel, which works identically in every locale.
+SCENARIO_PARSE_LANGUAGES = ("en", "pt", "es", "fr")
+
+
+def scenario_parse_status(question: str, language: str, scenarios: list[dict[str, Any]]) -> dict[str, Any]:
+    root = str(language or "en").strip().lower().split("-")[0]
+    if scenarios:
+        status = "parsed"
+    elif not _PERCENT.search(question or ""):
+        status = "not_requested"
+    elif root not in SCENARIO_PARSE_LANGUAGES:
+        status = "unsupported_language"
+    else:
+        status = "not_understood"
+    return {"status": status, "language": root, "supported_languages": list(SCENARIO_PARSE_LANGUAGES)}
+
+
 def requested_language(question: str) -> str | None:
     text = question.lower()
     for language, phrases in _LANGUAGE_REQUESTS.items():
@@ -214,29 +233,63 @@ def scenario_label(assumptions: dict[str, Any], language: str) -> str:
     return ", ".join(parts) or "—"
 
 
-def deterministic_context_lines(context: dict[str, Any], language: str) -> list[str]:
-    """Numbers come straight from deterministic results; no model involved."""
-    copy = _TEMPLATES.get(language, _TEMPLATES["en"])
+def deterministic_context_facts(context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Language-neutral facts behind the deterministic answer.
+
+    Every advertised portal locale renders these codes with its own catalog;
+    numbers come straight from deterministic results, no model involved.
+    """
     ccy = str(context.get("reporting_currency") or "")
-    lines: list[str] = []
+    facts: list[dict[str, Any]] = []
     for item in context.get("scenarios") or []:
         if item.get("status") != "ok":
             continue
-        label = scenario_label(item.get("assumptions") or {}, language)
+        assumptions = {k: str(v) for k, v in (item.get("assumptions") or {}).items() if v not in (None, "", "0")}
         if item.get("projected_margin") is not None:
-            lines.append(copy["scenario"].format(label=label, margin=item["projected_margin"], ccy=ccy,
-                                                 delta=item.get("delta_projected_margin") or "0.00", exposed=item.get("exposed_revenue") or "-"))
+            facts.append({"code": "scenario", "params": {"assumptions": assumptions, "projected_margin": str(item["projected_margin"]),
+                                                         "delta": str(item.get("delta_projected_margin") or "0.00"),
+                                                         "exposed_revenue": str(item.get("exposed_revenue")) if item.get("exposed_revenue") is not None else None,
+                                                         "currency": ccy}})
         else:
-            lines.append(copy["scenario_no_margin"].format(label=label, exposed=item.get("exposed_revenue") or "-", ccy=ccy,
-                                                           delta=item.get("delta_exposed_revenue") or "0.00"))
+            facts.append({"code": "scenario_no_margin", "params": {"assumptions": assumptions,
+                                                                   "exposed_revenue": str(item.get("exposed_revenue")) if item.get("exposed_revenue") is not None else None,
+                                                                   "delta": str(item.get("delta_exposed_revenue") or "0.00"), "currency": ccy}})
     if context.get("scenarios"):
-        lines.append(copy["not_forecast"])
-    stale = [f"{item['evidence']}={item['state']}" for item in context.get("data_states") or [] if item.get("state") in {"STALE", "UNAVAILABLE"}]
+        facts.append({"code": "not_forecast", "params": {}})
+    stale = [{"evidence": item["evidence"], "state": item["state"]} for item in context.get("data_states") or [] if item.get("state") in {"STALE", "UNAVAILABLE"}]
     if stale:
-        lines.append(copy["stale"].format(items=", ".join(stale)))
+        facts.append({"code": "stale", "params": {"items": stale}})
     for event in (context.get("material_changes") or [])[:2]:
-        lines.append(copy["change"].format(level=event.get("level"), position=event.get("position_name") or event.get("position_id")))
+        facts.append({"code": "change", "params": {"level": event.get("level"), "position": event.get("position_name") or event.get("position_id")}})
     source = context.get("price_source")
-    if source and source.get("source_name"):
-        lines.append(copy["source"].format(source=source["source_name"], state=source.get("state"), observed=(source.get("observed_at") or "")[:10]))
+    if source and (source.get("provider") or source.get("source_name")):
+        facts.append({"code": "source", "params": {"provider": source.get("provider"), "source_name": source.get("source_name"),
+                                                   "state": source.get("state"), "observed": (source.get("observed_at") or "")[:10]}})
+    return facts
+
+
+def _evidence_label(key: str) -> str:
+    return key.replace("contract_fx:", "contract FX ") if key.startswith("contract_fx:") else key
+
+
+def deterministic_context_lines(context: dict[str, Any], language: str) -> list[str]:
+    """Server-rendered text for the languages with reviewed templates (en, pt, es, fr)."""
+    copy = _TEMPLATES.get(language, _TEMPLATES["en"])
+    lines: list[str] = []
+    for fact in deterministic_context_facts(context):
+        params = fact["params"]
+        if fact["code"] == "scenario":
+            lines.append(copy["scenario"].format(label=scenario_label(params["assumptions"], language), margin=params["projected_margin"],
+                                                 ccy=params["currency"], delta=params["delta"], exposed=params.get("exposed_revenue") or "-"))
+        elif fact["code"] == "scenario_no_margin":
+            lines.append(copy["scenario_no_margin"].format(label=scenario_label(params["assumptions"], language), exposed=params.get("exposed_revenue") or "-",
+                                                           ccy=params["currency"], delta=params["delta"]))
+        elif fact["code"] == "not_forecast":
+            lines.append(copy["not_forecast"])
+        elif fact["code"] == "stale":
+            lines.append(copy["stale"].format(items=", ".join(f"{_evidence_label(item['evidence'])}={item['state']}" for item in params["items"])))
+        elif fact["code"] == "change":
+            lines.append(copy["change"].format(level=params["level"], position=params["position"]))
+        elif fact["code"] == "source" and params.get("source_name"):
+            lines.append(copy["source"].format(source=params["source_name"], state=params.get("state"), observed=params.get("observed") or ""))
     return lines
