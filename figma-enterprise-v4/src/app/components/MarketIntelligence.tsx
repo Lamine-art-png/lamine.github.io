@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
-import { COMMERCIAL_COPY, IMPORTANCE_LABELS, answerText, attentionText, providerLabel, stateLabel, unsupportedScenarioLanguage, useCommercialFormatters, warningLabel } from "./commercialCopy";
+import { COMMERCIAL_COPY, IMPORTANCE_LABELS, answerText, attentionText, providerLabel, stateLabel, unitLabel, unsupportedScenarioLanguage, useCommercialFormatters, warningLabel } from "./commercialCopy";
 import { currentLocale } from "../i18n";
 
 const COPY = [
@@ -180,9 +180,9 @@ function quantity(value: string | null | undefined, unit: string, locale: string
   return `${new Intl.NumberFormat(numberLocale(locale), { maximumFractionDigits: 2, notation: Math.abs(number) >= 1_000_000 ? "compact" : "standard" }).format(number)} ${unit}`;
 }
 
-function pct(value: string | null | undefined) {
+function pct(value: string | null | undefined, locale?: string) {
   const number = numberValue(value);
-  return number === null ? "—" : `${number.toFixed(1)}%`;
+  return number === null ? "—" : new Intl.NumberFormat(numberLocale(locale || ""), { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(number / 100);
 }
 
 function sourceBadge(status: string | undefined) {
@@ -334,14 +334,14 @@ export function MarketIntelligence() {
                 <span className="ms-auto rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: "#F1EFE8", color: "#59665E" }}>{selected.market_structure}</span>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <SmallMetric label={tx("Expected production")} value={quantity(selected.expected_production, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Carry inventory")} value={quantity(selected.inventory_quantity, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Marketable supply")} value={quantity(selected.marketable_supply, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Contracted")} value={`${quantity(selected.contracted_quantity, selected.quantity_unit, locale)} · ${pct(selected.contracted_percent)}`} />
-                <SmallMetric label={tx("Exposed")} value={`${quantity(selected.uncontracted_quantity, selected.quantity_unit, locale)} · ${pct(selected.exposed_percent)}`} warning={numberValue(selected.exposed_percent) !== null && Number(selected.exposed_percent) >= 60} />
+                <SmallMetric label={tx("Expected production")} value={quantity(selected.expected_production, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Carry inventory")} value={quantity(selected.inventory_quantity, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Marketable supply")} value={quantity(selected.marketable_supply, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Contracted")} value={`${quantity(selected.contracted_quantity, unitLabel(tx, selected.quantity_unit), locale)} · ${pct(selected.contracted_percent, locale)}`} />
+                <SmallMetric label={tx("Exposed")} value={`${quantity(selected.uncontracted_quantity, unitLabel(tx, selected.quantity_unit), locale)} · ${pct(selected.exposed_percent, locale)}`} warning={numberValue(selected.exposed_percent) !== null && Number(selected.exposed_percent) >= 60} />
                 <SmallMetric label={tx("Break-even")} value={money(selected.break_even_price, selected.reporting_currency, locale)} />
                 <SmallMetric label={tx("Current realizable")} value={money(selected.current_realizable_price, selected.reporting_currency, locale)} />
-                <SmallMetric label={tx("Margin")} value={`${money(selected.projected_margin, selected.reporting_currency, locale)} · ${pct(selected.projected_margin_percent)}`} />
+                <SmallMetric label={tx("Margin")} value={`${money(selected.projected_margin, selected.reporting_currency, locale)} · ${pct(selected.projected_margin_percent, locale)}`} />
               </div>
               {selected.warning_codes?.length ? (
                 <div className="mt-5 rounded-xl border px-4 py-3" style={{ background: "#FFF7E7", borderColor: "#F1D69B" }}>

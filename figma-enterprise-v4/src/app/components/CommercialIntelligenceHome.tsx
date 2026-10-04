@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BookmarkPlus, Check, CircleDot, FileSearch, Loader2, Send, SlidersHorizontal, X } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
-import { COMMERCIAL_COPY, answerText, driverLabel, evidenceLabel, levelLabel, stateLabel, missingInputLabel, providerLabel, unsupportedScenarioLanguage, useCommercialFormatters } from "./commercialCopy";
+import { COMMERCIAL_COPY, answerText, driverLabel, evidenceLabel, levelLabel, stateLabel, unitLabel, missingInputLabel, providerLabel, unsupportedScenarioLanguage, useCommercialFormatters } from "./commercialCopy";
 
 // Commercial Intelligence Home: answers "is anything materially affecting my
 // business?" first. Every number shown here comes from the deterministic
@@ -115,7 +115,8 @@ const COPY = [
   "Retry",
   "Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.",
   "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
-  "{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.",
+  "Uncontracted volume: {quantity} ({percent}%).",
+  "Its value at current prices is {value}.",
   "Projected margin turned negative: {value} {currency}.",
   "Realizable price {price} is below break-even {breakeven} {currency}.",
   "Contracted volume {contracted} exceeds marketable supply {supply} {unit}.",
@@ -181,13 +182,13 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
       case "price_change":
         return tf("Realizable price changed by {percent}%: from {previous} to {price} {currency}.", { percent: fmt.number(reason.percent, 2), previous: fmt.number(reason.from, 2), price: fmt.number(reason.to, 2), currency: ccy });
       case "exposure":
-        return tf("{quantity} {unit} remains uncontracted ({percent}%), worth {value} {currency} at current prices.", { quantity: fmt.number(reason.uncontracted_quantity, 0), unit: reason.unit || "", percent: fmt.number(reason.exposed_percent, 1), value: fmt.number(reason.exposed_revenue, 0), currency: ccy });
+        return `${tf("Uncontracted volume: {quantity} ({percent}%).", { quantity: `${fmt.number(reason.uncontracted_quantity, 0)} ${unitLabel(tx, reason.unit)}`, percent: fmt.number(reason.exposed_percent, 1) })} ${tf("Its value at current prices is {value}.", { value: fmt.money(reason.exposed_revenue, ccy) })}`;
       case "margin_turned_negative":
         return tf("Projected margin turned negative: {value} {currency}.", { value: fmt.number(reason.projected_margin, 0), currency: ccy });
       case "price_below_break_even":
         return tf("Realizable price {price} is below break-even {breakeven} {currency}.", { price: fmt.number(reason.current_realizable_price, 2), breakeven: fmt.number(reason.break_even_price, 2), currency: ccy });
       case "over_contracted":
-        return tf("Contracted volume {contracted} exceeds marketable supply {supply} {unit}.", { contracted: fmt.number(reason.contracted_quantity, 0), supply: fmt.number(reason.marketable_supply, 0), unit: reason.unit || "" });
+        return tf("Contracted volume {contracted} exceeds marketable supply {supply} {unit}.", { contracted: fmt.number(reason.contracted_quantity, 0), supply: fmt.number(reason.marketable_supply, 0), unit: unitLabel(tx, reason.unit) });
       case "evidence_degraded":
         return tf("Evidence became {state}: {evidence}.", { state: stateLabel(tx, reason.state), evidence: evidenceLabel(tx, tf, String(reason.evidence || "")) });
       case "missing_inputs":
@@ -300,7 +301,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
                 </div>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-3">
-                <div><dt className="text-[#65736A]">{tx("Marketable supply")}</dt><dd className="font-semibold text-[#10231B]">{fmt.number(position.marketable_supply, 0)} {position.quantity_unit}</dd></div>
+                <div><dt className="text-[#65736A]">{tx("Marketable supply")}</dt><dd className="font-semibold text-[#10231B]">{fmt.number(position.marketable_supply, 0)} {unitLabel(tx, position.quantity_unit)}</dd></div>
                 <div><dt className="text-[#65736A]">{tx("Contracted")}</dt><dd className="font-semibold text-[#10231B]">{fmt.number(position.contracted_percent, 1)}%</dd></div>
                 <div><dt className="text-[#65736A]">{tx("Exposed")}</dt><dd className="font-semibold text-[#10231B]">{fmt.money(position.exposed_revenue, position.reporting_currency)}</dd></div>
                 <div><dt className="text-[#65736A]">{tx("Projected margin")}</dt><dd className="font-semibold text-[#10231B]">{position.projected_margin ? fmt.money(position.projected_margin, position.reporting_currency) : tx("Margin incomplete")}</dd></div>
@@ -322,7 +323,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
           <h3 className="text-sm font-semibold text-[#10231B]">{tx("Next commercial deadlines")}</h3>
           {home.deadlines.length ? (
             <ul className="mt-3 space-y-2 text-sm">
-              {home.deadlines.map((item) => <li key={item.contract_id} className="flex flex-wrap justify-between gap-2 border-b border-[#EEF1EB] pb-2"><span className="min-w-0 break-words">{item.position_name}{item.buyer ? ` · ${item.buyer}` : ""}</span><span className="text-[#65736A]">{fmt.number(item.quantity, 0)} {item.quantity_unit} · {fmt.date(item.delivery_start)}</span></li>)}
+              {home.deadlines.map((item) => <li key={item.contract_id} className="flex flex-wrap justify-between gap-2 border-b border-[#EEF1EB] pb-2"><span className="min-w-0 break-words">{item.position_name}{item.buyer ? ` · ${item.buyer}` : ""}</span><span className="text-[#65736A]">{fmt.number(item.quantity, 0)} {unitLabel(tx, item.quantity_unit)} · {fmt.date(item.delivery_start)}</span></li>)}
             </ul>
           ) : <p className="mt-2 text-sm text-[#65736A]">{tx("No deliveries scheduled in the next 60 days.")}</p>}
         </div>

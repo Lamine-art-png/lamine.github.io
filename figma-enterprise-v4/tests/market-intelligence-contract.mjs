@@ -15,10 +15,12 @@ assert.match(pageSource, /\/v1\/market-intelligence\/overview/);
 assert.match(pageSource, /\/v1\/market-intelligence\/scenarios/);
 assert.match(pageSource, /\/v1\/market-intelligence\/ask/);
 assert.match(pageSource, /"DEMO DATA"/);
-assert.match(pageSource, /"LIVE"/);
-assert.match(pageSource, /"DELAYED"/);
-assert.match(pageSource, /"STALE"/);
-assert.match(pageSource, /"MANUAL"/);
+// Source states render as localized labels from the shared copy module.
+const commercialCopySource = readFileSync(new URL("../src/app/components/commercialCopy.ts", import.meta.url), "utf8");
+for (const state of ["LIVE", "DELAYED", "STALE", "MANUAL", "UNAVAILABLE", "NOT_CONFIGURED"]) {
+  assert.match(commercialCopySource, new RegExp(`\\b${state}: "[^"]+"`));
+}
+assert.match(pageSource, /stateLabel\(tx, badge\.state\)/);
 assert.match(pageSource, /does not execute trades or provide personalized derivatives instructions/);
 assert.match(pageSource, /projected_revenue: string \| null/);
 assert.match(pageSource, /normalized === "auto" \? undefined : locale/);

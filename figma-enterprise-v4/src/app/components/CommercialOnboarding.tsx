@@ -4,7 +4,7 @@ import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import countryRegistry from "../../../../shared/registries/countries.json";
 import currencyRegistry from "../../../../shared/registries/currencies.json";
-import { COMMERCIAL_COPY, COMMODITY_LABELS, packLabel, providerLabel, warningLabel } from "./commercialCopy";
+import { COMMERCIAL_COPY, COMMODITY_LABELS, UNIT_LABELS, packLabel, providerLabel, unitLabel, warningLabel } from "./commercialCopy";
 
 // Customer-language onboarding for Commercial Intelligence. Operators answer
 // what they know (crop, place, season, volumes, costs, sales); AGRO-AI infers
@@ -31,10 +31,6 @@ type ContractRow = { buyer: string; quantity: string; price: string; currency: s
 const COUNTRIES: string[] = countryRegistry.countries.map((row) => row.code);
 const CURRENCIES: string[] = currencyRegistry.currencies.map((row) => row.code);
 const OTHER_CROP = "__other__";
-const UNITS: [string, string][] = [
-  ["tonne", "tonnes"], ["kg", "kilograms"], ["bushel", "bushels"], ["pound", "pounds"], ["quintal", "quintals (100 kg)"],
-  ["saca_60kg", "60 kg sacks"], ["bag_90kg", "90 kg bags"], ["bag_50kg", "50 kg bags"], ["cwt", "hundredweight (cwt)"],
-];
 
 const COPY = [
   "Set up Commercial Intelligence",
@@ -73,15 +69,6 @@ const COPY = [
   "Not configured",
   "Customer-supplied",
   "No futures market is required for this crop.",
-  "tonnes",
-  "kilograms",
-  "bushels",
-  "pounds",
-  "quintals (100 kg)",
-  "60 kg sacks",
-  "90 kg bags",
-  "50 kg bags",
-  "hundredweight (cwt)",
   "Request failed. Retry.",
 ] as const;
 
@@ -177,7 +164,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
       {inferred ? (
         <div className="mt-4 rounded-xl border border-[#D9E6DC] bg-[#F4F9F5] p-3 text-sm text-[#1F4A33]" data-testid="onboarding-inference">
           <div className="font-semibold">{tx("AGRO-AI will use")}: {packLabel(tx, inferred.pack_id)}</div>
-          <div className="mt-1 text-xs">{currencyNames?.of(inferred.local_currency || inferred.reporting_currency) || inferred.local_currency} · {tx(UNITS.find(([key]) => key === inferred.quantity_unit)?.[1] || inferred.quantity_unit)}</div>
+          <div className="mt-1 text-xs">{currencyNames?.of(inferred.local_currency || inferred.reporting_currency) || inferred.local_currency} · {unitLabel(tx, inferred.quantity_unit)}</div>
           {inferred.futures_role === "none" ? <div className="mt-1 text-xs">{tx("No futures market is required for this crop.")}</div> : null}
           {inferred.warnings.length ? <ul className="mt-1 space-y-0.5 text-xs text-[#77520E]">{inferred.warnings.map((code) => <li key={code}>{warningLabel(tx, code)}</li>)}</ul> : null}
           <div className="mt-2 text-xs font-semibold">{tx("Data sources")}</div>
@@ -187,7 +174,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className={label}>{tx("Expected production")}<input inputMode="decimal" className={input} value={form.expected_production} onChange={(e) => setForm({ ...form, expected_production: e.target.value })} /></label>
-        <label className={label}>{tx("Unit")}<select className={input} value={form.quantity_unit} onChange={(e) => { setUnitChosen(true); setForm({ ...form, quantity_unit: e.target.value }); }}>{UNITS.map(([key, name]) => <option key={key} value={key}>{tx(name)}</option>)}</select></label>
+        <label className={label}>{tx("Unit")}<select className={input} value={form.quantity_unit} onChange={(e) => { setUnitChosen(true); setForm({ ...form, quantity_unit: e.target.value }); }}>{Object.keys(UNIT_LABELS).map((key) => <option key={key} value={key}>{unitLabel(tx, key)}</option>)}</select></label>
         <label className={label}>{tx("Current inventory")}<input inputMode="decimal" className={input} value={form.inventory_quantity} onChange={(e) => setForm({ ...form, inventory_quantity: e.target.value })} /></label>
         <label className={label}>{tx("Approximate production cost per unit (optional)")}<input inputMode="decimal" className={input} value={form.production_cost_per_unit} onChange={(e) => setForm({ ...form, production_cost_per_unit: e.target.value })} /></label>
         <label className={label}>{tx("Reporting currency")}<select className={input} value={form.reporting_currency} onChange={(e) => setForm({ ...form, reporting_currency: e.target.value })}>{currencies.map(([code, name]) => <option key={code} value={code}>{name} ({code})</option>)}</select></label>

@@ -21,6 +21,7 @@ from app.services.market_intelligence_ai import deterministic_brief
 from app.services.market_intelligence_ask import SCENARIO_PARSE_LANGUAGES, deterministic_context_facts, scenario_parse_status
 from app.services.market_normalization import (
     _COMMODITIES,
+    _UNIT_ALIASES,
     country_default_currency,
     country_registry,
     country_timezone,
@@ -113,6 +114,7 @@ def test_portal_copy_covers_every_backend_identifier():
     assert set(_ts_record("PACK_LABELS")) == {pack.pack_id for pack in _PACKS}
     assert set(_ts_record("PROVIDER_LABELS")) == set(ADAPTERS)
     assert set(_ts_record("COMMODITY_LABELS")) == set(_COMMODITIES)
+    assert set(_ts_record("UNIT_LABELS")) == set(_UNIT_ALIASES.values())
     access = {adapter.access for adapter in ADAPTERS.values()} - {"public_no_key"}
     assert access <= set(_ts_record("ACCESS_HINTS"))
     economics = (REPO / "agroai_api" / "app" / "services" / "market_intelligence.py").read_text(encoding="utf-8")
@@ -127,7 +129,7 @@ def test_portal_copy_covers_every_backend_identifier():
 
 def test_every_portal_copy_label_is_in_the_authored_locale_source():
     source = set(json.loads((REPO / "shared" / "localization" / "source.json").read_text(encoding="utf-8"))["catalog"].values())
-    names = ("PACK_LABELS", "PROVIDER_LABELS", "ACCESS_HINTS", "COMMODITY_LABELS", "WARNING_LABELS", "MISSING_INPUT_LABELS",
+    names = ("PACK_LABELS", "PROVIDER_LABELS", "ACCESS_HINTS", "UNIT_LABELS", "COMMODITY_LABELS", "WARNING_LABELS", "MISSING_INPUT_LABELS",
              "EVIDENCE_LABELS", "LEVER_LABELS", "STATE_LABELS", "LEVEL_LABELS", "DRIVER_LABELS", "IMPORTANCE_LABELS")
     missing = sorted(value for name in names for value in _ts_record(name).values() if value not in source)
     templates = re.findall(r'^  [a-z_]+: "([^"]+)",$', re.search(r"const FACT_TEMPLATES = \{(.*?)\n\} as const;", COPY_SOURCE, re.S).group(1), re.M)

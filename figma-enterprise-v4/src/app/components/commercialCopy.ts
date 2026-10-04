@@ -49,6 +49,21 @@ export const ACCESS_HINTS: Record<string, string> = {
   customer_input: "Prices your team records, labelled as customer-supplied with time and author.",
 };
 
+// Canonical quantity units (agroai_api market_normalization.canonical_unit).
+export const UNIT_LABELS: Record<string, string> = {
+  tonne: "tonnes",
+  kg: "kilograms",
+  bushel: "bushels",
+  pound: "pounds",
+  quintal: "quintals (100 kg)",
+  cwt: "hundredweight (cwt)",
+  short_ton: "short tons",
+  long_ton: "long tons",
+  saca_60kg: "60 kg sacks",
+  bag_90kg: "90 kg bags",
+  bag_50kg: "50 kg bags",
+};
+
 export const COMMODITY_LABELS: Record<string, string> = {
   soybean: "Soybeans",
   corn: "Corn (maize)",
@@ -173,6 +188,7 @@ export const COMMERCIAL_COPY: readonly string[] = [
   ...Object.values(PACK_LABELS),
   ...Object.values(PROVIDER_LABELS),
   ...Object.values(ACCESS_HINTS),
+  ...Object.values(UNIT_LABELS),
   ...Object.values(COMMODITY_LABELS),
   ...Object.values(WARNING_LABELS),
   ...Object.values(MISSING_INPUT_LABELS),
@@ -203,6 +219,10 @@ export function levelLabel(tx: Translate, code?: string | null): string {
 
 export function driverLabel(tx: Translate, code: string): string {
   return DRIVER_LABELS[code] ? tx(DRIVER_LABELS[code]) : code;
+}
+
+export function unitLabel(tx: Translate, code?: string | null): string {
+  return code && UNIT_LABELS[code] ? tx(UNIT_LABELS[code]) : String(code || "");
 }
 
 export function packLabel(tx: Translate, packId?: string | null): string {
