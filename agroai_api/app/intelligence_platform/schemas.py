@@ -231,16 +231,53 @@ BUILTIN_DESCRIPTIONS = {
 }
 
 
+# Draft 2020-12 applicators: where subschemas live. Keyword checks walk only
+# these positions, so an output *property* named e.g. "$id" or "pattern" is
+# never mistaken for a keyword, and data keywords (const, enum, default,
+# examples) are never interpreted as schemas.
+_SUBSCHEMA = ("items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames",
+              "unevaluatedItems", "unevaluatedProperties", "additionalItems")
+_SUBSCHEMA_MAPS = ("properties", "patternProperties", "$defs", "definitions", "dependentSchemas")
+_SUBSCHEMA_LISTS = ("allOf", "anyOf", "oneOf", "prefixItems", "items")
+
+
+def _schema_objects(schema: Any):
+    """Yield every schema object (dict) in a schema, by semantic position."""
+    if not isinstance(schema, dict):
+        return
+    yield schema
+    for key in _SUBSCHEMA:
+        child = schema.get(key)
+        if isinstance(child, dict):
+            yield from _schema_objects(child)
+    for key in _SUBSCHEMA_MAPS:
+        children = schema.get(key)
+        if isinstance(children, dict):
+            for child in children.values():
+                yield from _schema_objects(child)
+    for key in _SUBSCHEMA_LISTS:
+        children = schema.get(key)
+        if isinstance(children, list):
+            for child in children:
+                yield from _schema_objects(child)
+
+
+def _check_keywords(schema: dict[str, Any]) -> None:
+    for node in _schema_objects(schema):
+        for key in node:
+            if key in _FORBIDDEN_KEYWORDS:
+                raise SchemaRejected(f"response_format.schema keyword '{key}' is not supported")
+        ref = node.get("$ref")
+        if "$ref" in node and not (isinstance(ref, str) and ref.startswith("#")):
+            raise SchemaRejected("response_format.schema supports only local '#/...' references")
+
+
 def _depth_and_nodes(value: Any, depth: int = 0) -> tuple[int, int]:
     if depth > MAX_SCHEMA_DEPTH:
         raise SchemaRejected(f"response_format.schema nesting must be {MAX_SCHEMA_DEPTH} levels or fewer")
     if isinstance(value, dict):
         deepest, nodes = depth, 1
-        for key, child in value.items():
-            if key in _FORBIDDEN_KEYWORDS:
-                raise SchemaRejected(f"response_format.schema keyword '{key}' is not supported")
-            if key == "$ref" and not (isinstance(child, str) and child.startswith("#")):
-                raise SchemaRejected("response_format.schema supports only local '#/...' references")
+        for child in value.values():
             child_depth, child_nodes = _depth_and_nodes(child, depth + 1)
             deepest, nodes = max(deepest, child_depth), nodes + child_nodes
         return deepest, nodes
@@ -263,6 +300,7 @@ def validate_caller_schema(schema: dict[str, Any]) -> None:
     _depth, nodes = _depth_and_nodes(schema)
     if nodes > MAX_SCHEMA_NODES:
         raise SchemaRejected("response_format.schema is too large")
+    _check_keywords(schema)
     if schema.get("type") != "object":
         raise SchemaRejected("response_format.schema root must be {\"type\": \"object\"}")
     try:
@@ -287,25 +325,21 @@ def _resolve_local_refs(node: Any, root: dict[str, Any], resolver: Any = None) -
             .with_resource("urn:agroai:response-schema", Resource(contents=root, specification=DRAFT202012))
             .resolver(base_uri="urn:agroai:response-schema")
         )
-    if isinstance(node, dict):
-        ref = node.get("$ref")
-        if isinstance(ref, str):
-            from referencing.exceptions import NoSuchAnchor, Unresolvable
+    from referencing.exceptions import NoSuchAnchor, Unresolvable
 
-            try:
-                resolver.lookup(ref)
-            except NoSuchAnchor as exc:
-                raise SchemaRejected(
-                    f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
-                    "use a JSON pointer such as '#/$defs/name'"
-                ) from exc
-            except Unresolvable as exc:
-                raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
-        for child in node.values():
-            _resolve_local_refs(child, root, resolver)
-    elif isinstance(node, list):
-        for child in node:
-            _resolve_local_refs(child, root, resolver)
+    for schema_node in _schema_objects(node):
+        ref = schema_node.get("$ref")
+        if not isinstance(ref, str):
+            continue
+        try:
+            resolver.lookup(ref)
+        except NoSuchAnchor as exc:
+            raise SchemaRejected(
+                f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
+                "use a JSON pointer such as '#/$defs/name'"
+            ) from exc
+        except Unresolvable as exc:
+            raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' does not resolve") from exc
 
 
 def resolve_schema(response_format: Any) -> tuple[str, dict[str, Any]] | None:

@@ -490,3 +490,29 @@ def test_nested_id_scopes_are_rejected_so_refs_resolve_one_way():
         schemas.validate_caller_schema(nested)
     with pytest.raises(schemas.SchemaRejected, match=r"\$id"):
         schemas.validate_caller_schema({"$id": "urn:example:root", "type": "object"})
+
+
+def test_keyword_names_as_output_properties_are_allowed():
+    schema = {"type": "object", "properties": {"$id": {"type": "string"}, "pattern": {"type": "string"}, "$ref": {"type": "string"},
+                                                 "$anchor": {"type": "integer"}},
+              "required": ["$id"], "default": {"$ref": "not-a-reference", "pattern": "^x$"}}
+    schemas.validate_caller_schema(schema)
+    assert schemas.validation_errors({"$id": "abc", "pattern": "p", "$ref": "r", "$anchor": 1}, schema) == []
+
+
+@pytest.mark.parametrize(
+    "position",
+    [
+        lambda bad: {"type": "object", "properties": {"a": bad}},
+        lambda bad: {"type": "object", "allOf": [bad]},
+        lambda bad: {"type": "object", "properties": {"a": {"type": "array", "items": bad}}},
+        lambda bad: {"type": "object", "$defs": {"d": bad}},
+        lambda bad: {"type": "object", "if": {"type": "object"}, "then": bad},
+        lambda bad: {"type": "object", "additionalProperties": bad},
+        lambda bad: {"type": "object", "properties": {"a": {"not": bad}}},
+    ],
+)
+@pytest.mark.parametrize("bad", [{"type": "string", "pattern": "(a+)+$"}, {"$id": "urn:x", "type": "string"}, {"$ref": "https://evil.example/s"}])
+def test_forbidden_keywords_rejected_in_every_schema_position(position, bad):
+    with pytest.raises(schemas.SchemaRejected):
+        schemas.validate_caller_schema(position(dict(bad)))
