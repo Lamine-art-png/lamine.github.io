@@ -192,6 +192,12 @@ class SeriesProvider:
 # ---------------------------------------------------------------------------
 
 ECB_HIST_90D = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml"
+# Currencies in the ECB euro reference-rate basket (RUB suspended since 2022;
+# BGN ended with Bulgaria's euro adoption on 2026-01-01).
+ECB_REFERENCE_CURRENCIES = frozenset({
+    "USD", "JPY", "CZK", "DKK", "GBP", "HUF", "PLN", "RON", "SEK", "CHF", "ISK", "NOK", "TRY", "AUD", "BRL", "CAD",
+    "CNY", "HKD", "IDR", "ILS", "INR", "KRW", "MXN", "MYR", "NZD", "PHP", "SGD", "THB", "ZAR",
+})
 ECB_LICENSE = licensing(
     license_id="ECB-statistics-reuse",
     license_url="https://www.ecb.europa.eu/stats/ecb_statistics/governance_and_quality_framework/html/usage_policy.en.html",

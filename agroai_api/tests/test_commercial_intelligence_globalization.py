@@ -198,3 +198,26 @@ def test_every_declared_market_intelligence_copy_string_is_authored(component):
     declared = [json.loads(f'"{value}"') for value in re.findall(r'"((?:[^"\\]|\\.)*)"', block.group(1))]
     source = set(json.loads((REPO / "shared" / "localization" / "source.json").read_text(encoding="utf-8"))["catalog"].values())
     assert [value for value in declared if " ".join(value.split()) not in source] == []
+
+
+
+def test_fx_availability_is_judged_for_the_actual_currency_pair(client, db):
+    act_as(*identity(db, "fx-pairs"))
+    def plan(country, reporting=None):
+        body = client.post("/v1/market-intelligence/onboarding/infer", json={"crop": "maize", "country_code": country, **({"reporting_currency": reporting} if reporting else {})}).json()
+        return {slot["provider_id"]: slot["status"] for slot in body["evidence_plan"] if slot["role"] == "fx_rate"}
+    # ECB has no UGX rate: the portal must ask for the customer's own rate.
+    assert plan("UG", "USD") == {"fx_reference": "NOT_COVERED"}
+    assert plan("BR", "USD") == {"bcb_ptax": "DELAYED", "fx_reference": "DELAYED"}
+    assert plan("SN", "USD")["fx_reference"] == "DELAYED"  # CFA franc via exact EUR parity
+    assert plan("BR", "BRL") == {"bcb_ptax": "NOT_REQUIRED", "fx_reference": "NOT_REQUIRED"}
+
+
+def test_unsupported_onboarding_units_are_rejected_not_stored_as_null(client, db):
+    act_as(*identity(db, "units"))
+    base = {"crop": "rice", "country_code": "NP", "season": "2026", "expected_production": "10"}
+    assert client.post("/v1/market-intelligence/onboarding", json={**base, "quantity_unit": "furlong"}).status_code == 422
+    bad_contract = client.post("/v1/market-intelligence/onboarding", json={**base, "contracts": [{"quantity": "1", "price": "1", "quantity_unit": "furlong"}]})
+    assert bad_contract.status_code == 422
+    ok = client.post("/v1/market-intelligence/onboarding", json={**base, "quantity_unit": "Quintals", "contracts": [{"quantity": "1", "price": "1", "quantity_unit": "kg"}]})
+    assert ok.status_code == 201 and ok.json()["inferred"]["quantity_unit"] == "quintal"

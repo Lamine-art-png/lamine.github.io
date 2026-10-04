@@ -232,11 +232,22 @@ class InferRequest(BaseModel):
         return validate_country_code(value)
 
 
-def _provider_availability(plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _provider_availability(plan: list[dict[str, Any]], *, local_currency: str | None, reporting_currency: str | None) -> list[dict[str, Any]]:
+    """Real status per evidence slot. FX slots are judged for the actual pair:
+    a configured provider that does not cover it (e.g. ECB for UGX) is
+    NOT_COVERED, so the portal asks for the customer's own rate."""
+    coverage = plane.fx_pair_coverage(local_currency, reporting_currency)
+    same_currency = bool(local_currency) and str(local_currency).upper() == str(reporting_currency or "").upper()
     result = []
     for slot in plan:
         adapter = ADAPTERS.get(slot["provider_id"])
-        result.append({**slot, "status": adapter.status() if adapter else "NOT_CONFIGURED"})
+        status = adapter.status() if adapter else "NOT_CONFIGURED"
+        if slot["role"] == "fx_rate":
+            if same_currency:
+                status = "NOT_REQUIRED"
+            elif not coverage.get(slot["provider_id"], False):
+                status = "NOT_COVERED"
+        result.append({**slot, "status": status})
     return result
 
 
@@ -250,8 +261,18 @@ def market_packs(ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]
 def onboarding_infer(payload: InferRequest, ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]:
     _org_id(ctx)
     inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region, reporting_currency=payload.reporting_currency)
-    inferred["evidence_plan"] = _provider_availability(inferred["evidence_plan"])
+    inferred["evidence_plan"] = _provider_availability(inferred["evidence_plan"], local_currency=inferred["local_currency"], reporting_currency=inferred["reporting_currency"])
     return inferred
+
+
+def _supported_unit(value: str | None) -> str | None:
+    """Canonical quantity unit, or a validation error (never a NULL column)."""
+    if value is None or not str(value).strip():
+        return None
+    unit = canonical_unit(value)
+    if unit is None:
+        raise ValueError("unit_not_supported")
+    return unit
 
 
 class OnboardingContract(BaseModel):
@@ -268,6 +289,11 @@ class OnboardingContract(BaseModel):
     @classmethod
     def contract_currency(cls, value: str | None) -> str | None:
         return validate_currency_code(value) if value is not None else None
+
+    @field_validator("quantity_unit")
+    @classmethod
+    def contract_unit(cls, value: str | None) -> str | None:
+        return _supported_unit(value)
 
 
 class OnboardingRequest(BaseModel):
@@ -296,6 +322,11 @@ class OnboardingRequest(BaseModel):
     @classmethod
     def country(cls, value: str) -> str:
         return validate_country_code(value)
+
+    @field_validator("quantity_unit")
+    @classmethod
+    def position_unit(cls, value: str | None) -> str | None:
+        return _supported_unit(value)
 
     @field_validator("reporting_currency", "local_price_currency")
     @classmethod
@@ -416,7 +447,7 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
         "id": position.id,
         "status": "created",
         "inferred": {k: inferred[k] for k in ("pack_id", "commodity", "local_currency", "reporting_currency", "market_structure", "futures_role")} | {"quantity_unit": unit},
-        "evidence_plan": _provider_availability(inferred["evidence_plan"]),
+        "evidence_plan": _provider_availability(inferred["evidence_plan"], local_currency=local_currency, reporting_currency=position.reporting_currency),
         "refresh": refresh,
         "position": _position_payload(db, org_id, position),
     }

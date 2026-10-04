@@ -173,11 +173,19 @@ async def drain_task_outbox() -> dict:
 
 
 def _schedule_market_intelligence_cycle(trigger: str = "scheduled") -> dict:
-    """Isolated so a market-data failure can never affect other maintenance."""
-    try:
-        from app.services.market_intelligence_cycle import schedule_cycle_once
+    """Isolated so a market-data failure can never affect other maintenance.
 
-        return schedule_cycle_once(trigger=trigger)
+    Newly scheduled cycle jobs are published in the same pass with their own
+    bound, so they neither wait for the next hourly tick nor compete with the
+    connector backlog drained above.
+    """
+    try:
+        from app.services.market_intelligence_cycle import TASK_TYPE, schedule_cycle_once
+
+        result = schedule_cycle_once(trigger=trigger)
+        if result.get("status") == "ok":
+            result["published"] = drain_pending_outbox(limit=max(1, int(result.get("batch") or 200)), task_types=(TASK_TYPE,))
+        return result
     except Exception as exc:  # noqa: BLE001
         import logging
 

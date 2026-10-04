@@ -144,6 +144,7 @@ export const STATE_LABELS: Record<string, string> = {
   MANUAL: "Customer-supplied",
   NOT_REQUIRED: "Not required",
   NOT_CONFIGURED: "Not configured",
+  NOT_COVERED: "Not available for this currency",
   DEMO: "Demo data",
   OK: "Available",
   UNKNOWN: "Unknown",

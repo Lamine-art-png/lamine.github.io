@@ -52,6 +52,7 @@ from app.models.market_intelligence import (
     MarketCycleOrganizationState,
     MarketMaterialityEvent,
     MarketPosition,
+    MarketProviderRun,
 )
 from app.models.operational_records import IngestionJob
 from app.models.saas import Organization, OrganizationMembership, User, UserPreference
@@ -302,6 +303,44 @@ async def ingest_due_demands(db: Session, *, deadline: float, trigger: str = "sc
     return results
 
 
+SLOT_MARKER_PROVIDER = "__cycle_slot__"
+
+
+async def ingest_once_per_slot(db: Session, slot: str, *, deadline: float, trigger: str = "scheduled") -> dict[str, Any]:
+    """Shared ingestion runs once per scheduling slot, not once per organization.
+
+    Building the global demand set reads every tenant's active positions, so
+    only the first job of a slot does it (under a lock) and records a marker
+    run; every other organization job of that slot skips straight to
+    evaluation against the freshly persisted evidence.
+    """
+    marker_key = f"slot:{slot}"
+
+    def marked() -> bool:
+        return db.query(MarketProviderRun.id).filter(
+            MarketProviderRun.provider == SLOT_MARKER_PROVIDER, MarketProviderRun.demand_key == marker_key
+        ).first() is not None
+
+    if marked():
+        return {"status": "already_ingested_this_slot"}
+    with _provider_lock(db, SLOT_MARKER_PROVIDER) as acquired:
+        if not acquired:
+            return {"status": "in_progress_elsewhere"}
+        if marked():
+            return {"status": "already_ingested_this_slot"}
+        started = datetime.utcnow()
+        providers = await ingest_due_demands(db, deadline=deadline, trigger=trigger)
+        complete = all(item.get("status") != "deferred_time_budget" for item in providers.values())
+        if complete:
+            db.add(MarketProviderRun(
+                provider=SLOT_MARKER_PROVIDER, demand_key=marker_key, trigger=trigger, status="ok", started_at=started,
+                finished_at=datetime.utcnow(), observations_seen=0, points_inserted=0, points_revised=0, duplicates=0,
+                trace_json={"providers": {key: value.get("status") for key, value in providers.items()}},
+            ))
+            db.commit()
+        return providers
+
+
 async def evaluate_organization(db: Session, organization_id: str, *, deadline: float) -> dict[str, Any]:
     positions = (
         db.query(MarketPosition)
@@ -492,10 +531,17 @@ def _job_budget() -> float:
         return DEFAULT_JOB_TIME_BUDGET_SECONDS
 
 
-async def run_organization_cycle(db: Session, organization_id: str, *, time_budget_seconds: float | None = None, trigger: str = "scheduled") -> dict[str, Any]:
+async def run_organization_cycle(
+    db: Session,
+    organization_id: str,
+    *,
+    time_budget_seconds: float | None = None,
+    trigger: str = "scheduled",
+    slot: str | None = None,
+) -> dict[str, Any]:
     started = time.monotonic()
     deadline = started + (time_budget_seconds if time_budget_seconds is not None else _job_budget())
-    providers = await ingest_due_demands(db, deadline=deadline, trigger=trigger)
+    providers = await ingest_once_per_slot(db, slot or _slot(datetime.utcnow()), deadline=deadline, trigger=trigger)
     outcome = await evaluate_organization(db, organization_id, deadline=deadline)
     notifications = deliver_alerts(db, organization_id)
     return {
@@ -528,7 +574,8 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
         return _complete(db, job, {"status": "skipped"}, worker_id=worker_id)
     with job_lease_heartbeat(job_id=job_id, tenant_id=organization_id, worker_id=worker_id):
         try:
-            output = asyncio.run(run_organization_cycle(db, organization_id, trigger=str((job.input_json or {}).get("trigger") or "scheduled")))
+            payload = job.input_json or {}
+            output = asyncio.run(run_organization_cycle(db, organization_id, trigger=str(payload.get("trigger") or "scheduled"), slot=payload.get("slot")))
         except Exception as exc:  # noqa: BLE001
             logger.exception("market_cycle_job_failed job=%s", job_id)
             status = _fail_or_retry(db, job_id, exc, worker_id=worker_id)

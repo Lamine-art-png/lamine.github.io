@@ -4,7 +4,7 @@ import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import countryRegistry from "../../../../shared/registries/countries.json";
 import currencyRegistry from "../../../../shared/registries/currencies.json";
-import { COMMERCIAL_COPY, COMMODITY_LABELS, UNIT_LABELS, packLabel, providerLabel, unitLabel, warningLabel } from "./commercialCopy";
+import { COMMERCIAL_COPY, COMMODITY_LABELS, UNIT_LABELS, packLabel, providerLabel, stateLabel, unitLabel, warningLabel } from "./commercialCopy";
 
 // Customer-language onboarding for Commercial Intelligence. Operators answer
 // what they know (crop, place, season, volumes, costs, sales); AGRO-AI infers
@@ -145,7 +145,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
 
   const input = "mt-1 w-full rounded-xl border border-[#D6DDD0] bg-white px-3 py-2.5 text-sm text-[#10231B]";
   const label = "block text-xs font-semibold text-[#46574B]";
-  const statusLabel = (status: string) => status === "DELAYED" ? tx("Available") : status === "MANUAL" ? tx("Customer-supplied") : tx("Not configured");
+  const statusLabel = (status: string) => status === "DELAYED" ? tx("Available") : stateLabel(tx, status);
 
   return (
     <section data-testid="commercial-onboarding" className="rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-4 sm:p-6">

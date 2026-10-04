@@ -273,13 +273,17 @@ def test_drain_endpoint_schedules_synchronously_without_background_tasks(monkeyp
 
     calls = []
     monkeypatch.setattr(cloudflare_queue, "queue_configured", lambda: True)
-    for name in ("drain_pending_outbox", "run_connector_object_gc"):
-        monkeypatch.setattr(cloudflare_queue, name, lambda **kwargs: {"published": 0})
+    monkeypatch.setattr(cloudflare_queue, "run_connector_object_gc", lambda **kwargs: {"deleted": 0})
     for name in ("_drain_webhook_outbox", "_drain_meter_outbox", "_run_platform_api_maintenance", "_run_lifecycle_emails"):
         monkeypatch.setattr(cloudflare_queue, name, lambda: {})
-    monkeypatch.setattr("app.services.market_intelligence_cycle.schedule_cycle_once", lambda **kwargs: calls.append(kwargs) or {"status": "ok", "enqueued": 3})
+    published = []
+    monkeypatch.setattr(cloudflare_queue, "drain_pending_outbox", lambda **kwargs: published.append(kwargs) or {"published": 3, "failed": 0})
+    monkeypatch.setattr("app.services.market_intelligence_cycle.schedule_cycle_once", lambda **kwargs: calls.append(kwargs) or {"status": "ok", "enqueued": 3, "batch": 200})
     result = asyncio.run(cloudflare_queue.drain_task_outbox())
-    assert result["market_intelligence_cycle"] == {"status": "ok", "enqueued": 3} and calls == [{"trigger": "scheduled"}]
+    assert calls == [{"trigger": "scheduled"}]
+    # Jobs scheduled in this pass are published in this pass, with their own bound.
+    assert published[-1] == {"limit": 200, "task_types": (cycle.TASK_TYPE,)}
+    assert result["market_intelligence_cycle"] == {"status": "ok", "enqueued": 3, "batch": 200, "published": {"published": 3, "failed": 0}}
     import inspect
 
     assert "background" not in inspect.signature(cloudflare_queue.drain_task_outbox).parameters
@@ -378,6 +382,9 @@ def test_organization_cycle_ingests_shared_evidence_once_and_alerts(db, client, 
     monkeypatch.setitem(ADAPTERS, "conab_precos", FixtureConab())
     for provider_id in ("fx_reference", "bcb_ptax"):
         monkeypatch.setattr(ADAPTERS[provider_id], "configured", lambda: False)
+    demand_builds = []
+    real_demand_set = cycle.plane.demand_set
+    monkeypatch.setattr(cycle.plane, "demand_set", lambda db_, **kw: demand_builds.append(1) or real_demand_set(db_, **kw))
     cycle.schedule_cycle(db)
     [job] = _jobs(db)
     assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org_id, worker_id="w") == "succeeded"
@@ -387,9 +394,14 @@ def test_organization_cycle_ingests_shared_evidence_once_and_alerts(db, client, 
     events = db.query(MarketMaterialityEvent).filter_by(position_id=position_id).all()
     assert events and events[0].level in {"HIGH", "CRITICAL"}
     assert job.output_json["notifications"]["status"] == "disabled"
-    # Shared evidence is fresh: the next organization job does not re-fetch CONAB.
-    again = asyncio.run(cycle.run_organization_cycle(db, org_id, time_budget_seconds=60))
-    assert again["providers"]["conab_precos"]["status"] == "fresh_enough" and len(calls) == 1
+    # Every other organization job of the slot skips shared ingestion entirely:
+    # no global demand rebuild, no provider call.
+    again = asyncio.run(cycle.run_organization_cycle(db, org_id, time_budget_seconds=60, slot=job.input_json["slot"]))
+    assert again["providers"] == {"status": "already_ingested_this_slot"} and len(calls) == 1 and len(demand_builds) == 1
+    # The next slot re-checks freshness: CONAB is still fresh, so it is not re-fetched.
+    later = asyncio.run(cycle.run_organization_cycle(db, org_id, time_budget_seconds=60, slot="next-slot"))
+    assert later["providers"]["conab_precos"]["status"] == "fresh_enough" and len(calls) == 1 and len(demand_builds) == 2
+    assert "__cycle_slot__" not in plane.provider_health(db)
 
 
 # ---------------------------------------------------------------------------
@@ -527,3 +539,26 @@ def test_alert_emails_stay_off_unless_explicitly_enabled(db, monkeypatch):
     monkeypatch.delenv("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED", raising=False)
     assert cycle.deliver_alerts(db, org.id) == {"status": "disabled"}
     assert db.query(MarketAlertDelivery).count() == 0
+
+
+def test_outbox_publish_can_be_scoped_to_cycle_jobs(db, monkeypatch):
+    from app.services import task_outbox_service
+
+    _, org, _ = identity(db, "scoped-publish")
+    _position(db, org)
+    cycle.schedule_cycle(db)
+    other = IngestionJob(tenant_id=org.id, job_type="connector_provider_sync", status="queued", input_json={}, output_json={}, attempt_count=0, max_attempts=5)
+    db.add(other)
+    db.flush()
+    db.add(TaskOutbox(job_id=other.id, tenant_id=org.id, task_type="connector_provider_sync", payload_json={}, status="pending", publish_attempts=0))
+    db.commit()
+    sent = []
+
+    class Publisher:
+        def enqueue(self, job_id, tenant_id, task_type):
+            sent.append(task_type)
+
+    monkeypatch.setattr(task_outbox_service, "get_task_publisher", lambda: Publisher())
+    assert task_outbox_service.publish_pending_outbox(db, limit=10, task_types=(cycle.TASK_TYPE,)) == {"published": 1, "failed": 0}
+    assert sent == [cycle.TASK_TYPE]
+    assert db.query(TaskOutbox).filter_by(task_type="connector_provider_sync").one().status == "pending"

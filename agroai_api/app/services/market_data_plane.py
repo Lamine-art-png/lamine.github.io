@@ -35,7 +35,7 @@ from app.models.market_intelligence import (
     MarketPosition,
     MarketProviderRun,
 )
-from app.services.market_data_adapters import ADAPTERS, SeriesPoint, SeriesProvider
+from app.services.market_data_adapters import ADAPTERS, ECB_REFERENCE_CURRENCIES, SeriesPoint, SeriesProvider
 from app.services.market_intelligence import ACTIVE_CONTRACT_STATUSES, MarketCalculationError, convert_price_per_unit
 from app.services.market_normalization import EUR_FIXED_PARITIES, canonical_commodity, fold
 from app.services.market_packs import ROLE_PHYSICAL, position_selectors, resolve_pack
@@ -512,6 +512,22 @@ def _per_eur(db: Session, currency: str, now: datetime) -> tuple[Decimal | None,
     if point is None or state == "UNAVAILABLE":
         return None, "UNAVAILABLE", []
     return Decimal(point.value), state, [evidence_record(series, point, state, age, role="fx_rate")]
+
+
+def fx_pair_coverage(source_currency: str | None, reporting_currency: str | None) -> dict[str, bool]:
+    """Which governed FX providers can convert this pair at all.
+
+    PTAX covers USD/BRL; the ECB basket covers any two of EUR, its reference
+    currencies and the EUR-pegged CFA francs. Anything else (e.g. UGX, KES)
+    needs a customer-entered rate.
+    """
+    source = str(source_currency or "").upper()
+    reporting = str(reporting_currency or "").upper()
+
+    def ecb(code: str) -> bool:
+        return code == "EUR" or code in ECB_REFERENCE_CURRENCIES or code in EUR_FIXED_PARITIES
+
+    return {"bcb_ptax": {source, reporting} == {"USD", "BRL"}, "fx_reference": bool(source and reporting) and ecb(source) and ecb(reporting)}
 
 
 def resolve_fx(db: Session, source_currency: str, reporting_currency: str, *, now: datetime | None = None) -> FxResolution:
