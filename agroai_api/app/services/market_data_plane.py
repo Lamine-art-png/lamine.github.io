@@ -28,13 +28,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.market_intelligence import (
+    MarketContractPosition,
     MarketDataPoint,
+    MarketDataPointRevision,
     MarketDataSeries,
     MarketPosition,
     MarketProviderRun,
 )
 from app.services.market_data_adapters import ADAPTERS, SeriesPoint, SeriesProvider
-from app.services.market_intelligence import MarketCalculationError, convert_price_per_unit
+from app.services.market_intelligence import ACTIVE_CONTRACT_STATUSES, MarketCalculationError, convert_price_per_unit
 from app.services.market_normalization import EUR_FIXED_PARITIES, canonical_commodity, fold
 from app.services.market_packs import ROLE_PHYSICAL, position_selectors, resolve_pack
 
@@ -67,6 +69,20 @@ def _content_hash(point: SeriesPoint) -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(material.encode()).hexdigest()
+
+
+def demand_identity(adapter: SeriesProvider, selectors: Iterable[dict[str, Any]]) -> tuple[str, list[str]]:
+    """Stable, bounded identity of a provider demand.
+
+    Returns ``(sha256 key, readable labels)``. The key hashes the canonical
+    (sorted, de-duplicated, key-sorted JSON) selector set, so it never collides
+    through truncation however many selectors the tenant population produces;
+    the labels are kept only as trace metadata.
+    """
+    canonical = sorted({json.dumps(selector or {}, sort_keys=True, separators=(",", ":"), default=str) for selector in selectors} or {"{}"})
+    digest = hashlib.sha256(json.dumps([adapter.provider_id, canonical], separators=(",", ":")).encode()).hexdigest()
+    labels = sorted({adapter.demand_key(json.loads(item)) for item in canonical})
+    return f"sha256:{digest}", labels
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +136,7 @@ def _series_row(db: Session, descriptor: Any, cache: dict[str, MarketDataSeries]
     return row
 
 
-def persist_points(db: Session, points: Iterable[SeriesPoint]) -> IngestStats:
+def persist_points(db: Session, points: Iterable[SeriesPoint], *, provider_run_id: str | None = None) -> IngestStats:
     """Idempotently persist provider points. Does not commit.
 
     Existing points are loaded once per series (one query per series, not per
@@ -148,11 +164,19 @@ def persist_points(db: Session, points: Iterable[SeriesPoint]) -> IngestStats:
         }
         for point in series_points:
             stats.series_touched.add(series.id)
-            _persist_point(db, series, point, known, stats)
+            _persist_point(db, series, point, known, stats, provider_run_id=provider_run_id)
     return stats
 
 
-def _persist_point(db: Session, series: MarketDataSeries, point: SeriesPoint, known: dict[datetime, MarketDataPoint], stats: IngestStats) -> None:
+def _persist_point(
+    db: Session,
+    series: MarketDataSeries,
+    point: SeriesPoint,
+    known: dict[datetime, MarketDataPoint],
+    stats: IngestStats,
+    *,
+    provider_run_id: str | None = None,
+) -> None:
     observed = _naive(point.observed_at)
     digest = _content_hash(point)
     existing = known.get(observed)
@@ -182,19 +206,35 @@ def _persist_point(db: Session, series: MarketDataSeries, point: SeriesPoint, kn
         stats.duplicates += 1
         existing.retrieved_at = _naive(point.retrieved_at)
     else:
-        quality = dict(existing.quality_json or {})
-        revisions = list(quality.get("revisions") or [])[-9:]
-        revisions.append({
-            "previous_value": str(existing.value),
-            "previous_retrieved_at": existing.retrieved_at.isoformat() + "Z" if existing.retrieved_at else None,
-            "revised_at": _naive(point.retrieved_at).isoformat() + "Z",
-        })
+        # Upstream correction: the point keeps the latest value for fast reads
+        # and the full before/after is appended to the audit history.
+        revision = int(existing.revision or 0) + 1
+        new_raw = (point.raw_value or "")[:120] or None
+        db.add(MarketDataPointRevision(
+            point_id=existing.id,
+            series_id=series.id,
+            observed_at=observed,
+            revision=revision,
+            previous_value=existing.value,
+            new_value=point.value,
+            previous_raw_value=existing.raw_value,
+            new_raw_value=new_raw,
+            previous_source_status=existing.source_status,
+            new_source_status=point.source_status,
+            previous_content_hash=existing.content_hash,
+            new_content_hash=digest,
+            previous_retrieved_at=existing.retrieved_at,
+            revised_retrieved_at=_naive(point.retrieved_at),
+            provider_run_id=provider_run_id,
+            upstream_ref=(point.upstream_ref or "")[:600] or None,
+        ))
         existing.value = point.value
-        existing.raw_value = (point.raw_value or "")[:120] or None
+        existing.raw_value = new_raw
+        existing.source_status = point.source_status
         existing.content_hash = digest
         existing.retrieved_at = _naive(point.retrieved_at)
-        existing.revision = Decimal(int(existing.revision or 0) + 1)
-        existing.quality_json = {**dict(point.quality), "revisions": revisions}
+        existing.revision = Decimal(revision)
+        existing.quality_json = dict(point.quality)
         stats.revised += 1
     if series.last_observed_at is None or observed > series.last_observed_at:
         series.last_observed_at = observed
@@ -245,8 +285,7 @@ async def ingest(
     adapter = adapter or ADAPTERS.get(provider_id)
     if adapter is None:
         return {"provider": provider_id, "status": "unknown_provider"}
-    demand_key = "|".join(sorted({adapter.demand_key(selector) for selector in selectors})) or adapter.demand_key({})
-    demand_key = demand_key[:400]
+    demand_key, demand_labels = demand_identity(adapter, selectors)
     run = MarketProviderRun(
         provider=provider_id,
         demand_key=demand_key,
@@ -257,7 +296,7 @@ async def ingest(
         points_inserted=Decimal(0),
         points_revised=Decimal(0),
         duplicates=Decimal(0),
-        trace_json={"selectors": selectors[:50], "data_plane_version": DATA_PLANE_VERSION},
+        trace_json={"demand_labels": demand_labels[:200], "selector_count": len(demand_labels), "selectors": selectors[:50], "data_plane_version": DATA_PLANE_VERSION},
     )
     if not adapter.configured():
         run.status = "not_configured"
@@ -269,7 +308,7 @@ async def ingest(
     db.commit()
     try:
         points = await adapter.collect(selectors)
-        stats = persist_points(db, points)
+        stats = persist_points(db, points, provider_run_id=run.id)
         run.status = "ok" if points or not selectors else "partial"
         run.observations_seen = Decimal(stats.seen)
         run.points_inserted = Decimal(stats.inserted)
@@ -295,19 +334,71 @@ async def ingest(
     }
 
 
+def position_fx_currencies(position: MarketPosition, contracts: Iterable[MarketContractPosition] = ()) -> set[str]:
+    """Every currency that must convert to the position's reporting currency.
+
+    The realizable-price currency, the cost currency and the currency of every
+    contract that still carries exposure (active, priced or committed): a
+    USD-priced contract on a BRL-reported Brazilian position needs USD/BRL even
+    when price and reporting currency are the same.
+    """
+    reporting = str(position.reporting_currency or "").upper()
+    metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
+    currencies = {
+        str(position.price_currency or position.local_currency or "").upper(),
+        str(metadata.get("cost_currency") or "").upper(),
+    }
+    for contract in contracts:
+        if str(contract.status or "active").lower() in ACTIVE_CONTRACT_STATUSES:
+            currencies.add(str(contract.currency or "").upper())
+    return {code for code in currencies if code and code != reporting}
+
+
+def fx_demands(reporting_currency: str, foreign: set[str]) -> dict[str, dict[str, Any]]:
+    """Shared FX provider demands for one reporting currency and its foreign currencies."""
+    reporting = str(reporting_currency or "").upper()
+    if not foreign:
+        return {}
+    demands: dict[str, dict[str, Any]] = {"fx_reference": {}}
+    if any({code, reporting} == {"BRL", "USD"} for code in foreign):
+        demands["bcb_ptax"] = {}
+    return demands
+
+
+def active_contracts_by_position(db: Session, positions: list[MarketPosition]) -> dict[str, list[MarketContractPosition]]:
+    """Exposure-carrying contracts per position, loaded in one query, tenant-scoped."""
+    if not positions:
+        return {}
+    rows = (
+        db.query(MarketContractPosition)
+        .filter(
+            MarketContractPosition.position_id.in_([position.id for position in positions]),
+            MarketContractPosition.status.in_(sorted(ACTIVE_CONTRACT_STATUSES)),
+        )
+        .all()
+    )
+    owners = {position.id: position.organization_id for position in positions}
+    grouped: dict[str, list[MarketContractPosition]] = {}
+    for row in rows:
+        if owners.get(row.position_id) == row.organization_id:
+            grouped.setdefault(row.position_id, []).append(row)
+    return grouped
+
+
 def demand_set(db: Session, *, organization_id: str | None = None) -> dict[str, list[dict[str, Any]]]:
     """De-duplicated provider selectors needed by active positions.
 
     Hundreds of tenants holding Mato Grosso soybean positions produce one
-    CONAB selector; FX is a single global demand.
+    CONAB selector; FX is a single global demand covering price, cost and
+    every exposure-carrying contract currency.
     """
     query = db.query(MarketPosition).filter(MarketPosition.status == "active")
     if organization_id:
         query = query.filter(MarketPosition.organization_id == organization_id)
+    positions = query.all()
+    contracts = active_contracts_by_position(db, positions)
     demands: dict[str, dict[str, dict[str, Any]]] = {}
-    needs_fx = False
-    needs_ptax = False
-    for position in query.all():
+    for position in positions:
         metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
         pack = resolve_pack(position.country_code, position.commodity)
         selectors = position_selectors(
@@ -317,15 +408,10 @@ def demand_set(db: Session, *, organization_id: str | None = None) -> dict[str, 
             adapter = ADAPTERS.get(provider_id)
             if adapter is None:
                 continue
-            demands.setdefault(provider_id, {})[adapter.demand_key(selector)] = selector
-        currencies = {str(position.reporting_currency or "").upper(), str(position.price_currency or position.local_currency or "").upper()}
-        if len(currencies - {""}) > 1:
-            needs_fx = True
-            needs_ptax = needs_ptax or {"BRL", "USD"}.issubset(currencies)
-    if needs_fx:
-        demands.setdefault("fx_reference", {})["fx_reference:ecb-hist-90d"] = {}
-    if needs_ptax:
-        demands.setdefault("bcb_ptax", {})["bcb_ptax:USD:BRL"] = {}
+            demands.setdefault(provider_id, {})[json.dumps(selector, sort_keys=True, default=str)] = selector
+        foreign = position_fx_currencies(position, contracts.get(position.id, []))
+        for provider_id, selector in fx_demands(str(position.reporting_currency or ""), foreign).items():
+            demands.setdefault(provider_id, {})[json.dumps(selector, sort_keys=True, default=str)] = selector
     return {provider_id: list(selectors.values()) for provider_id, selectors in demands.items()}
 
 

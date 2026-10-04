@@ -37,12 +37,12 @@ from app.models.market_intelligence import (
     MarketObservation,
     MarketPosition,
     MarketPositionFieldLink,
-    MarketPositionSnapshot,
 )
 from app.models.saas import ManagedEntity
 from app.services import market_data_plane as plane
 from app.services.market_data_adapters import ADAPTERS
 from app.services.market_intelligence import (
+    ACTIVE_CONTRACT_STATUSES,
     CALCULATION_VERSION,
     MarketCalculationError,
     apply_display_policy,
@@ -53,7 +53,7 @@ from app.services.market_intelligence import (
     scenario_position,
 )
 from app.services.market_intelligence_refresh import refresh_position_market_data
-from app.services.market_materiality import METHODOLOGY_VERSION, evaluate_position, event_payload
+from app.services.market_materiality import METHODOLOGY_VERSION, evaluate_position, event_payload, evidence_states
 from app.services.market_normalization import canonical_unit
 from app.services.market_packs import catalog as pack_catalog, infer_onboarding, resolve_pack
 from app.services.market_risk import position_risk
@@ -113,9 +113,10 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
             payload, _ = apply_display_policy(compute_position(row, contracts_by_position[row.id]).payload, None, row)
         except MarketCalculationError as exc:
             payload = {"position_id": row.id, "name": row.name, "error": str(exc)}
-        metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
-        payload["price_state"] = metadata.get("price_state") or ("MANUAL" if row.current_realizable_price is not None else "UNAVAILABLE")
-        payload["fx_state"] = metadata.get("fx_state") or ("NOT_REQUIRED" if str(row.price_currency or row.reporting_currency) == str(row.reporting_currency) else ("MANUAL" if row.fx_rate_to_reporting is not None else "UNAVAILABLE"))
+        states = evidence_states(db, row, contracts_by_position[row.id])
+        payload["evidence_states"] = states
+        payload["price_state"] = states["price"]
+        payload["fx_state"] = states["fx"]
         payload["pack_id"] = resolve_pack(row.country_code, row.commodity).pack_id
         positions.append(payload)
 
@@ -175,16 +176,22 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
         }
         for contracts in contracts_by_position.values()
         for contract in contracts
-        if str(contract.status).lower() in {"active", "priced", "committed"}
+        if str(contract.status).lower() in ACTIVE_CONTRACT_STATUSES
         and contract.delivery_start is not None and datetime.utcnow() - timedelta(days=1) <= contract.delivery_start <= horizon
     ]
     deadlines.sort(key=lambda item: item["delivery_start"] or "")
 
-    stale = [
-        {"position_id": item.get("position_id"), "name": item.get("name"), "price_state": item.get("price_state"), "fx_state": item.get("fx_state")}
-        for item in positions
-        if item.get("price_state") in {"STALE", "UNAVAILABLE"} or item.get("fx_state") in {"STALE", "UNAVAILABLE"}
-    ]
+    stale = []
+    for item in positions:
+        degraded = {key: state for key, state in (item.get("evidence_states") or {}).items() if state in {"STALE", "UNAVAILABLE"}}
+        if degraded:
+            stale.append({
+                "position_id": item.get("position_id"),
+                "name": item.get("name"),
+                "price_state": item.get("price_state"),
+                "fx_state": item.get("fx_state"),
+                "degraded_evidence": degraded,
+            })
     urgent = [m for m in material if m["level"] in {"HIGH", "CRITICAL"}]
     return {
         "module": "commercial_intelligence",

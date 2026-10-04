@@ -577,6 +577,7 @@ def _focus_position(db: Session, org_id: str) -> MarketPosition | None:
 def _ask_context(db: Session, org_id: str, position: MarketPosition, contracts: list[MarketContractPosition], payload: dict[str, Any], question: str) -> tuple[dict[str, Any], dict[str, str]]:
     from app.models.market_intelligence import MarketMaterialityEvent
     from app.services.market_intelligence_ask import parse_scenario_intents, scenario_evidence
+    from app.services.market_materiality import evidence_states
 
     metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
     intents = parse_scenario_intents(question, {**payload, "price_currency": position.price_currency})
@@ -634,8 +635,11 @@ def _ask_context(db: Session, org_id: str, position: MarketPosition, contracts: 
         "reporting_currency": payload.get("reporting_currency"),
         "scenarios": scenarios,
         "data_states": [
-            {"evidence": "price", "state": metadata.get("price_state") or (price_row.source_status if price_row else "UNAVAILABLE")},
-            {"evidence": "fx", "state": metadata.get("fx_state") or "NOT_REQUIRED"},
+            {"evidence": key, "state": state}
+            for key, state in {
+                **evidence_states(db, position, contracts),
+                "price": metadata.get("price_state") or (price_row.source_status if price_row else "UNAVAILABLE"),
+            }.items()
         ],
         "price_source": price_source,
         "material_changes": [{"level": e.level, "kind": e.kind, "position_name": position.name, "reasons": e.reasons_json,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 
 from app.db.base import Base
 
@@ -228,12 +228,50 @@ class MarketDataPoint(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class MarketDataPointRevision(Base):
+    """Append-only audit history of upstream corrections to a point.
+
+    ``market_data_points`` keeps the latest value for efficient reads; every
+    change of an already-stored upstream fact appends one row here and rows are
+    never updated or deleted by the application.
+    """
+
+    __tablename__ = "market_data_point_revisions"
+    __table_args__ = (
+        UniqueConstraint("point_id", "revision", name="uq_market_point_revision"),
+        Index("ix_market_point_revision_series_time", "series_id", "observed_at"),
+    )
+
+    id = Column(String, primary_key=True, default=_id)
+    point_id = Column(String, ForeignKey("market_data_points.id", ondelete="CASCADE"), nullable=False, index=True)
+    series_id = Column(String, ForeignKey("market_data_series.id", ondelete="CASCADE"), nullable=False)
+    observed_at = Column(DateTime, nullable=False)
+    revision = Column(Integer, nullable=False)
+    previous_value = Column(Numeric(24, 10), nullable=False)
+    new_value = Column(Numeric(24, 10), nullable=False)
+    previous_raw_value = Column(String(120), nullable=True)
+    new_raw_value = Column(String(120), nullable=True)
+    previous_source_status = Column(String, nullable=True)
+    new_source_status = Column(String, nullable=True)
+    previous_content_hash = Column(String(64), nullable=False)
+    new_content_hash = Column(String(64), nullable=False)
+    previous_retrieved_at = Column(DateTime, nullable=True)
+    revised_retrieved_at = Column(DateTime, nullable=False)
+    provider_run_id = Column(String, ForeignKey("market_provider_runs.id", ondelete="SET NULL"), nullable=True)
+    upstream_ref = Column(String(600), nullable=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class MarketProviderRun(Base):
     __tablename__ = "market_provider_runs"
-    __table_args__ = (Index("ix_market_provider_run_provider_time", "provider", "started_at"),)
+    __table_args__ = (
+        Index("ix_market_provider_run_provider_time", "provider", "started_at"),
+        Index("ix_market_provider_run_demand_time", "provider", "demand_key", "started_at"),
+    )
 
     id = Column(String, primary_key=True, default=_id)
     provider = Column(String, nullable=False)
+    # sha256 of the canonical, sorted selector set; readable selectors live in trace_json.
     demand_key = Column(String(400), nullable=False)
     trigger = Column(String, nullable=False, default="scheduled")
     status = Column(String, nullable=False)  # ok | partial | unavailable | not_configured | skipped
@@ -308,3 +346,54 @@ class MarketPositionFieldLink(Base):
     field_entity_id = Column(String, ForeignKey("managed_entities.id", ondelete="CASCADE"), nullable=False)
     created_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketCycleOrganizationState(Base):
+    """Per-organization scheduling state for the Commercial Intelligence cycle.
+
+    The scheduler enqueues organizations oldest-due first (never-run first, then
+    the oldest successful completion), so a large tenant population cannot
+    starve later organizations.
+    """
+
+    __tablename__ = "market_cycle_organization_state"
+
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    last_enqueued_at = Column(DateTime, nullable=True)
+    last_started_at = Column(DateTime, nullable=True)
+    last_completed_at = Column(DateTime, nullable=True, index=True)
+    last_status = Column(String, nullable=True)
+    last_job_id = Column(String, nullable=True)
+    consecutive_failures = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class MarketAlertDelivery(Base):
+    """One alert channel delivery per event and recipient.
+
+    Attempts are recorded separately from success: ``delivered_at`` is set only
+    when the provider accepted the message; failures retry on a bounded backoff
+    and an unsupported recipient language is an explicit terminal deferral.
+    """
+
+    __tablename__ = "market_alert_deliveries"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", "channel", name="uq_market_alert_delivery"),
+        Index("ix_market_alert_delivery_due", "status", "next_attempt_at"),
+    )
+
+    id = Column(String, primary_key=True, default=_id)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(String, ForeignKey("market_materiality_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    channel = Column(String, nullable=False, default="email")
+    # pending | retrying | delivered | failed | deferred_unsupported_language
+    status = Column(String, nullable=False, default="pending")
+    language = Column(String(16), nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    last_attempt_at = Column(DateTime, nullable=True)
+    next_attempt_at = Column(DateTime, nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    last_error = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

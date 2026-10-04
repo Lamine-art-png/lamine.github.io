@@ -5,13 +5,18 @@ Global (not tenant-scoped) provider evidence:
 - market_data_points: time-series observations, unique per series and time, so
   re-ingesting the same upstream fact is idempotent and every tenant reads the
   same governed point instead of re-fetching it.
-- market_provider_runs: ingestion runs for provider health and auditability.
+- market_provider_runs: ingestion runs for provider health and auditability,
+  keyed by a sha256 of the canonical selector set.
+- market_data_point_revisions: append-only audit history of upstream
+  corrections (the point row keeps the latest value for fast reads).
 
 Tenant-private state:
 - market_position_snapshots: deterministic economics at a point in time for
   change detection ("what changed since yesterday").
 - market_materiality_events: explainable material changes, deduplicated.
 - market_position_field_links: commercial positions linked to AGRO-AI fields.
+- market_cycle_organization_state: oldest-due fair scheduling of the cycle.
+- market_alert_deliveries: per-recipient alert delivery attempts and outcome.
 - Decision Journal v2 columns on market_decision_journal.
 
 Revision ID: 042_market_data_plane
@@ -121,6 +126,37 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
         )
     _index("ix_market_provider_run_provider_time", "market_provider_runs", ["provider", "started_at"])
+    _index("ix_market_provider_run_demand_time", "market_provider_runs", ["provider", "demand_key", "started_at"])
+
+    if "market_data_point_revisions" not in tables:
+        op.create_table(
+            "market_data_point_revisions",
+            sa.Column("id", sa.String(), nullable=False),
+            sa.Column("point_id", sa.String(), nullable=False),
+            sa.Column("series_id", sa.String(), nullable=False),
+            sa.Column("observed_at", sa.DateTime(), nullable=False),
+            sa.Column("revision", sa.Integer(), nullable=False),
+            sa.Column("previous_value", value, nullable=False),
+            sa.Column("new_value", value, nullable=False),
+            sa.Column("previous_raw_value", sa.String(120), nullable=True),
+            sa.Column("new_raw_value", sa.String(120), nullable=True),
+            sa.Column("previous_source_status", sa.String(), nullable=True),
+            sa.Column("new_source_status", sa.String(), nullable=True),
+            sa.Column("previous_content_hash", sa.String(64), nullable=False),
+            sa.Column("new_content_hash", sa.String(64), nullable=False),
+            sa.Column("previous_retrieved_at", sa.DateTime(), nullable=True),
+            sa.Column("revised_retrieved_at", sa.DateTime(), nullable=False),
+            sa.Column("provider_run_id", sa.String(), nullable=True),
+            sa.Column("upstream_ref", sa.String(600), nullable=True),
+            sa.Column("recorded_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["point_id"], ["market_data_points.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["series_id"], ["market_data_series.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["provider_run_id"], ["market_provider_runs.id"], ondelete="SET NULL"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("point_id", "revision", name="uq_market_point_revision"),
+        )
+    _index("ix_market_data_point_revisions_point_id", "market_data_point_revisions", ["point_id"])
+    _index("ix_market_point_revision_series_time", "market_data_point_revisions", ["series_id", "observed_at"])
 
     if "market_position_snapshots" not in tables:
         op.create_table(
@@ -194,6 +230,49 @@ def upgrade() -> None:
         )
     _index("ix_market_position_field_org", "market_position_field_links", ["organization_id", "position_id"])
 
+    if "market_cycle_organization_state" not in tables:
+        op.create_table(
+            "market_cycle_organization_state",
+            sa.Column("organization_id", sa.String(), nullable=False),
+            sa.Column("last_enqueued_at", sa.DateTime(), nullable=True),
+            sa.Column("last_started_at", sa.DateTime(), nullable=True),
+            sa.Column("last_completed_at", sa.DateTime(), nullable=True),
+            sa.Column("last_status", sa.String(), nullable=True),
+            sa.Column("last_job_id", sa.String(), nullable=True),
+            sa.Column("consecutive_failures", sa.Integer(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("organization_id"),
+        )
+    _index("ix_market_cycle_organization_state_last_completed_at", "market_cycle_organization_state", ["last_completed_at"])
+
+    if "market_alert_deliveries" not in tables:
+        op.create_table(
+            "market_alert_deliveries",
+            sa.Column("id", sa.String(), nullable=False),
+            sa.Column("organization_id", sa.String(), nullable=False),
+            sa.Column("event_id", sa.String(), nullable=False),
+            sa.Column("user_id", sa.String(), nullable=False),
+            sa.Column("channel", sa.String(), nullable=False),
+            sa.Column("status", sa.String(), nullable=False),
+            sa.Column("language", sa.String(16), nullable=True),
+            sa.Column("attempts", sa.Integer(), nullable=False),
+            sa.Column("last_attempt_at", sa.DateTime(), nullable=True),
+            sa.Column("next_attempt_at", sa.DateTime(), nullable=True),
+            sa.Column("delivered_at", sa.DateTime(), nullable=True),
+            sa.Column("last_error", sa.String(200), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["event_id"], ["market_materiality_events.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("event_id", "user_id", "channel", name="uq_market_alert_delivery"),
+        )
+    _index("ix_market_alert_deliveries_organization_id", "market_alert_deliveries", ["organization_id"])
+    _index("ix_market_alert_deliveries_event_id", "market_alert_deliveries", ["event_id"])
+    _index("ix_market_alert_delivery_due", "market_alert_deliveries", ["status", "next_attempt_at"])
+
     journal_columns = _columns("market_decision_journal")
     for name, column in (
         ("evidence_snapshot_json", sa.Column("evidence_snapshot_json", sa.JSON(), nullable=True)),
@@ -221,6 +300,9 @@ def downgrade() -> None:
         op.drop_constraint("fk_market_journal_outcome_user", "market_decision_journal", type_="foreignkey")
     for name in ("outcome_recorded_by_user_id", "outcome_recorded_at", "action_taken", "evidence_snapshot_json"):
         op.drop_column("market_decision_journal", name)
+    op.drop_table("market_alert_deliveries")
+    op.drop_table("market_cycle_organization_state")
+    op.drop_table("market_data_point_revisions")
     op.drop_table("market_position_field_links")
     op.drop_table("market_materiality_events")
     op.drop_table("market_position_snapshots")

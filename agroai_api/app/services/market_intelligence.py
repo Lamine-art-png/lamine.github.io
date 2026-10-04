@@ -13,6 +13,8 @@ from typing import Any, Iterable
 from app.services.market_normalization import canonical_commodity, canonical_unit
 
 CALCULATION_VERSION = "market-economics-2026.10.1"
+# Contract statuses that still carry commercial exposure (price, volume, FX).
+ACTIVE_CONTRACT_STATUSES = frozenset({"active", "priced", "committed"})
 FX_QUOTE_CONVENTION = "reporting_currency_per_source_currency"
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -202,8 +204,12 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     if cost_currency != reporting_currency:
         price_currency = str(_attr(position, "price_currency") or reporting_currency).upper()
         position_fx = _attr(position, "fx_rate_to_reporting")
+        explicit_cost_fx = metadata.get("cost_fx_rate")
         if cost_currency == price_currency and position_fx is not None and dec(position_fx) > ZERO:
             cost_fx = dec(position_fx)
+        elif cost_currency != price_currency and explicit_cost_fx not in (None, "") and dec(explicit_cost_fx) > ZERO:
+            # Third currency (neither price nor reporting): governed or customer rate.
+            cost_fx = dec(explicit_cost_fx)
         else:
             cost_fx_missing = True
             missing_inputs.append("cost_fx")
@@ -215,7 +221,7 @@ def compute_position(position: Any, contracts: Iterable[Any] = ()) -> PositionCo
     missing_contract_fx = False
 
     for contract in contracts:
-        if str(_attr(contract, "status", "active")).lower() not in {"active", "priced", "committed"}:
+        if str(_attr(contract, "status", "active")).lower() not in ACTIVE_CONTRACT_STATUSES:
             continue
         quantity = convert_quantity(
             _attr(contract, "quantity"),

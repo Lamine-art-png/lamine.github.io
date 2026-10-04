@@ -1,42 +1,79 @@
-"""Scheduled Commercial Intelligence cycle.
+"""Scheduled Commercial Intelligence cycle on AGRO-AI's durable job queue.
 
-Runs from the hourly maintenance hook (Cloudflare cron -> drain-outbox), off
-the request path, so customers never need to press "refresh":
+The hourly maintenance hook (Cloudflare cron -> drain-outbox) only *schedules*:
+it writes one durable job per due organization (``ingestion_jobs`` +
+``task_outbox``, the same infrastructure as connector and Platform API jobs),
+and the outbox publishes them to the Cloudflare Queue, which delivers each to
+``/v1/internal/queue/connector-task``. Nothing runs after the HTTP response,
+so a deploy or process restart cannot silently lose a cycle:
 
-1. ingest due shared provider demands once for all tenants;
-2. re-resolve every active position from the shared plane (no provider calls);
-3. snapshot economics and evaluate materiality;
-4. notify (in-app always; email digests only when explicitly enabled).
+- a job that crashes mid-run keeps its row; its lease expires and the next
+  scheduling tick re-arms its outbox row for redelivery;
+- failures retry with backoff up to ``max_attempts`` (``_fail_or_retry``), then
+  stay visibly ``failed`` in the job row and the organization state;
+- single-flight: at most one open job per organization (open-job check plus a
+  per-hour idempotency key backed by a unique index), job claims are
+  lease-fenced, and shared provider ingestion holds a per-provider lock.
 
-Single-flight: a PostgreSQL advisory lock (or an in-process lock on SQLite)
-prevents overlapping cycles across instances. A time budget bounds each run;
-unfinished organizations are picked up next hour (oldest refresh first).
+Fair, bounded scheduling: each tick enqueues at most ``batch`` organizations,
+oldest-due first (never run first, then the oldest completion), so a large
+tenant population cannot starve later organizations. Inside a job, positions
+are refreshed oldest-first under a time budget, so partial progress rotates.
+
+Each organization job:
+1. ingests due shared provider demands once for all tenants (dedupe by demand
+   hash + freshness; the first job of a tick does the work, others find the
+   evidence fresh);
+2. re-resolves the organization's active positions from the shared plane;
+3. snapshots economics and evaluates materiality;
+4. delivers alerts (in-app always; email only when explicitly enabled), with
+   per-recipient attempts recorded separately from successful delivery.
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import threading
 import time
-from datetime import datetime
-from typing import Any
+import zlib
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from typing import Any, Iterator
 
-from sqlalchemy import text
+from sqlalchemy import and_, func, literal, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.base import SessionLocal
-from app.models.market_intelligence import MarketMaterialityEvent, MarketPosition
+from app.core.config import settings
+from app.models.market_intelligence import (
+    MarketAlertDelivery,
+    MarketCycleOrganizationState,
+    MarketMaterialityEvent,
+    MarketPosition,
+)
+from app.models.operational_records import IngestionJob
 from app.models.saas import Organization, OrganizationMembership, User, UserPreference
+from app.models.task_outbox import TaskOutbox
 from app.services import market_data_plane as plane
+from app.services.ingestion_job_runner import _claim, _complete, _fail_or_retry, job_lease_heartbeat
 from app.services.market_data_adapters import ADAPTERS
 from app.services.market_intelligence_refresh import refresh_position_market_data
 from app.services.market_materiality import evaluate_position
 
 logger = logging.getLogger("agroai.market_cycle")
-_LOCK_KEY = 0x4D4B5443594C  # "MKTCYL"
-_process_lock = threading.Lock()
-DEFAULT_TIME_BUDGET_SECONDS = 1500.0
+
+TASK_TYPE = "market_intelligence_cycle"
+OPEN_JOB_STATUSES = ("queued", "running", "retrying")
+CYCLE_INTERVAL = timedelta(minutes=55)  # an organization is due about hourly
+DEFAULT_BATCH = 200
+# The queue consumer waits 120 s for a delivery; finish well inside it.
+DEFAULT_JOB_TIME_BUDGET_SECONDS = 90.0
+STALE_DELIVERY_AFTER = timedelta(minutes=10)
+_EPOCH = datetime(1970, 1, 1)
+_provider_locks: dict[str, threading.Lock] = {}
+_provider_locks_guard = threading.Lock()
 
 
 def _flag(name: str) -> bool:
@@ -48,15 +85,187 @@ def cycle_enabled() -> bool:
     return raw not in {"0", "false", "no", "off"}
 
 
-def _try_lock(db: Session) -> bool:
-    if db.bind is not None and db.bind.dialect.name == "postgresql":
-        return bool(db.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": _LOCK_KEY}).scalar())
-    return True
+def _int_env(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, "") or default))
+    except ValueError:
+        return default
 
 
-def _unlock(db: Session) -> None:
+def _state(db: Session, organization_id: str) -> MarketCycleOrganizationState:
+    row = db.get(MarketCycleOrganizationState, organization_id)
+    if row is None:
+        row = MarketCycleOrganizationState(organization_id=organization_id, consecutive_failures=0)
+        db.add(row)
+        db.flush()
+    return row
+
+
+# ---------------------------------------------------------------------------
+# Scheduling (runs inside the hourly drain request; enqueue only)
+# ---------------------------------------------------------------------------
+
+
+def _slot(now: datetime) -> str:
+    return now.strftime("%Y-%m-%dT%H")
+
+
+def recover_stale_jobs(db: Session, *, now: datetime | None = None, limit: int = 200) -> int:
+    """Re-arm delivery for cycle jobs whose delivery was lost.
+
+    Covers a worker killed mid-run (running, lease expired), a retry whose
+    queue redelivery was exhausted (retrying, due) and a queued job whose
+    published message never arrived. The job row is the source of truth; the
+    lease prevents concurrent execution of a re-delivered job.
+    """
+    now = now or datetime.utcnow()
+    stale_before = now - STALE_DELIVERY_AFTER
+    rows = (
+        db.query(TaskOutbox)
+        .join(IngestionJob, IngestionJob.id == TaskOutbox.job_id)
+        .filter(
+            TaskOutbox.task_type == TASK_TYPE,
+            TaskOutbox.status.in_(["published", "publishing"]),
+            TaskOutbox.updated_at <= stale_before,
+            or_(
+                and_(IngestionJob.status == "running", IngestionJob.lease_expires_at.isnot(None), IngestionJob.lease_expires_at <= now),
+                and_(IngestionJob.status == "retrying", or_(IngestionJob.next_attempt_at.is_(None), IngestionJob.next_attempt_at <= now)),
+                and_(IngestionJob.status == "queued", IngestionJob.updated_at <= stale_before),
+            ),
+        )
+        .order_by(TaskOutbox.updated_at.asc())
+        .limit(limit)
+        .all()
+    )
+    for row in rows:
+        row.status = "pending"
+        row.next_attempt_at = now
+        row.published_at = None
+        row.last_error = "Stale market intelligence cycle job re-armed for delivery."
+        row.updated_at = now
+    if rows:
+        db.commit()
+    return len(rows)
+
+
+def due_organizations(db: Session, *, now: datetime, limit: int) -> list[str]:
+    """Organizations with active positions, oldest-due first, without an open job."""
+    open_jobs = (
+        db.query(IngestionJob.tenant_id)
+        .filter(IngestionJob.job_type == TASK_TYPE, IngestionJob.status.in_(OPEN_JOB_STATUSES))
+        .subquery()
+    )
+    with_positions = (
+        db.query(MarketPosition.organization_id.label("organization_id"))
+        .filter(MarketPosition.status == "active")
+        .distinct()
+        .subquery()
+    )
+    last_completed = func.coalesce(MarketCycleOrganizationState.last_completed_at, literal(_EPOCH))
+    rows = (
+        db.query(with_positions.c.organization_id)
+        .join(Organization, Organization.id == with_positions.c.organization_id)
+        .outerjoin(MarketCycleOrganizationState, MarketCycleOrganizationState.organization_id == with_positions.c.organization_id)
+        .filter(~with_positions.c.organization_id.in_(db.query(open_jobs.c.tenant_id)))
+        .filter(last_completed <= now - CYCLE_INTERVAL)
+        .order_by(last_completed.asc(), func.coalesce(MarketCycleOrganizationState.last_enqueued_at, literal(_EPOCH)).asc(), with_positions.c.organization_id.asc())
+        .limit(limit)
+        .all()
+    )
+    return [row[0] for row in rows]
+
+
+def enqueue_organization(db: Session, organization_id: str, *, now: datetime, trigger: str = "scheduled") -> IngestionJob | None:
+    """One durable job per organization per hour slot (idempotent)."""
+    identity = hashlib.sha256(f"{organization_id}|{TASK_TYPE}|{_slot(now)}".encode()).hexdigest()
+    try:
+        with db.begin_nested():
+            job = IngestionJob(
+                tenant_id=organization_id,
+                job_type=TASK_TYPE,
+                status="queued",
+                input_json={"trigger": trigger, "slot": _slot(now)},
+                output_json={},
+                idempotency_key=identity,
+                attempt_count=0,
+                max_attempts=int(getattr(settings, "TASK_QUEUE_MAX_ATTEMPTS", 5) or 5),
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(job)
+            db.flush()
+            db.add(TaskOutbox(
+                job_id=job.id,
+                tenant_id=organization_id,
+                task_type=TASK_TYPE,
+                payload_json={"job_id": job.id, "slot": _slot(now)},
+                status="pending",
+                publish_attempts=0,
+                created_at=now,
+                updated_at=now,
+            ))
+            db.flush()
+    except IntegrityError:
+        return None  # another scheduler already enqueued this organization for this slot
+    state = _state(db, organization_id)
+    state.last_enqueued_at = now
+    state.last_job_id = job.id
+    state.last_status = "queued"
+    return job
+
+
+def schedule_cycle(db: Session, *, now: datetime | None = None, batch: int | None = None, trigger: str = "scheduled") -> dict[str, Any]:
+    """Enqueue due organizations. Cheap and bounded; safe to call concurrently."""
+    if not cycle_enabled():
+        return {"status": "disabled"}
+    now = now or datetime.utcnow()
+    batch = batch or _int_env("MARKET_INTELLIGENCE_CYCLE_BATCH", DEFAULT_BATCH)
+    recovered = recover_stale_jobs(db, now=now)
+    organizations = due_organizations(db, now=now, limit=batch)
+    enqueued = [job.id for organization_id in organizations if (job := enqueue_organization(db, organization_id, now=now, trigger=trigger)) is not None]
+    db.commit()
+    return {"status": "ok", "enqueued": len(enqueued), "recovered": recovered, "batch": batch}
+
+
+def schedule_cycle_once(**kwargs: Any) -> dict[str, Any]:
+    """Thread-owned session entry point for the drain endpoint."""
+    from app.db.base import SessionLocal
+
+    db = SessionLocal()
+    try:
+        return schedule_cycle(db, **kwargs)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Shared ingestion (single-flight per provider across workers)
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def _provider_lock(db: Session, provider_id: str) -> Iterator[bool]:
     if db.bind is not None and db.bind.dialect.name == "postgresql":
-        db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": _LOCK_KEY})
+        key = zlib.crc32(f"market-provider:{provider_id}".encode()) & 0x7FFFFFFF
+        acquired = bool(db.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": key}).scalar())
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": key})
+                db.commit()
+        return
+    with _provider_locks_guard:
+        lock = _provider_locks.setdefault(provider_id, threading.Lock())
+    acquired = lock.acquire(blocking=False)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            lock.release()
 
 
 async def ingest_due_demands(db: Session, *, deadline: float, trigger: str = "scheduled") -> dict[str, Any]:
@@ -71,18 +280,25 @@ async def ingest_due_demands(db: Session, *, deadline: float, trigger: str = "sc
         if not adapter.configured():
             results[provider_id] = {"status": adapter.status().lower()}
             continue
-        demand_key = "|".join(sorted({adapter.demand_key(s) for s in selectors}))[:400] or adapter.demand_key({})
+        demand_key, _ = plane.demand_identity(adapter, selectors)
         if not plane.provider_due(db, adapter, demand_key):
             results[provider_id] = {"status": "fresh_enough"}
             continue
-        try:
-            results[provider_id] = await asyncio.wait_for(
-                plane.ingest(db, provider_id, selectors, trigger=trigger, adapter=adapter),
-                timeout=max(30.0, min(adapter.request_timeout_seconds + 60.0, deadline - time.monotonic())),
-            )
-        except asyncio.TimeoutError:
-            db.rollback()
-            results[provider_id] = {"status": "timeout"}
+        with _provider_lock(db, provider_id) as acquired:
+            if not acquired:
+                results[provider_id] = {"status": "in_progress_elsewhere"}
+                continue
+            if not plane.provider_due(db, adapter, demand_key):  # another worker just finished it
+                results[provider_id] = {"status": "fresh_enough"}
+                continue
+            try:
+                results[provider_id] = await asyncio.wait_for(
+                    plane.ingest(db, provider_id, selectors, trigger=trigger, adapter=adapter),
+                    timeout=max(5.0, min(adapter.request_timeout_seconds + 30.0, deadline - time.monotonic())),
+                )
+            except asyncio.TimeoutError:
+                db.rollback()
+                results[provider_id] = {"status": "timeout"}
     return results
 
 
@@ -90,10 +306,10 @@ async def evaluate_organization(db: Session, organization_id: str, *, deadline: 
     positions = (
         db.query(MarketPosition)
         .filter(MarketPosition.organization_id == organization_id, MarketPosition.status == "active")
-        .order_by(MarketPosition.updated_at.asc())
+        .order_by(MarketPosition.updated_at.asc(), MarketPosition.id.asc())
         .all()
     )
-    evaluated, events = 0, []
+    evaluated, failed, events = 0, 0, []
     for position in positions:
         if time.monotonic() > deadline:
             break
@@ -105,14 +321,17 @@ async def evaluate_organization(db: Session, organization_id: str, *, deadline: 
             evaluated += 1
         except Exception:  # noqa: BLE001 - one bad position must not stop the portfolio
             db.rollback()
+            failed += 1
             logger.exception("market_cycle_position_failed position=%s", position.id)
-    return {"positions": len(positions), "evaluated": evaluated, "events_created": events}
+    return {"positions": len(positions), "evaluated": evaluated, "failed": failed, "complete": evaluated + failed == len(positions), "events_created": events}
 
 
 # ---------------------------------------------------------------------------
-# Email digest foundation (explicitly opt-in).
+# Alert delivery (email explicitly opt-in; attempts tracked per recipient)
 # ---------------------------------------------------------------------------
 
+ALERT_WINDOW = timedelta(days=7)
+MAX_EMAIL_ATTEMPTS = 5
 _DIGEST_COPY = {
     "en": {"subject": "{count} commercial change(s) need your attention", "intro": "AGRO-AI Market Intelligence found material changes to your commercial position:",
            "line": "{level}: {position}", "outro": "Open Market Intelligence to review the evidence and scenarios. This is decision support, not a trading instruction."},
@@ -125,34 +344,29 @@ _DIGEST_COPY = {
 }
 
 
-def _recipient_language(db: Session, user_id: str) -> str | None:
+def _recipient_language(db: Session, user_id: str) -> str:
     preference = db.get(UserPreference, user_id)
     locale = str((preference.locale if preference is not None else None) or "en").strip().lower()
-    language = "en" if locale in {"", "auto"} else locale.split("-")[0]
-    return language if language in _DIGEST_COPY else None
+    return "en" if locale in {"", "auto"} else locale.split("-")[0]
 
 
-def send_alert_digest(db: Session, organization_id: str, event_ids: list[str]) -> dict[str, Any]:
-    """Email owners/admins about new HIGH/CRITICAL events. Opt-in only.
+def _retry_at(now: datetime, attempts: int) -> datetime:
+    return now + min(timedelta(hours=12), timedelta(minutes=15) * (2 ** max(0, attempts - 1)))
 
-    Recipients whose language has no reviewed digest template are not sent
-    English silently; the event stays in-app and the deferral is recorded.
-    """
-    if not event_ids:
-        return {"status": "nothing_to_send"}
-    if not _flag("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED"):
-        return {"status": "disabled"}
-    from app.services.email_delivery import send_email
 
-    events = (
+def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> None:
+    urgent = (
         db.query(MarketMaterialityEvent)
-        .filter(MarketMaterialityEvent.organization_id == organization_id, MarketMaterialityEvent.id.in_(event_ids))
+        .filter(
+            MarketMaterialityEvent.organization_id == organization_id,
+            MarketMaterialityEvent.status == "open",
+            MarketMaterialityEvent.level.in_(("HIGH", "CRITICAL")),
+            MarketMaterialityEvent.created_at >= now - ALERT_WINDOW,
+        )
         .all()
     )
-    urgent = [event for event in events if event.level in {"HIGH", "CRITICAL"} and not (event.notified_json or {}).get("email")]
     if not urgent:
-        return {"status": "nothing_urgent"}
-    positions = {p.id: p.name for p in db.query(MarketPosition).filter(MarketPosition.id.in_([e.position_id for e in urgent]))}
+        return
     recipients = (
         db.query(User)
         .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
@@ -164,76 +378,172 @@ def send_alert_digest(db: Session, organization_id: str, event_ids: list[str]) -
         )
         .all()
     )
-    sent, deferred = 0, 0
-    for user in recipients:
-        language = _recipient_language(db, user.id)
-        if language is None:
-            deferred += 1
-            continue
-        copy = _DIGEST_COPY[language]
-        lines = [copy["line"].format(level=e.level, position=positions.get(e.position_id, "")) for e in urgent]
-        result = send_email(
-            to_email=user.email,
-            subject=copy["subject"].format(count=len(urgent)),
-            text_body="\n".join([copy["intro"], "", *lines, "", copy["outro"]]),
-            tags=[{"name": "category", "value": "market_intelligence_alert"}],
+    existing = {
+        (row.event_id, row.user_id)
+        for row in db.query(MarketAlertDelivery.event_id, MarketAlertDelivery.user_id).filter(
+            MarketAlertDelivery.organization_id == organization_id,
+            MarketAlertDelivery.event_id.in_([event.id for event in urgent]),
+            MarketAlertDelivery.channel == "email",
         )
-        sent += 1 if result.get("ok") else 0
-    stamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    }
     for event in urgent:
-        event.notified_json = {**(event.notified_json or {}), "email": {"at": stamp, "sent": sent, "deferred_unsupported_language": deferred}}
-    db.commit()
-    return {"status": "sent", "recipients": sent, "deferred": deferred}
+        for user in recipients:
+            if (event.id, user.id) in existing:
+                continue
+            language = _recipient_language(db, user.id)
+            supported = language in _DIGEST_COPY
+            db.add(MarketAlertDelivery(
+                organization_id=organization_id,
+                event_id=event.id,
+                user_id=user.id,
+                channel="email",
+                language=language,
+                # No reviewed template for this language: never send English
+                # silently; the alert stays in-app and the deferral is explicit.
+                status="pending" if supported else "deferred_unsupported_language",
+                attempts=0,
+                next_attempt_at=now if supported else None,
+            ))
+    db.flush()
 
 
-async def run_cycle(*, time_budget_seconds: float = DEFAULT_TIME_BUDGET_SECONDS, trigger: str = "scheduled") -> dict[str, Any]:
-    if not cycle_enabled():
+def deliver_alerts(db: Session, organization_id: str, *, now: datetime | None = None) -> dict[str, Any]:
+    """Email owners/admins about HIGH/CRITICAL events. Opt-in only.
+
+    A delivery is ``delivered`` only when the email provider accepted it.
+    Failures keep the row ``retrying`` with backoff until MAX_EMAIL_ATTEMPTS,
+    then ``failed``; every attempt increments ``attempts``.
+    """
+    if not _flag("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED"):
         return {"status": "disabled"}
-    if not _process_lock.acquire(blocking=False):
-        return {"status": "already_running"}
-    started = time.monotonic()
-    deadline = started + max(30.0, time_budget_seconds)
-    db = SessionLocal()
-    locked = False
+    from app.services.email_delivery import send_email
+
+    now = now or datetime.utcnow()
+    _ensure_deliveries(db, organization_id, now=now)
+    due = (
+        db.query(MarketAlertDelivery)
+        .filter(
+            MarketAlertDelivery.organization_id == organization_id,
+            MarketAlertDelivery.channel == "email",
+            MarketAlertDelivery.status.in_(("pending", "retrying")),
+            or_(MarketAlertDelivery.next_attempt_at.is_(None), MarketAlertDelivery.next_attempt_at <= now),
+        )
+        .all()
+    )
+    deferred = (
+        db.query(func.count(MarketAlertDelivery.id))
+        .filter(MarketAlertDelivery.organization_id == organization_id, MarketAlertDelivery.status == "deferred_unsupported_language")
+        .scalar()
+    )
+    if not due:
+        db.commit()
+        return {"status": "nothing_due", "deferred_unsupported_language": int(deferred or 0)}
+    events = {
+        event.id: event
+        for event in db.query(MarketMaterialityEvent).filter(MarketMaterialityEvent.id.in_({row.event_id for row in due}))
+    }
+    names = {
+        position.id: position.name
+        for position in db.query(MarketPosition).filter(MarketPosition.id.in_({event.position_id for event in events.values()}))
+    }
+    by_user: dict[str, list[MarketAlertDelivery]] = {}
+    for row in due:
+        by_user.setdefault(row.user_id, []).append(row)
+    delivered = failed = retrying = 0
+    for user_id, rows in by_user.items():
+        user = db.get(User, user_id)
+        language = rows[0].language if rows[0].language in _DIGEST_COPY else "en"
+        copy = _DIGEST_COPY[language]
+        lines = [copy["line"].format(level=events[row.event_id].level, position=names.get(events[row.event_id].position_id, "")) for row in rows if row.event_id in events]
+        try:
+            result = send_email(
+                to_email=user.email,
+                subject=copy["subject"].format(count=len(lines)),
+                text_body="\n".join([copy["intro"], "", *lines, "", copy["outro"]]),
+                tags=[{"name": "category", "value": "market_intelligence_alert"}],
+            ) if user is not None else {"ok": False, "reason": "recipient_missing"}
+        except Exception as exc:  # noqa: BLE001 - a provider exception is a failed attempt, never a success
+            result = {"ok": False, "reason": exc.__class__.__name__}
+        for row in rows:
+            row.attempts = int(row.attempts or 0) + 1
+            row.last_attempt_at = now
+            if result.get("ok"):
+                row.status, row.delivered_at, row.next_attempt_at, row.last_error = "delivered", now, None, None
+                delivered += 1
+            elif row.attempts >= MAX_EMAIL_ATTEMPTS:
+                row.status, row.next_attempt_at, row.last_error = "failed", None, str(result.get("reason") or "send_failed")[:200]
+                failed += 1
+            else:
+                row.status, row.next_attempt_at, row.last_error = "retrying", _retry_at(now, row.attempts), str(result.get("reason") or "send_failed")[:200]
+                retrying += 1
+    db.commit()
+    return {"status": "attempted", "delivered": delivered, "retrying": retrying, "failed": failed, "deferred_unsupported_language": int(deferred or 0)}
+
+
+# ---------------------------------------------------------------------------
+# Job processing (delivered by the Cloudflare Queue consumer)
+# ---------------------------------------------------------------------------
+
+
+def _job_budget() -> float:
     try:
-        locked = _try_lock(db)
-        if not locked:
-            return {"status": "already_running_elsewhere"}
-        providers = await ingest_due_demands(db, deadline=deadline, trigger=trigger)
-        organizations = [row[0] for row in db.query(MarketPosition.organization_id).filter(MarketPosition.status == "active").distinct().all()]
-        org_results: dict[str, Any] = {}
-        for organization_id in organizations:
-            if time.monotonic() > deadline:
-                org_results[organization_id] = {"status": "deferred_time_budget"}
-                continue
-            if db.get(Organization, organization_id) is None:
-                continue
-            outcome = await evaluate_organization(db, organization_id, deadline=deadline)
-            outcome["notifications"] = send_alert_digest(db, organization_id, outcome["events_created"])
-            org_results[organization_id] = {**outcome, "events_created": len(outcome["events_created"])}
-        return {
-            "status": "ok",
-            "trigger": trigger,
-            "duration_seconds": round(time.monotonic() - started, 2),
-            "providers": providers,
-            "organizations": len(organizations),
-            "organization_results": org_results,
-        }
-    except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        logger.exception("market_cycle_failed")
-        return {"status": "error", "reason": exc.__class__.__name__}
-    finally:
-        if locked:
-            try:
-                _unlock(db)
-                db.commit()
-            except Exception:  # noqa: BLE001
-                db.rollback()
-        db.close()
-        _process_lock.release()
+        return max(10.0, float(os.getenv("MARKET_INTELLIGENCE_CYCLE_JOB_BUDGET_SECONDS", "") or DEFAULT_JOB_TIME_BUDGET_SECONDS))
+    except ValueError:
+        return DEFAULT_JOB_TIME_BUDGET_SECONDS
 
 
-def run_cycle_sync(**kwargs: Any) -> dict[str, Any]:
-    """Entry point for background tasks running outside an event loop."""
-    return asyncio.run(run_cycle(**kwargs))
+async def run_organization_cycle(db: Session, organization_id: str, *, time_budget_seconds: float | None = None, trigger: str = "scheduled") -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + (time_budget_seconds if time_budget_seconds is not None else _job_budget())
+    providers = await ingest_due_demands(db, deadline=deadline, trigger=trigger)
+    outcome = await evaluate_organization(db, organization_id, deadline=deadline)
+    notifications = deliver_alerts(db, organization_id)
+    return {
+        "organization_id": organization_id,
+        "duration_seconds": round(time.monotonic() - started, 2),
+        "providers": providers,
+        "positions": outcome["positions"],
+        "evaluated": outcome["evaluated"],
+        "failed_positions": outcome["failed"],
+        "complete": outcome["complete"],
+        "events_created": len(outcome["events_created"]),
+        "notifications": notifications,
+    }
+
+
+def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, worker_id: str) -> str:
+    job = _claim(db, job_id=job_id, tenant_id=organization_id, worker_id=worker_id)
+    if job is None:
+        return "deferred"  # leased elsewhere or not yet due; the queue redelivers later
+    if job.status in {"succeeded", "failed", "cancelled"}:
+        return job.status
+    if job.job_type != TASK_TYPE:
+        raise ValueError("unsupported market intelligence job type")
+    state = _state(db, organization_id)
+    state.last_started_at = datetime.utcnow()
+    state.last_job_id = job_id
+    state.last_status = "running"
+    db.commit()
+    if db.get(Organization, organization_id) is None or not cycle_enabled():
+        return _complete(db, job, {"status": "skipped"}, worker_id=worker_id)
+    with job_lease_heartbeat(job_id=job_id, tenant_id=organization_id, worker_id=worker_id):
+        try:
+            output = asyncio.run(run_organization_cycle(db, organization_id, trigger=str((job.input_json or {}).get("trigger") or "scheduled")))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("market_cycle_job_failed job=%s", job_id)
+            status = _fail_or_retry(db, job_id, exc, worker_id=worker_id)
+            state = _state(db, organization_id)
+            state.last_status = status
+            state.consecutive_failures = int(state.consecutive_failures or 0) + 1
+            db.commit()
+            return status
+    job = db.get(IngestionJob, job_id)
+    status = _complete(db, job, output, worker_id=worker_id)
+    state = _state(db, organization_id)
+    if status == "succeeded":
+        state.last_completed_at = datetime.utcnow()
+        state.last_status = "succeeded" if output.get("complete") else "partial"
+        state.consecutive_failures = 0
+    db.commit()
+    return status
+

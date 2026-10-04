@@ -219,6 +219,9 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "market_position_snapshots": {"id", "organization_id", "position_id", "inputs_hash", "payload_json"},
     "market_materiality_events": {"id", "organization_id", "position_id", "dedupe_key", "level", "status"},
     "market_position_field_links": {"id", "organization_id", "position_id", "field_entity_id"},
+    "market_data_point_revisions": {"id", "point_id", "series_id", "revision", "previous_value", "new_value", "revised_retrieved_at"},
+    "market_cycle_organization_state": {"organization_id", "last_completed_at", "last_status", "consecutive_failures"},
+    "market_alert_deliveries": {"id", "event_id", "user_id", "channel", "status", "attempts", "delivered_at", "next_attempt_at"},
     "platform_abuse_events": {
         "id",
         "organization_id",

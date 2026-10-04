@@ -43,6 +43,7 @@ from app.models.market_intelligence import (
     MarketPositionSnapshot,
 )
 from app.services.market_intelligence import (
+    ACTIVE_CONTRACT_STATUSES,
     CALCULATION_VERSION,
     MarketCalculationError,
     compute_position,
@@ -84,12 +85,21 @@ def position_inputs(position: MarketPosition, contracts: list[MarketContractPosi
     inputs = {name: _s(getattr(position, name, None)) for name in _POSITION_FIELDS}
     inputs["metadata_json"] = {
         key: metadata.get(key)
-        for key in ("inventory_cost_per_unit", "production_cost_behavior", "price_state", "fx_state", "price_source")
+        for key in ("inventory_cost_per_unit", "production_cost_behavior", "price_state", "fx_state", "price_source",
+                    "cost_currency", "cost_fx_rate", "cost_fx_state")
         if key in metadata
     }
     inputs["inventory_cost_per_unit"] = _s(metadata.get("inventory_cost_per_unit"))
     inputs["contracts"] = sorted(
-        ({name: _s(getattr(contract, name, None)) for name in _CONTRACT_FIELDS} for contract in contracts),
+        (
+            {
+                **{name: _s(getattr(contract, name, None)) for name in _CONTRACT_FIELDS},
+                # Freshness of the contract's conversion is part of what changed.
+                "fx_state": (contract.metadata_json or {}).get("fx_state") if isinstance(contract.metadata_json, dict) else None,
+                "contract_code": getattr(contract, "contract_code", None),
+            }
+            for contract in contracts
+        ),
         key=lambda row: str(row.get("id")),
     )
     return inputs
@@ -122,8 +132,13 @@ def _dec(value: Any) -> Decimal | None:
         return None
 
 
-def evidence_states(db: Session, position: MarketPosition) -> dict[str, Any]:
-    """Freshness of the evidence currently driving price and FX."""
+def evidence_states(db: Session, position: MarketPosition, contracts: list[MarketContractPosition] | None = None) -> dict[str, Any]:
+    """Freshness of the evidence currently driving price, FX, cost FX and contract FX.
+
+    Contract conversions are tracked per contract (``contract_fx:<code>``) so a
+    stale or missing USD rate on one contract is visible and gates materiality
+    instead of silently producing incomplete commercial truth.
+    """
     metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
     price_state = metadata.get("price_state")
     if price_state is None:
@@ -142,7 +157,22 @@ def evidence_states(db: Session, position: MarketPosition) -> dict[str, Any]:
     fx_state = metadata.get("fx_state") if fx_needed else "NOT_REQUIRED"
     if fx_needed and fx_state is None:
         fx_state = "MANUAL" if position.fx_rate_to_reporting is not None else "UNAVAILABLE"
-    return {"price": str(price_state).upper(), "fx": str(fx_state).upper()}
+    states = {"price": str(price_state).upper(), "fx": str(fx_state).upper()}
+    reporting = str(position.reporting_currency or "").upper()
+    cost_currency = str(metadata.get("cost_currency") or reporting).upper()
+    price_currency = str(position.price_currency or position.local_currency or reporting).upper()
+    if cost_currency not in {reporting, price_currency}:
+        cost_state = metadata.get("cost_fx_state") or ("MANUAL" if metadata.get("cost_fx_rate") else "UNAVAILABLE")
+        states["cost_fx"] = str(cost_state).upper()
+    for contract in contracts or []:
+        if str(contract.status or "active").lower() not in ACTIVE_CONTRACT_STATUSES:
+            continue
+        if str(contract.currency or reporting).upper() == reporting:
+            continue
+        contract_metadata = contract.metadata_json if isinstance(contract.metadata_json, dict) else {}
+        state = contract_metadata.get("fx_state") or ("MANUAL" if contract.fx_rate_to_reporting is not None else "UNAVAILABLE")
+        states[f"contract_fx:{contract.contract_code}"] = str(state).upper()
+    return states
 
 
 def record_snapshot(db: Session, position: MarketPosition, contracts: list[MarketContractPosition], *, now: datetime | None = None) -> tuple[MarketPositionSnapshot, bool]:
@@ -166,7 +196,7 @@ def record_snapshot(db: Session, position: MarketPosition, contracts: list[Marke
         inputs_hash=digest,
         inputs_json=inputs,
         payload_json=computation.payload,
-        evidence_json={"states": evidence_states(db, position)},
+        evidence_json={"states": evidence_states(db, position, contracts)},
         calculation_version=CALCULATION_VERSION,
     )
     db.add(snapshot)
@@ -345,7 +375,9 @@ def evaluate(
                         "marketable_supply": after.get("marketable_supply"), "unit": after.get("quantity_unit")})
 
     if level != "LOW":
-        evidence_ok = all(states_after.get(k) not in {"STALE", "UNAVAILABLE"} for k in ("price", "fx"))
+        # Every input conversion counts: a stale contract or cost FX makes the
+        # computed change unreliable, so it is suppressed like a stale price.
+        evidence_ok = all(state not in {"STALE", "UNAVAILABLE"} for state in states_after.values())
         result = MaterialityResult(
             level=level, kind="commercial_change", emit=evidence_ok, title_key="market.materiality.commercial_change",
             reasons=reasons, impact=impact, data_quality={"states": states_after},

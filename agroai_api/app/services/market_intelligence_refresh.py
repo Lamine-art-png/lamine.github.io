@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.models.market_intelligence import MarketContractPosition, MarketObservation, MarketPosition
 from app.services import market_data_plane as plane
+from app.services.market_intelligence import ACTIVE_CONTRACT_STATUSES
 from app.services.market_data_adapters import ADAPTERS
 from app.services.market_packs import position_selectors, resolve_pack
 
@@ -116,17 +117,30 @@ def _audit(db: Session, position: MarketPosition, evidence: dict[str, Any], *, n
             setattr(row, key, value)
 
 
-async def ensure_position_evidence(db: Session, position: MarketPosition, *, trigger: str = "on_demand") -> dict[str, Any]:
-    """Run due fast-provider demands for one position (never slow publications)."""
+def _active_contracts(db: Session, position: MarketPosition) -> list[MarketContractPosition]:
+    return plane.active_contracts_by_position(db, [position]).get(position.id, [])
+
+
+async def ensure_position_evidence(
+    db: Session,
+    position: MarketPosition,
+    *,
+    contracts: list[MarketContractPosition] | None = None,
+    trigger: str = "on_demand",
+) -> dict[str, Any]:
+    """Run due fast-provider demands for one position (never slow publications).
+
+    FX demand covers the price, cost and every exposure-carrying contract
+    currency, exactly as the scheduled demand set does.
+    """
     metadata = _metadata(position)
     pack = resolve_pack(position.country_code, position.commodity)
     selectors = position_selectors(pack, country_code=position.country_code, commodity=position.commodity, region=position.region, metadata=metadata)
     demands: dict[str, list[dict[str, Any]]] = {pid: [sel] for pid, sel in selectors.items()}
-    currencies = {str(position.reporting_currency or "").upper(), str(position.price_currency or position.local_currency or "").upper()}
-    if len(currencies - {""}) > 1:
-        demands.setdefault("fx_reference", [{}])
-        if {"BRL", "USD"}.issubset(currencies):
-            demands.setdefault("bcb_ptax", [{}])
+    contracts = contracts if contracts is not None else _active_contracts(db, position)
+    foreign = plane.position_fx_currencies(position, contracts)
+    for provider_id, selector in plane.fx_demands(str(position.reporting_currency or ""), foreign).items():
+        demands.setdefault(provider_id, [selector])
     results: dict[str, Any] = {}
     for provider_id, provider_selectors in demands.items():
         adapter = ADAPTERS.get(provider_id)
@@ -138,7 +152,7 @@ async def ensure_position_evidence(db: Session, position: MarketPosition, *, tri
         if not adapter.configured():
             results[provider_id] = {"status": adapter.status().lower()}
             continue
-        demand_key = "|".join(sorted({adapter.demand_key(s) for s in provider_selectors}))[:400]
+        demand_key, _ = plane.demand_identity(adapter, provider_selectors)
         if not plane.provider_due(db, adapter, demand_key):
             results[provider_id] = {"status": "fresh_enough"}
             continue
@@ -175,7 +189,46 @@ def _apply_fx(db: Session, position: MarketPosition, target: Any, source_currenc
         metadata["fx_state"] = "UNAVAILABLE"
         target.metadata_json = metadata
         return "cleared_unverifiable", resolution
+    # No governed rate: a customer-entered rate stays (MANUAL); otherwise the
+    # conversion is explicitly UNAVAILABLE so economics and data health say so.
+    metadata["fx_state"] = "MANUAL" if target.fx_rate_to_reporting is not None else "UNAVAILABLE"
+    target.metadata_json = metadata
     return ("kept_customer_rate" if target.fx_rate_to_reporting is not None else "missing"), resolution
+
+
+def _apply_cost_fx(db: Session, position: MarketPosition, cache: dict[str, plane.FxResolution]) -> dict[str, Any] | None:
+    """Governed FX for costs recorded in a third currency (not price, not reporting).
+
+    Costs in the price currency reuse the position FX; this covers e.g. a
+    USD-reporting operation selling in USD while paying costs in BRL.
+    """
+    metadata = _metadata(position)
+    reporting = str(position.reporting_currency or "").upper()
+    cost_currency = str(metadata.get("cost_currency") or reporting).upper()
+    price_currency = str(position.price_currency or position.local_currency or reporting).upper()
+    if cost_currency in {reporting, price_currency}:
+        changed = any(key in metadata for key in ("cost_fx_rate", "cost_fx_state"))
+        if changed and str(metadata.get("cost_fx_source") or "").startswith(AUTOMATED_FX_PREFIX):
+            for key in ("cost_fx_rate", "cost_fx_state", "cost_fx_source"):
+                metadata.pop(key, None)
+            position.metadata_json = metadata
+        return None
+    if cost_currency not in cache:
+        cache[cost_currency] = plane.resolve_fx(db, cost_currency, reporting)
+    resolution = cache[cost_currency]
+    customer_rate = metadata.get("cost_fx_rate") if not str(metadata.get("cost_fx_source") or "").startswith(AUTOMATED_FX_PREFIX) else None
+    if resolution.rate is not None:
+        metadata.update({"cost_fx_rate": str(resolution.rate), "cost_fx_state": resolution.state, "cost_fx_source": f"{AUTOMATED_FX_PREFIX}{resolution.method}"})
+        outcome = "updated"
+    elif customer_rate is not None:
+        metadata["cost_fx_state"] = "MANUAL"
+        outcome = "kept_customer_rate"
+    else:
+        metadata.pop("cost_fx_rate", None)
+        metadata.update({"cost_fx_state": "UNAVAILABLE", "cost_fx_source": f"{AUTOMATED_FX_PREFIX}unavailable"})
+        outcome = "missing"
+    position.metadata_json = metadata
+    return {"currency": cost_currency, "outcome": outcome, "state": metadata.get("cost_fx_state")}
 
 
 async def refresh_position_market_data(
@@ -192,7 +245,7 @@ async def refresh_position_market_data(
         .filter(MarketContractPosition.organization_id == organization_id, MarketContractPosition.position_id == position.id)
         .all()
     )
-    provider_results = await ensure_position_evidence(db, position, trigger=trigger) if ingest_missing else {}
+    provider_results = await ensure_position_evidence(db, position, contracts=contracts, trigger=trigger) if ingest_missing else {}
     position_updates: list[str] = []
 
     # Physical price.
@@ -236,10 +289,23 @@ async def refresh_position_market_data(
     if fx_outcome in {"updated", "cleared_unverifiable", "cleared_same_currency"}:
         position_updates.append("fx_rate_to_reporting")
     contract_updates = 0
+    contract_fx: list[dict[str, Any]] = []
     for contract in contracts:
-        outcome, _ = _apply_fx(db, position, contract, str(contract.currency or ""), fx_cache)
+        if str(contract.status or "active").lower() not in ACTIVE_CONTRACT_STATUSES:
+            continue
+        outcome, resolution = _apply_fx(db, position, contract, str(contract.currency or ""), fx_cache)
         if outcome in {"updated", "cleared_unverifiable", "cleared_same_currency"}:
             contract_updates += 1
+        if outcome not in {"same_currency", "cleared_same_currency"}:
+            contract_fx.append({
+                "contract_id": contract.id,
+                "contract_code": contract.contract_code,
+                "currency": str(contract.currency or "").upper(),
+                "outcome": outcome,
+                "state": _metadata(contract).get("fx_state"),
+                "method": resolution.method if resolution else None,
+            })
+    cost_fx = _apply_cost_fx(db, position, fx_cache)
     for resolution in fx_cache.values():
         for item in resolution.components:
             if item.get("point_id"):
@@ -265,6 +331,8 @@ async def refresh_position_market_data(
         },
         "position_updates": sorted(set(position_updates)),
         "contract_fx_updates": contract_updates,
+        "contract_fx": contract_fx,
+        "cost_fx": cost_fx,
         "providers": provider_results,
     }
 

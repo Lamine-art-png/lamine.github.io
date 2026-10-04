@@ -21,11 +21,10 @@ import pytest
 from app.api.deps import AuthContext, get_auth_context
 from app.main import app
 from app.models.market_intelligence import (
-    MarketContractPosition,
     MarketDataPoint,
+    MarketDataPointRevision,
     MarketDataSeries,
     MarketMaterialityEvent,
-    MarketObservation,
     MarketPosition,
     MarketPositionSnapshot,
     MarketProviderRun,
@@ -60,7 +59,7 @@ PUBLIC = licensing(license_id="test-open", attribution="Test source")
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     """Positions resolve from seeded shared evidence; nothing calls an upstream."""
-    async def no_ingest(db, position, *, trigger="on_demand"):
+    async def no_ingest(db, position, *, contracts=None, trigger="on_demand"):
         return {}
 
     monkeypatch.setattr(refresh_module, "ensure_position_evidence", no_ingest)
@@ -285,7 +284,9 @@ def test_ingestion_is_idempotent_and_tracks_revisions(db):
     assert third.revised == 1
     stored = db.query(MarketDataPoint).one()
     assert stored.value == Decimal("101") and int(stored.revision) == 1
-    assert stored.quality_json["revisions"][0]["previous_value"].startswith("100")
+    [history] = db.query(MarketDataPointRevision).all()
+    assert (history.point_id, history.revision, history.previous_value, history.new_value) == (stored.id, 1, Decimal("100"), Decimal("101"))
+    assert history.new_content_hash == stored.content_hash and history.previous_content_hash != stored.content_hash
     assert db.query(MarketDataSeries).count() == 1
 
 
@@ -791,42 +792,8 @@ def test_model_answer_hides_serving_vendor(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_scheduled_cycle_ingests_shared_evidence_once_and_alerts(client, db, monkeypatch):
-    from app.services import market_intelligence_cycle as cycle
-
-    seed_fx(db)
-    created = _brazil_position(client, db, "cycle")
-    position_id = created["id"]
-    _age_snapshots(db, position_id)
-    calls = []
-
-    class FixtureConab(CONABWeeklyPricesSeries):
-        async def collect(self, selectors):
-            calls.append(selectors)
-            line = "SOJA ;EM GRÃOS ;1;MT ;CENTRO-OESTE ;2026;10;{} - {} ;1;PREÇO RECEBIDO P/ PR;1,95\n"
-            day = datetime.utcnow().strftime("%d-%m-%Y")
-            return self._parse(iter([CONAB_FIXTURE[0], line.format(day, day)]), {("soybean", "MT")}, datetime.now(timezone.utc))
-
-    monkeypatch.setitem(ADAPTERS, "conab_precos", FixtureConab())
-    for provider_id in ("fx_reference", "bcb_ptax"):
-        monkeypatch.setattr(ADAPTERS[provider_id], "configured", lambda: False)
-
-    class SessionFactory:
-        def __call__(self):
-            return db
-
-    monkeypatch.setattr(cycle, "SessionLocal", SessionFactory())
-    monkeypatch.setattr(db, "close", lambda: None)
-    result = asyncio.run(cycle.run_cycle(time_budget_seconds=120))
-    assert result["status"] == "ok", result
-    assert result["providers"]["conab_precos"]["status"] == "ok"
-    assert len(calls) == 1 and calls[0] == [{"commodity": "soybean", "uf": "MT"}]
-    events = db.query(MarketMaterialityEvent).filter_by(position_id=position_id).all()
-    assert events and events[0].level in {"HIGH", "CRITICAL"}
-    assert result["organization_results"][db.get(MarketPosition, position_id).organization_id]["notifications"]["status"] in {"disabled", "nothing_urgent"}
-    # A second cycle inside the refresh interval does not re-fetch CONAB.
-    again = asyncio.run(cycle.run_cycle(time_budget_seconds=120))
-    assert again["providers"]["conab_precos"]["status"] == "fresh_enough" and len(calls) == 1
+# The scheduled cycle runs as durable per-organization jobs; see
+# tests/test_commercial_intelligence_hardening.py (ingest-once, alerts, crash, retry, fairness).
 
 
 def test_mixed_clause_what_if_assigns_each_percentage_to_its_own_lever():
