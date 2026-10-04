@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+from urllib.parse import unquote
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -279,7 +280,9 @@ def _resolve_pointer(document: Any, ref: str) -> None:
             "use a JSON pointer such as '#/$defs/name'"
         )
     node = document
-    for raw in pointer[1:].split("/"):
+    # A local $ref is a URI fragment: percent-decode it first, then apply
+    # JSON Pointer's ~1 / ~0 unescaping per token.
+    for raw in unquote(pointer)[1:].split("/"):
         part = raw.replace("~1", "/").replace("~0", "~")
         if isinstance(node, dict) and part in node:
             node = node[part]

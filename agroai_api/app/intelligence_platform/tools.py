@@ -20,13 +20,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
-
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeout
 
 from fastapi import HTTPException
 from jsonschema import Draft202012Validator
@@ -525,9 +523,19 @@ class _ToolDeadlineExceeded(Exception):
     pass
 
 
-# Calculation tools are pure Python; a bounded pool lets a call be abandoned at
-# its deadline (the request never waits longer than the tool's timeout).
-_CALCULATION_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="agroai-tool")
+# Calculation tools are pure Python. Each call runs on its own daemon thread,
+# so a handler stuck past its deadline is abandoned without occupying a shared
+# worker; abandoned-but-alive threads are capped so stuck work cannot grow
+# without bound (beyond the cap, calculations fail fast as timeouts).
+MAX_ABANDONED_CALCULATIONS = 32
+_ABANDONED: list[threading.Thread] = []
+_ABANDONED_LOCK = threading.Lock()
+
+
+def _abandoned_alive() -> int:
+    with _ABANDONED_LOCK:
+        _ABANDONED[:] = [thread for thread in _ABANDONED if thread.is_alive()]
+        return len(_ABANDONED)
 
 
 def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str, Any], deadline_ms: int) -> dict[str, Any]:
@@ -540,12 +548,26 @@ def _run_with_deadline(ctx: ToolContext, tool: PlatformTool, arguments: dict[str
       restored afterwards; a cancelled statement becomes ``timeout``.
     """
     if tool.category == "calculation":
-        future = _CALCULATION_POOL.submit(tool.handler, ctx, arguments)
-        try:
-            return future.result(timeout=deadline_ms / 1000)
-        except FutureTimeout as exc:
-            future.cancel()
-            raise _ToolDeadlineExceeded() from exc
+        if _abandoned_alive() >= MAX_ABANDONED_CALCULATIONS:
+            raise _ToolDeadlineExceeded()
+        outcome: dict[str, Any] = {}
+
+        def target() -> None:
+            try:
+                outcome["value"] = tool.handler(ctx, arguments)
+            except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
+                outcome["error"] = exc
+
+        thread = threading.Thread(target=target, name=f"agroai-tool-{tool.name}", daemon=True)
+        thread.start()
+        thread.join(timeout=deadline_ms / 1000)
+        if thread.is_alive():
+            with _ABANDONED_LOCK:
+                _ABANDONED.append(thread)
+            raise _ToolDeadlineExceeded()
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["value"]
     db = ctx.db
     if db is None or db.get_bind().dialect.name != "postgresql":
         return tool.handler(ctx, arguments)

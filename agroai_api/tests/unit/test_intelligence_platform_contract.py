@@ -401,3 +401,32 @@ def test_drain_runs_intelligence_maintenance_even_without_a_queue(monkeypatch):
     response = TestClient(app).post("/v1/internal/queue/drain-outbox", headers={"Authorization": "Bearer unit-consumer-token"})
     assert response.status_code == 503
     assert calls == [1] and response.json()["detail"]["intelligence_platform"] == {"jobs": "ok"}
+
+
+def test_stuck_calculations_do_not_starve_later_calls(monkeypatch):
+    import threading
+    import time as _time
+
+    release = threading.Event()
+    stuck = tools.PlatformTool(name="stuck.calc.v1", version="1", category="calculation", description="",
+                               input_schema={"type": "object"}, handler=lambda c, a: (release.wait(10), {"status": "completed", "output": {}})[1],
+                               timeout_ms=50)
+    monkeypatch.setitem(tools.REGISTRY._tools, stuck.name, stuck)
+    ctx = SimpleNamespace(db=None, principal=None)
+    try:
+        for _ in range(6):  # more than any fixed pool size
+            assert tools.execute(ctx, [ToolCall(name="stuck.calc.v1", arguments={})])[0]["status"] == "timeout"
+        started = _time.monotonic()
+        result = tools.execute(ctx, [ToolCall(name="units.convert.v1", arguments={"value": 1, "from_unit": "m", "to_unit": "mm"})])[0]
+        assert result["status"] in {"completed", "invalid_input", "not_computable"}, result
+        assert result["status"] != "timeout" and _time.monotonic() - started < 0.5
+    finally:
+        release.set()
+
+
+def test_percent_encoded_local_refs_resolve():
+    schema = {"type": "object", "$defs": {"a b": {"type": "string"}, "x/y": {"type": "integer"}},
+              "properties": {"p": {"$ref": "#/$defs/a%20b"}, "q": {"$ref": "#/$defs/x~1y"}}}
+    schemas.validate_caller_schema(schema)
+    assert schemas.validation_errors({"p": "ok", "q": 3}, schema) == []
+    assert schemas.validation_errors({"p": 1}, schema)
