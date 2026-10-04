@@ -142,8 +142,14 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
 
 @router.post("/internal/queue/drain-outbox", dependencies=[Depends(_require_queue_token)])
 async def drain_task_outbox() -> dict:
+    # Intelligence jobs/retention must progress even without the connector
+    # queue (the sweep runs due jobs inline in that case).
+    intelligence_platform = await asyncio.to_thread(_run_intelligence_platform_maintenance)
     if not queue_configured():
-        raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Durable connector queue is not configured", "intelligence_platform": intelligence_platform},
+        )
     try:
         outbox = await asyncio.to_thread(drain_pending_outbox, limit=100)
         webhook_outbox = await asyncio.to_thread(_drain_webhook_outbox)
@@ -156,7 +162,6 @@ async def drain_task_outbox() -> dict:
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
     lifecycle = await asyncio.to_thread(_run_lifecycle_emails)
-    intelligence_platform = await asyncio.to_thread(_run_intelligence_platform_maintenance)
     return {
         "status": "ok",
         "lifecycle_emails": lifecycle,

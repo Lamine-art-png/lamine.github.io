@@ -378,3 +378,26 @@ def test_caller_id_equal_to_internal_marker_is_whole_or_nothing():
     complete = "TAIL-" + "q" * 4000 in prepared.data_block
     assert in_block == complete, "a citable item is wholly included or wholly omitted"
     assert ("__base_context__" in prepared.known_ids) == complete
+
+
+def test_anchor_references_are_rejected_with_a_clear_message():
+    with pytest.raises(schemas.SchemaRejected, match="anchor"):
+        schemas.validate_caller_schema({"type": "object", "$defs": {"t": {"$anchor": "thing", "type": "string"}}, "properties": {"a": {"$ref": "#thing"}}})
+    with pytest.raises(schemas.SchemaRejected, match="plain-name"):
+        schemas.validate_caller_schema({"type": "object", "properties": {"a": {"$ref": "#thing"}}})
+
+
+def test_drain_runs_intelligence_maintenance_even_without_a_queue(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api.v1 import cloudflare_queue
+    from app.core.config import settings
+    from app.main import app
+
+    calls = []
+    monkeypatch.setattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "unit-consumer-token", raising=False)
+    monkeypatch.setattr(cloudflare_queue, "queue_configured", lambda: False)
+    monkeypatch.setattr(cloudflare_queue, "_run_intelligence_platform_maintenance", lambda: calls.append(1) or {"jobs": "ok"})
+    response = TestClient(app).post("/v1/internal/queue/drain-outbox", headers={"Authorization": "Bearer unit-consumer-token"})
+    assert response.status_code == 503
+    assert calls == [1] and response.json()["detail"]["intelligence_platform"] == {"jobs": "ok"}

@@ -140,6 +140,7 @@ def platform(monkeypatch):
         monkeypatch.setattr(settings, name, True, raising=False)
     monkeypatch.setattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "TASK_QUEUE_BACKEND", "disabled", raising=False)
+    monkeypatch.setattr(settings, "INTELLIGENCE_JOBS_INLINE_FALLBACK", False, raising=False)
 
     state = SimpleNamespace(model_calls=[], json_replies=[], json_calls=[], vision_ok=True, model_raises=False)
 
@@ -1589,3 +1590,26 @@ def test_job_stops_when_service_account_is_narrowed_after_enqueue(platform, narr
     assert _execute(p, job["id"], p.A.org_id) == "failed"
     assert len(p.state.model_calls) == calls
     assert _wallet(p.Session, p.A.org_id) == (500, 0)
+
+
+def test_jobs_progress_without_a_queue_via_maintenance(platform, monkeypatch):
+    p = platform
+    from app.api.v1 import cloudflare_queue
+    from app.core.config import settings
+    from app.models.intelligence_commerce import CommercialIntelligenceRun
+
+    monkeypatch.setattr(settings, "INTELLIGENCE_JOBS_INLINE_FALLBACK", True, raising=False)
+    job = p.client.post("/v1/intelligence/jobs", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "no queue here"}).json()
+    db = p.Session()
+    try:
+        db.get(CommercialIntelligenceRun, job["id"]).next_attempt_at = datetime(2000, 1, 1)
+        db.commit()
+    finally:
+        db.close()
+    # The sweep's inline runner uses the application session factory.
+    from app.db import base as db_base
+    monkeypatch.setattr(db_base, "SessionLocal", p.Session)
+    monkeypatch.setattr(cloudflare_queue, "SessionLocal", p.Session)
+    result = cloudflare_queue._run_intelligence_platform_maintenance()
+    assert result["jobs"]["executed_inline"] >= 1, result
+    assert p.client.get(f"/v1/intelligence/jobs/{job['id']}", headers=p.keys["A"]).json()["status"] == "completed"

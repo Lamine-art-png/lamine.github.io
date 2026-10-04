@@ -328,7 +328,27 @@ def sweep(db: Session, *, limit: int = 25) -> dict[str, int]:
         .all()
     )
     dispatched = sum(1 for run_id, organization_id in due if dispatch(run_id, organization_id))
-    return {"timed_out": timed_out, "redispatched": dispatched, "due": len(due)}
+    executed_inline = 0
+    if dispatched < len(due) and _inline_fallback_enabled():
+        # No durable queue (or it is failing): run a bounded number of due jobs
+        # in this maintenance pass so accepted jobs never wait forever. The
+        # lease/claim makes this safe against a concurrent queue delivery.
+        for run_id, organization_id in due[:INLINE_JOBS_PER_SWEEP]:
+            try:
+                process_intelligence_job(job_id=run_id, organization_id=organization_id, worker_id="maintenance-inline")
+                executed_inline += 1
+            except Exception:  # noqa: BLE001 - recorded on the row; retried next sweep
+                logger.exception("intelligence_job_inline_execution_failed run_id=%s", run_id)
+    return {"timed_out": timed_out, "redispatched": dispatched, "executed_inline": executed_inline, "due": len(due)}
+
+
+INLINE_JOBS_PER_SWEEP = 3
+
+
+def _inline_fallback_enabled() -> bool:
+    from app.core.config import settings
+
+    return bool(getattr(settings, "INTELLIGENCE_JOBS_INLINE_FALLBACK", True))
 
 
 def purge_expired_payloads_and_results(db: Session, *, limit: int = 500) -> int:

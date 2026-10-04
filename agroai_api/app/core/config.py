@@ -333,6 +333,9 @@ class Settings(BaseSettings):
 
     # Durable external connector task plane
     TASK_QUEUE_BACKEND: str = "disabled"
+    # Intelligence Platform async jobs: when no durable queue can take a due
+    # job, the scheduled maintenance pass runs a few inline.
+    INTELLIGENCE_JOBS_INLINE_FALLBACK: bool = True
     REDIS_URL: str = ""
     TASK_QUEUE_STREAM: str = "agroai:tasks"
     TASK_QUEUE_GROUP: str = "agroai-workers"

@@ -21,7 +21,7 @@ MAX_SCHEMA_NODES = 1_500
 # Caller regexes would execute against model output inside AGRO-AI; remote or
 # dynamic references could reach outside the request. Neither is needed for
 # agricultural result shapes.
-_FORBIDDEN_KEYWORDS = {"pattern", "patternProperties", "$dynamicRef", "$recursiveRef", "$dynamicAnchor", "$recursiveAnchor"}
+_FORBIDDEN_KEYWORDS = {"pattern", "patternProperties", "$dynamicRef", "$recursiveRef", "$dynamicAnchor", "$recursiveAnchor", "$anchor"}
 
 
 class SchemaRejected(ValueError):
@@ -274,7 +274,10 @@ def _resolve_pointer(document: Any, ref: str) -> None:
     if pointer == "":
         return  # "#" is the document root; "#/" is the property named "".
     if not pointer.startswith("/"):
-        raise SchemaRejected(f"response_format.schema reference '{ref[:80]}' must be a JSON pointer such as '#/$defs/name'")
+        raise SchemaRejected(
+            f"response_format.schema reference '{ref[:80]}': plain-name ($anchor) references are not supported; "
+            "use a JSON pointer such as '#/$defs/name'"
+        )
     node = document
     for raw in pointer[1:].split("/"):
         part = raw.replace("~1", "/").replace("~0", "~")
