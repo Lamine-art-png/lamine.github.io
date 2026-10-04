@@ -387,7 +387,7 @@ class MarketAlertDelivery(Base):
     event_id = Column(String, ForeignKey("market_materiality_events.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     channel = Column(String, nullable=False, default="email")
-    # pending | retrying | delivered | failed | deferred_unsupported_language
+    # pending | retrying | delivered | failed | deferred_unsupported_language | cancelled_alert_closed
     status = Column(String, nullable=False, default="pending")
     language = Column(String(16), nullable=True)
     attempts = Column(Integer, nullable=False, default=0)

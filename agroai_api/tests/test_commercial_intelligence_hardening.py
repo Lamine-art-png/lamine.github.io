@@ -909,3 +909,65 @@ def test_tick_budget_covers_recovered_and_new_jobs_and_all_admitted_are_publishe
     db.query(TaskOutbox).update({TaskOutbox.status: "pending", TaskOutbox.next_attempt_at: None})
     db.commit()
     assert cycle.schedule_cycle(db, batch=3) == {"status": "ok", "enqueued": 0, "recovered": 0, "already_pending": 3, "batch": 3}
+
+
+def test_onboarding_fx_rate_applies_to_contracts_in_the_same_currency(client, db):
+    from tests.test_commercial_intelligence_global import onboard
+
+    act_as(*identity(db, "ke-contract-fx"))
+    created = onboard(client, crop="maize", country_code="KE", region="Rift Valley", season="2026", expected_production="400",
+                      local_price="4200", reporting_currency="USD", fx_rate_to_reporting="0.00775", production_cost_per_unit="3000",
+                      contracts=[{"quantity": "100", "price": "4100"},
+                                 {"quantity": "50", "price": "33", "currency": "USD"},
+                                 {"quantity": "20", "price": "300", "currency": "UGX", "fx_rate_to_reporting": "0.00027"}])
+    rows = {row.currency: row for row in db.query(MarketContractPosition).filter_by(position_id=created["id"])}
+    assert rows["KES"].fx_rate_to_reporting == Decimal("0.0077500000") and rows["KES"].metadata_json["fx_state"] == "MANUAL"
+    assert rows["USD"].fx_rate_to_reporting is None  # reporting currency: no conversion needed
+    assert rows["UGX"].fx_rate_to_reporting == Decimal("0.0002700000")
+    position = created["position"]
+    assert "contract_fx" not in position["missing_inputs"] and position["locked_revenue"] is not None and position["projected_margin"] is not None
+
+
+def test_suspended_or_restricted_admins_never_receive_alert_emails(db, monkeypatch):
+    from app.models.saas import OrganizationMembership, User
+
+    owner, org, _ = identity(db, "alert-suspended")
+    suspended = User(email="suspended@example.com", email_verification_status="verified", account_status="suspended")
+    restricted = User(email="restricted@example.com", email_verification_status="verified", access_restricted_at=datetime.utcnow())
+    inactive = User(email="inactive@example.com", email_verification_status="verified", is_active=False)
+    db.add_all([suspended, restricted, inactive])
+    db.flush()
+    db.add_all([OrganizationMembership(organization_id=org.id, user_id=user.id, role="admin", status="active") for user in (suspended, restricted, inactive)])
+    db.commit()
+    _urgent_event(db, org, _position(db, org))
+    monkeypatch.setenv("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED", "true")
+    sent = []
+    monkeypatch.setattr("app.services.email_delivery.send_email", lambda **kwargs: sent.append(kwargs["to_email"]) or {"ok": True})
+    cycle.deliver_alerts(db, org.id)
+    assert sent == [owner.email]
+    assert {row.user_id for row in db.query(MarketAlertDelivery)} == {owner.id}
+
+
+def test_acknowledged_alert_stops_pending_email_retries(client, db, monkeypatch):
+    user, org, membership = identity(db, "alert-ack")
+    event = _urgent_event(db, org, _position(db, org))
+    monkeypatch.setenv("MARKET_INTELLIGENCE_ALERT_EMAILS_ENABLED", "true")
+    outcomes = []
+    monkeypatch.setattr("app.services.email_delivery.send_email", lambda **kwargs: outcomes.append(1) or {"ok": False, "reason": "smtp_timeout"})
+    now = datetime.utcnow()
+    cycle.deliver_alerts(db, org.id, now=now)
+    [delivery] = db.query(MarketAlertDelivery).all()
+    assert delivery.status == "retrying" and len(outcomes) == 1
+    act_as(user, org, membership)
+    assert client.post(f"/v1/market-intelligence/alerts/{event.id}/acknowledge").status_code == 200
+    db.refresh(delivery)
+    assert delivery.status == "cancelled_alert_closed" and delivery.next_attempt_at is None
+    assert cycle.deliver_alerts(db, org.id, now=now + timedelta(days=1))["status"] == "nothing_due" and len(outcomes) == 1
+    # Closed by any other path (e.g. resolved) is also caught at delivery time.
+    other = _urgent_event(db, org, _position(db, org, name="Other"), level="CRITICAL")
+    cycle.deliver_alerts(db, org.id, now=now + timedelta(days=2))
+    other.status = "resolved"
+    db.commit()
+    cycle.deliver_alerts(db, org.id, now=now + timedelta(days=3))
+    statuses = {row.event_id: row.status for row in db.query(MarketAlertDelivery)}
+    assert statuses[other.id] == "cancelled_alert_closed" and len(outcomes) == 2

@@ -443,6 +443,10 @@ def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> N
             OrganizationMembership.status == "active",
             OrganizationMembership.role.in_(("owner", "admin")),
             User.email_verification_status == "verified",
+            # Suspended, restricted or deactivated accounts receive nothing.
+            User.is_active.is_(True),
+            User.account_status == "active",
+            User.access_restricted_at.is_(None),
         )
         .all()
     )
@@ -475,6 +479,23 @@ def _ensure_deliveries(db: Session, organization_id: str, *, now: datetime) -> N
     db.flush()
 
 
+def cancel_deliveries(db: Session, delivery_ids: list[str]) -> int:
+    """Stop pending/retrying deliveries (alert no longer open). Does not commit."""
+    if not delivery_ids:
+        return 0
+    return (
+        db.query(MarketAlertDelivery)
+        .filter(MarketAlertDelivery.id.in_(delivery_ids), MarketAlertDelivery.status.in_(("pending", "retrying")))
+        .update({MarketAlertDelivery.status: "cancelled_alert_closed", MarketAlertDelivery.next_attempt_at: None}, synchronize_session=False)
+    )
+
+
+def cancel_event_deliveries(db: Session, organization_id: str, event_id: str) -> int:
+    ids = [row.id for row in db.query(MarketAlertDelivery.id).filter(
+        MarketAlertDelivery.organization_id == organization_id, MarketAlertDelivery.event_id == event_id)]
+    return cancel_deliveries(db, ids)
+
+
 def deliver_alerts(db: Session, organization_id: str, *, now: datetime | None = None) -> dict[str, Any]:
     """Email owners/admins about HIGH/CRITICAL events. Opt-in only.
 
@@ -488,9 +509,23 @@ def deliver_alerts(db: Session, organization_id: str, *, now: datetime | None = 
 
     now = now or datetime.utcnow()
     _ensure_deliveries(db, organization_id, now=now)
+    # Deliveries for alerts that were acknowledged or resolved meanwhile stop.
+    closed = [
+        row.id for row in db.query(MarketAlertDelivery.id)
+        .join(MarketMaterialityEvent, MarketMaterialityEvent.id == MarketAlertDelivery.event_id)
+        .filter(
+            MarketAlertDelivery.organization_id == organization_id,
+            MarketAlertDelivery.status.in_(("pending", "retrying")),
+            MarketMaterialityEvent.status != "open",
+        )
+    ]
+    if closed:
+        cancel_deliveries(db, closed)
     due = (
         db.query(MarketAlertDelivery)
+        .join(MarketMaterialityEvent, MarketMaterialityEvent.id == MarketAlertDelivery.event_id)
         .filter(
+            MarketMaterialityEvent.status == "open",
             MarketAlertDelivery.organization_id == organization_id,
             MarketAlertDelivery.channel == "email",
             MarketAlertDelivery.status.in_(("pending", "retrying")),

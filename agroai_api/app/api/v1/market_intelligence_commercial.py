@@ -289,6 +289,7 @@ class OnboardingContract(BaseModel):
     price: Decimal = Field(ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     quantity_unit: str | None = Field(default=None, max_length=40)
+    fx_rate_to_reporting: Decimal | None = Field(default=None, gt=0)
     delivery_start: datetime | None = None
     delivery_end: datetime | None = None
 
@@ -439,13 +440,22 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
             metadata_json={"input_source": "customer_onboarding", "author_user_id": ctx.user.id if ctx.user else None},
         ))
     for index, item in enumerate(payload.contracts):
+        currency = (item.currency or local_currency).upper()
+        # A customer rate applies to contracts in the same currency as the price
+        # it was given for; a contract may also carry its own rate.
+        contract_fx = item.fx_rate_to_reporting
+        if contract_fx is None and payload.fx_rate_to_reporting is not None and currency == str(position.price_currency or "").upper():
+            contract_fx = payload.fx_rate_to_reporting
+        contract_metadata: dict[str, Any] = {"input_source": "customer_onboarding"}
+        if contract_fx is not None:
+            contract_metadata.update({"fx_source": "customer", "fx_state": "MANUAL"})
         db.add(MarketContractPosition(
             id=str(uuid.uuid4()), organization_id=org_id, position_id=position.id,
             contract_code=f"{position.position_key}-c{index + 1}"[:160], buyer=item.buyer, status="active",
             quantity=item.quantity, quantity_unit=canonical_unit(item.quantity_unit) if item.quantity_unit else unit,
-            price=item.price, currency=(item.currency or local_currency).upper(),
+            price=item.price, currency=currency, fx_rate_to_reporting=contract_fx,
             delivery_start=item.delivery_start, delivery_end=item.delivery_end,
-            metadata_json={"input_source": "customer_onboarding"},
+            metadata_json=contract_metadata,
         ))
     for field in fields:
         db.add(MarketPositionFieldLink(organization_id=org_id, position_id=position.id, field_entity_id=field.id,
@@ -669,9 +679,12 @@ def acknowledge_alert(alert_id: str, ctx: AuthContext = Depends(get_auth_context
     if row is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     if row.status != "acknowledged":
+        from app.services.market_intelligence_cycle import cancel_event_deliveries
+
         row.status = "acknowledged"
         row.acknowledged_at = datetime.utcnow()
         row.acknowledged_by_user_id = ctx.user.id if ctx.user else None
+        cancel_event_deliveries(db, org_id, row.id)  # no further emails for a handled alert
         db.commit()
     return event_payload(row)
 
