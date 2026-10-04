@@ -58,7 +58,7 @@ Direct Developer and Scale billing is implemented through AGRO-AI's production S
 - API base: https://api.agroai-pilot.com/v1
 - API reference: https://agroai-pilot.com/platform-api/reference.html
 - Documentation: https://agroai-pilot.com/platform-api/docs/
-- OpenAPI import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/marketplace_openapi.json
+- OpenAPI import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/marketplace_openapi.json\n- RapidAPI OpenAPI 3.0.2 artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/rapidapi_openapi_3_0_2.json
 - Postman import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/AGRO-AI-Platform-API.postman_collection.json
 
 ## Search keywords
@@ -74,7 +74,7 @@ Secondary: Agriculture / Analytics / Enterprise Integration
 Lead with the shortest path to a first successful call: import the official collection, set `api_key`, call `GET /platform/me` or the TEST sandbox, then move into fields, observations, recommendations, reports, and usage.
 
 ### RapidAPI
-Import `marketplace_openapi.json`. Keep the listing developer-first. If Rapid Proxy monetization is used, map Rapid plans to AGRO-AI entitlements server-side and do not also charge the same subscriber through direct Stripe.
+Import `rapidapi_openapi_3_0_2.json`. Keep the listing developer-first. If Rapid Proxy monetization is used, map Rapid plans to AGRO-AI entitlements server-side and do not also charge the same subscriber through direct Stripe.
 
 ### AWS Marketplace
 Use a SaaS listing with AWS-native subscription entitlement and metering for AWS-originated customers. AGRO-AI's own API remains the service plane; the AWS adapter should translate Marketplace subscription state into AGRO-AI organization/program/plan entitlements.
