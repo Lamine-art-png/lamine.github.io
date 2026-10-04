@@ -312,7 +312,7 @@ def test_crashed_cycle_job_is_redelivered_and_completed_by_another_worker(db, mo
 
     async def fake_cycle(db_, organization_id, **kwargs):
         ran.append(organization_id)
-        return {"complete": True, "evaluated": 1}
+        return {"complete": True, "evaluated": 1, "shared_ingestion_complete": True}
 
     monkeypatch.setattr(cycle, "run_organization_cycle", fake_cycle)
     assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="worker-b") == "succeeded"
@@ -425,6 +425,9 @@ def test_bounded_scheduling_serves_every_organization_oldest_due_first(db, monke
     for tick in range(3):
         now = clock + timedelta(hours=tick)
         cycle.schedule_cycle(db, now=now, batch=2)
+        # The drain publishes what it admitted in the same pass.
+        db.query(TaskOutbox).filter(TaskOutbox.task_type == cycle.TASK_TYPE).update({TaskOutbox.status: "published"})
+        db.commit()
         batch = [job for job in _jobs(db) if job.status == "queued"]
         served.append(sorted(job.tenant_id for job in batch))
         for job in batch:
@@ -676,3 +679,233 @@ def test_risk_with_horizon_equal_to_history_is_insufficient_not_an_error():
     result = historical_move_statistics(values, horizon_periods=MIN_OBSERVATIONS, frequency="weekly")
     assert result["status"] == "insufficient_history" and result["horizon_periods"] == MIN_OBSERVATIONS
     assert historical_move_statistics(values + [Decimal(130)] * 20, horizon_periods=4, frequency="weekly")["status"] != "insufficient_history"
+
+
+# ---------------------------------------------------------------------------
+# Final audit (PR #528)
+# ---------------------------------------------------------------------------
+
+
+def _physical_series(series_key, value, *, provider, commodity, country, market, unit, currency, price_basis=None, metadata=None, days_ago=1):
+    from app.services.market_data_adapters import SeriesDescriptor
+
+    descriptor = SeriesDescriptor(
+        provider=provider, series_key=series_key, source_name=f"{provider} test", observation_type="physical_price", commodity=commodity,
+        country_code=country, region=None, market_name=market, price_basis=price_basis, unit=unit, currency=currency, frequency="weekly",
+        freshness_max_age_minutes=14 * 1440, last_known_max_age_minutes=30 * 1440, licensing=PUBLIC_LICENCE, metadata=metadata or {},
+    )
+    return SeriesPoint(descriptor=descriptor, observed_at=NOW - timedelta(days=days_ago), value=Decimal(value), retrieved_at=NOW)
+
+
+from tests.test_commercial_intelligence_global import PUBLIC as PUBLIC_LICENCE  # noqa: E402
+
+
+def test_usda_grades_and_delivery_periods_are_never_medianed_into_one_price(db, client):
+    from app.services.market_data_adapters import USDAMyMarketNewsSeries
+
+    report = json.dumps({"results": [
+        {"commodity": "Yellow Corn", "grade": "US #2", "price_unit": "$/bu", "avg_price": "4.21", "report_date": datetime.utcnow().strftime("%m/%d/%Y"), "location": "Central Iowa"},
+        {"commodity": "Yellow Corn", "grade": "US #3", "price_unit": "$/bu", "avg_price": "4.05", "report_date": datetime.utcnow().strftime("%m/%d/%Y"), "location": "Central Iowa"},
+        {"commodity": "Yellow Corn", "grade": "US #2", "delivery_period": "Nov", "price_unit": "$/bu", "avg_price": "4.30", "report_date": datetime.utcnow().strftime("%m/%d/%Y"), "location": "Central Iowa"},
+    ]})
+    points = asyncio.run(USDAMyMarketNewsSeries(api_key="k", fetch_text=lambda url, headers, timeout: report).collect([{"commodity": "corn", "region": "Iowa"}]))
+    assert len(points) == 3
+    seed(db, *points)
+    user, org, membership = identity(db, "usda-grades")
+    position = _position(db, org, country="US", commodity="corn", reporting="USD", price_currency="USD", price=None, region="Central Iowa",
+                         metadata={"price_policy": "automatic"})
+    position.quantity_unit = "bushel"
+    db.commit()
+    resolution = plane.resolve_physical_price(db, position)
+    assert resolution.price is None and resolution.state == "SELECTION_REQUIRED" and resolution.reason == "heterogeneous_candidates"
+    candidates = resolution.trace["candidates"]
+    assert len(candidates) == 3 and len({json.dumps(c["signature"], sort_keys=True) for c in candidates}) == 3
+    assert {c["signature"]["product"]["quote"].get("grade") for c in candidates} == {"US #2", "US #3"}
+    result = asyncio.run(refresh_module.refresh_position_market_data(db, position, ingest_missing=False))
+    db.refresh(position)
+    assert result["price"]["outcome"] == "selection_required" and position.current_realizable_price is None  # no synthetic 4.21 median
+    assert position.metadata_json["price_state"] == "SELECTION_REQUIRED"
+    assert evidence_states(db, position, [])["price"] == "SELECTION_REQUIRED"
+    act_as(user, org, membership)
+    grade2 = next(c for c in candidates if c["signature"]["product"]["quote"] == {"grade": "US #2"})
+    chosen = client.put(f"/v1/market-intelligence/positions/{position.id}/price-source", json={"series_key": grade2["series_key"]}).json()
+    assert chosen["price"]["method"] == "customer_selected_series" and Decimal(chosen["position"]["current_realizable_price"]) == Decimal("4.21")
+    assert client.put(f"/v1/market-intelligence/positions/{position.id}/price-source", json={"series_key": "usda_mymarketnews:invented"}).status_code == 422
+
+
+def test_previously_automated_price_is_withdrawn_when_quotes_become_heterogeneous(db):
+    _, org, _ = identity(db, "withdraw")
+    seed(db, _physical_series("eu_agrifood:FR:BLT:rouen:delivered", "244.36", provider="eu_agrifood", commodity="wheat", country="FR", market="Rouen",
+                              unit="tonne", currency="EUR", price_basis="Delivered Rouen", metadata={"product_label": "Breadmaking wheat"}))
+    position = _position(db, org, country="FR", commodity="wheat", reporting="EUR", price_currency="EUR", price=None, region="Rouen",
+                         metadata={"price_policy": "automatic"})
+    position.quantity_unit = "tonne"
+    db.commit()
+    asyncio.run(refresh_module.refresh_position_market_data(db, position, ingest_missing=False))
+    db.refresh(position)
+    assert position.current_realizable_price == Decimal("244.36000000")
+    seed(db, _physical_series("eu_agrifood:FR:FEED:rouen:delivered", "205.10", provider="eu_agrifood", commodity="wheat", country="FR", market="Rouen",
+                              unit="tonne", currency="EUR", price_basis="Delivered Rouen", metadata={"product_label": "Feed wheat"}))
+    result = asyncio.run(refresh_module.refresh_position_market_data(db, position, ingest_missing=False))
+    db.refresh(position)
+    assert result["price"]["outcome"] == "selection_required" and position.current_realizable_price is None
+
+
+@pytest.mark.parametrize("variant", ["product", "stage"])
+def test_eu_breadmaking_vs_feed_wheat_or_stages_at_one_market_require_selection(db, variant):
+    _, org, _ = identity(db, f"eu-{variant}")
+    if variant == "product":
+        rows = [("BLT", "Breadmaking wheat", "Delivered Rouen", "244.36"), ("FEED", "Feed wheat", "Delivered Rouen", "205.10")]
+    else:
+        rows = [("BLT", "Breadmaking wheat", "Delivered Rouen", "244.36"), ("BLT", "Breadmaking wheat", "FOB Rouen", "238.00")]
+    seed(db, *[_physical_series(f"eu_agrifood:FR:{code}:rouen:{fold_stage}", value, provider="eu_agrifood", commodity="wheat", country="FR",
+                                market="Rouen", unit="tonne", currency="EUR", price_basis=stage, metadata={"product_label": label})
+               for (code, label, stage, value), fold_stage in zip(rows, ["a", "b"])])
+    position = _position(db, org, country="FR", commodity="wheat", reporting="EUR", price_currency="EUR", price=None, region="Rouen",
+                         metadata={"price_policy": "automatic"})
+    position.quantity_unit = "tonne"
+    db.commit()
+    resolution = plane.resolve_physical_price(db, position)
+    assert resolution.price is None and resolution.state == "SELECTION_REQUIRED"
+    assert sorted(Decimal(c["value"]) for c in resolution.trace["candidates"]) == sorted(Decimal(r[3]) for r in rows)  # provenance kept, nothing blended
+
+
+def test_identical_quotes_are_the_only_ones_ever_aggregated(db):
+    _, org, _ = identity(db, "identical")
+    same = {"product_label": "Breadmaking wheat"}
+    seed(db, *[_physical_series(f"eu_agrifood:FR:BLT:rouen:{suffix}", value, provider="eu_agrifood", commodity="wheat", country="FR", market="Rouen",
+                                unit="tonne", currency="EUR", price_basis="Delivered Rouen", metadata=same) for suffix, value in (("x", "240"), ("y", "250"))])
+    position = _position(db, org, country="FR", commodity="wheat", reporting="EUR", price_currency="EUR", price=None, region="Rouen",
+                         metadata={"price_policy": "automatic"})
+    position.quantity_unit = "tonne"
+    db.commit()
+    resolution = plane.resolve_physical_price(db, position)
+    assert resolution.method == "median_of_identical_quotes" and resolution.price == Decimal("245.00000000")
+
+
+def test_concurrent_workers_wait_for_the_slot_ingestion_barrier(db, monkeypatch, no_heartbeat):
+    import threading
+
+    from sqlalchemy.orm import sessionmaker
+
+    from app.services.market_data_adapters import CONABWeeklyPricesSeries
+    from tests.test_commercial_intelligence_global import CONAB_FIXTURE
+
+    _, org_a, _ = identity(db, "barrier-a")
+    _, org_b, _ = identity(db, "barrier-b")
+    _position(db, org_a, name="A")
+    _position(db, org_b, name="B")
+    started, release = threading.Event(), threading.Event()
+
+    class SlowConab(CONABWeeklyPricesSeries):
+        async def collect(self, selectors):
+            started.set()
+            await asyncio.to_thread(release.wait, 20)
+            line = "SOJA ;EM GRÃOS ;1;MT ;CENTRO-OESTE ;2026;10;{} - {} ;1;PREÇO RECEBIDO P/ PR;2,40\n"
+            day = datetime.utcnow().strftime("%d-%m-%Y")
+            return self._parse(iter([CONAB_FIXTURE[0], line.format(day, day)]), {("soybean", "MT")}, datetime.now(timezone.utc))
+
+    monkeypatch.setitem(ADAPTERS, "conab_precos", SlowConab())
+    for provider_id in ("fx_reference", "bcb_ptax"):
+        monkeypatch.setattr(ADAPTERS[provider_id], "configured", lambda: False)
+    evaluated: list[tuple[str, int]] = []
+    real_evaluate = cycle.evaluate_organization
+
+    async def spy_evaluate(db_, organization_id, **kwargs):
+        points = db_.query(MarketDataPoint).count()
+        evaluated.append((organization_id, points))
+        return await real_evaluate(db_, organization_id, **kwargs)
+
+    monkeypatch.setattr(cycle, "evaluate_organization", spy_evaluate)
+    cycle.schedule_cycle(db)
+    jobs = {job.tenant_id: job.id for job in _jobs(db)}
+    Session = sessionmaker(bind=db.get_bind(), autoflush=False, autocommit=False)
+    results: dict[str, str] = {}
+
+    def worker(org_id: str, name: str) -> None:
+        session = Session()
+        try:
+            results[name] = cycle.process_market_cycle_job(session, job_id=jobs[org_id], organization_id=org_id, worker_id=name)
+        finally:
+            session.close()
+
+    thread_a = threading.Thread(target=worker, args=(org_a.id, "worker-a"))
+    thread_a.start()
+    assert started.wait(10), "worker A must be ingesting"
+    thread_b = threading.Thread(target=worker, args=(org_b.id, "worker-b"))
+    thread_b.start()
+    thread_b.join(20)
+    # B ran while A held the slot: it deferred, evaluated nothing, and its job is re-queued without a counted attempt.
+    assert results["worker-b"] == "deferred" and evaluated == []
+    db.expire_all()
+    job_b = db.get(IngestionJob, jobs[org_b.id])
+    assert (job_b.status, job_b.attempt_count, job_b.input_json["slot_deferrals"]) == ("queued", 0, 1)
+    assert db.get(MarketCycleOrganizationState, org_b.id).last_completed_at is None
+    release.set()
+    thread_a.join(20)
+    assert results["worker-a"] == "succeeded" and evaluated[0][0] == org_a.id and evaluated[0][1] >= 1
+    db.query(IngestionJob).filter_by(id=jobs[org_b.id]).update({IngestionJob.next_attempt_at: datetime.utcnow() - timedelta(seconds=1)})
+    db.commit()
+    worker(org_b.id, "worker-b2")
+    assert results["worker-b2"] == "succeeded"
+    assert evaluated[-1] == (org_b.id, evaluated[0][1])  # B evaluated only after A's ingestion landed
+    db.expire_all()
+    assert db.get(IngestionJob, jobs[org_b.id]).output_json["providers"] == {"status": "already_ingested_this_slot"}
+    assert db.query(MarketProviderRun).filter(MarketProviderRun.provider == "conab_precos").count() == 1  # contention is not a provider run
+
+
+def test_deferrals_are_bounded(db, monkeypatch, no_heartbeat):
+    _, org, _ = identity(db, "bounded-defer")
+    _position(db, org)
+    cycle.schedule_cycle(db)
+    [job] = _jobs(db)
+
+    async def busy(db_, slot, **kwargs):
+        return {"status": "in_progress_elsewhere"}
+
+    monkeypatch.setattr(cycle, "ingest_once_per_slot", busy)
+    monkeypatch.setattr(cycle, "evaluate_organization", lambda *a, **k: asyncio.sleep(0, result={"positions": 0, "evaluated": 0, "failed": 0, "complete": True, "events_created": []}))
+    for _ in range(cycle.MAX_SLOT_DEFERRALS):
+        assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "deferred"
+        db.query(IngestionJob).filter_by(id=job.id).update({IngestionJob.next_attempt_at: datetime.utcnow() - timedelta(seconds=1)})
+        db.commit()
+    assert cycle.process_market_cycle_job(db, job_id=job.id, organization_id=org.id, worker_id="w") == "succeeded"
+    db.refresh(job)
+    assert job.output_json["shared_ingestion_complete"] is False and db.get(MarketCycleOrganizationState, org.id).last_status == "partial"
+
+
+def test_tick_budget_covers_recovered_and_new_jobs_and_all_admitted_are_published(db, monkeypatch):
+    from app.services import task_outbox_service
+
+    orgs = []
+    for index in range(4):
+        _, org, _ = identity(db, f"budget-{index}")
+        _position(db, org)
+        orgs.append(org.id)
+    start = datetime.utcnow() - timedelta(hours=2)
+    # Ticks earlier: A and B were scheduled, published, and their workers died mid-run.
+    cycle.schedule_cycle(db, now=start, batch=2)
+    stale = _jobs(db)
+    assert len(stale) == 2
+    for job in stale:
+        job.status, job.lease_expires_at, job.worker_id = "running", start, "dead"
+    db.query(TaskOutbox).update({TaskOutbox.status: "published", TaskOutbox.updated_at: start})
+    db.commit()
+    result = cycle.schedule_cycle(db, now=datetime.utcnow(), batch=3)
+    assert (result["recovered"], result["enqueued"], result["already_pending"]) == (2, 1, 0)  # 2 + 1 == budget 3
+    sent = []
+
+    class Publisher:
+        def enqueue(self, job_id, tenant_id, task_type):
+            sent.append(tenant_id)
+
+    monkeypatch.setattr(task_outbox_service, "get_task_publisher", lambda: Publisher())
+    published = task_outbox_service.publish_pending_outbox(db, limit=result["batch"], task_types=(cycle.TASK_TYPE,))
+    assert published == {"published": 3, "failed": 0} and len(sent) == 3
+    assert db.query(TaskOutbox).filter(TaskOutbox.task_type == cycle.TASK_TYPE, TaskOutbox.status == "pending").count() == 0
+    # The organization beyond the budget was not admitted (no outbox row), so nothing admitted waits for the next cron.
+    assert len(_jobs(db)) == 3
+    # A backlog of publishable rows counts against the next tick's budget.
+    db.query(TaskOutbox).update({TaskOutbox.status: "pending", TaskOutbox.next_attempt_at: None})
+    db.commit()
+    assert cycle.schedule_cycle(db, batch=3) == {"status": "ok", "enqueued": 0, "recovered": 0, "already_pending": 3, "batch": 3}

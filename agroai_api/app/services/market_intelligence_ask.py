@@ -256,7 +256,7 @@ def deterministic_context_facts(context: dict[str, Any]) -> list[dict[str, Any]]
                                                                    "delta": str(item.get("delta_exposed_revenue") or "0.00"), "currency": ccy}})
     if context.get("scenarios"):
         facts.append({"code": "not_forecast", "params": {}})
-    stale = [{"evidence": item["evidence"], "state": item["state"]} for item in context.get("data_states") or [] if item.get("state") in {"STALE", "UNAVAILABLE"}]
+    stale = [{"evidence": item["evidence"], "state": item["state"]} for item in context.get("data_states") or [] if item.get("state") in {"STALE", "UNAVAILABLE", "SELECTION_REQUIRED"}]
     if stale:
         facts.append({"code": "stale", "params": {"items": stale}})
     for event in (context.get("material_changes") or [])[:2]:

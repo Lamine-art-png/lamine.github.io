@@ -56,7 +56,7 @@ const CHANGE = {
 };
 
 async function stub(page, { locale = "en", positions = [POSITION], changes = [CHANGE] } = {}) {
-  const calls = { acknowledged: [], compare: [], journal: [], onboarding: [], ask: [] };
+  const calls = { acknowledged: [], compare: [], journal: [], onboarding: [], ask: [], priceSource: [] };
   await page.addInitScript(({ token, selected }) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", selected);
@@ -90,8 +90,13 @@ async function stub(page, { locale = "en", positions = [POSITION], changes = [CH
       });
     }
     if (path === "/v1/market-intelligence/alerts/evt-1/acknowledge") { calls.acknowledged.push(path); changes.splice(0, changes.length); return json({ id: "evt-1", status: "acknowledged" }); }
+    if (path.endsWith("/price-source")) { calls.priceSource.push(request.postDataJSON()); return json({ position_id: "pos-1", price: { outcome: "promoted" } }); }
     if (path.endsWith("/provenance")) {
       return json({ numbers: { current_realizable_price: { value: "127.20", origin: "governed_shared_evidence", state: "DELAYED" }, fx_rate_to_reporting: { value: null, origin: "not_required_or_missing" } },
+        price_selection: { required: true, selected_series_key: null, candidates: [
+          { series_key: "usda:a", provider: "usda_mymarketnews", market_name: "Central Iowa", price_basis: "cash_bid", signature: { product: { quote: { grade: "US #2" } } }, state: "DELAYED", value: "4.21", unit: "bushel", currency: "USD" },
+          { series_key: "usda:b", provider: "usda_mymarketnews", market_name: "Central Iowa", price_basis: "cash_bid", signature: { product: { quote: { grade: "US #3" } } }, state: "DELAYED", value: "4.05", unit: "bushel", currency: "USD" },
+        ] },
         sources: [{ evidence_id: "e1", observation_type: "physical_price", provider: "conab_precos", source_name: "CONAB weekly state agricultural prices", state: "DELAYED", value: "2.12", unit: "kg", currency: "BRL", observed_at: "2026-09-25T12:00:00Z", retrieved_at: "2026-10-03T08:00:00Z", market_name: "MT state average", attribution: "Fonte: Conab" }] });
     }
     if (path === "/v1/market-intelligence/scenarios/compare") {
@@ -103,6 +108,11 @@ async function stub(page, { locale = "en", positions = [POSITION], changes = [CH
     if (path === "/v1/market-intelligence/onboarding/infer") {
       const body = request.postDataJSON();
       const almonds = /almond/i.test(body.crop);
+      if (body.country_code === "ZW") {
+        return json({ pack_id: "global_physical", commodity: "corn", commodity_recognised: true, local_currency: body.local_currency || null,
+          local_currency_options: ["USD", "ZWG"], reporting_currency: body.reporting_currency || "USD", quantity_unit: "tonne", market_structure: "physical",
+          futures_role: "none", warnings: body.local_currency ? [] : ["local_currency_ambiguous"], evidence_plan: [] });
+      }
       const known = ["almonds", "corn"].includes(body.crop);
       return json({ pack_id: almonds ? "us_specialty_crops" : known ? "us_row_crops" : "global_physical", commodity: almonds ? "almonds" : body.crop,
         commodity_recognised: known, local_currency: "USD", reporting_currency: "USD", quantity_unit: almonds ? "pound" : "bushel", market_structure: almonds ? "physical" : "hybrid",
@@ -142,6 +152,14 @@ test("home leads with material changes and explains them with evidence", async (
   // Provider names are localized from provider_id, never the API's English name.
   await expect(sources.getByText("Weekly state producer prices from CONAB")).toBeVisible();
   await expect(sources.getByText("CONAB weekly state agricultural prices")).toHaveCount(0);
+  // Different grades are listed for an explicit choice, never averaged.
+  const selection = page.getByTestId("price-selection");
+  await expect(selection.getByText("Choose which market price applies")).toBeVisible();
+  await expect(selection.getByText(/US #2/)).toBeVisible();
+  await expect(selection.getByText(/US #3/)).toBeVisible();
+  await selection.getByRole("button", { name: "Use this price" }).first().click();
+  await expect.poll(() => calls.priceSource.length).toBe(1);
+  expect(calls.priceSource[0]).toEqual({ series_key: "usda:a" });
   await expect(sources.getByText("Fonte: Conab")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
@@ -242,4 +260,22 @@ test("deterministic answers render from facts in the viewer's language, never th
   await expect(answer).toContainText("Free-text what-if questions are understood in English, Portuguese, Spanish and French.");
   await expect(answer).not.toContainText("SERVER ENGLISH SUMMARY");
   expect(calls.ask.length).toBe(1);
+});
+
+test("countries with several tender currencies ask for the operating currency", async ({ page }) => {
+  const calls = await stub(page, { positions: [], changes: [] });
+  await page.goto(`${APP}/market-intelligence`);
+  const onboarding = page.getByTestId("commercial-onboarding");
+  await expect(onboarding.getByText("Set up Commercial Intelligence")).toBeVisible({ timeout: 25_000 });
+  await onboarding.getByLabel("Country").selectOption("ZW");
+  await onboarding.getByLabel("What do you grow?").selectOption("corn");
+  await expect(page.getByText("Several currencies are used in this country. Choose the one your operation sells and pays costs in.")).toBeVisible();
+  await onboarding.getByLabel("Expected production").fill("100");
+  const create = onboarding.getByRole("button", { name: "Create commercial position" });
+  await expect(create).toBeDisabled();
+  await onboarding.getByLabel("Operating currency").selectOption("ZWG");
+  await expect(create).toBeEnabled();
+  await create.click();
+  await expect.poll(() => calls.onboarding.length).toBe(1);
+  expect(calls.onboarding[0].local_currency).toBe("ZWG");
 });

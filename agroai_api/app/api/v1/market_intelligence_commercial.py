@@ -53,7 +53,7 @@ from app.services.market_intelligence import (
     scenario_position,
 )
 from app.services.market_intelligence_refresh import refresh_position_market_data
-from app.services.market_materiality import METHODOLOGY_VERSION, evaluate_position, event_payload, evidence_states
+from app.services.market_materiality import DEGRADED_STATES, METHODOLOGY_VERSION, evaluate_position, event_payload, evidence_states
 from app.services.market_normalization import canonical_unit, validate_country_code, validate_currency_code
 from app.services.market_packs import catalog as pack_catalog, infer_onboarding, resolve_pack
 from app.services.market_risk import position_risk
@@ -183,7 +183,7 @@ def commercial_home(ctx: AuthContext = Depends(get_auth_context), db: Session = 
 
     stale = []
     for item in positions:
-        degraded = {key: state for key, state in (item.get("evidence_states") or {}).items() if state in {"STALE", "UNAVAILABLE"}}
+        degraded = {key: state for key, state in (item.get("evidence_states") or {}).items() if state in DEGRADED_STATES}
         if degraded:
             stale.append({
                 "position_id": item.get("position_id"),
@@ -225,11 +225,17 @@ class InferRequest(BaseModel):
     country_code: str = Field(min_length=2, max_length=2)
     region: str | None = Field(default=None, max_length=160)
     reporting_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    local_currency: str | None = Field(default=None, min_length=3, max_length=3)
 
     @field_validator("country_code")
     @classmethod
     def country(cls, value: str) -> str:
         return validate_country_code(value)
+
+    @field_validator("reporting_currency", "local_currency")
+    @classmethod
+    def currency(cls, value: str | None) -> str | None:
+        return validate_currency_code(value) if value is not None else None
 
 
 def _provider_availability(plan: list[dict[str, Any]], *, local_currency: str | None, reporting_currency: str | None) -> list[dict[str, Any]]:
@@ -260,7 +266,8 @@ def market_packs(ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]
 @router.post("/onboarding/infer")
 def onboarding_infer(payload: InferRequest, ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]:
     _org_id(ctx)
-    inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region, reporting_currency=payload.reporting_currency)
+    inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region,
+                                reporting_currency=payload.reporting_currency, local_currency=payload.local_currency)
     inferred["evidence_plan"] = _provider_availability(inferred["evidence_plan"], local_currency=inferred["local_currency"], reporting_currency=inferred["reporting_currency"])
     return inferred
 
@@ -309,6 +316,9 @@ class OnboardingRequest(BaseModel):
     inventory_cost_per_unit: Decimal | None = Field(default=None, ge=0)
     production_cost_per_unit: Decimal | None = Field(default=None, ge=0)
     reporting_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    # The currency the operation sells and pays costs in; required where the
+    # country has several tender currencies.
+    local_currency: str | None = Field(default=None, min_length=3, max_length=3)
     local_price: Decimal | None = Field(default=None, ge=0)
     local_price_currency: str | None = Field(default=None, min_length=3, max_length=3)
     fx_rate_to_reporting: Decimal | None = Field(default=None, gt=0)
@@ -328,7 +338,7 @@ class OnboardingRequest(BaseModel):
     def position_unit(cls, value: str | None) -> str | None:
         return _supported_unit(value)
 
-    @field_validator("reporting_currency", "local_price_currency")
+    @field_validator("reporting_currency", "local_price_currency", "local_currency")
     @classmethod
     def currency(cls, value: str | None) -> str | None:
         if value is None:
@@ -364,10 +374,15 @@ async def onboarding_create(payload: OnboardingRequest, ctx: AuthContext = Depen
     """Create a commercial position from plain answers; AGRO-AI infers the rest."""
     _require_write(ctx)
     org_id = _org_id(ctx)
-    inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region, reporting_currency=payload.reporting_currency)
+    inferred = infer_onboarding(crop=payload.crop, country_code=payload.country_code, region=payload.region,
+                                reporting_currency=payload.reporting_currency, local_currency=payload.local_currency)
     unit = canonical_unit(payload.quantity_unit) if payload.quantity_unit else inferred["quantity_unit"]
     if unit is None:
         raise HTTPException(status_code=422, detail={"code": "unit_not_supported", "message": "Choose a supported quantity unit."})
+    if "local_currency_ambiguous" in inferred["warnings"]:
+        # Never assume which of several tender currencies the operation uses.
+        raise HTTPException(status_code=422, detail={"code": "local_currency_required", "options": inferred["local_currency_options"],
+                                                     "message": "Choose the currency your operation sells and pays costs in."})
     local_currency = inferred["local_currency"] or payload.local_price_currency or inferred["reporting_currency"]
     fields = _org_fields(db, org_id, payload.field_ids)
     if payload.workspace_id:
@@ -528,7 +543,49 @@ def position_provenance(position_id: str, ctx: AuthContext = Depends(get_auth_co
             for key in ("locked_revenue", "exposed_revenue", "projected_revenue", "projected_cost", "projected_margin", "break_even_price")
         },
     }
-    return {"position_id": position.id, "pack_id": resolve_pack(position.country_code, position.commodity).pack_id, "numbers": numbers, "sources": sources}
+    unselected = plane.resolve_physical_price(db, position, ignore_selection=True)
+    return {
+        "position_id": position.id,
+        "pack_id": resolve_pack(position.country_code, position.commodity).pack_id,
+        "numbers": numbers,
+        "sources": sources,
+        # Commercially different governed quotes the customer can choose from.
+        "price_selection": {
+            "required": metadata.get("price_state") == "SELECTION_REQUIRED",
+            "selected_series_key": metadata.get("price_series_key"),
+            "candidates": unselected.trace.get("candidates") or [],
+        },
+    }
+
+
+class PriceSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    series_key: str | None = Field(default=None, max_length=400)
+
+
+@router.put("/positions/{position_id}/price-source")
+async def select_price_source(position_id: str, payload: PriceSourceRequest, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Choose which governed quote applies when several commercially different ones exist."""
+    _require_write(ctx)
+    org_id = _org_id(ctx)
+    position = _position(db, org_id, position_id)
+    metadata = dict(position.metadata_json) if isinstance(position.metadata_json, dict) else {}
+    if payload.series_key is None:
+        metadata.pop("price_series_key", None)
+    else:
+        resolution = plane.resolve_physical_price(db, position, ignore_selection=True)
+        allowed = {item["series_key"] for item in resolution.trace.get("candidates") or []}
+        allowed |= {item.get("series_key") for item in resolution.evidence if item.get("series_key")}
+        if payload.series_key not in allowed:
+            raise HTTPException(status_code=422, detail={"code": "price_source_not_a_candidate", "message": "Choose one of the listed market prices."})
+        metadata["price_series_key"] = payload.series_key
+    metadata["price_policy"] = "automatic"
+    position.metadata_json = metadata
+    db.commit()
+    refresh = await refresh_position_market_data(db, position, ingest_missing=False)
+    evaluate_position(db, position)
+    db.commit()
+    return {"position_id": position.id, "price": refresh["price"], "position": _position_payload(db, org_id, position)}
 
 
 @router.get("/positions/{position_id}/risk")

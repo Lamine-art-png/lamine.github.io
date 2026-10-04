@@ -18,6 +18,7 @@ type Inferred = {
   commodity: string;
   commodity_recognised: boolean;
   local_currency: string | null;
+  local_currency_options?: string[];
   reporting_currency: string;
   quantity_unit: string;
   market_structure: string;
@@ -49,6 +50,8 @@ const COPY = [
   "Current inventory",
   "Approximate production cost per unit (optional)",
   "Reporting currency",
+  "Operating currency",
+  "The currency your operation sells and pays costs in.",
   "Current local market price (optional)",
   "Leave empty and AGRO-AI will use governed market sources where available.",
   "Exchange rate to reporting currency",
@@ -85,7 +88,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
   // The unit follows the inferred market convention until the user picks one.
   const [unitChosen, setUnitChosen] = useState(false);
 
-  const [form, setForm] = useState({ crop: "", country_code: COUNTRIES.includes(localeCountry) ? localeCountry : "US", region: "", season: String(new Date().getFullYear()), expected_production: "", quantity_unit: "", inventory_quantity: "0", production_cost_per_unit: "", reporting_currency: "", local_price: "", fx_rate_to_reporting: "" });
+  const [form, setForm] = useState({ crop: "", country_code: COUNTRIES.includes(localeCountry) ? localeCountry : "US", region: "", local_currency: "", season: String(new Date().getFullYear()), expected_production: "", quantity_unit: "", inventory_quantity: "0", production_cost_per_unit: "", reporting_currency: "", local_price: "", fx_rate_to_reporting: "" });
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [fieldIds, setFieldIds] = useState<string[]>([]);
@@ -102,16 +105,19 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
     const timer = window.setTimeout(() => {
       void apiClient.post<Inferred>("/v1/market-intelligence/onboarding/infer", {
         crop: form.crop.trim(), country_code: form.country_code, region: form.region.trim() || undefined,
-        reporting_currency: form.reporting_currency || undefined,
+        reporting_currency: form.reporting_currency || undefined, local_currency: form.local_currency || undefined,
       }).then((value) => {
         setInferred(value);
         setForm((current) => ({ ...current, quantity_unit: unitChosen && current.quantity_unit ? current.quantity_unit : value.quantity_unit, reporting_currency: current.reporting_currency || value.reporting_currency }));
       }).catch(() => setInferred(null));
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [form.crop, form.country_code, form.region, form.reporting_currency, unitChosen]);
+  }, [form.crop, form.country_code, form.region, form.reporting_currency, form.local_currency, unitChosen]);
 
-  const localCurrency = inferred?.local_currency || form.reporting_currency;
+  // Several tender currencies (e.g. ZW, PA): the customer chooses; never assumed.
+  const currencyOptions = inferred?.local_currency_options || [];
+  const operatingCurrencyRequired = currencyOptions.length > 1;
+  const localCurrency = form.local_currency || inferred?.local_currency || (operatingCurrencyRequired ? "" : form.reporting_currency);
   const fxSlots = inferred?.evidence_plan.filter((slot) => slot.role === "fx_rate") || [];
   const needsCustomerFx = Boolean(localCurrency && form.reporting_currency && localCurrency !== form.reporting_currency && !fxSlots.some((slot) => slot.status === "DELAYED"));
 
@@ -129,6 +135,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
         inventory_quantity: form.inventory_quantity || "0",
         production_cost_per_unit: form.production_cost_per_unit || undefined,
         reporting_currency: form.reporting_currency || undefined,
+        local_currency: form.local_currency || undefined,
         local_price: form.local_price || undefined,
         local_price_currency: form.local_price ? localCurrency || undefined : undefined,
         fx_rate_to_reporting: needsCustomerFx && form.fx_rate_to_reporting ? form.fx_rate_to_reporting : undefined,
@@ -156,7 +163,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
         <label className={label}>{tx("What do you grow?")}<select className={input} value={cropChoice} onChange={(e) => { setCropChoice(e.target.value); setForm({ ...form, crop: e.target.value === OTHER_CROP ? "" : e.target.value }); }}><option value="" disabled>{tx("Choose a crop")}</option>{crops.map(([id, name]) => <option key={id} value={id}>{name}</option>)}<option value={OTHER_CROP}>{tx("Other crop")}</option></select>
           {cropChoice === OTHER_CROP ? <input aria-label={tx("Name of your crop")} placeholder={tx("Name of your crop")} className={input} value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })} /> : null}
         </label>
-        <label className={label}>{tx("Country")}<select className={input} value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value, reporting_currency: "", quantity_unit: "" })}>{countries.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label>
+        <label className={label}>{tx("Country")}<select className={input} value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value, reporting_currency: "", local_currency: "", quantity_unit: "" })}>{countries.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label>
         <label className={label}>{tx("Region, state or market")}<input className={input} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></label>
         <label className={label}>{tx("Which season?")}<input className={input} value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} /></label>
       </div>
@@ -177,6 +184,9 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
         <label className={label}>{tx("Unit")}<select className={input} value={form.quantity_unit} onChange={(e) => { setUnitChosen(true); setForm({ ...form, quantity_unit: e.target.value }); }}>{Object.keys(UNIT_LABELS).map((key) => <option key={key} value={key}>{unitLabel(tx, key)}</option>)}</select></label>
         <label className={label}>{tx("Current inventory")}<input inputMode="decimal" className={input} value={form.inventory_quantity} onChange={(e) => setForm({ ...form, inventory_quantity: e.target.value })} /></label>
         <label className={label}>{tx("Approximate production cost per unit (optional)")}<input inputMode="decimal" className={input} value={form.production_cost_per_unit} onChange={(e) => setForm({ ...form, production_cost_per_unit: e.target.value })} /></label>
+        {operatingCurrencyRequired ? (
+          <label className={label}>{tx("Operating currency")}<select className={input} value={form.local_currency} onChange={(e) => setForm({ ...form, local_currency: e.target.value })}><option value="" disabled>{tx("The currency your operation sells and pays costs in.")}</option>{currencyOptions.map((code) => <option key={code} value={code}>{currencyNames?.of(code) || code} ({code})</option>)}</select></label>
+        ) : null}
         <label className={label}>{tx("Reporting currency")}<select className={input} value={form.reporting_currency} onChange={(e) => setForm({ ...form, reporting_currency: e.target.value })}>{currencies.map(([code, name]) => <option key={code} value={code}>{name} ({code})</option>)}</select></label>
         <label className={label}>{tx("Current local market price (optional)")}<input inputMode="decimal" className={input} value={form.local_price} onChange={(e) => setForm({ ...form, local_price: e.target.value })} /><span className="mt-1 block font-normal text-[11px] text-[#7B877F]">{tx("Leave empty and AGRO-AI will use governed market sources where available.")}</span></label>
       </div>
@@ -212,7 +222,7 @@ export function CommercialOnboarding({ onCreated }: { onCreated: () => void }) {
       ) : null}
 
       {error ? <div className="mt-4 rounded-xl border border-[#F0C6B8] bg-[#FFF5F1] px-3 py-2 text-sm text-[#8B321B]">{error}</div> : null}
-      <button onClick={() => void submit()} disabled={saving || !form.crop.trim() || !form.season.trim() || !form.expected_production} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#10231B] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{saving ? tx("Creating…") : tx("Create commercial position")}</button>
+      <button onClick={() => void submit()} disabled={saving || !form.crop.trim() || !form.season.trim() || !form.expected_production || (operatingCurrencyRequired && !form.local_currency)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#10231B] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{saving ? tx("Creating…") : tx("Create commercial position")}</button>
     </section>
   );
 }

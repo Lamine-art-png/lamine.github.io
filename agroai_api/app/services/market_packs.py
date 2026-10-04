@@ -19,7 +19,7 @@ from app.services.market_normalization import (
     brazil_state_code,
     canonical_commodity,
     commodity_family,
-    country_default_currency,
+    country_currencies,
 )
 
 PACKS_VERSION = "market-packs-2026.10.1"
@@ -301,7 +301,14 @@ def position_selectors(pack: MarketPack, *, country_code: str, commodity: str, r
     return selectors
 
 
-def infer_onboarding(*, crop: str, country_code: str, region: str | None = None, reporting_currency: str | None = None) -> dict[str, Any]:
+def infer_onboarding(
+    *,
+    crop: str,
+    country_code: str,
+    region: str | None = None,
+    reporting_currency: str | None = None,
+    local_currency: str | None = None,
+) -> dict[str, Any]:
     """Turn customer-language answers into a position template.
 
     "Soybeans in Mato Grosso, Brazil" -> commodity soybean, BRL, saca 60 kg,
@@ -310,13 +317,22 @@ def infer_onboarding(*, crop: str, country_code: str, region: str | None = None,
     country = str(country_code or "").upper()
     canonical = canonical_commodity(crop)
     pack = resolve_pack(country, crop)
-    local_currency = country_default_currency(country)
+    # The operating (local) currency is inferred only when the country has a
+    # single tender currency; where several circulate (ZW, PA, LS, BT, ...)
+    # the customer must choose, separately from the reporting currency.
+    options = country_currencies(country)
+    if local_currency:
+        local_currency = local_currency.upper()
+    elif len(options) == 1:
+        local_currency = options[0]
+    else:
+        local_currency = None
     # Stable codes only: the portal renders each in the viewer's locale.
     warnings: list[str] = []
     if canonical is None:
         warnings.append("crop_not_recognised")
     if local_currency is None:
-        warnings.append("currency_not_inferred")
+        warnings.append("local_currency_ambiguous" if len(options) > 1 else "currency_not_inferred")
     if pack.pack_id.startswith("br_") and region and brazil_state_code(region) is None:
         warnings.append("state_not_recognised")
     return {
@@ -327,6 +343,7 @@ def infer_onboarding(*, crop: str, country_code: str, region: str | None = None,
         "country_code": country,
         "region": region,
         "local_currency": local_currency,
+        "local_currency_options": options,
         "reporting_currency": (reporting_currency or local_currency or "USD").upper(),
         "quantity_unit": pack.default_unit,
         "market_structure": pack.market_structure,

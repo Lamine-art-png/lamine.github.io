@@ -287,6 +287,12 @@ BR_STATE_CODES: dict[str, str] = {
 }
 
 
+def country_currencies(country_code: str | None) -> list[str]:
+    """Every current tender currency of a country (several for e.g. ZW, PA, LS)."""
+    entry = country_registry().get(str(country_code or "").upper())
+    return list(entry.get("currencies") or []) if entry else []
+
+
 def country_default_currency(country_code: str | None) -> str | None:
     entry = country_registry().get(str(country_code or "").upper())
     return entry.get("default_currency") if entry else None

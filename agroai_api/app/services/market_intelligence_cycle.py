@@ -221,11 +221,27 @@ def schedule_cycle(db: Session, *, now: datetime | None = None, batch: int | Non
         return {"status": "disabled"}
     now = now or datetime.utcnow()
     batch = batch or _int_env("MARKET_INTELLIGENCE_CYCLE_BATCH", DEFAULT_BATCH)
-    recovered = recover_stale_jobs(db, now=now)
-    organizations = due_organizations(db, now=now, limit=batch)
+    # One total budget per tick: cycle rows already waiting to publish,
+    # re-armed stale jobs and newly due organizations together never exceed
+    # ``batch``, which is exactly what the same drain pass then publishes.
+    pending = _publishable_cycle_rows(db, now)
+    budget = max(0, batch - pending)
+    recovered = recover_stale_jobs(db, now=now, limit=budget) if budget else 0
+    budget -= recovered
+    organizations = due_organizations(db, now=now, limit=budget) if budget > 0 else []
     enqueued = [job.id for organization_id in organizations if (job := enqueue_organization(db, organization_id, now=now, trigger=trigger)) is not None]
     db.commit()
-    return {"status": "ok", "enqueued": len(enqueued), "recovered": recovered, "batch": batch}
+    return {"status": "ok", "enqueued": len(enqueued), "recovered": recovered, "already_pending": pending, "batch": batch}
+
+
+def _publishable_cycle_rows(db: Session, now: datetime) -> int:
+    from app.services.task_outbox_service import _claimable_outbox
+
+    return int(
+        db.query(func.count(TaskOutbox.id))
+        .filter(TaskOutbox.task_type == TASK_TYPE, _claimable_outbox(now))
+        .scalar() or 0
+    )
 
 
 def schedule_cycle_once(**kwargs: Any) -> dict[str, Any]:
@@ -304,6 +320,19 @@ async def ingest_due_demands(db: Session, *, deadline: float, trigger: str = "sc
 
 
 SLOT_MARKER_PROVIDER = "__cycle_slot__"
+# Barrier: an organization job never evaluates before the slot's shared
+# ingestion has completed. It is re-queued (not failed) a bounded number of
+# times; after that it evaluates and reports the incomplete ingestion.
+SLOT_DEFER_SECONDS = 30
+MAX_SLOT_DEFERRALS = 20
+
+
+class SlotIngestionPending(Exception):
+    """Shared ingestion for this slot is still running (or unfinished)."""
+
+    def __init__(self, status: str) -> None:
+        super().__init__(status)
+        self.status = status
 
 
 async def ingest_once_per_slot(db: Session, slot: str, *, deadline: float, trigger: str = "scheduled") -> dict[str, Any]:
@@ -538,10 +567,16 @@ async def run_organization_cycle(
     time_budget_seconds: float | None = None,
     trigger: str = "scheduled",
     slot: str | None = None,
+    allow_incomplete_ingestion: bool = False,
 ) -> dict[str, Any]:
     started = time.monotonic()
     deadline = started + (time_budget_seconds if time_budget_seconds is not None else _job_budget())
     providers = await ingest_once_per_slot(db, slot or _slot(datetime.utcnow()), deadline=deadline, trigger=trigger)
+    barrier_open = providers.get("status") == "already_ingested_this_slot" or (
+        "status" not in providers and all(item.get("status") != "deferred_time_budget" for item in providers.values())
+    )
+    if not barrier_open and not allow_incomplete_ingestion:
+        raise SlotIngestionPending(str(providers.get("status") or "ingestion_incomplete"))
     outcome = await evaluate_organization(db, organization_id, deadline=deadline)
     notifications = deliver_alerts(db, organization_id)
     return {
@@ -554,7 +589,31 @@ async def run_organization_cycle(
         "complete": outcome["complete"],
         "events_created": len(outcome["events_created"]),
         "notifications": notifications,
+        "shared_ingestion_complete": barrier_open,
     }
+
+
+def _defer_job(db: Session, job_id: str, *, worker_id: str, reason: str) -> str:
+    """Re-queue a claimed job without counting an attempt (contention is not failure)."""
+    db.rollback()
+    now = datetime.utcnow()
+    job = db.get(IngestionJob, job_id)
+    if job is None or job.status != "running" or job.worker_id != worker_id:
+        return "deferred"
+    payload = dict(job.input_json or {})
+    payload["slot_deferrals"] = int(payload.get("slot_deferrals") or 0) + 1
+    payload["last_deferral_reason"] = reason
+    job.status = "queued"
+    job.attempt_count = max(0, int(job.attempt_count or 1) - 1)
+    job.next_attempt_at = now + timedelta(seconds=SLOT_DEFER_SECONDS)
+    job.lease_expires_at = None
+    job.worker_id = None
+    job.input_json = payload
+    job.updated_at = now
+    state = _state(db, job.tenant_id)
+    state.last_status = "waiting_for_shared_ingestion"
+    db.commit()
+    return "deferred"
 
 
 def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, worker_id: str) -> str:
@@ -577,7 +636,12 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
     with job_lease_heartbeat(job_id=job_id, tenant_id=organization_id, worker_id=worker_id):
         try:
             payload = job.input_json or {}
-            output = asyncio.run(run_organization_cycle(db, organization_id, trigger=str(payload.get("trigger") or "scheduled"), slot=payload.get("slot")))
+            output = asyncio.run(run_organization_cycle(
+                db, organization_id, trigger=str(payload.get("trigger") or "scheduled"), slot=payload.get("slot"),
+                allow_incomplete_ingestion=int(payload.get("slot_deferrals") or 0) >= MAX_SLOT_DEFERRALS,
+            ))
+        except SlotIngestionPending as pending:
+            return _defer_job(db, job_id, worker_id=worker_id, reason=pending.status)
         except Exception as exc:  # noqa: BLE001
             logger.exception("market_cycle_job_failed job=%s", job_id)
             status = _fail_or_retry(db, job_id, exc, worker_id=worker_id)
@@ -591,7 +655,7 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
     state = _state(db, organization_id)
     if status == "succeeded":
         state.last_completed_at = datetime.utcnow()
-        state.last_status = "succeeded" if output.get("complete") else "partial"
+        state.last_status = "succeeded" if output.get("complete") and output.get("shared_ingestion_complete") else "partial"
         state.consecutive_failures = 0
     db.commit()
     return status

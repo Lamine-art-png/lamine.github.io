@@ -55,6 +55,7 @@ type Home = {
 };
 type Provenance = {
   numbers: Record<string, any>;
+  price_selection?: { required: boolean; selected_series_key?: string | null; candidates: PriceCandidate[] };
   sources: { evidence_id: string; observation_type: string; provider: string; source_name: string; state: string; value?: string | null; redacted?: boolean; unit?: string | null; currency?: string | null; observed_at?: string | null; retrieved_at?: string | null; market_name?: string | null; price_basis?: string | null; attribution?: string | null; automated?: boolean }[];
 };
 type ScenarioResult = { label: string; status: string; message?: string; result?: PositionCard; delta?: Record<string, string | null> };
@@ -113,6 +114,10 @@ const COPY = [
   "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "Unable to load Commercial Intelligence.",
   "Retry",
+  "Choose which market price applies",
+  "These quotes differ in product, grade, delivery or location, so AGRO-AI will not average them.",
+  "Use this price",
+  "Selected",
   "Projected margin changed by {change} {currency}. This equals {percent}% of projected revenue.",
   "Realizable price changed by {percent}%: from {previous} to {price} {currency}.",
   "Uncontracted volume: {quantity} ({percent}%).",
@@ -200,6 +205,12 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
 
   const acknowledge = async (change: Change) => {
     await apiClient.post(`/v1/market-intelligence/alerts/${encodeURIComponent(change.id)}/acknowledge`, {});
+    await load();
+  };
+
+  const selectPriceSource = async (position: PositionCard, seriesKey: string) => {
+    await apiClient.request(`/v1/market-intelligence/positions/${encodeURIComponent(position.position_id)}/price-source`, { method: "PUT", body: JSON.stringify({ series_key: seriesKey }) });
+    await openProvenance(position);
     await load();
   };
 
@@ -341,7 +352,7 @@ export function CommercialIntelligenceHome({ canWrite, onOpenOnboarding }: { can
       <p className="text-[11px] text-[#7B877F]">{tx("Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.")}</p>
       {notice ? <div className="rounded-xl border border-[#C6DECC] bg-[#F2FAF4] px-4 py-3 text-sm text-[#1F6A45]">{notice}</div> : null}
 
-      {provenance ? <ProvenancePanel tx={tx} fmt={fmt} data={provenance.data} position={provenance.position} onClose={() => setProvenance(null)} /> : null}
+      {provenance ? <ProvenancePanel tx={tx} fmt={fmt} data={provenance.data} position={provenance.position} onClose={() => setProvenance(null)} canWrite={canWrite} onSelect={(seriesKey) => void selectPriceSource(provenance.position, seriesKey)} /> : null}
       {whatIf ? <WhatIfPanel tx={tx} fmt={fmt} position={whatIf} onClose={() => setWhatIf(null)} /> : null}
       {decisionFor ? <DecisionPanel tx={tx} position={decisionFor.position} change={decisionFor.change} onClose={() => setDecisionFor(null)} onSaved={() => { setDecisionFor(null); setNotice(tx("Decision saved with the evidence available today.")); }} /> : null}
     </section>
@@ -362,9 +373,22 @@ function Sheet({ title, onClose, children, tx }: { title: string; onClose: () =>
   );
 }
 
-type Fmt = ReturnType<typeof useFormatters>;
+type Fmt = ReturnType<typeof useCommercialFormatters>;
+type PriceCandidate = { series_key: string; provider: string; market_name?: string | null; price_basis?: string | null; signature?: { product?: Record<string, any> }; state: string; observed_at?: string | null; value?: string | null; unit?: string | null; currency?: string | null };
 
-function ProvenancePanel({ tx, fmt, data, position, onClose }: { tx: (value: string) => string; fmt: Fmt; data: Provenance; position: PositionCard; onClose: () => void }) {
+function quoteDetails(candidate: PriceCandidate): string {
+  // Upstream product, grade, class and delivery labels exactly as published.
+  const product = candidate.signature?.product || {};
+  const values: string[] = [];
+  for (const value of Object.values(product)) {
+    if (value && typeof value === "object") values.push(...Object.values(value as Record<string, string>).map(String));
+    else if (value) values.push(String(value));
+  }
+  return [...values, candidate.price_basis || ""].filter(Boolean).join(" · ");
+}
+
+function ProvenancePanel({ tx, fmt, data, position, onClose, canWrite, onSelect }: { tx: (value: string) => string; fmt: Fmt; data: Provenance; position: PositionCard; onClose: () => void; canWrite: boolean; onSelect: (seriesKey: string) => void }) {
+  const selection = data.price_selection;
   const originLabel = (origin?: string) => origin === "governed_shared_evidence" ? tx("Governed shared evidence") : origin === "customer" ? tx("Customer-entered") : origin === "deterministic_calculation" ? tx("Deterministic calculation") : tx("Missing");
   return (
     <Sheet title={`${tx("Where these numbers come from")} · ${position.name}`} onClose={onClose} tx={tx}>
@@ -377,6 +401,28 @@ function ProvenancePanel({ tx, fmt, data, position, onClose }: { tx: (value: str
           </div>
         ))}
       </dl>
+      {selection && selection.candidates.length > 1 ? (
+        <section className="mt-4 rounded-xl border border-[#F1D69B] bg-[#FFF7E7] p-3" data-testid="price-selection">
+          <h4 className="text-sm font-semibold text-[#10231B]">{tx("Choose which market price applies")}</h4>
+          <p className="mt-1 text-xs text-[#65736A]">{tx("These quotes differ in product, grade, delivery or location, so AGRO-AI will not average them.")}</p>
+          <ul className="mt-2 space-y-2">
+            {selection.candidates.map((candidate) => {
+              const selected = selection.selected_series_key === candidate.series_key;
+              return (
+                <li key={candidate.series_key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E2E7DE] bg-white p-2 text-xs">
+                  <div className="min-w-0">
+                    <div className="break-words font-semibold text-[#10231B]">{candidate.market_name || providerLabel(tx, candidate.provider)}</div>
+                    <div className="break-words text-[#65736A]">{quoteDetails(candidate) || providerLabel(tx, candidate.provider)}</div>
+                    <div className="text-[#46574B]">{candidate.value ? `${fmt.number(candidate.value, 4)} ${candidate.currency || ""} / ${unitLabel(tx, candidate.unit)}` : "—"} · {stateLabel(tx, candidate.state)}</div>
+                  </div>
+                  {selected ? <span className="rounded-full bg-[#E7F4EC] px-2 py-1 font-semibold text-[#1F6A45]">{tx("Selected")}</span>
+                    : canWrite ? <button onClick={() => onSelect(candidate.series_key)} className="rounded-lg border border-[#C7D2C9] bg-white px-3 py-1.5 font-semibold text-[#234224]">{tx("Use this price")}</button> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       <ul className="mt-4 space-y-2" data-testid="provenance-sources">
         {data.sources.map((source) => (
           <li key={source.evidence_id} className="rounded-xl border border-[#E2E7DE] bg-white p-3 text-xs text-[#2F3E35]">

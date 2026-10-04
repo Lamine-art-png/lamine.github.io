@@ -272,6 +272,16 @@ async def refresh_position_market_data(
             position.metadata_json = metadata
             position_updates.extend(["current_realizable_price", "price_currency"])
             price_outcome = "promoted"
+    elif policy == "automatic" and price.state == "SELECTION_REQUIRED":
+        # Several commercially different quotes: the customer chooses which one
+        # applies; a previously automated price is not kept as if it were current.
+        metadata = _metadata(position)
+        metadata["price_state"] = "SELECTION_REQUIRED"
+        if str(metadata.get("price_source") or "").startswith(AUTOMATED_FX_PREFIX) and position.current_realizable_price is not None:
+            position.current_realizable_price = None
+            position_updates.append("current_realizable_price")
+        position.metadata_json = metadata
+        price_outcome = "selection_required"
     elif policy == "automatic" and str(_metadata(position).get("price_source") or "").startswith(AUTOMATED_FX_PREFIX):
         # Previously automated price can no longer be verified: do not keep
         # presenting it as current.
@@ -323,6 +333,7 @@ async def refresh_position_market_data(
             "state": price.state,
             "method": price.method,
             "reason": price.reason,
+            "candidates": price.trace.get("candidates") if price.state == "SELECTION_REQUIRED" else None,
         },
         "fx": {
             "outcome": fx_outcome,

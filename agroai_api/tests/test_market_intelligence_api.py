@@ -86,6 +86,7 @@ def test_market_intelligence_routes_are_materialized():
         ("GET", "/v1/market-intelligence/fields"),
         ("PUT", "/v1/market-intelligence/positions/{position_id}/fields"),
         ("POST", "/v1/market-intelligence/positions/{position_id}/yield-estimates"),
+        ("PUT", "/v1/market-intelligence/positions/{position_id}/price-source"),
         ("PATCH", "/v1/market-intelligence/decision-journal/{entry_id}"),
         ("GET", "/v1/market-intelligence/coverage"),
     }

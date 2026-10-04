@@ -599,17 +599,62 @@ def _physical_series(db: Session, provider_id: str, selector: dict[str, Any], co
     return rows
 
 
+# Fields that make two physical quotes commercially different: product,
+# class, grade, variety, delivery period/point, marketing stage, price basis
+# and location. Quotes are only ever aggregated when all of these are equal.
+_QUOTE_METADATA_KEYS = ("quote", "product_label", "classification", "variety", "stage", "dataset")
+
+
+def commercial_signature(series: MarketDataSeries) -> dict[str, Any]:
+    """Explicit compatibility signature of a physical price series."""
+    metadata = series.metadata_json if isinstance(series.metadata_json, dict) else {}
+    return {
+        "provider": series.provider,
+        "commodity": series.commodity,
+        "product": {key: metadata[key] for key in _QUOTE_METADATA_KEYS if metadata.get(key) not in (None, "", {})},
+        "price_basis": fold(series.price_basis),
+        "market": fold(series.market_name or series.region),
+        "currency": series.currency,
+    }
+
+
+def _signature_key(series: MarketDataSeries) -> str:
+    return json.dumps(commercial_signature(series), sort_keys=True, default=str)
+
+
+def _candidate_summary(series: MarketDataSeries, point: MarketDataPoint, state: str, display_allowed: bool) -> dict[str, Any]:
+    return {
+        "series_key": series.series_key,
+        "provider": series.provider,
+        "market_name": series.market_name,
+        "price_basis": series.price_basis,
+        "signature": commercial_signature(series),
+        "state": state,
+        "observed_at": point.observed_at.isoformat() + "Z" if point.observed_at else None,
+        "value": str(point.value) if display_allowed else None,
+        "unit": series.unit,
+        "currency": series.currency,
+    }
+
+
 def resolve_physical_price(
     db: Session,
     position: Any,
     *,
     now: datetime | None = None,
+    ignore_selection: bool = False,
 ) -> PriceResolution:
     """Governed physical price for a position, in the position's quantity unit.
 
-    Selection is deterministic and recorded: an exact market match for the
-    position's region when one exists; otherwise the median of the latest
-    fresh points across the pack's markets (each contributing point listed).
+    Selection is deterministic, recorded and never blends different products:
+    - a customer-selected series (``metadata.price_series_key``) is used alone;
+    - otherwise an exact market match for the position's region narrows the
+      candidates; candidates are grouped by ``commercial_signature`` and only
+      a single homogeneous group is used (its median when the same quote is
+      reported more than once);
+    - several commercially different candidates (grades, classes, delivery
+      periods, stages, locations) yield ``SELECTION_REQUIRED`` with the
+      candidates listed, and no price is promoted.
     """
     now = now or utc_now()
     metadata = position.metadata_json if isinstance(getattr(position, "metadata_json", None), dict) else {}
@@ -626,7 +671,10 @@ def resolve_physical_price(
             reasons.append(f"{provider_id}:no_selector")
             continue
         candidates: list[tuple[MarketDataSeries, MarketDataPoint, str, int | None]] = []
+        selected_key = None if ignore_selection else str(metadata.get("price_series_key") or "") or None
         for series in _physical_series(db, provider_id, selector, commodity):
+            if selected_key and series.series_key != selected_key:
+                continue
             point = latest_point(db, series.id)
             state, age = point_state(series, point, now)
             if point is None or state == "UNAVAILABLE":
@@ -635,12 +683,26 @@ def resolve_physical_price(
                 continue  # licence forbids using the value in calculations
             candidates.append((series, point, state, age))
         if not candidates:
-            reasons.append(f"{provider_id}:no_usable_points")
+            reasons.append(f"{provider_id}:{'selected_series_unavailable' if selected_key else 'no_usable_points'}")
             continue
         region = fold(position.region)
         exact = [c for c in candidates if region and (fold(c[0].market_name) == region or fold(c[0].region) == region)]
         best_state = min((c[2] for c in candidates), key=lambda s: _STATE_RANK[s])
         pool = exact or [c for c in candidates if c[2] == best_state]
+        groups: dict[str, list[tuple[MarketDataSeries, MarketDataPoint, str, int | None]]] = {}
+        for candidate in pool:
+            groups.setdefault(_signature_key(candidate[0]), []).append(candidate)
+        if len(groups) > 1:
+            # Commercially different quotes: never synthesize one price.
+            listed = [
+                _candidate_summary(c[0], c[1], c[2], (c[0].licensing_json or {}).get("display_allowed", True) is not False)
+                for c in sorted(pool, key=lambda item: item[0].series_key)
+            ]
+            return PriceResolution(
+                None, None, "SELECTION_REQUIRED", "selection_required", [],
+                {"provider": provider_id, "candidates": listed, "data_plane_version": DATA_PLANE_VERSION},
+                "heterogeneous_candidates",
+            )
         # Normalize every candidate into the position's unit before comparing.
         normalized: list[tuple[Decimal, tuple[MarketDataSeries, MarketDataPoint, str, int | None]]] = []
         currencies = {c[0].currency for c in pool}
@@ -657,7 +719,11 @@ def resolve_physical_price(
         if not normalized:
             reasons.append(f"{provider_id}:unit_not_convertible")
             continue
-        if exact and len(normalized) == 1:
+        if selected_key:
+            price, chosen = normalized[0]
+            method = "customer_selected_series"
+            contributing = [chosen]
+        elif exact and len(normalized) == 1:
             price, chosen = normalized[0]
             method = "exact_market_match"
             contributing = [chosen]
@@ -666,9 +732,10 @@ def resolve_physical_price(
             method = "single_market"
             contributing = [chosen]
         else:
+            # Same commercial signature reported more than once (one quote).
             values = sorted(value for value, _ in normalized)
             price = Decimal(str(statistics.median(values)))
-            method = "median_of_markets"
+            method = "median_of_identical_quotes"
             contributing = [c for _, c in normalized]
         state = max((c[2] for c in contributing), key=lambda s: _STATE_RANK[s])
         evidence = [evidence_record(c[0], c[1], c[2], c[3], role="physical_price") for c in contributing]

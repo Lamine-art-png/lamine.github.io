@@ -431,10 +431,16 @@ def test_india_rice_mandi_quintals_in_inr(client, db):
     created = onboard(client, crop="paddy", country_code="IN", region="Punjab", season="kharif-2026", expected_production="800")
     position = created["position"]
     assert position["quantity_unit"] == "quintal" and position["reporting_currency"] == "INR"
-    assert position["current_realizable_price"] == "2369.00000000"  # median of three mandis
+    # Three mandis are three delivery points: no synthetic median is promoted.
+    assert position["current_realizable_price"] is None and created["refresh"]["price"]["outcome"] == "selection_required"
+    provenance = client.get(f"/v1/market-intelligence/positions/{created['id']}/provenance").json()
+    assert provenance["price_selection"]["required"] is True and len(provenance["price_selection"]["candidates"]) == 3
+    chosen = next(c for c in provenance["price_selection"]["candidates"] if c["market_name"].startswith("khanna"))
+    selected = client.put(f"/v1/market-intelligence/positions/{created['id']}/price-source", json={"series_key": chosen["series_key"]}).json()
+    assert selected["price"]["method"] == "customer_selected_series" and selected["position"]["current_realizable_price"] == "2369.00000000"
     provenance = client.get(f"/v1/market-intelligence/positions/{created['id']}/provenance").json()
     assert provenance["numbers"]["current_realizable_price"]["origin"] == "governed_shared_evidence"
-    assert len([s for s in provenance["sources"] if s["observation_type"] == "physical_price"]) == 3
+    assert [s["market_name"] for s in provenance["sources"] if s["observation_type"] == "physical_price"] == ["khanna, Ludhiana"]
 
 
 def test_kenya_maize_keeps_customer_fx_when_no_governed_kes_source(client, db):

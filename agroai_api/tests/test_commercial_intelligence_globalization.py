@@ -57,7 +57,7 @@ def test_registries_cover_every_iso_country_and_tender_currency():
 
 
 @pytest.mark.parametrize("country,currency", [
-    ("NP", "NPR"), ("MN", "MNT"), ("FJ", "FJD"), ("ZW", "USD"), ("UZ", "UZS"), ("HT", "HTG"),
+    ("NP", "NPR"), ("MN", "MNT"), ("FJ", "FJD"), ("UZ", "UZS"),
     ("PG", "PGK"), ("BD", "BDT"), ("BO", "BOB"), ("LA", "LAK"), ("MW", "MWK"), ("XK", "EUR"),
 ])
 def test_previously_omitted_countries_infer_safely_to_the_global_pack(country, currency):
@@ -221,3 +221,30 @@ def test_unsupported_onboarding_units_are_rejected_not_stored_as_null(client, db
     assert bad_contract.status_code == 422
     ok = client.post("/v1/market-intelligence/onboarding", json={**base, "quantity_unit": "Quintals", "contracts": [{"quantity": "1", "price": "1", "quantity_unit": "kg"}]})
     assert ok.status_code == 201 and ok.json()["inferred"]["quantity_unit"] == "quintal"
+
+
+@pytest.mark.parametrize("country,options", [("ZW", ["USD", "ZWG"]), ("HT", ["HTG", "USD"]), ("PA", ["PAB", "USD"]), ("LS", ["LSL", "ZAR"])])
+def test_multi_tender_countries_never_assume_the_operating_currency(country, options):
+    inferred = infer_onboarding(crop="maize", country_code=country)
+    assert inferred["local_currency"] is None and sorted(inferred["local_currency_options"]) == sorted(options)
+    assert inferred["warnings"] == ["local_currency_ambiguous"]
+    chosen = infer_onboarding(crop="maize", country_code=country, local_currency=options[-1], reporting_currency="EUR")
+    assert chosen["local_currency"] == options[-1] and chosen["reporting_currency"] == "EUR" and chosen["warnings"] == []
+
+
+def test_onboarding_requires_and_then_uses_the_chosen_operating_currency(client, db):
+    act_as(*identity(db, "zw-currency"))
+    base = {"crop": "maize", "country_code": "ZW", "season": "2026", "expected_production": "100", "quantity_unit": "tonne",
+            "production_cost_per_unit": "150", "reporting_currency": "USD"}
+    missing = client.post("/v1/market-intelligence/onboarding", json=base)
+    assert missing.status_code == 422 and missing.json()["detail"]["code"] == "local_currency_required"
+    assert sorted(missing.json()["detail"]["options"]) == ["USD", "ZWG"]
+    created = onboard(client, **base, local_currency="ZWG", local_price="5000", contracts=[{"quantity": "20", "price": "4800"}])
+    position = created["position"]
+    assert created["inferred"]["local_currency"] == "ZWG" and position["reporting_currency"] == "USD"
+    from app.models.market_intelligence import MarketContractPosition, MarketPosition
+
+    row = db.get(MarketPosition, created["id"])
+    assert (row.local_currency, row.price_currency, row.metadata_json["cost_currency"]) == ("ZWG", "ZWG", "ZWG")
+    assert db.query(MarketContractPosition).filter_by(position_id=row.id).one().currency == "ZWG"
+    assert client.post("/v1/market-intelligence/onboarding/infer", json={"crop": "maize", "country_code": "ZW", "local_currency": "XYZ"}).status_code == 422

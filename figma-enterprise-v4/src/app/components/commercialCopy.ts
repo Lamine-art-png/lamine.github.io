@@ -102,6 +102,7 @@ export const WARNING_LABELS: Record<string, string> = {
   currency_not_inferred: "Choose the currency you normally sell in.",
   state_not_recognised: "Choose a Brazilian state to use CONAB producer prices.",
   calculation_error: "These inputs cannot be calculated. Review quantities and prices.",
+  local_currency_ambiguous: "Several currencies are used in this country. Choose the one your operation sells and pays costs in.",
 };
 
 export const MISSING_INPUT_LABELS: Record<string, string> = {
@@ -145,6 +146,7 @@ export const STATE_LABELS: Record<string, string> = {
   NOT_REQUIRED: "Not required",
   NOT_CONFIGURED: "Not configured",
   NOT_COVERED: "Not available for this currency",
+  SELECTION_REQUIRED: "Choose a price source",
   DEMO: "Demo data",
   OK: "Available",
   UNKNOWN: "Unknown",

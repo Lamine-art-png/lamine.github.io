@@ -51,6 +51,8 @@ from app.services.market_intelligence import (
 )
 
 METHODOLOGY_VERSION = "materiality-2026.10.1"
+# Evidence states that cannot support an emitted economic change.
+DEGRADED_STATES = frozenset({"STALE", "UNAVAILABLE", "SELECTION_REQUIRED"})
 LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 DEFAULT_THRESHOLDS = {"MEDIUM": Decimal("2"), "HIGH": Decimal("5"), "CRITICAL": Decimal("10")}
 REFERENCE_MIN_AGE = timedelta(hours=20)
@@ -302,8 +304,8 @@ def evaluate(
     results: list[MaterialityResult] = []
 
     # --- data quality transitions -------------------------------------------------
-    degraded_now = [k for k, v in states_after.items() if v in {"STALE", "UNAVAILABLE"}]
-    newly_degraded = [k for k in degraded_now if states_before.get(k) not in {"STALE", "UNAVAILABLE"}]
+    degraded_now = [k for k, v in states_after.items() if v in DEGRADED_STATES]
+    newly_degraded = [k for k in degraded_now if states_before.get(k) not in DEGRADED_STATES]
     if newly_degraded:
         results.append(MaterialityResult(
             level="MEDIUM", kind="data_quality", emit=True, title_key="market.materiality.data_quality",
@@ -377,7 +379,7 @@ def evaluate(
     if level != "LOW":
         # Every input conversion counts: a stale contract or cost FX makes the
         # computed change unreliable, so it is suppressed like a stale price.
-        evidence_ok = all(state not in {"STALE", "UNAVAILABLE"} for state in states_after.values())
+        evidence_ok = all(state not in DEGRADED_STATES for state in states_after.values())
         result = MaterialityResult(
             level=level, kind="commercial_change", emit=evidence_ok, title_key="market.materiality.commercial_change",
             reasons=reasons, impact=impact, data_quality={"states": states_after},
