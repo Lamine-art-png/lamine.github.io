@@ -80,11 +80,18 @@ async def register(request: Request, db: Session = Depends(get_db)):
             if row is None:
                 raise HTTPException(status_code=409, detail="Purchase identity conflict") from None
     reference = escape(row.id)
+    if row.status == "revoked":
+        raise HTTPException(status_code=409, detail="AWS license is no longer available; manage your subscription in AWS Marketplace")
+    message = (
+        "Your AWS license has been confirmed. API access is pending account setup."
+        if row.status == "license_confirmed"
+        else "Your AWS purchase identity has been validated. API access is pending license confirmation and account setup."
+    )
     return HTMLResponse(
         '<!doctype html><html lang="en"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>AGRO-AI AWS onboarding</title><main><h1>Purchase received</h1>'
-        '<p>Your AWS purchase identity has been validated. API access is pending license confirmation and account setup.</p>'
+        f'<p>{message}</p>'
         '<p>Contact <a href="mailto:contact@agroai-pilot.com">contact@agroai-pilot.com</a> '
         f'with registration reference <strong>{reference}</strong> to complete account linking.</p></main></html>',
         headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'", "X-Content-Type-Options": "nosniff"},

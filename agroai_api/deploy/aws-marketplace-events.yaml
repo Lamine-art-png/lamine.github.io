@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AGRO-AI Marketplace license events, restricted to this seller account and product.
+Parameters:
+  ProductCode:
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+  ConsumerRoleName:
+    Type: String
+    Default: ''
+    Description: Optional existing IAM role to receive least-privilege consumer permissions. Creates no keys.
+Conditions:
+  AttachConsumerRole: !Not [!Equals [!Ref ConsumerRoleName, '']]
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+  LicenseQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: 60
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+  LicenseRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-licenses'
+      State: ENABLED
+      EventPattern:
+        source: [aws.agreement-marketplace]
+        account: [!Ref AWS::AccountId]
+        detail-type:
+          - License Updated - Manufacturer
+          - License Deprovisioned - Manufacturer
+        detail:
+          catalog: [AWSMarketplace]
+          product:
+            code: [!Ref ProductCode]
+      Targets:
+        - Id: LicenseQueue
+          Arn: !GetAtt LicenseQueue.Arn
+          DeadLetterConfig:
+            Arn: !GetAtt DeadLetterQueue.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 185
+            MaximumEventAgeInSeconds: 86400
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref LicenseQueue, !Ref DeadLetterQueue]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: OnlyConfiguredEventBridgeRule
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: [!GetAtt LicenseQueue.Arn, !GetAtt DeadLetterQueue.Arn]
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt LicenseRule.Arn
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: '*'
+            Action: sqs:*
+            Resource: [!GetAtt LicenseQueue.Arn, !GetAtt DeadLetterQueue.Arn]
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  ConsumerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Roles: !If [AttachConsumerRole, [!Ref ConsumerRoleName], !Ref AWS::NoValue]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+            Resource: !GetAtt LicenseQueue.Arn
+  ResolveCustomerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: aws-marketplace:ResolveCustomer
+            Resource: '*'
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Marketplace events need inspection and replay; no bodies should be logged.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+Outputs:
+  QueueUrl:
+    Value: !Ref LicenseQueue
+  ConsumerPolicyArn:
+    Value: !Ref ConsumerPolicy
+  ResolveCustomerPolicyArn:
+    Value: !Ref ResolveCustomerPolicy
+  DeadLetterQueueUrl:
+    Value: !Ref DeadLetterQueue

@@ -78,3 +78,19 @@ def test_aws_failure_hides_exception_and_creates_no_registration(registration, m
     assert "sensitive-upstream-detail" not in response.text
     with sessions() as db:
         assert db.query(AwsMarketplaceRegistration).count() == 0
+
+
+@pytest.mark.parametrize("status,expected_code", [("license_confirmed", 200), ("revoked", 409)])
+def test_registration_preserves_license_events_arriving_first(registration, status, expected_code):
+    client, sessions = registration
+    with sessions() as db:
+        db.add(AwsMarketplaceRegistration(
+            product_code="test-product", customer_aws_account_id="123456789012",
+            license_arn="arn:aws:license-manager:us-east-1:123456789012:license:l-test",
+            status=status,
+        ))
+        db.commit()
+    response = client.post("/marketplace/aws/register", data={"x-amzn-marketplace-token": "token"})
+    assert response.status_code == expected_code
+    with sessions() as db:
+        assert db.query(AwsMarketplaceRegistration).one().status == status

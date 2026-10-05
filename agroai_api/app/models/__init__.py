@@ -1,5 +1,5 @@
 """Models package."""
-from app.models.aws_marketplace import AwsMarketplaceRegistration
+from app.models.aws_marketplace import AwsMarketplaceRegistration, AwsMarketplaceLicenseEvent
 from app.models.tenant import Tenant
 from app.models.client import Client
 from app.models.block import Block
@@ -83,6 +83,7 @@ from app.models.market_intelligence import (
 
 __all__ = [
     "AwsMarketplaceRegistration",
+    "AwsMarketplaceLicenseEvent",
     "Tenant", "Client", "Block", "Telemetry", "Event", "Recommendation",
     "Schedule", "Webhook", "UsageMetering", "AuditLog", "IngestionRun",
     "APIKey", "ModelRun", "InvitationToken", "WaterState", "DecisionRun",
