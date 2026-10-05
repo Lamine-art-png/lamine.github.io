@@ -17,11 +17,30 @@ terraform/*.tfvars.local
 terraform.tfvars.local
 terraform/taskdef*.json
 
-# Notebook outputs that previously embedded provider credentials
-AGRO_AI_Weather_data.ipynb
-assets/AGRO_AI_Weather_data.ipynb
+# Notebook outputs can embed provider credentials and production data.
+# Keep notebooks out of this public repository.
+*.ipynb
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
+
+# AI-agent / code-review proof artifacts must stay local. Never create a public
+# screenshot host or adjacent "pr-assets" repository for visual verification.
+.gitshot/
+**/.gitshot/
+pr-assets/
+**/pr-assets/
+agent-artifacts/
+**/agent-artifacts/
+Screenshot_*.png
+Screenshot_*.jpg
+Screenshot_*.jpeg
+Screenshot_*.webp
+Screen Recording*.mov
+Screen Recording*.mp4
+*_gitshot.png
+*_gitshot.jpg
+*_gitshot.jpeg
+*_gitshot.webp
 
 # OS
 .DS_Store
@@ -72,3 +91,4 @@ build/
 .env.*
 !.env.example
 !.env.staging.example
+!.env.demo.example
