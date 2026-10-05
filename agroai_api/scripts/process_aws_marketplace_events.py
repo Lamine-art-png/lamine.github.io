@@ -40,4 +40,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Startup/receive failures must not emit raw SDK exceptions or payloads.
+        raise SystemExit("AWS Marketplace event processing unavailable; check configuration and service health") from None

@@ -33,7 +33,7 @@ jobs:
       - name: Install focused dependencies
         run: python -m pip install pytest boto3==1.43.108 fastapi==0.109.0 pydantic==2.5.3 pydantic-settings==2.1.0 sqlalchemy==2.0.25 httpx==0.26.0 slowapi==0.1.9 email-validator==2.1.0.post1
       - name: Verify registration, license lifecycle and revision contracts
-        run: python -m pytest --confcutdir=tests/unit tests/unit/test_aws_marketplace_identity.py tests/unit/test_aws_marketplace_registration.py tests/unit/test_aws_marketplace_events.py tests/unit/test_alembic_revision_contract.py -q
+        run: python -m pytest --confcutdir=tests/unit tests/unit/test_aws_marketplace_identity.py tests/unit/test_aws_marketplace_registration.py tests/unit/test_aws_marketplace_events.py tests/unit/test_aws_marketplace_worker.py tests/unit/test_alembic_revision_contract.py -q
       - name: Scan for committed secrets
         working-directory: .
         run: python agroai_api/scripts/scan_repository_secrets.py
