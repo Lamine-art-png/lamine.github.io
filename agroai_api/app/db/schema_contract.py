@@ -5,10 +5,18 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "041_abuse_project_holds"
+HEAD_ALEMBIC_REVISION = "042_aws_marketplace_registration"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
+    "aws_marketplace_registrations": {
+        "id", "license_arn", "customer_aws_account_id", "product_code",
+        "status", "created_at", "license_updated_at",
+    },
+    "aws_marketplace_license_events": {
+        "event_id", "payload_digest", "license_arn", "event_type",
+        "occurred_at", "processed_at",
+    },
     "market_positions": {
         "id", "organization_id", "workspace_id", "position_key", "commodity", "season",
         "country_code", "market_structure", "local_currency", "reporting_currency",
