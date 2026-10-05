@@ -1,0 +1,114 @@
+name: Public Leak Guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  public-leak-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scan the complete tracked tree for recognizable credentials
+        run: python agroai_api/scripts/scan_repository_secrets.py
+
+      - name: Reject newly added private proof artifacts and secret-bearing file types
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+          fi
+
+          if [ -z "$base" ] || printf '%s' "$base" | grep -Eq '^0+$'; then
+            base="$(git rev-list --max-parents=0 HEAD | head -1)"
+          fi
+
+          git diff --name-only --diff-filter=A "$base" "$GITHUB_SHA" > /tmp/agroai-new-files.txt
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import re
+          from pathlib import Path
+
+          paths = [
+              line.strip()
+              for line in Path("/tmp/agroai-new-files.txt").read_text().splitlines()
+              if line.strip()
+          ]
+
+          allowed_env_examples = {
+              ".env.example",
+              ".env.staging.example",
+              ".env.demo.example",
+          }
+
+          rules = [
+              (
+                  "agent/public screenshot-host directory",
+                  re.compile(r"(^|/)(?:pr-assets|agent-artifacts|\.gitshot)(?:/|$)", re.I),
+              ),
+              (
+                  "OS screenshot artifact",
+                  re.compile(
+                      r"(^|/)Screenshot_[^/]*\.(?:png|jpe?g|webp|gif)$", re.I
+                  ),
+              ),
+              (
+                  "OS screen recording artifact",
+                  re.compile(r"(^|/)Screen Recording[^/]*\.(?:mov|mp4)$", re.I),
+              ),
+              (
+                  "gitshot artifact",
+                  re.compile(r"_gitshot\.(?:png|jpe?g|webp|gif)$", re.I),
+              ),
+              ("notebook output", re.compile(r"\.ipynb$", re.I)),
+              (
+                  "Terraform state",
+                  re.compile(r"(^|/)terraform\.tfstate(?:\.|$)", re.I),
+              ),
+              (
+                  "generated task definition",
+                  re.compile(r"(^|/)taskdef[^/]*\.json$", re.I),
+              ),
+          ]
+
+          findings: list[str] = []
+          for path in paths:
+              name = Path(path).name
+              if re.search(r"(^|/)\.env(?:$|\.)", path, re.I) and name not in allowed_env_examples:
+                  findings.append(f"{path}: local environment file")
+                  continue
+              for label, pattern in rules:
+                  if pattern.search(path):
+                      findings.append(f"{path}: {label}")
+                      break
+
+          if findings:
+              raise SystemExit(
+                  "Refusing files that can expose credentials, customer data, or "
+                  "private visual proof. Keep them local/private instead:\n"
+                  + "\n".join(sorted(findings))
+              )
+
+          print(f"New-file leak guard passed across {len(paths)} added files.")
+          PY
