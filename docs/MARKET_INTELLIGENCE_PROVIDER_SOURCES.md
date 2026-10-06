@@ -23,4 +23,3 @@ This is a first-class operating path rather than a fake-data fallback: many spec
 ## Shared data plane sources (October 2026)
 
 Additional governed sources now feed the shared market-data plane: Banco Central do Brasil PTAX (official USD/BRL), European Commission agri-food weekly representative prices (EU cereals and oilseeds by market and marketing stage), and CONAB weekly state prices received by producers (Brazil). USDA NASS and AGMARKNET adapters exist and stay NOT_CONFIGURED until keys are configured. See `COMMERCIAL_INTELLIGENCE_COVERAGE.md` for the exact matrix, validation dates and remaining access.
-
