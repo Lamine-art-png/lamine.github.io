@@ -12,9 +12,10 @@ from app.services.provider_sync_runner import process_provider_sync_job
 from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, process_webhook_delivery_task
 from app.platform_api.jobs import PLATFORM_OPERATION_TASK_TYPE, process_platform_operation_job
 from app.platform_api.stripe_metering import STRIPE_METER_TASK_TYPE, process_meter_export_task
+from app.services.market_intelligence_cycle import TASK_TYPE as MARKET_CYCLE_TASK_TYPE, process_market_cycle_job
 
 
-SUPPORTED_TASK_TYPES = frozenset({INGESTION_TASK_TYPE, PROVIDER_SYNC_TASK_TYPE, WEBHOOK_TASK_TYPE, PLATFORM_OPERATION_TASK_TYPE, STRIPE_METER_TASK_TYPE})
+SUPPORTED_TASK_TYPES = frozenset({INGESTION_TASK_TYPE, PROVIDER_SYNC_TASK_TYPE, WEBHOOK_TASK_TYPE, PLATFORM_OPERATION_TASK_TYPE, STRIPE_METER_TASK_TYPE, MARKET_CYCLE_TASK_TYPE})
 
 
 def worker_identity(prefix: str = "connector-worker") -> str:
@@ -66,6 +67,13 @@ def process_connector_task(
         if task_type == STRIPE_METER_TASK_TYPE:
             return process_meter_export_task(
                 outbox_id=job_id,
+                organization_id=tenant_id,
+                worker_id=resolved_worker_id,
+            )
+        if task_type == MARKET_CYCLE_TASK_TYPE:
+            return process_market_cycle_job(
+                db,
+                job_id=job_id,
                 organization_id=tenant_id,
                 worker_id=resolved_worker_id,
             )

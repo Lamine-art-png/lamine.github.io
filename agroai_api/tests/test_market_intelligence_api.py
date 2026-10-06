@@ -72,6 +72,23 @@ def test_market_intelligence_routes_are_materialized():
         ("POST", "/v1/market-intelligence/decision-journal"),
         ("GET", "/v1/market-intelligence/decision-journal"),
         ("POST", "/v1/market-intelligence/demo/seed"),
+        # Commercial Intelligence (shared data plane, materiality, onboarding).
+        ("GET", "/v1/market-intelligence/home"),
+        ("GET", "/v1/market-intelligence/market-packs"),
+        ("POST", "/v1/market-intelligence/onboarding/infer"),
+        ("POST", "/v1/market-intelligence/onboarding"),
+        ("GET", "/v1/market-intelligence/positions/{position_id}/provenance"),
+        ("GET", "/v1/market-intelligence/positions/{position_id}/risk"),
+        ("POST", "/v1/market-intelligence/scenarios/compare"),
+        ("GET", "/v1/market-intelligence/alerts"),
+        ("POST", "/v1/market-intelligence/alerts/{alert_id}/acknowledge"),
+        ("GET", "/v1/market-intelligence/changes"),
+        ("GET", "/v1/market-intelligence/fields"),
+        ("PUT", "/v1/market-intelligence/positions/{position_id}/fields"),
+        ("POST", "/v1/market-intelligence/positions/{position_id}/yield-estimates"),
+        ("PUT", "/v1/market-intelligence/positions/{position_id}/price-source"),
+        ("PATCH", "/v1/market-intelligence/decision-journal/{entry_id}"),
+        ("GET", "/v1/market-intelligence/coverage"),
     }
     actual = [
         (method, route.path)

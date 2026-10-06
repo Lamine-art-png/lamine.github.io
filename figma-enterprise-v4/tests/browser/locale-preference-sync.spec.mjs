@@ -84,3 +84,21 @@ test("failed preference PATCH preserves local switch and does not recurse", asyn
   expect(state.patches).toBe(1);
   expect(state.payloads).toEqual([{ locale: "fr-FR" }]);
 });
+
+test("rapid switches persist preferences in the order chosen, even when a catalog loads slowly", async ({ page }) => {
+  const state = await prepare(page);
+  // The French catalog chunk arrives late; English needs no catalog. Writing the
+  // preference after each activation would persist fr-FR last while English shows.
+  await page.route(/\/assets\/fr-FR-[^/]+\.js$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.goto(APP_URL);
+  const selector = page.locator("select[data-language-selector]").first();
+  await expect(selector).toHaveValue("en");
+  await selector.selectOption("fr-FR");
+  await selector.selectOption("en");
+  await expect.poll(() => state.patches, { timeout: 10_000 }).toBe(2);
+  expect(state.payloads).toEqual([{ locale: "fr-FR" }, { locale: "en" }]);
+  await expect(selector).toHaveValue("en");
+});

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.services.market_normalization import validate_country_code, validate_currency_code
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1.market_intelligence import enforce_market_intelligence_release
 from app.db.base import get_db
@@ -41,10 +42,7 @@ def _scope(ctx: AuthContext) -> str:
 
 
 def _currency(value: str) -> str:
-    code = str(value or "").strip().upper()
-    if len(code) != 3 or not code.isalpha():
-        raise ValueError("currency must be a 3-letter ISO code")
-    return code
+    return validate_currency_code(value)
 
 
 def _clean_required(value: str, field_name: str) -> str:
@@ -85,10 +83,7 @@ class PositionInput(BaseModel):
     @field_validator("country_code")
     @classmethod
     def validate_country(cls, value: str) -> str:
-        code = value.strip().upper()
-        if len(code) != 2 or not code.isalpha():
-            raise ValueError("country_code must be ISO-3166 alpha-2")
-        return code
+        return validate_country_code(value)
 
     @field_validator("local_currency", "reporting_currency", "price_currency")
     @classmethod
@@ -123,7 +118,13 @@ def create_position(payload: PositionInput, ctx: AuthContext = Depends(get_auth_
         production_cost_per_unit=payload.production_cost_per_unit, current_realizable_price=payload.current_realizable_price,
         price_currency=payload.price_currency or payload.local_currency, fx_rate_to_reporting=payload.fx_rate_to_reporting,
         freight_per_unit=payload.freight_per_unit, storage_per_unit=payload.storage_per_unit,
-        metadata_json={**payload.metadata, "input_source": "customer_structured_input"},
+        metadata_json={
+            **payload.metadata,
+            "input_source": "customer_structured_input",
+            # A customer-entered price is customer-owned; automation never overwrites it.
+            "price_policy": payload.metadata.get("price_policy") or ("manual" if payload.current_realizable_price is not None else "automatic"),
+            **({"fx_source": "customer"} if payload.fx_rate_to_reporting is not None else {}),
+        },
     )
     db.add(row)
     db.commit()
@@ -172,7 +173,7 @@ def create_contract(payload: ContractInput, ctx: AuthContext = Depends(get_auth_
         buyer=payload.buyer, status="active", quantity=payload.quantity, quantity_unit=payload.quantity_unit,
         price=payload.price, currency=payload.currency, fx_rate_to_reporting=payload.fx_rate_to_reporting,
         delivery_start=payload.delivery_start, delivery_end=payload.delivery_end, delivery_location=payload.delivery_location,
-        metadata_json={**payload.metadata, "input_source": "customer_structured_input"},
+        metadata_json={**payload.metadata, "input_source": "customer_structured_input", **({"fx_source": "customer"} if payload.fx_rate_to_reporting is not None else {})},
     )
     db.add(row)
     db.commit()
@@ -225,10 +226,11 @@ def create_observation(payload: ObservationInput, ctx: AuthContext = Depends(get
     duplicate = db.query(MarketObservation.id).filter(MarketObservation.organization_id == org_id, MarketObservation.evidence_id == payload.evidence_id).first()
     if duplicate is not None:
         raise HTTPException(status_code=409, detail={"code": "evidence_id_exists", "message": "This evidence id has already been ingested."})
-    # Client/customer input can carry a provider name for provenance, but it can
-    # never grant itself LIVE authority. Only a configured MarketDataProvider
-    # adapter is allowed to emit LIVE after verified upstream retrieval.
-    source_state = "MANUAL" if payload.source_status == "LIVE" else payload.source_status
+    # Customer input can carry a provider name for provenance, but it can never
+    # grant itself governed authority: not LIVE, and not DELAYED either (which
+    # would make a hand-entered value look like a published government or
+    # exchange observation). Only shared-plane adapters emit governed states.
+    source_state = "MANUAL"
     row = MarketObservation(
         id=str(uuid.uuid4()), organization_id=org_id, position_id=payload.position_id, evidence_id=payload.evidence_id,
         observation_type=payload.observation_type, provider=payload.provider, source_name=payload.source_name,

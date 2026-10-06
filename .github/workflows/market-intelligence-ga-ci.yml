@@ -5,6 +5,23 @@ on:
     paths:
       - 'agroai_api/app/api/v1/market_intelligence*.py'
       - 'agroai_api/app/services/market_data_providers.py'
+      - 'agroai_api/app/services/market_data_*.py'
+      - 'agroai_api/app/services/market_normalization.py'
+      - 'agroai_api/app/services/market_packs.py'
+      - 'agroai_api/app/services/market_materiality.py'
+      - 'agroai_api/app/services/market_risk.py'
+      - 'agroai_api/alembic/versions/042_market_data_plane.py'
+      - 'agroai_api/tests/test_commercial_intelligence_*.py'
+      - 'agroai_api/tests/unit/test_connector_task_processor_contract.py'
+      - 'agroai_api/app/services/connector_task_processor.py'
+      - 'agroai_api/app/api/v1/cloudflare_queue.py'
+      - 'agroai_api/app/services/market_cycle_proof.py'
+      - 'agroai_api/tests/test_market_cycle_proof.py'
+      - '.github/workflows/market-intelligence-cycle-proof.yml'
+      - 'cloudflare/edge-gateway/src/index.ts'
+      - 'shared/registries/**'
+      - 'figma-enterprise-v4/src/app/components/commercialCopy.ts'
+      - 'figma-enterprise-v4/src/app/components/Commercial*.tsx'
       - 'agroai_api/app/services/market_intelligence*.py'
       - 'agroai_api/app/models/market_intelligence.py'
       - 'agroai_api/tests/test_market_intelligence*.py'
@@ -34,7 +51,7 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r requirements.txt pytest==8.3.5
       - name: Compile Market Intelligence production code
-        run: python -m compileall -q app/api/v1/market_intelligence.py app/api/v1/market_intelligence_ingestion.py app/api/v1/market_intelligence_operations.py app/services/market_intelligence.py app/services/market_intelligence_ai.py app/services/market_data_providers.py app/services/market_intelligence_refresh.py
+        run: python -m compileall -q app/api/v1/market_intelligence.py app/api/v1/market_intelligence_ingestion.py app/api/v1/market_intelligence_operations.py app/services/market_intelligence.py app/services/market_intelligence_ai.py app/services/market_data_providers.py app/services/market_intelligence_refresh.py app/services/market_data_adapters.py app/services/market_data_plane.py app/services/market_normalization.py app/services/market_packs.py app/services/market_materiality.py app/services/market_risk.py app/services/market_intelligence_cycle.py app/services/market_cycle_proof.py app/services/market_intelligence_ask.py app/api/v1/market_intelligence_commercial.py
       - name: Run complete Market Intelligence backend contract
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
@@ -42,7 +59,12 @@ jobs:
             tests/test_market_intelligence_api.py \
             tests/test_market_intelligence_operations_contract.py \
             tests/test_market_intelligence_providers_ga.py \
-            tests/test_market_intelligence_refresh_contract.py
+            tests/test_market_intelligence_refresh_contract.py \
+            tests/test_commercial_intelligence_global.py \
+            tests/test_commercial_intelligence_hardening.py \
+            tests/test_market_cycle_proof.py \
+            tests/test_commercial_intelligence_globalization.py \
+            tests/unit/test_connector_task_processor_contract.py
       - name: Assert Market Intelligence OpenAPI route uniqueness
         run: |
           python - <<'PY'

@@ -31,7 +31,7 @@ provisions access.
 
 ## Deployment configuration
 
-- Apply database migrations through `043_aws_marketplace_linking`.
+- Apply database migrations through `044_aws_marketplace_linking`.
 - Configure `AWS_MARKETPLACE_PRODUCT_CODE` and `AWS_MARKETPLACE_PRODUCT_ID` from
   the actual seller product, and `AWS_MARKETPLACE_REGION=us-east-1`.
 - Use a short-lived seller-account workload identity with `ResolveCustomer` for

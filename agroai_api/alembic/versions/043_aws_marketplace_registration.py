@@ -2,8 +2,8 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "042_aws_marketplace_registration"
-down_revision = "041_abuse_project_holds"
+revision = "043_aws_marketplace_registration"
+down_revision = "042_market_data_plane"
 branch_labels = None
 depends_on = None
 

@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import os
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -156,8 +157,13 @@ async def drain_task_outbox() -> dict:
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
     lifecycle = await asyncio.to_thread(_run_lifecycle_emails)
+    # Commercial Intelligence only *enqueues* durable per-organization jobs
+    # here (cheap, bounded); the queue delivers them to connector-task, so no
+    # work depends on this process surviving after the response.
+    market_cycle = await asyncio.to_thread(_schedule_market_intelligence_cycle)
     return {
         "status": "ok",
+        "market_intelligence_cycle": market_cycle,
         "lifecycle_emails": lifecycle,
         "outbox": outbox,
         "webhook_outbox": webhook_outbox,
@@ -165,6 +171,49 @@ async def drain_task_outbox() -> dict:
         "platform_maintenance": platform_maintenance,
         "object_gc": object_gc,
     }
+
+
+def _schedule_market_intelligence_cycle(trigger: str = "scheduled") -> dict:
+    """Isolated so a market-data failure can never affect other maintenance.
+
+    Newly scheduled cycle jobs are published in the same pass with their own
+    bound, so they neither wait for the next hourly tick nor compete with the
+    connector backlog drained above.
+    """
+    try:
+        from app.services.market_intelligence_cycle import TASK_TYPE, schedule_cycle_once
+
+        result = schedule_cycle_once(trigger=trigger)
+        if result.get("status") == "ok":
+            result["published"] = drain_pending_outbox(limit=max(1, int(result.get("batch") or 200)), task_types=(TASK_TYPE,))
+        return result
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.getLogger("agroai.market_cycle").exception("market_intelligence_cycle_schedule_failed")
+        return {"status": "error", "reason": exc.__class__.__name__}
+
+
+@router.post("/internal/queue/market-cycle", dependencies=[Depends(_require_queue_token)])
+async def run_market_intelligence_cycle_now() -> dict:
+    """Operator trigger: enqueue due organizations on the same durable path."""
+    if not queue_configured():
+        raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
+    return await asyncio.to_thread(_schedule_market_intelligence_cycle, "operator")
+
+
+@router.get("/internal/queue/market-cycle/proof", dependencies=[Depends(_require_queue_token)])
+def market_intelligence_cycle_proof(since: datetime | None = None, db: Session = Depends(get_db)) -> dict:
+    """Read-only, aggregate-only evidence of what the live cycle did since ``since``."""
+    from app.services.market_cycle_proof import cycle_proof
+
+    try:
+        return cycle_proof(db, since=since)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "market_cycle_proof_unavailable", "reason": exc.__class__.__name__},
+        ) from exc
 
 
 def _run_lifecycle_emails() -> dict:
