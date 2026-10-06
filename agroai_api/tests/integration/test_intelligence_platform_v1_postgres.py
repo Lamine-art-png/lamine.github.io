@@ -217,6 +217,9 @@ def test_legacy_request_is_unchanged_and_hash_compatible(platform):
     assert data["status"] == "completed" and data["model"] == "agroai-intelligence-1"
     assert data["billing"]["charged_cents"] == 5
     assert data["structured_output_status"] == "not_requested"
+    from app.intelligence_platform.routes import API_VERSION
+
+    assert resp.headers["AGROAI-API-Version"] == API_VERSION, "non-streamed runs carry the contract revision too"
     assert "internal-vendor" not in resp.text and "internal-model" not in resp.text
     assert "AGROAI_DATA" not in p.state.model_calls[-1]["user_instruction"], "legacy prompts must not change"
     # Pre-platform hash formula is preserved for legacy-shaped requests.
@@ -558,6 +561,7 @@ def test_streaming_emits_stage_events_and_bills_once(platform):
                          json={"task": "answer", "question": "Stream it", "stream": True}) as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
+        assert resp.headers["AGROAI-API-Version"]
         raw = "".join(resp.iter_text())
     events = [line[len("event: "):] for line in raw.splitlines() if line.startswith("event: ")]
     assert events[0] == "run.created" and events[-1] == "run.completed"

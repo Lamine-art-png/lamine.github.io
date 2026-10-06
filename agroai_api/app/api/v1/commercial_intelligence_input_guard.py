@@ -80,6 +80,11 @@ def _credential_path(value: Any, *, path: str = "input", depth: int = 0) -> str 
             child_path = f"{path}.{key}"
             if normalized in _SENSITIVE_EXACT or any(normalized.endswith(suffix) for suffix in _SENSITIVE_SUFFIXES):
                 return child_path
+            # Keys are text that reaches the prompt too (schema properties,
+            # context extensions, tool arguments): a credential used as a key
+            # is still a credential.
+            if isinstance(key, str) and _looks_like_secret_value(key):
+                return f"{path}.<key>"
             found = _credential_path(child, path=child_path, depth=depth + 1)
             if found:
                 return found

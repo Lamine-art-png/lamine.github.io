@@ -154,10 +154,12 @@ def _sse(event: str, data: Any) -> str:
 @router.post("/intelligence")
 async def intelligence_api(
     payload: legacy.IntelligenceRequest,
+    response: Response,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=255),
     principal: PlatformPrincipal = Depends(legacy.require_advisory_intelligence_key),
     db: Session = Depends(get_db),
 ):
+    response.headers["AGROAI-API-Version"] = API_VERSION
     if not payload.stream:
         result = await legacy._execute_paid_intelligence(
             payload=payload,
