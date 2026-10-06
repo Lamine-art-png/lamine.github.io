@@ -55,31 +55,11 @@ jobs:
                   print(f"OIDC_{key.upper()}={value}")
           PY
 
-      - name: Verify configured AWS target
-        shell: bash
-        env:
-          ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          AWS_REGION_VALUE: ${{ secrets.AWS_REGION }}
-        run: |
-          set -euo pipefail
-          ROLE_ACCOUNT="$(printf '%s' "$ROLE_ARN" | cut -d: -f5)"
-          if [ "$ROLE_ACCOUNT" = "987432215840" ]; then
-            echo "ROLE_ACCOUNT_MATCH=true"
-          else
-            echo "ROLE_ACCOUNT_MATCH=false"
-          fi
-
-          if [ "$AWS_REGION_VALUE" = "us-east-1" ]; then
-            echo "AWS_REGION_MATCH=true"
-          else
-            echo "AWS_REGION_MATCH=false"
-          fi
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: arn:aws:iam::987432215840:role/AgroAIMarketplaceGitHubVerifier
+          aws-region: us-east-1
 
       - name: Who am I?
         run: |
