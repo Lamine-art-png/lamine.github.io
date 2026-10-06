@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from app.api.v1 import platform_billing
 from app.core.config import settings
 from app.core.security import create_access_token
+from app.models.aws_marketplace import AwsMarketplaceRegistration
 from app.models.platform_product import (
     PlatformApiPlan,
     PlatformApiSubscription,
@@ -439,6 +440,55 @@ def test_meter_export_is_idempotent_and_never_exports_twice(db, monkeypatch):
     assert len(calls) == 1
     assert calls[0]["identifier"] == "agroai-logical-usage-1"
     assert calls[0]["payload"] == {"stripe_customer_id": "cus_platform", "value": "25"}
+
+
+def test_existing_stripe_meter_outbox_cannot_export_after_aws_link(db, monkeypatch):
+    _user, organization, _workspace, _project, *_ = _project_and_key(db)
+    plan = _developer_plan(db)
+    subscription = PlatformApiSubscription(
+        organization_id=organization.id,
+        plan_id=plan.id,
+        status="canceled",
+        status_slot="inactive",
+        billing_mode="stripe",
+        stripe_customer_id="cus_platform",
+    )
+    db.add(subscription)
+    db.flush()
+    outbox = PlatformStripeMeterOutbox(
+        organization_id=organization.id,
+        subscription_id=subscription.id,
+        usage_event_id="usage-before-aws-link",
+        meter_event_identifier="usage-before-aws-link",
+        meter_event_name="agroai_api_credits",
+        quantity=25,
+        status="queued",
+    )
+    db.add_all([
+        outbox,
+        AwsMarketplaceRegistration(
+            license_arn="arn:aws:license-manager:us-east-1:987432215840:license:example",
+            customer_aws_account_id="123456789012",
+            product_code="example",
+            organization_id=organization.id,
+            status="active",
+        ),
+    ])
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_METER_EXPORT_ENABLED", True)
+    monkeypatch.setattr(stripe_metering, "SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        stripe_metering.stripe.billing.MeterEvent,
+        "create",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Stripe export attempted")),
+    )
+
+    assert stripe_metering.process_meter_export_task(
+        outbox_id=outbox.id,
+        organization_id=organization.id,
+        worker_id="worker-1",
+    ) == "failed"
+    assert outbox.last_error_class == "aws_marketplace_billing_owned"
 
 
 def test_active_plan_limit_cannot_be_bypassed_by_broader_enrollment(client, db, monkeypatch):

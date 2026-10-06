@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import get_db
 from app.models.aws_marketplace import AwsMarketplaceRegistration
 from app.models.saas import Organization, User
-from app.models.platform_product import PlatformApiSubscription
+from app.models.platform_product import PlatformApiSubscription, PlatformStripeMeterOutbox
 
 # Load the router independently of unrelated connector imports in api.v1.
 spec = importlib.util.spec_from_file_location("aws_registration_test_route", Path(__file__).parents[2] / "app/api/v1/aws_marketplace.py")
@@ -28,6 +28,7 @@ def registration(monkeypatch):
     User.__table__.create(engine)
     Organization.__table__.create(engine)
     PlatformApiSubscription.__table__.create(engine)
+    PlatformStripeMeterOutbox.__table__.create(engine)
     AwsMarketplaceRegistration.__table__.create(engine)
     sessions = sessionmaker(bind=engine)
     def database():

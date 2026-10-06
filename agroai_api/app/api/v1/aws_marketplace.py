@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.rate_limiting import limiter
 from app.db.base import get_db
 from app.models.aws_marketplace import AwsMarketplaceRegistration
-from app.models.platform_product import PlatformApiSubscription
+from app.models.platform_product import PlatformApiSubscription, PlatformStripeMeterOutbox
 from app.models.saas import Organization
 from app.api.deps import AuthContext, get_auth_context, require_approved_organization
 from app.platform_api.terms import require_user_acceptance
@@ -149,6 +149,11 @@ def link_purchase(
     subscription = db.query(PlatformApiSubscription).filter_by(organization_id=ctx.organization.id, status_slot="active").first()
     if subscription and subscription.billing_mode == "stripe":
         raise HTTPException(status_code=409, detail="Existing Stripe subscription requires billing migration before AWS linking")
+    if db.query(PlatformStripeMeterOutbox.id).filter(
+        PlatformStripeMeterOutbox.organization_id == ctx.organization.id,
+        PlatformStripeMeterOutbox.status.in_(["pending", "publishing", "queued", "exporting"]),
+    ).first():
+        raise HTTPException(status_code=409, detail="Pending Stripe usage must settle before AWS linking")
     row.organization_id = ctx.organization.id
     row.linked_by_user_id = ctx.user.id
     row.linked_at = datetime.utcnow()

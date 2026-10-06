@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.metrics import platform_billing_events
 from app.db.base import SessionLocal
+from app.models.aws_marketplace import AwsMarketplaceRegistration
 from app.models.platform_product import PlatformApiSubscription, PlatformStripeMeterOutbox
+from app.models.saas import Organization
 from app.platform_api.stripe_mode import platform_stripe_livemode_matches
 from app.services.redis_task_queue import get_task_publisher
 
@@ -77,6 +79,7 @@ def process_meter_export_task(*, outbox_id: str, organization_id: str, worker_id
         return "disabled"
     db = SessionLocal()
     try:
+        db.query(Organization).filter_by(id=organization_id).with_for_update().first()
         row = (
             db.query(PlatformStripeMeterOutbox)
             .filter(
@@ -89,6 +92,12 @@ def process_meter_export_task(*, outbox_id: str, organization_id: str, worker_id
         if row is None or row.status in {"exported", "reconciled", "failed"}:
             platform_billing_events.labels(event_class="meter_export", outcome="idempotent_terminal").inc()
             return "succeeded" if row is None else row.status
+        if db.query(AwsMarketplaceRegistration.id).filter_by(organization_id=organization_id).first():
+            row.status = "failed"
+            row.last_error_class = "aws_marketplace_billing_owned"
+            db.commit()
+            platform_billing_events.labels(event_class="meter_export", outcome="aws_marketplace_billing_owned").inc()
+            return "failed"
         subscription = db.get(PlatformApiSubscription, row.subscription_id)
         if subscription is None or subscription.organization_id != organization_id or not subscription.stripe_customer_id:
             row.status = "failed"
