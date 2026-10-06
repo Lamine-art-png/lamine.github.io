@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import os
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -199,6 +200,20 @@ async def run_market_intelligence_cycle_now() -> dict:
     if not queue_configured():
         raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
     return await asyncio.to_thread(_schedule_market_intelligence_cycle, "operator")
+
+
+@router.get("/internal/queue/market-cycle/proof", dependencies=[Depends(_require_queue_token)])
+def market_intelligence_cycle_proof(since: datetime | None = None, db: Session = Depends(get_db)) -> dict:
+    """Read-only, aggregate-only evidence of what the live cycle did since ``since``."""
+    from app.services.market_cycle_proof import cycle_proof
+
+    try:
+        return cycle_proof(db, since=since)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "market_cycle_proof_unavailable", "reason": exc.__class__.__name__},
+        ) from exc
 
 
 def _run_lifecycle_emails() -> dict:
