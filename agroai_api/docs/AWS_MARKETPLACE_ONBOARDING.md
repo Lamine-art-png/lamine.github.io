@@ -17,7 +17,9 @@ Developer Console. Linking requires approved organization status and acceptance
 of current Platform API terms. One organization can own one AWS license, while
 multiple agreements for the same buyer AWS account remain separate and can be
 linked to separate organizations. An active Stripe API subscription must be
-migrated before AWS linking, avoiding two billing owners.
+migrated and outstanding Stripe meter exports must settle before AWS linking,
+avoiding two billing owners. The Stripe export worker also refuses to export
+usage for an AWS-linked organization.
 
 `License Updated - Manufacturer` is required before activation. The SQS consumer
 then uses the Agreement API to verify an ACTIVE purchase agreement, the expected
@@ -34,8 +36,11 @@ provisions access.
   the actual seller product, and `AWS_MARKETPLACE_REGION=us-east-1`.
 - Use a short-lived seller-account workload identity with `ResolveCustomer` for
   the API and queue/agreement permissions for the worker. Do not create access keys.
-- Deploy `deploy/aws-marketplace-events.yaml` in the seller account and configure
-  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL`.
+- The seller-account `agroai-marketplace-events` CloudFormation stack reached
+  `CREATE_COMPLETE` in `us-east-1` on 2026-10-06. Its EventBridge rule, encrypted
+  SQS queue, dead-letter queue, and IAM policies are deployed. Configure
+  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL` in the
+  application deployment.
 - Enable `AWS_MARKETPLACE_ONBOARDING_ENABLED` and
   `AWS_MARKETPLACE_EVENTS_ENABLED` only for verified integration testing.
 - Run `PYTHONPATH=. python scripts/process_aws_marketplace_events.py` continuously
