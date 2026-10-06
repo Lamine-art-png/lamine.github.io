@@ -49,7 +49,7 @@ def test_events_before_registration_are_persisted_and_replay_is_idempotent(sessi
         row = db.query(AwsMarketplaceRegistration).one()
         assert row.status == "license_confirmed"
         assert row.license_updated_at == datetime(2026, 1, 1)
-        assert not hasattr(row, "organization_id")  # Confirmation does not grant access.
+        assert row.organization_id is None  # Confirmation does not grant access.
 
 
 def test_same_event_id_with_different_content_is_rejected(sessions):

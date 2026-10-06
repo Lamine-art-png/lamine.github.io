@@ -21,6 +21,7 @@ def main():
     if (
         not re.fullmatch(r"[0-9]{12}", seller)
         or not settings.AWS_MARKETPLACE_PRODUCT_CODE
+        or not settings.AWS_MARKETPLACE_PRODUCT_ID
         or not re.fullmatch(r"[a-z]{2}-[a-z]+-\d", region)
         or parsed.scheme != "https"
         or parsed.netloc != f"sqs.{region}.amazonaws.com"
@@ -33,7 +34,8 @@ def main():
     if sts.get_caller_identity()["Account"] != seller:
         raise SystemExit("AWS credentials do not belong to the configured seller")
     sqs = boto3.client("sqs", region_name=region, config=config)
-    counts = consume_license_messages(sqs, SessionLocal, queue_url=queue, seller_account_id=seller, product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE, region=region)
+    agreements = boto3.client("marketplace-agreement", region_name=region, config=config)
+    counts = consume_license_messages(sqs, SessionLocal, queue_url=queue, seller_account_id=seller, product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE, region=region, agreements=agreements, product_id=settings.AWS_MARKETPLACE_PRODUCT_ID)
     print(json.dumps(counts))
     if counts["failed"]:
         raise SystemExit(1)

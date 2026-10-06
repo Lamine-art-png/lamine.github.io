@@ -15,7 +15,7 @@ def resolve_purchase(client, token: str, expected_product_code: str) -> dict[str
     if (
         result.get("ProductCode") != expected_product_code
         or not re.fullmatch(r"[0-9]{12}", account_id)
-        or not re.fullmatch(r"arn:aws[a-z-]*:license-manager:[^:]*:[0-9]{12}:license:[A-Za-z0-9-]+", license_arn)
+        or not re.fullmatch(r"arn:aws[a-z-]*:license-manager:[^:]*:[0-9]{12}:license[:/][A-Za-z0-9-]+", license_arn)
     ):
         raise InvalidMarketplaceIdentity("AWS returned an unexpected purchase identity")
     return {

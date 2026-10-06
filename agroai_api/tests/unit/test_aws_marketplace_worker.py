@@ -19,14 +19,14 @@ def test_worker_defaults_to_disabled():
 
 
 def test_invalid_queue_fails_before_credential_lookup():
-    result = run_worker(AWS_MARKETPLACE_EVENTS_ENABLED="true", AWS_MARKETPLACE_SELLER_ACCOUNT_ID="111111111111", AWS_MARKETPLACE_PRODUCT_CODE="synthetic", AWS_MARKETPLACE_QUEUE_URL="https://untrusted.example/queue")
+    result = run_worker(AWS_MARKETPLACE_EVENTS_ENABLED="true", AWS_MARKETPLACE_SELLER_ACCOUNT_ID="111111111111", AWS_MARKETPLACE_PRODUCT_CODE="synthetic", AWS_MARKETPLACE_PRODUCT_ID="prod-synthetic", AWS_MARKETPLACE_QUEUE_URL="https://untrusted.example/queue")
     assert result.returncode == 1
     assert "queue configuration is invalid" in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_missing_credentials_does_not_log_sdk_exception():
-    result = run_worker(AWS_MARKETPLACE_EVENTS_ENABLED="true", AWS_MARKETPLACE_SELLER_ACCOUNT_ID="111111111111", AWS_MARKETPLACE_PRODUCT_CODE="synthetic", AWS_MARKETPLACE_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/111111111111/synthetic")
+    result = run_worker(AWS_MARKETPLACE_EVENTS_ENABLED="true", AWS_MARKETPLACE_SELLER_ACCOUNT_ID="111111111111", AWS_MARKETPLACE_PRODUCT_CODE="synthetic", AWS_MARKETPLACE_PRODUCT_ID="prod-synthetic", AWS_MARKETPLACE_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/111111111111/synthetic")
     assert result.returncode == 1
     assert "event processing unavailable" in result.stderr
     assert "NoCredentialsError" not in result.stderr

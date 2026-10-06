@@ -8,7 +8,12 @@ on:
       - 'agroai_api/requirements.txt'
       - 'agroai_api/app/models/aws_marketplace.py'
       - 'agroai_api/alembic/versions/042_aws_marketplace_registration.py'
+      - 'agroai_api/alembic/versions/043_aws_marketplace_linking.py'
       - 'agroai_api/scripts/process_aws_marketplace_events.py'
+      - 'agroai_api/scripts/reconcile_aws_marketplace.py'
+      - 'agroai_api/app/api/v1/platform_billing.py'
+      - 'agroai_api/app/platform_api/programs.py'
+      - 'agroai_api/app/platform_api/deps.py'
       - 'agroai_api/tests/unit/test_aws_marketplace*'
       - 'agroai_api/deploy/aws-marketplace-events.yaml'
       - '.github/workflows/aws-marketplace-contract-ci.yml'
@@ -31,9 +36,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install focused dependencies
-        run: python -m pip install pytest boto3==1.43.108 fastapi==0.109.0 pydantic==2.5.3 pydantic-settings==2.1.0 sqlalchemy==2.0.25 httpx==0.26.0 slowapi==0.1.9 email-validator==2.1.0.post1
+        run: python -m pip install pytest boto3==1.43.108 fastapi==0.109.0 pydantic==2.5.3 pydantic-settings==2.1.0 sqlalchemy==2.0.25 httpx==0.26.0 slowapi==0.1.9 email-validator==2.1.0.post1 alembic==1.13.1 python-jose==3.3.0 passlib==1.7.4 bcrypt==4.0.1 prometheus-client==0.19.0 stripe==8.11.0 python-multipart==0.0.6 redis==5.0.1 cryptography==44.0.3
       - name: Verify registration, license lifecycle and revision contracts
-        run: python -m pytest --confcutdir=tests/unit tests/unit/test_aws_marketplace_identity.py tests/unit/test_aws_marketplace_registration.py tests/unit/test_aws_marketplace_events.py tests/unit/test_aws_marketplace_worker.py tests/unit/test_alembic_revision_contract.py -q
+        run: python -m pytest --confcutdir=tests/unit tests/unit/test_aws_marketplace_identity.py tests/unit/test_aws_marketplace_registration.py tests/unit/test_aws_marketplace_events.py tests/unit/test_aws_marketplace_worker.py tests/unit/test_aws_marketplace_reconciliation.py tests/unit/test_alembic_revision_contract.py -q
       - name: Scan for committed secrets
         working-directory: .
         run: python agroai_api/scripts/scan_repository_secrets.py

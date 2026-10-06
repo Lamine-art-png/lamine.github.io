@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "042_aws_marketplace_registration"
+    assert HEAD_ALEMBIC_REVISION == "043_aws_marketplace_linking"
     assert {"license_arn", "customer_aws_account_id", "status", "license_updated_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["aws_marketplace_registrations"]
     )

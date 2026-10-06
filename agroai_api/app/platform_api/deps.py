@@ -29,6 +29,7 @@ from app.platform_api.request_context import (
 from app.platform_api.rate_limits import apply_rate_limit_headers, enforce_rate_limit
 from app.platform_api.terms import require_organization_acceptance, require_user_acceptance
 from app.platform_api.credits import reserve_credits
+from app.platform_api.aws_marketplace_reconciliation import require_marketplace_access
 
 
 def _feature_enabled() -> bool:
@@ -128,6 +129,9 @@ def require_platform_api_principal(
                 "request_id": request_id,
             },
         )
+    # Fail closed for a revoked or stale AWS agreement even if program-policy
+    # switches are disabled for other customers.
+    aws_owned = require_marketplace_access(db, verified.key.organization_id)
     if not client_ip_allowed(request, list(verified.key.cidr_allowlist_json or [])):
         platform_authentication.labels(environment=verified.key.environment, outcome="cidr_denied").inc()
         record_abuse_signal(
@@ -183,7 +187,7 @@ def require_platform_api_principal(
                     "request_id": request_id,
                 },
             ) from exc
-    if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
+    if aws_owned or bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
         require_organization_acceptance(db, organization_id=verified.key.organization_id)
     principal = PlatformPrincipal(
         authentication_type="platform_api_key",

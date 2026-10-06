@@ -49,29 +49,55 @@ Resources:
           RetryPolicy:
             MaximumRetryAttempts: 185
             MaximumEventAgeInSeconds: 86400
-  QueuePolicy:
+  LicenseQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
-      Queues: [!Ref LicenseQueue, !Ref DeadLetterQueue]
+      Queues: [!Ref LicenseQueue]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: OnlyConfiguredEventBridgeRule
+          - Sid: OnlyConfiguredEventBridgeRuleMain
             Effect: Allow
             Principal:
               Service: events.amazonaws.com
             Action: sqs:SendMessage
-            Resource: [!GetAtt LicenseQueue.Arn, !GetAtt DeadLetterQueue.Arn]
+            Resource: !GetAtt LicenseQueue.Arn
             Condition:
               ArnEquals:
                 aws:SourceArn: !GetAtt LicenseRule.Arn
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
-          - Sid: EnforceTLS
+          - Sid: EnforceTLSMain
             Effect: Deny
             Principal: '*'
             Action: sqs:*
-            Resource: [!GetAtt LicenseQueue.Arn, !GetAtt DeadLetterQueue.Arn]
+            Resource: !GetAtt LicenseQueue.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  DeadLetterQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref DeadLetterQueue]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: OnlyConfiguredEventBridgeRuleDeadLetter
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt DeadLetterQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt LicenseRule.Arn
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+          - Sid: EnforceTLSDeadLetter
+            Effect: Deny
+            Principal: '*'
+            Action: sqs:*
+            Resource: !GetAtt DeadLetterQueue.Arn
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -85,6 +111,9 @@ Resources:
           - Effect: Allow
             Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
             Resource: !GetAtt LicenseQueue.Arn
+          - Effect: Allow
+            Action: [aws-marketplace:SearchAgreements, aws-marketplace:GetAgreementEntitlements]
+            Resource: '*'
   ResolveCustomerPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:

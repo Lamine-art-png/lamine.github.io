@@ -1,6 +1,7 @@
 import pytest
 import importlib.util
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
@@ -11,6 +12,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import get_db
 from app.models.aws_marketplace import AwsMarketplaceRegistration
+from app.models.saas import Organization, User
+from app.models.platform_product import PlatformApiSubscription
 
 # Load the router independently of unrelated connector imports in api.v1.
 spec = importlib.util.spec_from_file_location("aws_registration_test_route", Path(__file__).parents[2] / "app/api/v1/aws_marketplace.py")
@@ -22,6 +25,9 @@ spec.loader.exec_module(route)
 @pytest.fixture
 def registration(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    User.__table__.create(engine)
+    Organization.__table__.create(engine)
+    PlatformApiSubscription.__table__.create(engine)
     AwsMarketplaceRegistration.__table__.create(engine)
     sessions = sessionmaker(bind=engine)
     def database():
@@ -44,7 +50,9 @@ def test_retries_preserve_one_pending_registration_without_token(registration):
     client, sessions = registration
     responses = [client.post("/marketplace/aws/register", data={"x-amzn-marketplace-token": "sensitive-token"}) for _ in range(2)]
     assert all(response.status_code == 200 for response in responses)
-    assert responses[0].text == responses[1].text
+    assert "Reference:" in responses[0].text
+    assert "One-time claim code:" in responses[0].text
+    assert responses[0].text != responses[1].text  # a retry rotates the one-time claim
     assert "sensitive-token" not in responses[0].text
     assert responses[0].headers["cache-control"] == "no-store"
     with sessions() as db:
@@ -94,3 +102,31 @@ def test_registration_preserves_license_events_arriving_first(registration, stat
     assert response.status_code == expected_code
     with sessions() as db:
         assert db.query(AwsMarketplaceRegistration).one().status == status
+
+
+def test_authenticated_claim_binds_once_and_blocks_wrong_code(registration, monkeypatch):
+    client, sessions = registration
+    with sessions() as db:
+        db.execute(User.__table__.insert().values(id="user-test", email="owner@example.test", is_active=True))
+        db.execute(Organization.__table__.insert().values(id="org-test", name="Test organization", slug="test-organization", owner_user_id="user-test", verification_status="approved"))
+        db.commit()
+    client.app.dependency_overrides[route.get_auth_context] = lambda: SimpleNamespace(
+        user=SimpleNamespace(id="user-test"),
+        organization=SimpleNamespace(id="org-test", verification_status="approved"),
+        membership=SimpleNamespace(status="active", role="owner"),
+    )
+    monkeypatch.setattr(route, "require_user_acceptance", lambda *args, **kwargs: None)
+    receipt = client.post("/marketplace/aws/register", data={"x-amzn-marketplace-token": "token"})
+    assert receipt.status_code == 200
+    with sessions() as db:
+        reference = db.query(AwsMarketplaceRegistration).one().id
+    code = receipt.text.split("One-time claim code: <strong>")[1].split("</strong>")[0]
+    assert client.post("/marketplace/aws/link", json={"reference": reference, "claim_code": "wrong" + code}).status_code == 409
+    linked = client.post("/marketplace/aws/link", json={"reference": reference, "claim_code": code})
+    assert linked.status_code == 200
+    assert linked.json()["access"] == "pending_reconciliation"
+    assert client.post("/marketplace/aws/link", json={"reference": reference, "claim_code": code}).status_code == 409
+    with sessions() as db:
+        row = db.query(AwsMarketplaceRegistration).one()
+        assert row.organization_id == "org-test"
+        assert row.claim_token_hash is None

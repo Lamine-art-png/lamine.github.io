@@ -43,7 +43,7 @@ def parse_license_event(body: str, *, seller_account_id: str, product_code: str,
             or detail.get("catalog") != "AWSMarketplace"
             or detail["product"]["code"] != product_code
             or not re.fullmatch(r"[0-9]{12}", account_id)
-            or not re.fullmatch(r"arn:aws[a-z-]*:license-manager:[^:]*:[0-9]{12}:license:[A-Za-z0-9-]+", license_arn)
+            or not re.fullmatch(r"arn:aws[a-z-]*:license-manager:[^:]*:[0-9]{12}:license[:/][A-Za-z0-9-]+", license_arn)
             or occurred_at.tzinfo is None
             or occurred_at > (now or datetime.now(timezone.utc)) + timedelta(minutes=5)
         ):
@@ -96,14 +96,19 @@ remain separate. Database races are retried by SQS, never silently acknowledged.
     return "processed"
 
 
-def consume_license_messages(sqs, db_factory, *, queue_url: str, seller_account_id: str, product_code: str, region: str):
+def consume_license_messages(sqs, db_factory, *, queue_url: str, seller_account_id: str, product_code: str, region: str, agreements=None, product_id: str = ""):
     """One bounded batch. A failed message stays in SQS for retry/dead-lettering."""
     result = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=10, VisibilityTimeout=60)
     processed = failed = 0
     for message in result.get("Messages", []):
         with db_factory() as db:
             try:
+                event = parse_license_event(message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
                 process_license_event(db, message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
+                if agreements is not None and product_id:
+                    from app.platform_api.aws_marketplace_reconciliation import reconcile_registration
+                    row = db.query(AwsMarketplaceRegistration).filter_by(license_arn=event["license_arn"]).one()
+                    reconcile_registration(db, agreements, row, product_id)
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
                 processed += 1
             except Exception:

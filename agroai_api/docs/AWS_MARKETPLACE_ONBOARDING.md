@@ -1,73 +1,64 @@
 # AWS Marketplace onboarding checkpoint
 
-This change is disabled-by-default registration and license-event intake, not a completed
-Marketplace integration and not authorization to launch or charge customers.
+The staged SaaS product has no offer or pricing terms. Keep onboarding disabled
+until approved terms, a deployed seller identity, and a real test purchase are
+verified. A code release alone does not authorize a public listing or charges.
 
-The planned fulfillment route is `POST /v1/marketplace/aws/register` on the API
-origin. Do not enter it in a live offer until deployed and verified with an AWS
-test purchase. It accepts the AWS form token, resolves it server-side, validates
-the configured product, and stores the AWS account ID and license ARN. Purchase
-tokens are not stored. Registration records start `pending_license`; this
-endpoint does not provision API access, link organizations, or charge Stripe.
-Authenticated queue events transition records to `license_confirmed` or `revoked`.
-`license_confirmed` records still have no API entitlement or organization link.
-Events arriving before registration are retained; registration does not reset
-their state. A revoked license cannot complete registration.
+## Purchase and access lifecycle
 
-## Deployment prerequisites
+AWS posts its form token to `POST /v1/marketplace/aws/register` on the API origin.
+The server resolves it with `ResolveCustomer`, verifies the configured product,
+and stores the buyer AWS account ID and exact license ARN. It never stores the
+purchase token. The response displays a registration reference and a one-hour,
+one-time claim code; only the code hash is stored.
 
-- Apply migration `042_aws_marketplace_registration`.
-- Set `AWS_MARKETPLACE_PRODUCT_CODE` to the product's actual code in the secret/configuration store.
-- Configure SDK credentials belonging to the AWS seller account, with
-  `aws-marketplace:ResolveCustomer` permission. Never put keys in source or chat.
-- Set `AWS_MARKETPLACE_REGION=us-east-1`.
-- Enable `AWS_MARKETPLACE_ONBOARDING_ENABLED` only for integration testing.
+An authenticated organization owner or admin can enter both values in the
+Developer Console. Linking requires approved organization status and acceptance
+of current Platform API terms. One organization can own one AWS license, while
+multiple agreements for the same buyer AWS account remain separate and can be
+linked to separate organizations. An active Stripe API subscription must be
+migrated before AWS linking, avoiding two billing owners.
 
-## License-event infrastructure and consumer
+`License Updated - Manufacturer` is required before activation. The SQS consumer
+then uses the Agreement API to verify an ACTIVE purchase agreement, the expected
+buyer and product, the exact license ARN, and a PROVISIONED entitlement. API key
+access also requires reconciliation within the last 25 hours, an active program
+enrollment, current terms, and the existing live access approval. Deprovisioning
+and inactive agreement states revoke access. A pending or revoked purchase never
+provisions access.
 
-`deploy/aws-marketplace-events.yaml` defines an EventBridge rule filtered to
-this seller and product, an encrypted SQS queue, a 14-day dead-letter queue,
-a dead-letter alarm, and least-privilege managed policies. It creates no keys.
-The consumer policy can be attached to an existing role using `ConsumerRoleName`;
-the separate ResolveCustomer policy must be attached to the registration service
-identity. Deploying this template creates AWS resources and requires seller access;
-it has not been deployed by this change.
+## Deployment configuration
 
-Set `AWS_MARKETPLACE_SELLER_ACCOUNT_ID`, `AWS_MARKETPLACE_QUEUE_URL` from the stack
-output, and `AWS_MARKETPLACE_EVENTS_ENABLED=true` only after migration and queue
-configuration. Run from the backend root:
+- Apply database migrations through `043_aws_marketplace_linking`.
+- Configure `AWS_MARKETPLACE_PRODUCT_CODE` and `AWS_MARKETPLACE_PRODUCT_ID` from
+  the actual seller product, and `AWS_MARKETPLACE_REGION=us-east-1`.
+- Use a short-lived seller-account workload identity with `ResolveCustomer` for
+  the API and queue/agreement permissions for the worker. Do not create access keys.
+- Deploy `deploy/aws-marketplace-events.yaml` in the seller account and configure
+  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL`.
+- Enable `AWS_MARKETPLACE_ONBOARDING_ENABLED` and
+  `AWS_MARKETPLACE_EVENTS_ENABLED` only for verified integration testing.
+- Run `PYTHONPATH=. python scripts/process_aws_marketplace_events.py` continuously
+  or on a frequent schedule, and run
+  `PYTHONPATH=. python scripts/reconcile_aws_marketplace.py` at least hourly.
+  Alert on worker failures and dead-letter queue messages. Do not log event bodies,
+  purchase tokens, customer identifiers, or SDK exceptions.
 
-```sh
-PYTHONPATH=. python scripts/process_aws_marketplace_events.py
-```
+## Remaining release gates
 
-The command verifies the AWS credential's account through STS, polls a single
-bounded queue batch, and commits event receipts and license state before deletion.
-It never logs queue payloads, customer IDs, SDK exceptions, or receipt handles.
-Failed events remain in SQS for retry and eventual dead-lettering. Duplicates are
-idempotent; older events cannot overwrite newer state, and revocation wins equal
-timestamps. A scheduler or worker must invoke it continuously and operators must
-monitor and replay dead-lettered messages. No scheduler is deployed in this change.
-Timestamp ordering is a local guard, not authoritative reconciliation: live
-entitlement/Agreement API checks and a recovery policy remain launch requirements.
-
-## Remaining launch blockers
-
-1. Confirm contract versus usage-based pricing and the plan/dimension mapping.
-2. Deploy the current license-based EventBridge/SQS template and consumer;
-   authenticate events through the AWS queue, not an unauthenticated webhook.
-3. Add authoritative license-state reconciliation to the durable event intake.
-   A resolved token alone never activates access. Require `License Updated`.
-4. Implement authenticated organization linking, current terms acceptance, and
-   concurrent-license handling without bypassing existing organization approval.
-5. Route AWS customers exclusively to AWS billing. Block Stripe checkout for any
-   organization with AWS billing ownership, including pending purchases.
-6. For PAYG, add hourly durable usage export using `CustomerAWSAccountId` and
-   `LicenseArn`; omit request-level `ProductCode` in new `BatchMeterUsage` calls.
-7. Test buying, linking, API provisioning, usage, license changes, cancellation,
-   event replays, and failures before requesting public visibility.
+1. Approve an AWS Marketplace pricing model, dimensions, rates, and applicable
+   terms. The draft currently has no offer. The seller public profile review
+   must finish before a paid product can be published.
+2. Configure short-lived seller-account credentials for the deployed API and
+   worker, deploy the migration, and verify exact release health and scheduler.
+3. If the approved offer has usage charges, add a durable hourly metering outbox
+   mapped to its dimensions. Use `CustomerAWSAccountId` and per-record
+   `LicenseArn`, and omit request-level `ProductCode` in `BatchMeterUsage`.
+4. Verify a real purchase, organization link, provisioning, usage if applicable,
+   changes, cancellation, replay, and failure recovery before AWS review submission.
 
 Official references:
-- https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-metering_ResolveCustomer.html
-- https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-metering_BatchMeterUsage.html
 - https://docs.aws.amazon.com/marketplace/latest/userguide/saas-product-customer-setup.html
+- https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-agreements_SearchAgreements.html
+- https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-agreements_GetAgreementEntitlements.html
+- https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-metering_BatchMeterUsage.html

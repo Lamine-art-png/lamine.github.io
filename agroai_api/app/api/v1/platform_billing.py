@@ -15,6 +15,7 @@ from app.billing_bootstrap import safe_runtime_billing_status
 from app.core.config import settings
 from app.core.metrics import platform_billing_events
 from app.db.base import get_db
+from app.models.aws_marketplace import AwsMarketplaceRegistration
 from app.models.platform_product import (
     PlatformApiOperationCost,
     PlatformApiPlan,
@@ -72,6 +73,11 @@ class AdminBillingAction(BaseModel):
 def _flag(name: str) -> None:
     if not bool(getattr(settings, name, False)):
         raise HTTPException(status_code=404, detail="Not found")
+
+
+def _require_no_aws_billing(db: Session, organization_id: str) -> None:
+    if db.query(AwsMarketplaceRegistration.id).filter_by(organization_id=organization_id).first():
+        raise HTTPException(status_code=409, detail={"code": "aws_marketplace_billing_owned"})
 
 
 def _stripe() -> None:
@@ -303,6 +309,7 @@ def create_api_checkout(
     _flag("PLATFORM_API_STRIPE_CHECKOUT_ENABLED")
     if payload.plan not in {"developer", "scale"}:
         raise HTTPException(status_code=422, detail={"code": "checkout_plan_not_supported"})
+    _require_no_aws_billing(db, ctx.organization.id)
     canonical_payload = payload.model_dump(mode="json")
     claim, replay = claim_checkout(
         db,
@@ -318,6 +325,8 @@ def create_api_checkout(
         return dict(claim.response_json or {})
 
     try:
+        db.query(Organization).filter_by(id=ctx.organization.id).with_for_update().one()
+        _require_no_aws_billing(db, ctx.organization.id)
         plan = _active_plan(db, payload.plan)
         price_id = _price_for(plan, payload.billing_interval)
         overage_price_id = _overage_price_for(plan, payload.billing_interval)
@@ -448,6 +457,7 @@ def create_api_billing_portal(
     db: Session = Depends(get_db),
 ) -> dict:
     _flag("PLATFORM_API_BILLING_ENABLED")
+    _require_no_aws_billing(db, ctx.organization.id)
     row = (
         db.query(PlatformApiSubscription)
         .filter(
@@ -644,6 +654,12 @@ async def api_stripe_webhook(
         return {"status": "ignored_non_platform_api", "event_id": event_id}
     if subscription.organization_id != organization.id:
         raise HTTPException(status_code=409, detail={"code": "stripe_organization_mapping_conflict"})
+    if db.query(AwsMarketplaceRegistration.id).filter_by(organization_id=organization.id).first():
+        row.status = "ignored_aws_billing_owned"
+        row.processed_at = datetime.utcnow()
+        db.commit()
+        platform_billing_events.labels(event_class="stripe_webhook", outcome="ignored_aws_billing_owned").inc()
+        return {"status": "ignored_aws_billing_owned", "event_id": event_id}
     if subscription.stripe_state_updated_at and created < subscription.stripe_state_updated_at:
         row.status = "ignored_out_of_order"
         row.processed_at = datetime.utcnow()
