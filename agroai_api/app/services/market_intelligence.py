@@ -680,4 +680,3 @@ def redact_reasons(reasons: list[dict[str, Any]], position: Any) -> list[dict[st
                 item[key] = None
         cleaned.append(item)
     return cleaned
-

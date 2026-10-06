@@ -332,6 +332,8 @@
   "literal.ba3bbbe10d8bef66": "Loading…",
   "literal.84805a7574a82052": "Webhook URL",
   "literal.4a2b33ad2c1fb939": "Create webhook",
+  "literal.ac4deb59c642d7cf": "AWS purchase linked. Access follows your approved program and live access policy.",
+  "literal.ca677426db8f2ac6": "The AWS claim could not be linked. Check the reference, claim code, organization approval, and current Platform API terms.",
   "literal.56b3669c3a19e43c": "scopes",
   "literal.f785c3ce1d580c8f": "ms",
   "literal.7ef84bb37f45a8ae": "Untitled source",

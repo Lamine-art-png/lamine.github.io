@@ -482,6 +482,7 @@ from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
 from app.api.v1.platform_access import router as platform_access_router  # noqa: E402
 from app.api.v1.platform_resources import router as platform_resources_router  # noqa: E402
 from app.api.v1.platform_billing import router as platform_billing_router  # noqa: E402
+from app.api.v1.aws_marketplace import router as aws_marketplace_router  # noqa: E402
 from app.api.v1.platform_operations import router as platform_operations_router  # noqa: E402
 from app.api.v1.recommendations import router as recommendations_router  # noqa: E402
 from app.api.v1.reports import router as reports_router  # noqa: E402
@@ -543,6 +544,7 @@ app.include_router(platform_api_router, prefix="/v1")
 app.include_router(platform_access_router, prefix="/v1")
 app.include_router(platform_resources_router, prefix="/v1")
 app.include_router(platform_billing_router, prefix="/v1")
+app.include_router(aws_marketplace_router, prefix="/v1")
 app.include_router(platform_operations_router, prefix="/v1")
 app.include_router(recommendations_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")

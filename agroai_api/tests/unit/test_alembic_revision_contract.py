@@ -94,6 +94,8 @@ def test_account_verification_platform_api_field_assurance_and_intelligence_revi
         "040_intelligence_money_checks": "039_lifecycle_next_action",
         "041_abuse_project_holds": "040_intelligence_money_checks",
         "042_market_data_plane": "041_abuse_project_holds",
+        "043_aws_marketplace_registration": "042_market_data_plane",
+        "044_aws_marketplace_linking": "043_aws_marketplace_registration",
     }
     actual = {}
 

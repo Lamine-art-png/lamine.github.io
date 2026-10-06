@@ -18,6 +18,7 @@ from app.models.platform_product import (
     PlatformProgramEnrollment,
 )
 from app.models.saas import Organization
+from app.platform_api.aws_marketplace_reconciliation import require_marketplace_access
 
 
 PROGRAMS = frozenset(
@@ -107,6 +108,7 @@ def require_api_entitlement(
     operation: str,
     api_project_id: str | None,
 ) -> tuple[PlatformProgramEnrollment, PlatformApiSubscription | None]:
+    aws_owned = require_marketplace_access(db, organization.id)
     enrollment = require_active_enrollment(db, organization, environment=environment, operation=operation)
     if environment == "live":
         moment = datetime.utcnow()
@@ -136,6 +138,8 @@ def require_api_entitlement(
                     "message": "An active live-access approval is required for this operation.",
                 },
             )
+    if aws_owned:
+        return enrollment, None
     subscription = current_api_subscription(db, organization.id)
     if enrollment.billing_mode in {"enterprise_invoice", "contract"}:
         return enrollment, subscription

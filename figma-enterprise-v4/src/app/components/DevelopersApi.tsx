@@ -94,6 +94,10 @@ export function DevelopersApi() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedServiceAccountId, setSelectedServiceAccountId] = useState("");
+  const [awsReference, setAwsReference] = useState("");
+  const [awsClaimCode, setAwsClaimCode] = useState("");
+  const [awsLinkMessage, setAwsLinkMessage] = useState("");
+  const [awsStatus, setAwsStatus] = useState<{ linked?: boolean; status?: string; last_reconciled_at?: string | null }>({});
 
   const selectedProject = useMemo(
     () => state.projects.find((item) => item.id === selectedProjectId) || state.projects[0],
@@ -108,7 +112,7 @@ export function DevelopersApi() {
     try {
       const overview = record(await apiClient.platformDeveloper.overview());
       const optional = async (enabled: boolean, work: () => Promise<unknown>) => enabled ? work().catch(() => null) : null;
-      const [projectsResult, serviceAccountsResult, keysResult, usageResult, logsResult, webhooksResult, billingResult, liveResult, supportResult] = await Promise.all([
+      const [projectsResult, serviceAccountsResult, keysResult, usageResult, logsResult, webhooksResult, billingResult, liveResult, supportResult, awsResult] = await Promise.all([
         apiClient.platformDeveloper.projects(),
         apiClient.platformDeveloper.serviceAccounts(),
         apiClient.platformDeveloper.keys(),
@@ -118,7 +122,9 @@ export function DevelopersApi() {
         optional(Boolean(overview.sections?.billing), apiClient.platformDeveloper.billing),
         optional(Boolean(overview.sections?.live_access), apiClient.platformDeveloper.liveAccess),
         optional(Boolean(overview.sections?.support), apiClient.platformDeveloper.support),
+        apiClient.awsMarketplace.status().catch(() => null),
       ]);
+      setAwsStatus(record(awsResult));
       const projects = rows(projectsResult, "projects");
       const serviceAccounts = rows(serviceAccountsResult, "service_accounts");
       setState({
@@ -140,6 +146,18 @@ export function DevelopersApi() {
       setError(cause instanceof Error ? cause.message : tx("The developer console is unavailable."));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function linkAwsPurchase() {
+    setAwsLinkMessage("");
+    try {
+      const result = await apiClient.awsMarketplace.link(awsReference.trim(), awsClaimCode.trim()) as { status?: string };
+      setAwsClaimCode("");
+      setAwsLinkMessage(result.status === "active" ? "AWS purchase linked. Access follows your approved program and live access policy." : "AWS purchase linked. API access is pending license reconciliation and program approval.");
+      await refresh();
+    } catch {
+      setAwsLinkMessage("The AWS claim could not be linked. Check the reference, claim code, organization approval, and current Platform API terms.");
     }
   }
 
@@ -294,7 +312,7 @@ export function DevelopersApi() {
           {activeTab === "usage" ? <Card title={tx("Usage")}><div className="space-y-2">{state.usage.map((item) => <div key={item.metric} className="grid grid-cols-3 border-b border-[#E2D8C8] py-2 text-[13px]"><span>{item.metric}</span><span>{item.events} events</span><strong className="text-end">{item.quantity}</strong></div>)}</div>{!state.usage.length ? empty : null}</Card> : null}
           {activeTab === "request_logs" ? <Card title={tx("Request Logs")}><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-start text-[12px]"><thead><tr className="border-b border-[#D6DDD0] text-[#65736A]"><th className="py-2">Request ID</th><th>Status</th><th>Operation</th><th>Latency</th><th>Cost</th></tr></thead><tbody>{state.requestLogs.map((item) => <tr key={String(item.request_id)} className="border-b border-[#EEE8DE]"><td className="py-2 font-mono">{String(item.request_id)}</td><td>{String(item.status_code || "—")}</td><td>{String(item.operation_id || "—")}</td><td>{String(item.latency_ms || "—")} ms</td><td>{String(item.usage_cost || 0)}</td></tr>)}</tbody></table></div>{!state.requestLogs.length ? empty : null}</Card> : null}
           {activeTab === "webhooks" ? <Card title={tx("Webhooks")}><div className="space-y-2">{state.webhooks.map((item) => <div key={String(item.id)} className="flex flex-col gap-3 border border-[#D6DDD0] p-3 text-[13px] md:flex-row md:items-center md:justify-between"><div><strong>{String(item.url)}</strong><div className="mt-1 text-[11px] text-[#65736A]">{String(item.status)} · {String(item.signing_secret_prefix)}…</div></div>{String(item.status) === "active" ? <div className="flex gap-2"><button type="button" onClick={() => void rotateWebhookSecret(String(item.id))} className="h-8 border border-[#D6DDD0] px-3 text-[11px] font-semibold">{tx("Rotate secret")}</button><button type="button" onClick={() => void disableWebhook(String(item.id))} className="h-8 border border-[#D9A88B] px-3 text-[11px] font-semibold text-[#7A2E0E]">{tx("Disable")}</button></div> : null}</div>)}</div>{!state.webhooks.length ? empty : null}<div className="mt-4 flex gap-2"><input type="url" aria-label={tx("Webhook URL")} value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.example.com/agroai" className="h-10 min-w-0 flex-1 border border-[#D6DDD0] px-3 text-[13px]" /><button type="button" onClick={() => void createWebhook()} className="inline-flex h-10 items-center gap-2 bg-[#10231B] px-4 text-[12px] font-semibold text-white"><Plus className="h-4 w-4" /> {tx("Create webhook")}</button></div></Card> : null}
-          {activeTab === "billing" ? <Card title={tx("Billing")}><p className="text-[13px] text-[#65736A]">{tx("API billing is separate from your Enterprise Portal subscription.")}</p><pre className="mt-3 overflow-auto bg-[#F6F4EE] p-3 text-[11px]">{JSON.stringify(state.billing?.subscription || {}, null, 2)}</pre></Card> : null}
+          {activeTab === "billing" ? <Card title={tx("Billing")}><p className="text-[13px] text-[#65736A]">{tx("API billing is separate from your Enterprise Portal subscription.")}</p><pre className="mt-3 overflow-auto bg-[#F6F4EE] p-3 text-[11px]">{JSON.stringify(state.billing?.subscription || {}, null, 2)}</pre><div className="mt-6 border-t border-[#D6DDD0] pt-5"><h3 className="text-[14px] font-semibold">AWS Marketplace</h3>{awsStatus.linked ? <p className="mt-2 text-[12px]">License: <strong>{awsStatus.status || "pending"}</strong>{awsStatus.last_reconciled_at ? ` · last verified ${awsStatus.last_reconciled_at}` : ""}</p> : <p className="mt-2 text-[12px] leading-5 text-[#65736A]">Enter the reference and one-time claim code shown after AWS Marketplace registration. Your organization must be approved and current Platform API terms accepted. Linking does not activate access until AWS confirms the license.</p>}{!awsStatus.linked ? <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); void linkAwsPurchase(); }}><input aria-label="AWS registration reference" autoComplete="off" value={awsReference} onChange={(event) => setAwsReference(event.target.value)} placeholder="Registration reference" className="h-10 border border-[#D6DDD0] px-3 text-[13px]" /><input aria-label="AWS one-time claim code" type="password" autoComplete="off" value={awsClaimCode} onChange={(event) => setAwsClaimCode(event.target.value)} placeholder="One-time claim code" className="h-10 border border-[#D6DDD0] px-3 text-[13px]" /><button type="submit" className="h-10 bg-[#10231B] px-4 text-[12px] font-semibold text-white">Link purchase</button></form> : null}{awsLinkMessage ? <p role="status" className="mt-3 text-[12px]">{awsLinkMessage}</p> : null}</div></Card> : null}
           {activeTab === "documentation" ? <Card title={tx("Documentation")}><a href="/developers" target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 bg-[#10231B] px-4 text-[12px] font-semibold text-white"><BookOpen className="h-4 w-4" /> {tx("Open developer documentation")}</a></Card> : null}
           {activeTab === "live_access" ? <Card title={tx("Live Access")}>{state.liveAccess.map((item) => <pre key={String(item.id)} className="mb-2 overflow-auto border border-[#D6DDD0] p-3 text-[11px]">{JSON.stringify(item, null, 2)}</pre>)}{!state.liveAccess.length ? empty : null}</Card> : null}
           {activeTab === "support" ? <Card title={tx("Support")}>{state.support.map((item) => <div key={String(item.id)} className="mb-2 border border-[#D6DDD0] p-3 text-[13px]"><strong>{String(item.subject)}</strong><div className="mt-1 text-[11px] text-[#65736A]">{String(item.category)} · {String(item.status)}</div></div>)}{!state.support.length ? empty : null}</Card> : null}

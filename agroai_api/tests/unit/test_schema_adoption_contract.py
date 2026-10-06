@@ -31,7 +31,13 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "042_market_data_plane"
+    assert HEAD_ALEMBIC_REVISION == "044_aws_marketplace_linking"
+    assert {"license_arn", "customer_aws_account_id", "status", "license_updated_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["aws_marketplace_registrations"]
+    )
+    assert {"event_id", "payload_digest", "occurred_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["aws_marketplace_license_events"]
+    )
     assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["market_positions"]
     )
