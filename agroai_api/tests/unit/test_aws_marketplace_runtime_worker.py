@@ -1,0 +1,33 @@
+from app.core.config import settings
+from app.services.aws_marketplace_worker import _event_configuration_valid, start_aws_marketplace_worker
+
+
+def test_marketplace_runtime_worker_defaults_to_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_EVENTS_ENABLED", False)
+    assert start_aws_marketplace_worker() is None
+
+
+def test_marketplace_runtime_configuration_accepts_exact_seller_queue(monkeypatch):
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_SELLER_ACCOUNT_ID", "987432215840")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_REGION", "us-east-1")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_PRODUCT_CODE", "synthetic-product-code")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_PRODUCT_ID", "prod-rrjrdndw2eptq")
+    monkeypatch.setattr(
+        settings,
+        "AWS_MARKETPLACE_QUEUE_URL",
+        "https://sqs.us-east-1.amazonaws.com/987432215840/agroai-marketplace-events",
+    )
+    assert _event_configuration_valid() is True
+
+
+def test_marketplace_runtime_configuration_rejects_cross_account_queue(monkeypatch):
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_SELLER_ACCOUNT_ID", "987432215840")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_REGION", "us-east-1")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_PRODUCT_CODE", "synthetic-product-code")
+    monkeypatch.setattr(settings, "AWS_MARKETPLACE_PRODUCT_ID", "prod-rrjrdndw2eptq")
+    monkeypatch.setattr(
+        settings,
+        "AWS_MARKETPLACE_QUEUE_URL",
+        "https://sqs.us-east-1.amazonaws.com/111111111111/agroai-marketplace-events",
+    )
+    assert _event_configuration_valid() is False
