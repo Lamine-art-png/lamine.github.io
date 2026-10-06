@@ -57,15 +57,24 @@ def enforce_provider_access(principal: PlatformPrincipal, provider_id: str) -> N
         raise _denied(principal, "provider_restricted", "This API key is not permitted to access the requested provider.")
 
 
-def enforce_resource_access(
-    principal: PlatformPrincipal,
-    *,
-    resource_id: str | None,
-    resource_type: str = "resource",
-) -> None:
+def is_resource_restricted(principal: PlatformPrincipal) -> bool:
+    """True when the key carries any resource allow/deny list (or an invalid one)."""
     restrictions = principal.resource_restrictions
     if not isinstance(restrictions, dict):
-        raise _denied(principal, "resource_restricted", "This API key has invalid resource restrictions.")
+        return True
+    return any(str(key).endswith("_ids") for key in restrictions)
+
+
+def resource_allowlist(principal: PlatformPrincipal, resource_type: str) -> tuple[set[str] | None, set[str]]:
+    """(allowed ids, or None when no allowlist applies; denied ids).
+
+    The single parser of resource restrictions: enforce_resource_access and
+    bulk queries both use it, so single-id checks and filters cannot disagree.
+    An invalid restriction document allows nothing.
+    """
+    restrictions = principal.resource_restrictions
+    if not isinstance(restrictions, dict):
+        return set(), set()
     allow_keys = [
         key
         for key, value in restrictions.items()
@@ -80,14 +89,23 @@ def enforce_resource_access(
         if key.startswith("deny") and key.endswith("_ids") and isinstance(values, list)
         for item in values
     }
+    if not allow_keys:
+        return None, denied
+    return {str(item) for key in allow_keys for item in restrictions.get(key, [])}, denied
+
+
+def enforce_resource_access(
+    principal: PlatformPrincipal,
+    *,
+    resource_id: str | None,
+    resource_type: str = "resource",
+) -> None:
+    if not isinstance(principal.resource_restrictions, dict):
+        raise _denied(principal, "resource_restricted", "This API key has invalid resource restrictions.")
+    allowed, denied = resource_allowlist(principal, resource_type)
     if resource_id and resource_id in denied:
         raise _denied(principal, "resource_restricted", "This API key is not permitted to access the requested resource.")
-    if not allow_keys:
+    if allowed is None:
         return
-    allowed = {
-        str(item)
-        for key in allow_keys
-        for item in restrictions.get(key, [])
-    }
     if resource_id is None or resource_id not in allowed:
         raise _denied(principal, "resource_restricted", "This API key is not permitted to access the requested resource.")

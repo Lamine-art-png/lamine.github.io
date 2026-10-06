@@ -32,6 +32,17 @@ def test_rejects_secret_value_hidden_under_innocent_key() -> None:
     assert guard._credential_path(payload) == "input.notes.integration_value"
 
 
+def test_rejects_secret_used_as_a_mapping_key() -> None:
+    token_like = "".join(chr(code) for code in [115, 107, 95, 108, 105, 118, 101, 95, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75])
+    schema = {"type": "object", "properties": {token_like: {"type": "string"}}}
+    found = guard._credential_path({"response_format": {"schema": schema}}, path="request")
+    assert found == "request.response_format.schema.properties.<key>"
+    assert token_like not in found, "the rejection must not echo the credential"
+    with pytest.raises(HTTPException) as rejected:
+        guard.reject_credentials(SimpleNamespace(question="ok", input={"extensions": {token_like: 1}}))
+    assert rejected.value.detail["code"] == "credential_like_input_rejected"
+
+
 def test_rejects_private_key_material_hidden_in_notes() -> None:
     key_material = "".join(chr(code) for code in [45,45,45,45,45,66,69,71,73,78,32,80,82,73,86,65,84,69,32,75,69,89,45,45,45,45,45,10,97,98,99])
     payload = {"operator_notes": key_material}

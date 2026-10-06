@@ -65,7 +65,7 @@ Direct Developer and Scale billing is implemented through AGRO-AI's production S
 agriculture API, agtech API, agricultural intelligence, farm API, field intelligence, irrigation intelligence, crop intelligence, agronomy API, agricultural data, farm management integration, geospatial agriculture, agricultural AI, water management API, agricultural recommendations, enterprise agriculture
 
 ## Recommended categories
-Primary: Developer Tools / Data / Artificial Intelligence  
+Primary: Developer Tools / Data / Artificial Intelligence\
 Secondary: Agriculture / Analytics / Enterprise Integration
 
 ## Channel-specific positioning

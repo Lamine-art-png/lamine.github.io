@@ -143,8 +143,14 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
 
 @router.post("/internal/queue/drain-outbox", dependencies=[Depends(_require_queue_token)])
 async def drain_task_outbox() -> dict:
+    # Intelligence jobs/retention must progress even without the connector
+    # queue (the sweep runs due jobs inline in that case).
+    intelligence_platform = await asyncio.to_thread(_run_intelligence_platform_maintenance)
     if not queue_configured():
-        raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Durable connector queue is not configured", "intelligence_platform": intelligence_platform},
+        )
     try:
         outbox = await asyncio.to_thread(drain_pending_outbox, limit=100)
         webhook_outbox = await asyncio.to_thread(_drain_webhook_outbox)
@@ -165,12 +171,41 @@ async def drain_task_outbox() -> dict:
         "status": "ok",
         "market_intelligence_cycle": market_cycle,
         "lifecycle_emails": lifecycle,
+        "intelligence_platform": intelligence_platform,
         "outbox": outbox,
         "webhook_outbox": webhook_outbox,
         "meter_outbox": meter_outbox,
         "platform_maintenance": platform_maintenance,
         "object_gc": object_gc,
     }
+
+
+def _run_intelligence_platform_maintenance() -> dict:
+    """Intelligence jobs (timeouts, re-dispatch), result retention, expired files
+    and sessions. Isolated so it can never fail other maintenance."""
+    from app.intelligence_platform import files as platform_files
+    from app.intelligence_platform import jobs as platform_jobs
+    from app.intelligence_platform import sessions as platform_sessions
+
+    result: dict = {}
+    for name, operation in (
+        ("jobs", platform_jobs.sweep),
+        ("job_results_expired", platform_jobs.purge_expired_payloads_and_results),
+        ("files_expired", platform_files.expire_files),
+        ("sessions_expired", platform_sessions.expire_sessions),
+    ):
+        db = SessionLocal()
+        try:
+            result[name] = operation(db)
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            import logging
+
+            logging.getLogger("agroai.intelligence.maintenance").exception("intelligence_platform_maintenance_failed step=%s", name)
+            result[name] = {"status": "error", "reason": exc.__class__.__name__}
+        finally:
+            db.close()
+    return result
 
 
 def _schedule_market_intelligence_cycle(trigger: str = "scheduled") -> dict:

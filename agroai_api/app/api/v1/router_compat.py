@@ -31,13 +31,21 @@ def include_commercial_intelligence(router: Any) -> None:
     from app.api.v1 import commercial_intelligence_input_guard as _input_guard  # noqa: F401
     from app.api.v1.commercial_intelligence_selfserve import router as commercial_selfserve_router
 
+    # Intelligence Platform v1 owns POST /intelligence (same contract plus
+    # opt-in streaming), GET /intelligence/pricing (same body, versioned) and
+    # the platform primitives.
+    from app.intelligence_platform.routes import router as intelligence_platform_router
+
     commercial_intelligence_router.routes[:] = [
         route
         for route in commercial_intelligence_router.routes
         if getattr(route, "path", None) not in _COMMERCIAL_BROWSER_PATHS
+        and not (getattr(route, "path", None) == "/intelligence" and "POST" in (getattr(route, "methods", None) or set()))
+        and not (getattr(route, "path", None) == "/intelligence/pricing" and "GET" in (getattr(route, "methods", None) or set()))
     ]
     router.include_router(commercial_selfserve_router, prefix="/v1")
     router.include_router(commercial_intelligence_router, prefix="/v1")
+    router.include_router(intelligence_platform_router, prefix="/v1")
     setattr(router, "_agroai_commercial_intelligence_included", True)
 
 

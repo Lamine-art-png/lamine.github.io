@@ -190,6 +190,33 @@ jobs:
           print("commercial_catalog=green")
           PY
 
+      - name: Verify Intelligence Platform v1 discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/intelligence/capabilities" -o intelligence-capabilities.json
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/intelligence/tools" -o intelligence-tools.json
+          python3 - <<'PY'
+          import json
+          caps = json.load(open("intelligence-capabilities.json", encoding="utf-8"))
+          assert caps.get("model") == "agroai-intelligence-1", caps
+          assert caps.get("physical_execution") is False, caps
+          assert caps["modalities"]["remote_urls"] is False, caps
+          assert {"diagnosis", "recommendations", "risk_assessment", "financial_projection"} <= {
+              item["name"] for item in caps["structured_output"]["builtin_schemas"]
+          }, caps
+          tools = json.load(open("intelligence-tools.json", encoding="utf-8"))["data"]
+          assert tools and all(t["side_effects"] == "none" and t["physical_action"] is False for t in tools), tools
+          assert all(t["required_scope"] == "intelligence:run" for t in tools), tools
+          # The public abstraction never names a vendor or internal model.
+          blob = json.dumps(caps).lower() + json.dumps(tools).lower()
+          for vendor in ("openrouter", "ollama", "openai", "anthropic", "llama", "qwen", "glm", "deepseek", "workers-ai"):
+              assert vendor not in blob, vendor
+          print("intelligence_platform_discovery=green")
+          PY
+
       - name: Verify deployed route contract
         shell: bash
         run: |
@@ -208,6 +235,19 @@ jobs:
               "/v1/platform/developer/wallet/checkout": "post",
               "/v1/platform/developer/intelligence/bootstrap": "post",
               "/v1/platform/developer/intelligence/run": "post",
+              "/v1/intelligence/capabilities": "get",
+              "/v1/intelligence/tools": "get",
+              "/v1/intelligence/tools/execute": "post",
+              "/v1/intelligence/jobs": "post",
+              "/v1/intelligence/jobs/{job_id}": "get",
+              "/v1/intelligence/jobs/{job_id}/cancel": "post",
+              "/v1/intelligence/runs/{run_id}": "get",
+              "/v1/intelligence/usage": "get",
+              "/v1/intelligence/sessions": "post",
+              "/v1/intelligence/sessions/{session_id}": "delete",
+              "/v1/intelligence/files": "post",
+              "/v1/intelligence/knowledge/documents": "post",
+              "/v1/intelligence/knowledge/search": "post",
           }
           for path, method in required.items():
               assert method in (paths.get(path) or {}), f"missing {method.upper()} {path}"
@@ -242,6 +282,14 @@ jobs:
           probe browser-checkout POST /v1/platform/developer/wallet/checkout -H 'Idempotency-Key: unauthenticated-production-probe' --data '{"amount_cents":500}'
           probe browser-bootstrap POST /v1/platform/developer/intelligence/bootstrap --data '{}'
           probe browser-run POST /v1/platform/developer/intelligence/run -H 'Idempotency-Key: unauthenticated-production-probe' --data "$body"
+          probe jobs-create POST /v1/intelligence/jobs -H 'Idempotency-Key: unauthenticated-production-probe' --data "$body"
+          probe jobs-read GET /v1/intelligence/jobs/run_probe
+          probe runs-read GET /v1/intelligence/runs/run_probe
+          probe usage-read GET /v1/intelligence/usage
+          probe sessions-create POST /v1/intelligence/sessions --data '{}'
+          probe knowledge-search POST /v1/intelligence/knowledge/search --data '{"collections":["probe"],"query":"probe"}'
+          probe tool-execute POST /v1/intelligence/tools/execute -H "Authorization: Bearer agro_live_$(printf '0%.0s' $(seq 1 40))" --data '{"name":"units.convert.v1","arguments":{}}'
+          probe console-usage GET /v1/platform/developer/intelligence/usage
           echo "authentication_boundary=green"
 
       - name: Record verified release
@@ -257,7 +305,7 @@ jobs:
               "checks": [
                   "exact_release_identity", "production_readiness", "platform_health",
                   "stripe_live_readiness", "intelligence_runtime", "commercial_catalog",
-                  "commercial_route_contract", "authentication_boundary",
+                  "intelligence_platform_discovery", "commercial_route_contract", "authentication_boundary",
               ],
               "money_moved": False,
           }
@@ -286,6 +334,8 @@ jobs:
             billing-readiness.json
             ai-status.json
             intelligence-pricing.json
+            intelligence-capabilities.json
+            intelligence-tools.json
             openapi.json
             auth-*.json
           if-no-files-found: ignore

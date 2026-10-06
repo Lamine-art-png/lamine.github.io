@@ -1617,6 +1617,18 @@ def _pending_object_has_live_reference(db: Session, object_uri: str) -> bool:
     ):
         return True
 
+    from app.models.intelligence_platform import IntelligenceFile
+
+    # Intelligence Platform image attachments (a 'deleting' tombstone stays
+    # live: its own sweep owns that deletion).
+    if (
+        db.query(IntelligenceFile.id)
+        .filter(IntelligenceFile.storage_uri == object_uri)
+        .filter(IntelligenceFile.status.in_(["available", "deleting"]))
+        .first()
+    ):
+        return True
+
     # Local imports keep Field Intelligence's normal startup path independent
     # of Assurance while allowing the shared object-store reconciler to honor
     # every registered consumer.

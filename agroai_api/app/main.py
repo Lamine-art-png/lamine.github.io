@@ -39,6 +39,15 @@ _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
     "saas_requests": {"id", "organization_id", "workspace_id", "user_id", "type", "status", "priority", "subject", "message", "notification_status", "metadata_json", "created_at", "updated_at"},
+    # Intelligence Platform v1 (045) ownership and async-job columns: serving
+    # these routes on a schema without them would break tenant isolation, so
+    # readiness fails closed until the migration is complete.
+    "platform_commercial_intelligence_runs": {"id", "organization_id", "api_project_id", "workspace_id", "execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"},
+    "platform_intelligence_sessions": {"id", "organization_id", "api_project_id", "workspace_id", "status", "expires_at"},
+    "platform_intelligence_session_turns": {"id", "session_id", "organization_id", "api_project_id"},
+    "platform_intelligence_files": {"id", "organization_id", "api_project_id", "workspace_id", "status", "storage_uri", "expires_at"},
+    "platform_knowledge_documents": {"id", "organization_id", "api_project_id", "workspace_id", "collection", "external_id"},
+    "platform_knowledge_chunks": {"id", "document_id", "organization_id", "api_project_id", "workspace_id", "collection"},
 }
 
 
@@ -162,11 +171,14 @@ if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
 ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|agroai-portal-staging|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
 _ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
-from app.core.request_body_limit import FieldIntelligenceBodyLimitMiddleware  # noqa: E402
+from app.core.request_body_limit import FieldIntelligenceBodyLimitMiddleware, IntelligenceBodyLimitMiddleware  # noqa: E402
 
 # Streaming byte enforcement for chunked JSON bodies on Field Intelligence
 # routes — bounded before any Pydantic parsing, independent of Content-Length.
 app.add_middleware(FieldIntelligenceBodyLimitMiddleware)
+# Byte cap for Intelligence API writes (multipart uploads included), enforced
+# while streaming, before any parsing, authentication, or disk spooling.
+app.add_middleware(IntelligenceBodyLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
