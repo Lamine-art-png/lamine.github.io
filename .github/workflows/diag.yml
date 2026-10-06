@@ -87,3 +87,87 @@ jobs:
           ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
           echo "AWS_CALLER_ACCOUNT=$ACCOUNT"
           test "$ACCOUNT" = "987432215840"
+
+      - name: Verify AWS Marketplace infrastructure read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGION="us-east-1"
+          STACK="agroai-marketplace-events"
+          PRODUCT_ID="prod-rrjrdndw2eptq"
+
+          aws cloudformation describe-stacks             --region "$REGION"             --stack-name "$STACK"             --output json > "$RUNNER_TEMP/stack.json"
+          aws cloudformation list-stack-resources             --region "$REGION"             --stack-name "$STACK"             --output json > "$RUNNER_TEMP/resources.json"
+
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          stack = json.loads((root / "stack.json").read_text())["Stacks"][0]
+          print("CFN_STACK_STATUS=" + stack["StackStatus"])
+          if not stack["StackStatus"].endswith("_COMPLETE"):
+              raise SystemExit("CloudFormation stack is not complete")
+          resources = json.loads((root / "resources.json").read_text())["StackResourceSummaries"]
+          for item in resources:
+              rtype = item.get("ResourceType", "")
+              if rtype in {"AWS::SQS::Queue", "AWS::Events::Rule"}:
+                  print("CFN_RESOURCE=" + json.dumps({
+                      "logical_id": item.get("LogicalResourceId"),
+                      "type": rtype,
+                      "status": item.get("ResourceStatus"),
+                      "physical_id": item.get("PhysicalResourceId"),
+                  }, sort_keys=True))
+          PY
+
+          python - <<'PY' > "$RUNNER_TEMP/queues.txt"
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          resources = json.loads((root / "resources.json").read_text())["StackResourceSummaries"]
+          for item in resources:
+              if item.get("ResourceType") == "AWS::SQS::Queue" and item.get("PhysicalResourceId"):
+                  print(item["PhysicalResourceId"])
+          PY
+          while IFS= read -r queue_url; do
+            [ -n "$queue_url" ] || continue
+            aws sqs get-queue-attributes               --region "$REGION"               --queue-url "$queue_url"               --attribute-names QueueArn KmsMasterKeyId RedrivePolicy VisibilityTimeout SqsManagedSseEnabled               --output json
+          done < "$RUNNER_TEMP/queues.txt"
+
+          python - <<'PY' > "$RUNNER_TEMP/rules.txt"
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          resources = json.loads((root / "resources.json").read_text())["StackResourceSummaries"]
+          for item in resources:
+              if item.get("ResourceType") == "AWS::Events::Rule" and item.get("PhysicalResourceId"):
+                  print(item["PhysicalResourceId"])
+          PY
+          while IFS= read -r rule_name; do
+            [ -n "$rule_name" ] || continue
+            aws events describe-rule --region "$REGION" --name "$rule_name"               --query '{Name:Name,State:State,EventPattern:EventPattern}' --output json
+            aws events list-targets-by-rule --region "$REGION" --rule "$rule_name"               --query 'Targets[].{Id:Id,Arn:Arn}' --output json
+          done < "$RUNNER_TEMP/rules.txt"
+
+          aws marketplace-catalog describe-entity             --region "$REGION"             --catalog AWSMarketplace             --entity-id "$PRODUCT_ID"             --output json > "$RUNNER_TEMP/product.json"
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          doc = json.loads((root / "product.json").read_text())
+          for key in ("EntityType", "EntityIdentifier", "LastModifiedDate"):
+              if key in doc:
+                  print(f"MARKETPLACE_{key.upper()}={doc[key]}")
+          details = doc.get("DetailsDocument")
+          if details is None and doc.get("Details"):
+              try:
+                  details = json.loads(doc["Details"])
+              except Exception:
+                  details = None
+          wanted = {"ProductCode", "ProductId", "Title", "Visibility", "Status", "Dimensions"}
+          def walk(value):
+              if isinstance(value, dict):
+                  for k, v in value.items():
+                      if k in wanted:
+                          print("MARKETPLACE_DETAIL=" + json.dumps({k: v}, sort_keys=True))
+                      walk(v)
+              elif isinstance(value, list):
+                  for item in value:
+                      walk(item)
+          walk(details)
+          PY
