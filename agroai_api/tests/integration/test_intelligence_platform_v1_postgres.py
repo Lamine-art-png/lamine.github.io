@@ -1799,3 +1799,13 @@ def test_restricted_key_usage_counts_only_its_own_runs(platform):
     assert own_usage["totals"] == {"runs": 2, "completed": 1, "charged_cents": 5, "not_charged": 1}, own_usage
     assert [item["task"] for item in own_usage["by_task"]] == ["answer"], "another key's report task must not leak"
     assert own_usage["by_task"][0]["runs"] == 2 and own_usage["by_task"][0]["completed"] == 1
+
+    # Negative control (mutation check): with the restricted-key filter
+    # disabled the same request leaks the project's aggregates, so the
+    # assertions above are what the filter protects.
+    from app.platform_api import restrictions
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(restrictions, "is_resource_restricted", lambda principal: False)
+        leaked = p.client.get("/v1/intelligence/usage", headers=restricted).json()
+    assert leaked["totals"]["runs"] == 7 and leaked["totals"]["charged_cents"] == 70, leaked
