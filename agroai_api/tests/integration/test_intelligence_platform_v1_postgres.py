@@ -1808,4 +1808,5 @@ def test_restricted_key_usage_counts_only_its_own_runs(platform):
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(restrictions, "is_resource_restricted", lambda principal: False)
         leaked = p.client.get("/v1/intelligence/usage", headers=restricted).json()
-    assert leaked["totals"]["runs"] == 7 and leaked["totals"]["charged_cents"] == 70, leaked
+    assert leaked["totals"] == project_usage["totals"] == {"runs": 5, "completed": 4, "charged_cents": 65, "not_charged": 1}, leaked
+    assert {item["task"] for item in leaked["by_task"]} == {"answer", "report"}
