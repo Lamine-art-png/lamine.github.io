@@ -475,6 +475,8 @@ def test_existing_stripe_meter_outbox_cannot_export_after_aws_link(db, monkeypat
         ),
     ])
     db.commit()
+    outbox_id = outbox.id
+    organization_id = organization.id
     monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_METER_EXPORT_ENABLED", True)
     monkeypatch.setattr(stripe_metering, "SessionLocal", lambda: db)
     monkeypatch.setattr(
@@ -484,11 +486,11 @@ def test_existing_stripe_meter_outbox_cannot_export_after_aws_link(db, monkeypat
     )
 
     assert stripe_metering.process_meter_export_task(
-        outbox_id=outbox.id,
-        organization_id=organization.id,
+        outbox_id=outbox_id,
+        organization_id=organization_id,
         worker_id="worker-1",
     ) == "failed"
-    assert outbox.last_error_class == "aws_marketplace_billing_owned"
+    assert db.get(PlatformStripeMeterOutbox, outbox_id).last_error_class == "aws_marketplace_billing_owned"
 
 
 def test_active_plan_limit_cannot_be_bypassed_by_broader_enrollment(client, db, monkeypatch):
