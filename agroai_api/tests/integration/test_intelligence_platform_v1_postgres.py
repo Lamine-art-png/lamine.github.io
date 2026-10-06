@@ -1810,3 +1810,41 @@ def test_restricted_key_usage_counts_only_its_own_runs(platform):
         leaked = p.client.get("/v1/intelligence/usage", headers=restricted).json()
     assert leaked["totals"] == project_usage["totals"] == {"runs": 5, "completed": 4, "charged_cents": 65, "not_charged": 1}, leaked
     assert {item["task"] for item in leaked["by_task"]} == {"answer", "report"}
+
+
+def test_pricing_is_versioned_and_deletes_keep_request_and_rate_limit_headers(platform):
+    """GET /v1/intelligence/pricing (SDK-exposed discovery) carries the contract
+    version with an unchanged body, and authenticated 204 deletes keep the
+    X-Request-Id and RateLimit-* headers the key dependency writes."""
+    from app.api.v1 import commercial_intelligence as legacy
+    from app.intelligence_platform.routes import API_VERSION
+    from app.main import app
+
+    p = platform
+    pricing = p.client.get("/v1/intelligence/pricing")
+    assert pricing.status_code == 200 and pricing.json() == legacy.intelligence_pricing()
+    assert pricing.headers.get("AGROAI-API-Version") == API_VERSION
+    assert [
+        (sorted(route.methods), route.path) for route in app.routes
+        if getattr(route, "path", None) == "/v1/intelligence/pricing"
+    ] == [(["GET"], "/v1/intelligence/pricing")], "exactly one pricing route"
+
+    session = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "headers"}).json()["id"]
+    upload = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                           files={"file": ("h.csv", io.BytesIO(b"a,b\n1,2\n"), "text/csv")}, data={"purpose": "attachment"}).json()["id"]
+    document = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"],
+                             json={"collection": "headers", "title": "h", "text": "Header preservation document."}).json()["id"]
+    deletes = {
+        "session": p.client.delete(f"/v1/intelligence/sessions/{session}", headers={**p.keys["A"], "X-Request-Id": "req-delete-session"}),
+        "file": p.client.delete(f"/v1/intelligence/files/{upload}", headers={**p.keys["A"], "X-Request-Id": "req-delete-file"}),
+        "document": p.client.delete(f"/v1/intelligence/knowledge/documents/{document}", headers={**p.keys["A"], "X-Request-Id": "req-delete-document"}),
+    }
+    reference = p.client.get("/v1/intelligence/usage", headers=p.keys["A"])
+    expected = {name for name in ("X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset") if name in reference.headers}
+    assert "X-Request-Id" in expected, reference.headers
+    for label, response in deletes.items():
+        assert response.status_code == 204 and response.content == b"", (label, response.status_code)
+        assert response.headers.get("AGROAI-API-Version") == API_VERSION, label
+        missing = {name for name in expected if name not in response.headers}
+        assert not missing, (label, missing)
+        assert "content-length" not in response.headers or response.headers["content-length"] == "0", label

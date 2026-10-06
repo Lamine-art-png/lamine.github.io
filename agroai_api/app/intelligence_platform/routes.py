@@ -100,8 +100,24 @@ def _log(event: str, principal: PlatformPrincipal, **fields: Any) -> None:
     )
 
 
+def _no_content(injected: Response) -> Response:
+    """204 that keeps the headers dependencies wrote on the injected response
+    (``X-Request-Id``, ``RateLimit-*``); a freshly constructed Response would
+    otherwise drop them."""
+    out = Response(status_code=status.HTTP_204_NO_CONTENT)
+    out.raw_headers.extend((name, value) for name, value in injected.raw_headers if name.lower() != b"content-length")
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Discovery (public, unauthenticated, cacheable).
+
+
+@router.get("/intelligence/pricing")
+def pricing() -> dict[str, Any]:
+    """Unchanged public price list, served here so it carries the contract
+    version header like every other Intelligence discovery route."""
+    return legacy.intelligence_pricing()
 
 
 @router.get("/intelligence/capabilities")
@@ -555,12 +571,13 @@ def session_turns(
 @router.delete("/intelligence/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_session(
     session_id: str,
+    response: Response,
     principal: PlatformPrincipal = Depends(_key("intelligence.sessions.write")),
     db: Session = Depends(get_db),
 ) -> Response:
     platform_sessions.delete_session(db, principal, session_id)
     _log("intelligence.session.deleted", principal, session_id=session_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return _no_content(response)
 
 
 # --------------------------------------------------------------------------- #
@@ -621,11 +638,12 @@ def get_file(
 @router.delete("/intelligence/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_file(
     file_id: str,
+    response: Response,
     principal: PlatformPrincipal = Depends(_key("intelligence.files.write")),
     db: Session = Depends(get_db),
 ) -> Response:
     platform_files.delete_file(db, principal, file_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return _no_content(response)
 
 
 # --------------------------------------------------------------------------- #
@@ -697,12 +715,13 @@ def get_document(
 @router.delete("/intelligence/knowledge/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: str,
+    response: Response,
     principal: PlatformPrincipal = Depends(_key("intelligence.knowledge.write")),
     db: Session = Depends(get_db),
 ) -> Response:
     platform_knowledge.delete_document(db, principal, document_id)
     _log("intelligence.knowledge.deleted", principal, document_id=document_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return _no_content(response)
 
 
 @router.post("/intelligence/knowledge/search")
