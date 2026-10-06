@@ -122,6 +122,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Field Intelligence worker failed to start; captures will still stage durably")
 
+    aws_marketplace_worker_started = False
+    try:
+        from app.services.aws_marketplace_worker import start_aws_marketplace_worker
+
+        if start_aws_marketplace_worker() is not None:
+            aws_marketplace_worker_started = True
+            logger.info("AWS Marketplace runtime worker started")
+    except Exception:
+        logger.error("AWS Marketplace runtime worker failed to start; API will continue with Marketplace disabled")
+
     yield
 
     try:
@@ -130,6 +140,14 @@ async def lifespan(app: FastAPI):
         await close_realtime_http_client()
     except Exception:
         logger.exception("Realtime voice HTTP client failed to close cleanly")
+
+    if aws_marketplace_worker_started:
+        try:
+            from app.services.aws_marketplace_worker import stop_aws_marketplace_worker
+
+            stop_aws_marketplace_worker()
+        except Exception:
+            logger.error("AWS Marketplace runtime worker failed to stop cleanly")
 
     if field_worker_started:
         try:
