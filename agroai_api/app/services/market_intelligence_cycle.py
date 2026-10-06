@@ -740,4 +740,3 @@ def process_market_cycle_job(db: Session, *, job_id: str, organization_id: str, 
         state.consecutive_failures = 0
     db.commit()
     return status
-
