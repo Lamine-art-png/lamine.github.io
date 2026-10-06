@@ -3,19 +3,30 @@ import { apiClient } from "../api/client";
 import { GLOBAL_UI_LOCALES } from "../globalLocaleOptions";
 import { useLocale } from "../hooks/useLocale";
 
+// Preference writes are chained in the order the user chose locales. Activation
+// time differs per locale (a catalog fetch versus none for English), so writing
+// after each activation could let an earlier choice land last and persist a
+// locale the user already left.
+let preferenceWrites: Promise<void> = Promise.resolve();
+
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   const { selectedLocale, activateLocale, t, catalogLoading, catalogError } = useLocale();
 
-  async function changeLanguage(nextLocale: string) {
-    try {
-      const canonical = await activateLocale(nextLocale);
-      void apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
+  function changeLanguage(nextLocale: string) {
+    const activation = activateLocale(nextLocale);
+    preferenceWrites = preferenceWrites.then(async () => {
+      let canonical: string;
+      try {
+        canonical = await activation;
+      } catch {
+        // Unexpected activation errors are fail-safe. Provider/catalog outages
+        // are handled inside activateLocale while preserving the chosen locale.
+        return;
+      }
+      await apiClient.patch("/v1/settings/preferences", { locale: canonical }).catch(() => {
         // Preference sync is best effort. The activated local switch remains authoritative for this session.
       });
-    } catch {
-      // Unexpected activation errors are fail-safe. Provider/catalog outages
-      // are handled inside activateLocale while preserving the chosen locale.
-    }
+    });
   }
 
   const labelColor = dark ? "rgba(255,255,255,0.58)" : "#65736A";

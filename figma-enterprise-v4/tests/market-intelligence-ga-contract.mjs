@@ -9,7 +9,7 @@ assert.match(routes, /"MarketIntelligenceV2"/);
 assert.match(page, /Add commercial position/);
 assert.match(page, /Add contract/);
 assert.match(page, /Update market price/);
-assert.match(page, /Market data providers/);
+assert.match(page, /Data sources/);
 assert.match(page, /Refresh market data/);
 assert.match(page, /\/v1\/market-intelligence\/providers/);
 assert.match(page, /\/v1\/market-intelligence\/refresh/);

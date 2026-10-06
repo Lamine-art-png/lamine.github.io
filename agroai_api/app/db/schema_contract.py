@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "041_abuse_project_holds"
+HEAD_ALEMBIC_REVISION = "042_market_data_plane"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -30,6 +30,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "market_decision_journal": {
         "id", "organization_id", "position_id", "scenario_id", "created_by_user_id",
         "decision", "rationale", "assumptions_json", "outcome_json",
+        "evidence_snapshot_json", "action_taken", "outcome_recorded_at", "outcome_recorded_by_user_id",
     },
     "market_intelligence_insights": {
         "id", "organization_id", "position_id", "kind", "title", "summary",
@@ -212,6 +213,15 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_status_components": {"id", "component_key", "status", "public"},
     "platform_status_incidents": {"id", "status", "severity", "public_summary"},
     "platform_status_incident_updates": {"id", "incident_id", "status", "public_message"},
+    "market_data_series": {"id", "series_key", "provider", "observation_type", "freshness_max_age_minutes", "licensing_json"},
+    "market_data_points": {"id", "series_id", "observed_at", "value", "source_status", "content_hash"},
+    "market_provider_runs": {"id", "provider", "status", "started_at"},
+    "market_position_snapshots": {"id", "organization_id", "position_id", "inputs_hash", "payload_json"},
+    "market_materiality_events": {"id", "organization_id", "position_id", "dedupe_key", "level", "status"},
+    "market_position_field_links": {"id", "organization_id", "position_id", "field_entity_id"},
+    "market_data_point_revisions": {"id", "point_id", "series_id", "revision", "previous_value", "new_value", "revised_retrieved_at"},
+    "market_cycle_organization_state": {"organization_id", "last_completed_at", "last_status", "consecutive_failures"},
+    "market_alert_deliveries": {"id", "event_id", "user_id", "channel", "status", "attempts", "delivered_at", "next_attempt_at"},
     "platform_abuse_events": {
         "id",
         "organization_id",

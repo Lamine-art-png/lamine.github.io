@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
@@ -29,8 +30,10 @@ from app.models.market_intelligence import (
 from app.services.market_intelligence import (
     CALCULATION_VERSION,
     MarketCalculationError,
+    apply_display_policy,
     compute_position,
     data_health,
+    redact_scenario,
     scenario_position,
 )
 from app.services.market_intelligence_ai import generate_market_brief
@@ -147,10 +150,11 @@ def _position_payload(
 ) -> dict[str, Any]:
     computation = compute_position(row, _contracts(db, org_id, row.id) if contracts is None else contracts)
     observations = _observations(db, org_id, row.id) if observations is None else observations
+    payload, evidence = apply_display_policy(computation.payload, computation.evidence, row)
     return {
-        **computation.payload,
+        **payload,
         "data_health": data_health(observations),
-        "evidence": computation.evidence,
+        "evidence": evidence,
     }
 
 
@@ -168,15 +172,34 @@ def _position_payloads(db: Session, org_id: str, rows: list[MarketPosition]) -> 
     ):
         contracts_by_position[contract.position_id].append(contract)
     observations_by_position: dict[str, list[MarketObservation]] = defaultdict(list)
+    # Data health only needs recent evidence; a bounded window keeps portfolio
+    # reads fast as time series accumulate.
+    window_start = datetime.utcnow() - timedelta(days=180)
+    # The newest 100 observations *per position* (a window partitioned by
+    # position), so one high-frequency position cannot crowd out the others.
+    ranked = (
+        db.query(
+            MarketObservation.id.label("id"),
+            func.row_number().over(
+                partition_by=MarketObservation.position_id,
+                order_by=(MarketObservation.observed_at.desc(), MarketObservation.id.desc()),
+            ).label("rank"),
+        )
+        .filter(
+            MarketObservation.organization_id == org_id,
+            MarketObservation.position_id.in_(position_ids),
+            MarketObservation.observed_at >= window_start,
+        )
+        .subquery()
+    )
     for observation in (
         db.query(MarketObservation)
-        .filter(MarketObservation.organization_id == org_id, MarketObservation.position_id.in_(position_ids))
+        .join(ranked, ranked.c.id == MarketObservation.id)
+        .filter(ranked.c.rank <= 100, MarketObservation.organization_id == org_id)
         .order_by(MarketObservation.observed_at.desc())
         .all()
     ):
-        bucket = observations_by_position[observation.position_id]
-        if len(bucket) < 100:
-            bucket.append(observation)
+        observations_by_position[observation.position_id].append(observation)
     return [
         _position_payload(
             db,
@@ -232,11 +255,15 @@ def _observation_payload(row: MarketObservation) -> dict[str, Any]:
 
 
 def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
+    # ``code``/``params`` are what the portal renders (in every locale); the
+    # English title/summary remain for API consumers.
     findings: list[dict[str, Any]] = []
     if position.get("over_contracted"):
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "over_contracted",
+            "params": {},
             "title": "Contracted volume exceeds expected production",
             "summary": "Projected margin is suppressed until production or contract volume is reconciled.",
         })
@@ -245,6 +272,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "missing_inputs",
+            "params": {"inputs": missing[:3]},
             "title": "Commercial position has missing inputs",
             "summary": "Complete " + ", ".join(missing[:3]) + " before relying on margin calculations.",
         })
@@ -256,6 +285,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "medium",
             "position_id": position.get("position_id"),
+            "code": "exposure",
+            "params": {"percent": str(position.get("exposed_percent"))},
             "title": "Most expected production remains commercially exposed",
             "summary": f"{position.get('exposed_percent')}% remains uncontracted under the current structured position.",
         })
@@ -264,6 +295,8 @@ def _attention(position: dict[str, Any]) -> list[dict[str, Any]]:
         findings.append({
             "importance": "high",
             "position_id": position.get("position_id"),
+            "code": "data_health",
+            "params": {},
             "title": "Market data health needs attention",
             "summary": "One or more source observations are stale, unavailable, not configured, or missing.",
         })
@@ -450,7 +483,7 @@ def create_scenario(
     position = _position(db, org_id, payload.position_id)
     assumptions = payload.model_dump(exclude={"position_id", "name"}, mode="json")
     try:
-        result = scenario_position(position, _contracts(db, org_id, position.id), assumptions)
+        result = redact_scenario(scenario_position(position, _contracts(db, org_id, position.id), assumptions), position)
     except MarketCalculationError as exc:
         raise HTTPException(status_code=422, detail={"code": "scenario_invalid", "message": str(exc)}) from exc
     scenario = MarketScenario(
@@ -527,9 +560,115 @@ def get_scenario(
 
 class AskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    position_id: str = Field(min_length=1, max_length=120)
+    position_id: str | None = Field(default=None, min_length=1, max_length=120)
     question: str = Field(min_length=1, max_length=1600)
     language: str = Field(default="en", min_length=2, max_length=16)
+
+
+_LEVEL_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def _focus_position(db: Session, org_id: str) -> MarketPosition | None:
+    """The position that most deserves attention: worst open material change,
+    otherwise the largest exposed revenue (deterministic)."""
+    from app.models.market_intelligence import MarketMaterialityEvent
+
+    events = (
+        db.query(MarketMaterialityEvent)
+        .filter(MarketMaterialityEvent.organization_id == org_id, MarketMaterialityEvent.status == "open")
+        .all()
+    )
+    if events:
+        worst = min(events, key=lambda e: (_LEVEL_RANK.get(e.level, 9), -(e.created_at.timestamp() if e.created_at else 0)))
+        row = db.query(MarketPosition).filter(MarketPosition.id == worst.position_id, MarketPosition.organization_id == org_id, MarketPosition.status == "active").first()
+        if row is not None:
+            return row
+    rows = db.query(MarketPosition).filter(MarketPosition.organization_id == org_id, MarketPosition.status == "active").all()
+    best: tuple[Decimal, MarketPosition] | None = None
+    for row in rows:
+        try:
+            exposed = compute_position(row, _contracts(db, org_id, row.id)).payload.get("exposed_revenue")
+        except MarketCalculationError:
+            continue
+        value = Decimal(str(exposed)) if exposed is not None else Decimal("-1")
+        if best is None or value > best[0]:
+            best = (value, row)
+    return best[1] if best else None
+
+
+def _ask_context(db: Session, org_id: str, position: MarketPosition, contracts: list[MarketContractPosition], payload: dict[str, Any], question: str) -> tuple[dict[str, Any], dict[str, str]]:
+    from app.models.market_intelligence import MarketMaterialityEvent
+    from app.services.market_intelligence_ask import parse_scenario_intents, scenario_evidence
+    from app.services.market_materiality import evidence_states
+
+    metadata = position.metadata_json if isinstance(position.metadata_json, dict) else {}
+    intents = parse_scenario_intents(question, {**payload, "price_currency": position.price_currency})
+    scenarios, scenario_ids = scenario_evidence(position, contracts, intents)
+    price_row = (
+        db.query(MarketObservation)
+        .filter(
+            MarketObservation.organization_id == org_id,
+            MarketObservation.position_id == position.id,
+            MarketObservation.observation_type.in_(("physical_price", "cash_price", "realizable_price")),
+        )
+        .order_by(MarketObservation.observed_at.desc())
+        .first()
+    )
+    price_source = None
+    if price_row is not None:
+        display = (price_row.licensing_json or {}).get("display_allowed") is not False
+        price_source = {
+            "source_name": price_row.source_name,
+            "provider": price_row.provider,
+            "state": price_row.source_status,
+            "observed_at": price_row.observed_at.isoformat() + "Z" if price_row.observed_at else None,
+            "market_name": (price_row.metadata_json or {}).get("market_name"),
+            "value": str(price_row.value) if display and price_row.value is not None else None,
+            "unit": price_row.unit,
+            "currency": price_row.currency,
+        }
+    events = (
+        db.query(MarketMaterialityEvent)
+        .filter(MarketMaterialityEvent.organization_id == org_id, MarketMaterialityEvent.position_id == position.id, MarketMaterialityEvent.status == "open")
+        .order_by(MarketMaterialityEvent.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    saved = (
+        db.query(MarketScenario)
+        .filter(MarketScenario.organization_id == org_id, MarketScenario.position_id == position.id)
+        .order_by(MarketScenario.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    saved_scenarios = [{
+        "name": row.name,
+        "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
+        "assumptions": row.assumptions_json,
+        "projected_margin": ((row.result_json or {}).get("result") or {}).get("projected_margin"),
+        "exposed_revenue": ((row.result_json or {}).get("result") or {}).get("exposed_revenue"),
+    } for row in saved]
+    extra_evidence = dict(scenario_ids)
+    for index, item in enumerate(saved_scenarios, start=1):
+        for key in ("projected_margin", "exposed_revenue"):
+            if item.get(key) is not None:
+                extra_evidence[f"saved_scenario_{index}.{key}"] = str(item[key])
+    context = {
+        "reporting_currency": payload.get("reporting_currency"),
+        "scenarios": scenarios,
+        "data_states": [
+            {"evidence": key, "state": state}
+            for key, state in {
+                **evidence_states(db, position, contracts),
+                "price": metadata.get("price_state") or (price_row.source_status if price_row else "UNAVAILABLE"),
+            }.items()
+        ],
+        "price_source": price_source,
+        "material_changes": [{"level": e.level, "kind": e.kind, "position_name": position.name, "reasons": e.reasons_json,
+                              "impact": e.impact_json, "created_at": e.created_at.isoformat() + "Z" if e.created_at else None} for e in events],
+        "saved_scenarios": saved_scenarios,
+    }
+    return context, extra_evidence
 
 
 @router.post("/ask")
@@ -538,19 +677,38 @@ async def ask_market_intelligence(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    from app.services.market_intelligence_ask import requested_language, scenario_parse_status
+
     org_id = _org_id(ctx)
-    position = _position(db, org_id, payload.position_id)
-    computation = compute_position(position, _contracts(db, org_id, position.id))
+    if payload.position_id:
+        position = _position(db, org_id, payload.position_id)
+        scope = "position"
+    else:
+        position = _focus_position(db, org_id)
+        scope = "portfolio_focus"
+        if position is None:
+            raise HTTPException(status_code=404, detail={"code": "no_commercial_positions", "message": "Add a commercial position first."})
+    contracts = _contracts(db, org_id, position.id)
+    computation = compute_position(position, contracts)
+    visible_payload, visible_evidence = apply_display_policy(computation.payload, computation.evidence, position)
+    context, extra_evidence = _ask_context(db, org_id, position, contracts, computation.payload, payload.question)
+    evidence = {**visible_evidence, **extra_evidence}
+    language = requested_language(payload.question) or payload.language
     result = await generate_market_brief(
-        computation.payload,
-        computation.evidence,
+        visible_payload,
+        evidence,
         question=payload.question,
-        language=payload.language,
+        language=language,
+        context=context,
     )
     return {
         "position_id": position.id,
-        "position": computation.payload,
-        "evidence": computation.evidence,
+        "scope": scope,
+        "position": visible_payload,
+        "evidence": evidence,
+        "scenarios": context["scenarios"],
+        "scenario_parse": scenario_parse_status(payload.question, payload.language, context["scenarios"]),
+        "data_states": context["data_states"],
         "intelligence": result,
         "notice": "Commercial decision support only. No trade execution or personalized derivatives instruction is provided.",
     }
@@ -563,6 +721,7 @@ class JournalRequest(BaseModel):
     decision: str = Field(min_length=1, max_length=4000)
     rationale: str | None = Field(default=None, max_length=8000)
     assumptions: dict[str, Any] = Field(default_factory=dict)
+    action_taken: str | None = Field(default=None, max_length=4000)
 
 
 @router.post("/decision-journal", status_code=201)
@@ -574,6 +733,7 @@ def create_journal_entry(
     _require_write(ctx)
     org_id = _org_id(ctx)
     position = _position(db, org_id, payload.position_id)
+    scenario = None
     if payload.scenario_id:
         scenario = (
             db.query(MarketScenario)
@@ -582,6 +742,30 @@ def create_journal_entry(
         )
         if scenario is None or scenario.position_id != position.id:
             raise HTTPException(status_code=404, detail="Scenario not found")
+    # Institutional memory: freeze what was known when the decision was taken.
+    contracts = _contracts(db, org_id, position.id)
+    snapshot_payload = _position_payload(db, org_id, position, contracts=contracts)
+    evidence_snapshot = {
+        "captured_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "calculation_version": CALCULATION_VERSION,
+        "position": {k: snapshot_payload.get(k) for k in (
+            "expected_production", "inventory_quantity", "marketable_supply", "contracted_quantity", "uncontracted_quantity",
+            "contracted_percent", "exposed_percent", "current_realizable_price", "locked_revenue", "exposed_revenue",
+            "projected_revenue", "projected_cost", "projected_margin", "projected_margin_percent", "break_even_price",
+            "reporting_currency", "quantity_unit", "data_complete", "missing_inputs", "warnings",
+        )},
+        "data_health": {
+            "status": (snapshot_payload.get("data_health") or {}).get("status"),
+            "sources": [
+                {k: src.get(k) for k in ("provider", "source_name", "status", "observed_at", "observation_type")}
+                for src in ((snapshot_payload.get("data_health") or {}).get("sources") or [])[:10]
+            ],
+        },
+        "scenario": {
+            "id": scenario.id, "name": scenario.name, "assumptions": scenario.assumptions_json,
+            "result": (scenario.result_json or {}).get("result"), "delta": (scenario.result_json or {}).get("delta"),
+        } if scenario is not None else None,
+    }
     row = MarketDecisionJournalEntry(
         id=str(uuid.uuid4()),
         organization_id=org_id,
@@ -591,6 +775,8 @@ def create_journal_entry(
         decision=payload.decision.strip(),
         rationale=payload.rationale.strip() if payload.rationale else None,
         assumptions_json=payload.assumptions,
+        evidence_snapshot_json=evidence_snapshot,
+        action_taken=payload.action_taken.strip() if payload.action_taken else None,
     )
     db.add(row)
     db.commit()
@@ -622,6 +808,9 @@ def list_journal_entries(
         "rationale": row.rationale,
         "assumptions": row.assumptions_json,
         "outcome": row.outcome_json,
+        "action_taken": row.action_taken,
+        "evidence_snapshot": row.evidence_snapshot_json,
+        "outcome_recorded_at": row.outcome_recorded_at.isoformat() + "Z" if row.outcome_recorded_at else None,
         "created_at": row.created_at.isoformat() + "Z" if row.created_at else None,
     } for row in rows]}
 

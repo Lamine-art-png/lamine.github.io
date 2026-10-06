@@ -17,6 +17,15 @@ MARKER_RESIDUE = re.compile(r"AGROAI[_ ]?(?:KEEP|ITEM)|<<<|>>>", re.I)
 def has_marker_residue(value: str) -> bool:
     return bool(MARKER_RESIDUE.search(value))
 
+
+# A bracket glued to a placeholder ("{price}>", "<{plan}") is left over from a
+# widened protection marker, not translation.
+PLACEHOLDER_BRACKET = re.compile(r"\}[>＞》〉]|[<＜《〈]\{")
+
+
+def has_placeholder_bracket_residue(value: str, source: str) -> bool:
+    return bool(PLACEHOLDER_BRACKET.search(value)) and not PLACEHOLDER_BRACKET.search(source)
+
 # Copy-pasteable code and wire-protocol literals must stay byte-identical in
 # every locale (e.g. curl examples, HTTP verbs + paths, JSON request bodies).
 _DO_NOT_TRANSLATE = re.compile(
@@ -172,6 +181,9 @@ def quality_errors(locale: str, source: dict[str, str], catalog: dict[str, str])
     residue = [key for key, value in catalog.items() if has_marker_residue(value) and not has_marker_residue(source.get(key, ""))]
     if residue:
         errors.append(f"authoring_marker_residue:{locale}:{','.join(residue[:5])}")
+    bracketed = [key for key, value in catalog.items() if has_placeholder_bracket_residue(value, source.get(key, ""))]
+    if bracketed:
+        errors.append(f"placeholder_bracket_residue:{locale}:{','.join(bracketed[:5])}")
     collapsed = collapsed_values(source, catalog)
     if collapsed:
         errors.append(f"collapsed_output:{locale}:{len(collapsed)}")

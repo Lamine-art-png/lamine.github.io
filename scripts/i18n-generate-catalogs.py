@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from i18n_public_translate import translate_catalog as public_translate_catalog
 from i18n_catalog_identity import write_envelope
-from i18n_quality import collapsed_values, degenerate, do_not_translate, has_marker_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
+from i18n_quality import collapsed_values, degenerate, do_not_translate, has_marker_residue, has_placeholder_bracket_residue, serbian_latin_to_cyrillic, english_leak_keys, quality_errors, quality_report
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -66,8 +66,8 @@ def validate_chunk(source: dict[str, str], candidate: object) -> dict[str, str]:
         value = candidate[key]
         if not isinstance(value, str) or not value.strip() or "[object Object]" in value or "\ufffd" in value:
             raise ValueError(f"translation_invalid_value:{key}")
-        if has_marker_residue(value) and not has_marker_residue(original):
-            raise ValueError(f"translation_marker_residue:{key}")
+        if (has_marker_residue(value) and not has_marker_residue(original)) or has_placeholder_bracket_residue(value, original):
+            raise ValueError(f"translation_marker_residue:{key}:{value[:120]!r}")
         if degenerate(value, original):
             raise ValueError(f"translation_degenerate_output:{key}")
         value = value.strip()
@@ -217,6 +217,7 @@ def call_edge(locale: str, source: dict[str, str], endpoint: str) -> dict[str, s
 
 def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[str, str]:
     last: Exception | None = None
+    primary: Exception | None = None
     explicit_authoring = endpoint.startswith("http://127.0.0.1:") or endpoint.startswith("http://localhost:")
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -226,7 +227,7 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
             try:
                 return validate_chunk(source, public_translate_catalog(locale, source))
             except Exception as public_exc:
-                last = public_exc
+                last = primary = public_exc
             # Release workflows deliberately start an isolated, production-equivalent
             # authoring worker as a secondary fallback.
             if explicit_authoring:
@@ -252,6 +253,10 @@ def translate_chunk(locale: str, source: dict[str, str], endpoint: str) -> dict[
             if attempt < MAX_ATTEMPTS:
                 time.sleep(min(6, attempt * 1.25))
     detail = str(last)[:500] if last else "unknown"
+    # Fallback errors (e.g. an unauthorized model API) would otherwise hide why
+    # the primary public translation was rejected.
+    if primary is not None and primary is not last:
+        detail = f"{detail}|primary:{type(primary).__name__}:{str(primary)[:300]}"
     raise RuntimeError(f"locale_chunk_failed:{locale}:{type(last).__name__ if last else 'unknown'}:{detail}") from None
 
 

@@ -19,3 +19,8 @@ AGRO-AI deliberately does not infer national or regional cash prices when a repo
 For markets not covered by a configured upstream, authorized organization members can enter a verified realizable price and its observation time. The observation is always stored as `MANUAL`. Customer input cannot self-assign `LIVE` authority.
 
 This is a first-class operating path rather than a fake-data fallback: many specialty crops and negotiated physical markets do not have a universal exchange price.
+
+## Shared data plane sources (October 2026)
+
+Additional governed sources now feed the shared market-data plane: Banco Central do Brasil PTAX (official USD/BRL), European Commission agri-food weekly representative prices (EU cereals and oilseeds by market and marketing stage), and CONAB weekly state prices received by producers (Brazil). USDA NASS and AGMARKNET adapters exist and stay NOT_CONFIGURED until keys are configured. See `COMMERCIAL_INTELLIGENCE_COVERAGE.md` for the exact matrix, validation dates and remaining access.
+

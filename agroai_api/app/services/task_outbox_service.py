@@ -67,11 +67,13 @@ def recover_stale_published_ingestion_jobs(
     return len(rows)
 
 
-def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
+def publish_pending_outbox(db: Session, *, limit: int = 50, task_types: tuple[str, ...] | None = None) -> dict[str, int]:
     now = datetime.utcnow()
+    query = db.query(TaskOutbox).filter(_claimable_outbox(now))
+    if task_types:
+        query = query.filter(TaskOutbox.task_type.in_(task_types))
     rows = (
-        db.query(TaskOutbox)
-        .filter(_claimable_outbox(now))
+        query
         .order_by(TaskOutbox.created_at.asc())
         .limit(max(1, min(limit, 200)))
         .all()
@@ -133,7 +135,7 @@ def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
     return {"published": published, "failed": failed}
 
 
-def drain_pending_outbox(*, limit: int = 50) -> dict[str, int]:
+def drain_pending_outbox(*, limit: int = 50, task_types: tuple[str, ...] | None = None) -> dict[str, int]:
     """Drain publishable rows in a thread-owned database session.
 
     Each row is atomically moved to ``publishing`` before network I/O so
@@ -145,8 +147,9 @@ def drain_pending_outbox(*, limit: int = 50) -> dict[str, int]:
     """
     db = SessionLocal()
     try:
-        recover_stale_published_ingestion_jobs(db, limit=limit)
-        return publish_pending_outbox(db, limit=limit)
+        if task_types is None:
+            recover_stale_published_ingestion_jobs(db, limit=limit)
+        return publish_pending_outbox(db, limit=limit, task_types=task_types)
     except Exception:
         db.rollback()
         raise
