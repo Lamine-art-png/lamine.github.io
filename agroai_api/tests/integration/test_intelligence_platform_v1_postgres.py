@@ -1716,3 +1716,86 @@ def test_unexpected_stream_readmission_failure_settles_run_uncharged(platform, m
                           json={"task": "answer", "question": "Stream flaky"})
     assert retry.status_code == 200, retry.text
     assert _wallet(p.Session, p.A.org_id) == (495, 1)
+
+
+def test_validation_failures_carry_the_contract_version_with_unchanged_bodies(platform):
+    """422s are rendered by the app's RequestValidationError handler, outside the
+    versioned route wrapper; they must still carry the contract revision, and
+    the body must be FastAPI's standard validation body (not reshaped)."""
+    from app.intelligence_platform.routes import API_VERSION
+
+    p = platform
+    session = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "versioned 204"})
+    assert session.status_code == 201
+    responses = {
+        "missing Idempotency-Key": p.client.post("/v1/intelligence", headers=p.keys["A"], json={"task": "answer", "question": "q"}),
+        "missing Idempotency-Key (jobs)": p.client.post("/v1/intelligence/jobs", headers=p.keys["A"], json={"task": "answer", "question": "q"}),
+        "invalid body": p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem()}, json={"task": "answer", "question": "q", "stream": "not-a-bool-object"}),
+        "malformed JSON": p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem(), "Content-Type": "application/json"}, content=b"{not json"),
+        "invalid query": p.client.get("/v1/intelligence/runs", headers=p.keys["A"], params={"limit": 0}),
+        "invalid query (usage)": p.client.get("/v1/intelligence/usage", headers=p.keys["A"], params={"days": "many"}),
+        "success": p.client.get("/v1/intelligence/usage", headers=p.keys["A"]),
+        "http error (404)": p.client.get("/v1/intelligence/runs/missing", headers=p.keys["A"]),
+        "unauthenticated (401)": p.client.get("/v1/intelligence/usage"),
+        "204": p.client.delete(f"/v1/intelligence/sessions/{session.json()['id']}", headers=p.keys["A"]),
+        "too large (413)": p.client.post("/v1/intelligence", headers={**p.keys["A"], **_idem(), "Content-Type": "application/json"},
+                                         content=b"{" + b" " * (4 * 1024 * 1024 + 1) + b"}"),
+    }
+    with p.client.stream("POST", "/v1/intelligence", headers={**p.keys["A"], **_idem()},
+                         json={"task": "answer", "question": "stream version", "stream": True}) as streamed:
+        assert streamed.status_code == 200 and streamed.headers["content-type"].startswith("text/event-stream")
+        responses["streaming"] = streamed
+        "".join(streamed.iter_text())
+    for label, response in responses.items():
+        assert response.headers.get("AGROAI-API-Version") == API_VERSION, (label, response.status_code)
+    statuses = {label: r.status_code for label, r in responses.items()}
+    assert {statuses[k] for k in ("missing Idempotency-Key", "missing Idempotency-Key (jobs)", "invalid body", "malformed JSON",
+                                  "invalid query", "invalid query (usage)")} == {422}, statuses
+    assert statuses["success"] == 200 and statuses["http error (404)"] == 404 and statuses["204"] == 204
+    assert statuses["unauthenticated (401)"] == 401 and statuses["too large (413)"] == 413
+    # Validation semantics and body shape are FastAPI's own, unchanged.
+    missing = responses["missing Idempotency-Key"].json()
+    assert set(missing) == {"detail"} and any(err["loc"] == ["header", "Idempotency-Key"] for err in missing["detail"]), missing
+    assert any(err["loc"][:2] == ["query", "limit"] for err in responses["invalid query"].json()["detail"])
+    assert any(err["loc"][0] == "body" for err in responses["invalid body"].json()["detail"])
+    assert len(p.state.model_calls) == 1, "only the streamed run reached the model"
+
+
+def test_restricted_key_usage_counts_only_its_own_runs(platform):
+    """/v1/intelligence/usage follows run visibility: an unrestricted project key
+    sees project-wide aggregates; a resource-restricted key in the same project
+    sees counts, statuses, latency and charges of only the runs it created."""
+    from app.models.platform_api import ApiProject, ApiServiceAccount
+    from app.platform_api.keys import create_platform_key
+
+    p = platform
+    db = p.Session()
+    try:
+        project = db.get(ApiProject, p.A.project_id)
+        account = db.query(ApiServiceAccount).filter_by(api_project_id=p.A.project_id).first()
+        _key, secret = create_platform_key(db, project=project, service_account=account, name="usage-limited",
+                                           scopes=["intelligence:run"], created_by_user_id=p.A.user_id,
+                                           resource_restrictions={"field_ids": ["usage-only-field"]})
+        db.commit()
+    finally:
+        db.close()
+    restricted = {"Authorization": f"Bearer {secret}"}
+    # Project key: two completed answers (5c each) and one report (50c).
+    for body in ({"task": "answer", "question": "project a"}, {"task": "answer", "question": "project b"},
+                 {"task": "report", "question": "project report"}):
+        assert _run(p, "A", body).status_code == 200
+    # Restricted key: one completed answer, one failed (never charged).
+    assert p.client.post("/v1/intelligence", headers={**restricted, **_idem()}, json={"task": "answer", "question": "mine"}).status_code == 200
+    p.state.model_raises = True
+    assert p.client.post("/v1/intelligence", headers={**restricted, **_idem()}, json={"task": "answer", "question": "mine, failed"}).status_code == 503
+    p.state.model_raises = False
+
+    project_usage = p.client.get("/v1/intelligence/usage", headers=p.keys["A"]).json()
+    own_usage = p.client.get("/v1/intelligence/usage", headers=restricted).json()
+    assert project_usage["totals"]["runs"] == 5 and project_usage["totals"]["completed"] == 4, project_usage
+    assert project_usage["totals"]["charged_cents"] == 5 + 5 + 50 + 5
+    assert {item["task"] for item in project_usage["by_task"]} == {"answer", "report"}
+
+    assert own_usage["totals"] == {"runs": 2, "completed": 1, "charged_cents": 5, "not_charged": 1}, own_usage
+    assert [item["task"] for item in own_usage["by_task"]] == ["answer"], "another key's report task must not leak"
+    assert own_usage["by_task"][0]["runs"] == 2 and own_usage["by_task"][0]["completed"] == 1

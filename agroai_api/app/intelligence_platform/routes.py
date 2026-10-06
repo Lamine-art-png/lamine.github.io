@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,12 +36,12 @@ from app.intelligence_platform import sessions as platform_sessions
 from app.intelligence_platform import tools as platform_tools
 from app.intelligence_platform.contract import ToolCall, to_naive_utc
 from app.intelligence_platform.ownership import owned
+from app.intelligence_platform.version import API_VERSION, API_VERSION_HEADER
 from app.models.intelligence_commerce import CommercialIntelligenceRun
 from app.platform_api.principal import PlatformPrincipal
 
 
 logger = logging.getLogger("agroai.intelligence.platform")
-API_VERSION = "2026-10-03"
 
 
 class _VersionedRoute(APIRoute):
@@ -53,9 +55,20 @@ class _VersionedRoute(APIRoute):
             try:
                 response = await handler(request)
             except StarletteHTTPException as exc:
-                exc.headers = {**(exc.headers or {}), "AGROAI-API-Version": API_VERSION}
+                exc.headers = {**(exc.headers or {}), API_VERSION_HEADER: API_VERSION}
                 raise
-            response.headers["AGROAI-API-Version"] = API_VERSION
+            except RequestValidationError as exc:
+                # Malformed bodies/queries and missing required headers are
+                # raised inside the route handler but answered by the app's
+                # exception handler after this wrapper has exited; render that
+                # same response here so the body is unchanged and the version
+                # header is present.
+                app = request.scope.get("app")
+                render = (getattr(app, "exception_handlers", None) or {}).get(
+                    RequestValidationError, request_validation_exception_handler
+                )
+                response = await render(request, exc)
+            response.headers[API_VERSION_HEADER] = API_VERSION
             return response
 
         return versioned
@@ -340,10 +353,30 @@ def usage(
     principal: PlatformPrincipal = Depends(_key("intelligence.usage.read")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    return _usage(db, organization_id=principal.organization_id, api_project_id=principal.api_project_id, days=days, workspace_id=principal.workspace_id)
+    from app.platform_api.restrictions import is_resource_restricted
+
+    # Same visibility as run/job reads (platform_jobs.visible_runs): a key with
+    # any resource allow/deny list only sees aggregates of the runs it created
+    # (fail closed: a restricted principal without a key id matches nothing).
+    return _usage(
+        db,
+        organization_id=principal.organization_id,
+        api_project_id=principal.api_project_id,
+        days=days,
+        workspace_id=principal.workspace_id,
+        api_key_id=(principal.api_key_id or "") if is_resource_restricted(principal) else None,
+    )
 
 
-def _usage(db: Session, *, organization_id: str, api_project_id: str | None, days: int, workspace_id: str | None = None) -> dict[str, Any]:
+def _usage(
+    db: Session,
+    *,
+    organization_id: str,
+    api_project_id: str | None,
+    days: int,
+    workspace_id: str | None = None,
+    api_key_id: str | None = None,
+) -> dict[str, Any]:
     since = datetime.utcnow() - timedelta(days=days)
     query = db.query(
         CommercialIntelligenceRun.task,
@@ -359,6 +392,8 @@ def _usage(db: Session, *, organization_id: str, api_project_id: str | None, day
         query = query.filter(CommercialIntelligenceRun.api_project_id == api_project_id)
     if workspace_id:
         query = query.filter(CommercialIntelligenceRun.workspace_id == workspace_id)
+    if api_key_id is not None:
+        query = query.filter(CommercialIntelligenceRun.api_key_id == api_key_id)
     rows = query.group_by(CommercialIntelligenceRun.task, CommercialIntelligenceRun.status).all()
     by_task: dict[str, dict[str, Any]] = {}
     totals = {"runs": 0, "completed": 0, "charged_cents": 0, "not_charged": 0}

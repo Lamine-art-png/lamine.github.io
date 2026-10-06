@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 from app.core.config import settings
+from app.intelligence_platform.version import API_VERSION, API_VERSION_HEADER
 
 
 class FieldIntelligenceBodyLimitMiddleware:
@@ -113,7 +114,11 @@ class IntelligenceBodyLimitMiddleware:
         await send({
             "type": "http.response.start",
             "status": 413,
-            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("ascii"))],
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+                (API_VERSION_HEADER.lower().encode("ascii"), API_VERSION.encode("ascii")),
+            ],
         })
         await send({"type": "http.response.body", "body": body})
 
