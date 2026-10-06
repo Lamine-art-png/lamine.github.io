@@ -1,0 +1,154 @@
+name: Market Intelligence Cycle Proof
+
+# Operator proof that the live Commercial Intelligence cycle works end to end in
+# production: exact backend build, durable jobs scheduled and published, shared
+# ingestion completed, at least one organization evaluated, and no evaluation
+# on evidence older than its slot's refresh.
+#
+# This repository is public. The proof endpoint returns aggregate counts,
+# timestamps and status words only, and the queue token is only ever passed to
+# curl through the environment; nothing here prints tenant data or secrets.
+# Production with no active Commercial Intelligence position fails explicitly
+# as NO_ELIGIBLE_POSITION instead of reporting success.
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_minutes:
+        description: "Also count cycle jobs created this many minutes before the trigger (the latest scheduled hourly cycle)"
+        type: number
+        default: 70
+      timeout_minutes:
+        description: "How long to wait for a conclusive verdict"
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-intelligence-cycle-proof
+  cancel-in-progress: false
+
+env:
+  API_URL: https://app.agroai-pilot.com
+
+jobs:
+  prove:
+    name: Prove the live Commercial Intelligence cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      LOOKBACK_MINUTES: ${{ inputs.lookback_minutes }}
+      TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail closed on missing operator secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${QUEUE_CONSUMER_TOKEN:-}" ]; then
+            echo "Missing required production secret: QUEUE_CONSUMER_TOKEN"
+            exit 1
+          fi
+
+      - name: Verify the exact deployed backend build
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "Expected backend build: ${expected}"
+          for _ in $(seq 1 45); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${API_URL}/v1/internal/release/health" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$expected" \
+              '.status == "ok" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .production_ready == true' >/dev/null 2>&1; then
+              printf '%s' "$payload" | jq '{build_sha, schema_current, database_heads, repository_heads, queue_configured, production_ready}'
+              echo "EXPECTED_BUILD_SHA=${expected}" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Production is not serving backend build ${expected}; refusing to prove an unknown release."
+          exit 1
+
+      - name: Trigger the durable cycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          triggered_at="$(date -u +%Y-%m-%dT%H:%M:%S)"
+          since="$(date -u -d "${triggered_at} UTC - ${LOOKBACK_MINUTES} minutes" +%Y-%m-%dT%H:%M:%S)"
+          echo "PROOF_SINCE=${since}" >> "$GITHUB_ENV"
+          response="$(curl --fail --silent --show-error --max-time 60 -X POST \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            "${API_URL}/v1/internal/queue/market-cycle")"
+          # Counts only: enqueued, recovered, already pending, published.
+          printf '%s' "$response" | jq '{status, reason, enqueued, recovered, already_pending, batch, published}'
+          echo "Triggered at ${triggered_at}Z; counting cycle jobs created since ${since}Z"
+
+      - name: Poll the aggregate cycle proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+          verdict=""
+          while :; do
+            if curl --fail --silent --show-error --max-time 30 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${API_URL}/v1/internal/queue/market-cycle/proof?since=${PROOF_SINCE}" -o proof.json 2>/dev/null; then
+              verdict="$(jq -r '.verdict' proof.json)"
+              echo "$(date -u +%H:%M:%S) verdict=${verdict} jobs=$(jq -c '.jobs.by_status' proof.json) evaluated_orgs=$(jq '.evaluation.organizations_evaluated' proof.json)"
+              case "$verdict" in PASS|FAIL|NO_ELIGIBLE_POSITION|CYCLE_DISABLED) break ;; esac
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+            sleep 20
+          done
+          echo "VERDICT=${verdict:-UNAVAILABLE}" >> "$GITHUB_ENV"
+
+      - name: Upload aggregate proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-intelligence-cycle-proof-${{ github.run_id }}
+          path: proof.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Assert the proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s proof.json ]; then
+            echo "CYCLE_PROOF=UNAVAILABLE: the proof endpoint never answered"
+            exit 1
+          fi
+          jq . proof.json
+          jq -e --arg sha "$EXPECTED_BUILD_SHA" '.build_sha == $sha' proof.json >/dev/null \
+            || { echo "CYCLE_PROOF=FAIL: proof served by an unexpected build"; exit 1; }
+          case "$VERDICT" in
+            PASS)
+              jq -e '
+                .latest_slot.shared_ingestion_complete == true
+                and .jobs.published >= 1
+                and .evaluation.organizations_evaluated >= 1
+                and .evaluation.slots_with_completed_shared_ingestion >= 1
+                and .evaluation.evaluations_without_completed_shared_ingestion == 0
+                and .evaluation.evaluations_without_slot_marker == 0
+                and .jobs.failed == 0' proof.json >/dev/null \
+                || { echo "CYCLE_PROOF=FAIL: PASS verdict without the required evidence"; exit 1; }
+              echo "CYCLE_PROOF=PASS"
+              ;;
+            NO_ELIGIBLE_POSITION)
+              echo "CYCLE_PROOF=NO_ELIGIBLE_POSITION: production has no active Commercial Intelligence position, so no organization cycle can be proven."
+              exit 1
+              ;;
+            *)
+              echo "CYCLE_PROOF=${VERDICT}: $(jq -r '.reasons | join(", ")' proof.json)"
+              exit 1
+              ;;
+          esac

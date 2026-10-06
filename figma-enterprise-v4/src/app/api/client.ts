@@ -438,6 +438,10 @@ export const apiClient = {
     support: () => get("/v1/platform/developer/support"),
     resetSandbox: (projectId: string) => post(`/v1/platform/developer/projects/${encodeURIComponent(projectId)}/sandbox/reset`),
   },
+  awsMarketplace: {
+    link: (reference: string, claimCode: string) => post("/v1/marketplace/aws/link", { reference, claim_code: claimCode }),
+    status: () => get("/v1/marketplace/aws/status"),
+  },
   platformProductAdmin: {
     applications: (status?: string, applicationType?: string) => {
       const query = new URLSearchParams();

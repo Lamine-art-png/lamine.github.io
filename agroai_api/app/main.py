@@ -39,7 +39,7 @@ _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
     "saas_requests": {"id", "organization_id", "workspace_id", "user_id", "type", "status", "priority", "subject", "message", "notification_status", "metadata_json", "created_at", "updated_at"},
-    # Intelligence Platform v1 (043) ownership and async-job columns: serving
+    # Intelligence Platform v1 (045) ownership and async-job columns: serving
     # these routes on a schema without them would break tenant isolation, so
     # readiness fails closed until the migration is complete.
     "platform_commercial_intelligence_runs": {"id", "organization_id", "api_project_id", "workspace_id", "execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"},
@@ -494,6 +494,7 @@ from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
 from app.api.v1.platform_access import router as platform_access_router  # noqa: E402
 from app.api.v1.platform_resources import router as platform_resources_router  # noqa: E402
 from app.api.v1.platform_billing import router as platform_billing_router  # noqa: E402
+from app.api.v1.aws_marketplace import router as aws_marketplace_router  # noqa: E402
 from app.api.v1.platform_operations import router as platform_operations_router  # noqa: E402
 from app.api.v1.recommendations import router as recommendations_router  # noqa: E402
 from app.api.v1.reports import router as reports_router  # noqa: E402
@@ -555,6 +556,7 @@ app.include_router(platform_api_router, prefix="/v1")
 app.include_router(platform_access_router, prefix="/v1")
 app.include_router(platform_resources_router, prefix="/v1")
 app.include_router(platform_billing_router, prefix="/v1")
+app.include_router(aws_marketplace_router, prefix="/v1")
 app.include_router(platform_operations_router, prefix="/v1")
 app.include_router(recommendations_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")

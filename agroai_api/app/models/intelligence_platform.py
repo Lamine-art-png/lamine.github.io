@@ -6,7 +6,7 @@ restricted (``workspace_id``). A workspace-restricted key sees only rows of
 its workspace; a project-wide key sees the whole project. Rows are
 never looked up by id alone: callers always filter by the authenticated
 principal's organization and project, so a foreign id behaves exactly like a
-missing one. Mirrors alembic 043_intelligence_platform_v1.
+missing one. Mirrors alembic 045_intelligence_platform_v1.
 """
 from __future__ import annotations
 

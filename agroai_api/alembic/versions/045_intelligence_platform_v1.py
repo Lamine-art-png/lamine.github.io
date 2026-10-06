@@ -7,15 +7,15 @@ sessions, files, and knowledge (documents + chunks). On PostgreSQL knowledge
 chunks carry a generated ``search_vector`` (``simple`` configuration, language
 neutral) with a GIN index, so retrieval needs no new infrastructure.
 
-Revision ID: 043_intelligence_platform_v1
-Revises: 042_market_data_plane
+Revision ID: 045_intelligence_platform_v1
+Revises: 044_aws_marketplace_linking
 """
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = "043_intelligence_platform_v1"
-down_revision = "042_market_data_plane"
+revision = "045_intelligence_platform_v1"
+down_revision = "044_aws_marketplace_linking"
 branch_labels = None
 depends_on = None
 
