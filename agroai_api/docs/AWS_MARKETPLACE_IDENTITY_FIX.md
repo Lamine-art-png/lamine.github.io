@@ -23,9 +23,10 @@ Target AWS Marketplace seller account:
 987432215840
 ```
 
-The diagnostic run on 2026-10-06 proved that the repository's current
-`AWS_OIDC_ROLE_ARN` points to a different AWS account and the current
-`AWS_REGION` secret is not `us-east-1`.
+The diagnostic run on 2026-10-06 proved that the repository's legacy
+`AWS_OIDC_ROLE_ARN` pointed to a different AWS account and the legacy
+`AWS_REGION` secret was not `us-east-1`. The Marketplace diagnostic no longer
+depends on those stale secrets.
 
 ## 1. GitHub -> AWS seller-account OIDC
 
@@ -79,13 +80,14 @@ Attach only read permissions needed by the diagnostic:
 }
 ```
 
-Then set these GitHub Actions repository secrets:
+Use the exact role name `AgroAIMarketplaceGitHubVerifier`. The `diag-oidc`
+workflow is pinned to the non-secret ARN
+`arn:aws:iam::987432215840:role/AgroAIMarketplaceGitHubVerifier` and region
+`us-east-1`, so no GitHub AWS role/region secrets are required for this path.
 
-- `AWS_OIDC_ROLE_ARN` = the ARN of that role in account `987432215840`
-- `AWS_REGION` = `us-east-1`
-
-The `diag-oidc` workflow will then verify caller account, CloudFormation,
-EventBridge, SQS/DLQ and product `prod-rrjrdndw2eptq` without changing AWS.
+After the role exists, the `diag-oidc` workflow will verify caller account,
+CloudFormation, EventBridge, SQS/DLQ and product `prod-rrjrdndw2eptq` without
+changing AWS.
 
 ## 2. Render -> AWS seller-account OIDC
 
