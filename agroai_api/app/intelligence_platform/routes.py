@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.routing import APIRoute
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,16 +39,35 @@ from app.platform_api.principal import PlatformPrincipal
 
 
 logger = logging.getLogger("agroai.intelligence.platform")
-router = APIRouter(tags=["intelligence-platform"])
 API_VERSION = "2026-10-03"
+
+
+class _VersionedRoute(APIRoute):
+    """Every Intelligence Platform response carries ``AGROAI-API-Version``:
+    public discovery, constructed 204s, streams and error responses alike."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def versioned(request: Request) -> Response:
+            try:
+                response = await handler(request)
+            except StarletteHTTPException as exc:
+                exc.headers = {**(exc.headers or {}), "AGROAI-API-Version": API_VERSION}
+                raise
+            response.headers["AGROAI-API-Version"] = API_VERSION
+            return response
+
+        return versioned
+
+
+router = APIRouter(tags=["intelligence-platform"], route_class=_VersionedRoute)
 _BACKGROUND: set[asyncio.Task] = set()
 
 
 def _key(route_id: str, cost: int | None = None):
     def dependency(request: Request, response: Response, db: Session = Depends(get_db)) -> PlatformPrincipal:
-        principal = legacy._advisory_key_principal(request, response, db, route_id=route_id, cost=cost)
-        response.headers["AGROAI-API-Version"] = API_VERSION
-        return principal
+        return legacy._advisory_key_principal(request, response, db, route_id=route_id, cost=cost)
 
     return dependency
 
@@ -154,12 +175,10 @@ def _sse(event: str, data: Any) -> str:
 @router.post("/intelligence")
 async def intelligence_api(
     payload: legacy.IntelligenceRequest,
-    response: Response,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=255),
     principal: PlatformPrincipal = Depends(legacy.require_advisory_intelligence_key),
     db: Session = Depends(get_db),
 ):
-    response.headers["AGROAI-API-Version"] = API_VERSION
     if not payload.stream:
         result = await legacy._execute_paid_intelligence(
             payload=payload,
@@ -176,7 +195,7 @@ async def intelligence_api(
     reject_credentials(payload)
     outcome = hardened._admit_paid_run(payload=payload, idempotency_key=idempotency_key, principal=principal, db=db)
     bind = db.get_bind()
-    headers = {"Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Request-Id": principal.request_id or "", "AGROAI-API-Version": API_VERSION}
+    headers = {"Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Request-Id": principal.request_id or ""}
 
     if outcome.replay is not None:
         replay = outcome.replay
@@ -203,7 +222,7 @@ async def intelligence_api(
             try:
                 run = worker_db.get(CommercialIntelligenceRun, run_id)
                 fresh = hardened._readmit_paid_run(payload=payload, principal=principal, db=worker_db, run=run)
-            except HTTPException as exc:
+            except StarletteHTTPException as exc:
                 code = exc.detail.get("code") if isinstance(exc.detail, dict) else "intelligence_reference_invalid"
                 hardened._fail_unstarted_run(worker_db, run_id=run_id, code=str(code))
                 raise

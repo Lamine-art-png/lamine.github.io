@@ -331,6 +331,31 @@ def test_tools_compute_deterministically_with_provenance(platform):
         db.close()
 
 
+def test_every_platform_response_carries_the_contract_version(platform):
+    from app.intelligence_platform.routes import API_VERSION
+
+    p = platform
+    responses = {
+        "capabilities (public)": p.client.get("/v1/intelligence/capabilities"),
+        "tools (public)": p.client.get("/v1/intelligence/tools"),
+        "unknown schema (public 404)": p.client.get("/v1/intelligence/schemas/not-a-schema"),
+        "unknown run (404)": p.client.get("/v1/intelligence/runs/missing", headers=p.keys["A"]),
+    }
+    session = p.client.post("/v1/intelligence/sessions", headers=p.keys["A"], json={"title": "version"})
+    upload = p.client.post("/v1/intelligence/files", headers=p.keys["A"],
+                           files={"file": ("v.csv", io.BytesIO(b"a,b\n1,2\n"), "text/csv")}, data={"purpose": "attachment"})
+    document = p.client.post("/v1/intelligence/knowledge/documents", headers=p.keys["A"],
+                             json={"collection": "version", "title": "v", "text": "Version header document text."})
+    assert session.status_code == upload.status_code == document.status_code == 201
+    responses["session created"] = session
+    responses["session deleted (204)"] = p.client.delete(f"/v1/intelligence/sessions/{session.json()['id']}", headers=p.keys["A"])
+    responses["file deleted (204)"] = p.client.delete(f"/v1/intelligence/files/{upload.json()['id']}", headers=p.keys["A"])
+    responses["document deleted (204)"] = p.client.delete(f"/v1/intelligence/knowledge/documents/{document.json()['id']}", headers=p.keys["A"])
+    for label, response in responses.items():
+        assert response.headers.get("AGROAI-API-Version") == API_VERSION, (label, response.status_code)
+    assert {r.status_code for r in responses.values()} >= {200, 201, 204, 404}
+
+
 def test_knowledge_is_tenant_isolated_cited_and_deletable(platform):
     p = platform
     doc = {"collection": "agronomy-notes", "title": "Block 7 scouting", "external_id": "scout-7",
