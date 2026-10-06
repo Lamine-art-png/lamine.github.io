@@ -36,18 +36,23 @@ provisions access.
   the actual seller product, and `AWS_MARKETPLACE_REGION=us-east-1`.
 - Use a short-lived seller-account workload identity with `ResolveCustomer` for
   the API and queue/agreement permissions for the worker. Do not create access keys.
-- The seller-account `agroai-marketplace-events` CloudFormation stack reached
-  `CREATE_COMPLETE` in `us-east-1` on 2026-10-06. Its EventBridge rule, encrypted
-  SQS queue, dead-letter queue, and IAM policies are deployed. Configure
-  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL` in the
-  application deployment.
+- Historical seller-account evidence says the `agroai-marketplace-events`
+  CloudFormation stack completed in `us-east-1`. Reverify its EventBridge rule,
+  encrypted SQS queue, dead-letter queue, policies and outputs with the read-only
+  `diag-oidc` workflow before activation. Configure
+  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL` only from
+  those verified outputs.
 - Enable `AWS_MARKETPLACE_ONBOARDING_ENABLED` and
   `AWS_MARKETPLACE_EVENTS_ENABLED` only for verified integration testing.
-- Run `PYTHONPATH=. python scripts/process_aws_marketplace_events.py` continuously
-  or on a frequent schedule, and run
-  `PYTHONPATH=. python scripts/reconcile_aws_marketplace.py` at least hourly.
+- Production runs the bounded SQS consumer and hourly reconciliation inside the
+  API process when `AWS_MARKETPLACE_EVENTS_ENABLED=true`. The standalone
+  `scripts/process_aws_marketplace_events.py` and
+  `scripts/reconcile_aws_marketplace.py` remain safe operator entrypoints.
   Alert on worker failures and dead-letter queue messages. Do not log event bodies,
   purchase tokens, customer identifiers, or SDK exceptions.
+- On Render, use managed AWS OIDC with `AWS_ROLE_ARN`; Render supplies
+  `AWS_WEB_IDENTITY_TOKEN_FILE` automatically. Do not create long-lived access keys.
+  See `AWS_MARKETPLACE_IDENTITY_FIX.md` for the exact seller-account trust policies.
 
 ## Remaining release gates
 
