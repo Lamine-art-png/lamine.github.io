@@ -151,3 +151,5 @@ jobs:
                       walk(item)
           walk(details)
           PY
+
+# Fresh seller-account OIDC verification trigger: 2026-10-06
