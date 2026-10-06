@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "042_intelligence_platform_v1"
+    assert HEAD_ALEMBIC_REVISION == "043_intelligence_platform_v1"
     assert {"organization_id", "commodity", "reporting_currency", "expected_production"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["market_positions"]
     )
@@ -113,8 +113,8 @@ def test_intelligence_platform_ownership_columns_are_head_contract():
     assert {"execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"} <= HEAD_SCHEMA_REQUIREMENTS["platform_commercial_intelligence_runs"]
 
 
-def test_partial_042_schema_missing_workspace_ownership_is_not_production_ready(tmp_path, monkeypatch):
-    """A 042 table without workspace_id fails both the deploy contract and /v1/readiness."""
+def test_partial_043_schema_missing_workspace_ownership_is_not_production_ready(tmp_path, monkeypatch):
+    """A 043 table without workspace_id fails both the deploy contract and /v1/readiness."""
     import app.main as main
     from app.db import base as db_base
 

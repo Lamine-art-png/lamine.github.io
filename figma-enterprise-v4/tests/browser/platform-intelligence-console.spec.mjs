@@ -165,8 +165,10 @@ test("Stripe return refreshes the wallet balance", async ({ page }) => {
   state.balanceCents = 2500;
   const before = state.walletCalls;
   await page.goto(`${APP}/platform/billing?wallet=success&session_id=cs_wallet_return`);
-  await expect(page.getByText("$25.00").first()).toBeVisible({ timeout: 20_000 });
-  expect(state.walletCalls).toBeGreaterThan(before);
+  // "$25.00" also labels an "Add funds" button, so wait for the refresh call
+  // itself and then for the balance to appear more than once (button + balance).
+  await expect.poll(() => state.walletCalls, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect.poll(() => page.getByText("$25.00").count(), { timeout: 20_000 }).toBeGreaterThan(1);
 });
 
 test("an expired Portal session on a wallet call signs the user out", async ({ page }) => {

@@ -16,8 +16,7 @@ for (const phrase of [
   "Add commercial position",
   "Add contract",
   "Update market price",
-  "Market data providers",
-  "Create position",
+  "Data sources",
   "Create contract",
   "Save price",
   "Refresh market data",
@@ -37,11 +36,14 @@ for (const endpoint of [
   assert.ok(page.includes(endpoint), `missing GA endpoint usage: ${endpoint}`);
 }
 
-assert.match(page, /\/v1\/market-intelligence\/positions\/\$\{encodeURIComponent\(created\.id\)\}\/refresh/);
+// Positions are created through customer-language onboarding; the server
+// infers market structure and refreshes governed evidence itself.
+const onboarding = readFileSync(new URL("../src/app/components/CommercialOnboarding.tsx", import.meta.url), "utf8");
+assert.ok(onboarding.includes('"/v1/market-intelligence/onboarding"'));
+assert.ok(onboarding.includes("Create commercial position"));
 assert.match(page, /source_status:\s*"MANUAL"/);
 assert.match(page, /Customer entered market price/);
-assert.match(page, /USDA MyMarketNews/);
-assert.match(page, /ECB/);
+assert.doesNotMatch(page, /report slug|usda_mmn_slug/i);
 assert.match(page, /never presents manual or delayed data as live/);
 assert.doesNotMatch(page, /Math\.random|fakeLive|mockPrice/);
 

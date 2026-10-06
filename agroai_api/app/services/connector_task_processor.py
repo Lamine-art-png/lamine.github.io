@@ -13,6 +13,7 @@ from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, process_webhook
 from app.platform_api.jobs import PLATFORM_OPERATION_TASK_TYPE, process_platform_operation_job
 from app.platform_api.stripe_metering import STRIPE_METER_TASK_TYPE, process_meter_export_task
 from app.intelligence_platform.jobs import INTELLIGENCE_JOB_TASK_TYPE
+from app.services.market_intelligence_cycle import TASK_TYPE as MARKET_CYCLE_TASK_TYPE, process_market_cycle_job
 
 
 SUPPORTED_TASK_TYPES = frozenset({
@@ -22,6 +23,7 @@ SUPPORTED_TASK_TYPES = frozenset({
     PLATFORM_OPERATION_TASK_TYPE,
     STRIPE_METER_TASK_TYPE,
     INTELLIGENCE_JOB_TASK_TYPE,
+    MARKET_CYCLE_TASK_TYPE,
 })
 
 
@@ -83,6 +85,13 @@ def process_connector_task(
         if task_type == STRIPE_METER_TASK_TYPE:
             return process_meter_export_task(
                 outbox_id=job_id,
+                organization_id=tenant_id,
+                worker_id=resolved_worker_id,
+            )
+        if task_type == MARKET_CYCLE_TASK_TYPE:
+            return process_market_cycle_job(
+                db,
+                job_id=job_id,
                 organization_id=tenant_id,
                 worker_id=resolved_worker_id,
             )

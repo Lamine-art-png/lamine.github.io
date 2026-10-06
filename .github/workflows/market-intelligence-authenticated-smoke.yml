@@ -1,0 +1,39 @@
+name: Market Intelligence Authenticated Smoke
+
+# Operator-run proof of the authenticated Commercial Intelligence experience in
+# production. Requires the MARKET_INTELLIGENCE_SMOKE_TOKEN secret: a real AEP
+# session for an organization in the Market Intelligence release cohort. With
+# no secret the run fails with NOT_CONFIGURED instead of reporting success.
+on:
+  workflow_dispatch:
+    inputs:
+      write:
+        description: "Also create and archive a labelled smoke position"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run authenticated smoke
+        env:
+          MARKET_INTELLIGENCE_SMOKE_TOKEN: ${{ secrets.MARKET_INTELLIGENCE_SMOKE_TOKEN }}
+          WRITE: ${{ inputs.write }}
+        run: |
+          set -o pipefail
+          args=()
+          if [ "${WRITE}" = "true" ]; then args+=(--write); fi
+          python3 scripts/market_intelligence_authenticated_smoke.py "${args[@]}" | tee smoke.json
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-intelligence-authenticated-smoke-${{ github.run_id }}
+          path: smoke.json
+          if-no-files-found: ignore

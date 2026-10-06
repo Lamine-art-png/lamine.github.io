@@ -1,9 +1,8 @@
-# Provisional Platform API pricing catalog
+# Platform API pricing catalog
 
-Status: seeded inactive for test/review. Commercial approval and real test/live
-Stripe configuration are required before activation.
+Status: direct AGRO-AI production billing is live and production-verified for the Developer and Scale plans. Public acquisition, external marketplace publication, TEST self-service activation, and marketplace-specific entitlement/billing integrations remain separate launch states and must be represented independently.
 
-| Plan | Monthly | Annual | Included credits | Provisional overage |
+| Plan | Monthly | Annual | Included credits | Overage |
 | --- | ---: | ---: | ---: | ---: |
 | Sandbox | $0 | — | 10,000 | none |
 | Developer | $149 | $1,430 | 250,000 | $0.75 / 1,000 |
@@ -15,5 +14,15 @@ seven-day logs. Developer: three projects, one approved live project, five
 service accounts/keys, three webhooks, 30-day logs. Scale: ten projects, five
 approved live projects, 20 service accounts/keys/webhooks, 90-day logs.
 
-Catalog rows and operation-credit costs are versioned and inactive by default.
-Route code never accepts a browser-supplied Stripe price or amount.
+Developer and Scale have live AGRO-AI Stripe base prices and interval-matched
+metered overage prices. The AGRO-AI credit ledger remains the synchronous
+authorization source; Stripe meter export is asynchronous settlement.
+
+A marketplace-originated subscription must use that marketplace's required
+transaction and entitlement path. Do not create a second direct Stripe charge
+for the same marketplace subscriber.
+
+Sandbox availability remains controlled by the TEST self-service and legal
+activation gates. A configured Stripe catalog does not by itself open public
+self-service, and external marketplace readiness must not be inferred from
+direct AGRO-AI billing readiness.

@@ -1,0 +1,1338 @@
+{
+  "info": {
+    "name": "AGRO-AI Platform API",
+    "description": "Official import-ready collection generated from AGRO-AI's curated Platform API contract. Use a scoped agro_test_ or agro_live_ key issued by the AGRO-AI Developer Console. TEST and LIVE access remain governed by server-side entitlement and production-readiness controls.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.agroai-pilot.com/v1",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "field_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "provider_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recommendation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "report_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "source_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Partners and actions",
+      "item": [
+        {
+          "name": "platform_api_partner POST /v1/platform/actions/execute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/actions/execute",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "actions",
+                "execute"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner POST /v1/platform/actions/execute\n\nRequired scopes: actions:execute",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner POST /v1/platform/actions/plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/actions/plan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "actions",
+                "plan"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner POST /v1/platform/actions/plan\n\nRequired scopes: actions:plan",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner GET /v1/platform/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "me"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner GET /v1/platform/me\n\nRequired scopes: projects:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner GET /v1/platform/providers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/providers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "providers"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner GET /v1/platform/providers\n\nRequired scopes: connectors:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner GET /v1/platform/providers/{provider_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/providers/{{provider_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "providers",
+                "{{provider_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner GET /v1/platform/providers/{provider_id}\n\nRequired scopes: connectors:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner POST /v1/platform/providers/{provider_id}/sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/providers/{{provider_id}}/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "providers",
+                "{{provider_id}}",
+                "sync"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner POST /v1/platform/providers/{provider_id}/sync\n\nRequired scopes: connectors:sync",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connection_id\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner GET /v1/platform/providers/{provider_id}/sync-jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/providers/{{provider_id}}/sync-jobs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "providers",
+                "{{provider_id}}",
+                "sync-jobs"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner GET /v1/platform/providers/{provider_id}/sync-jobs\n\nRequired scopes: connectors:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_partner POST /v1/platform/providers/{provider_id}/validate-credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/providers/{{provider_id}}/validate-credentials",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "providers",
+                "{{provider_id}}",
+                "validate-credentials"
+              ],
+              "query": []
+            },
+            "description": "platform_api_partner POST /v1/platform/providers/{provider_id}/validate-credentials\n\nRequired scopes: connectors:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentials\": {},\n  \"provider_id\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Resources",
+      "item": [
+        {
+          "name": "platform_api_resource GET /v1/platform/fields",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/fields",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "fields"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/fields\n\nRequired scopes: fields:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/fields",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "fields"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/fields\n\nRequired scopes: fields:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/fields/{field_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/fields/{{field_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "fields",
+                "{{field_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/fields/{field_id}\n\nRequired scopes: fields:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource PATCH /v1/platform/fields/{field_id}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/fields/{{field_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "fields",
+                "{{field_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource PATCH /v1/platform/fields/{field_id}\n\nRequired scopes: fields:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource DELETE /v1/platform/fields/{field_id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/fields/{{field_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "fields",
+                "{{field_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource DELETE /v1/platform/fields/{field_id}\n\nRequired scopes: fields:write"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/jobs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/jobs\n\nRequired scopes: jobs:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/jobs/{job_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/jobs/{{job_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "jobs",
+                "{{job_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/jobs/{job_id}\n\nRequired scopes: jobs:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/jobs/{job_id}/retry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/jobs/{{job_id}}/retry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "jobs",
+                "{{job_id}}",
+                "retry"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/jobs/{job_id}/retry\n\nRequired scopes: jobs:read",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/observations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/observations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "observations"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/observations\n\nRequired scopes: observations:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/observations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/observations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "observations"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/observations\n\nRequired scopes: observations:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"observations\": [\n    {}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/recommendations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/recommendations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "recommendations"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/recommendations\n\nRequired scopes: recommendations:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/recommendations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/recommendations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "recommendations"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/recommendations\n\nRequired scopes: recommendations:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"field_id\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/recommendations/{recommendation_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/recommendations/{{recommendation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "recommendations",
+                "{{recommendation_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/recommendations/{recommendation_id}\n\nRequired scopes: recommendations:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/reports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/reports\n\nRequired scopes: reports:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/reports",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/reports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "reports"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/reports\n\nRequired scopes: reports:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/reports/{report_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/reports/{{report_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "reports",
+                "{{report_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/reports/{report_id}\n\nRequired scopes: reports:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/reports/{report_id}/download",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/reports/{{report_id}}/download",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "reports",
+                "{{report_id}}",
+                "download"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/reports/{report_id}/download\n\nRequired scopes: reports:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/request-logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/request-logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "request-logs"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/request-logs\n\nRequired scopes: request_logs:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/sandbox",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/sandbox",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "sandbox"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/sandbox\n\nRequired scopes: projects:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/sources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/sources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "sources"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "platform_api_resource GET /v1/platform/sources\n\nRequired scopes: sources:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/sources",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/sources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "sources"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/sources\n\nRequired scopes: sources:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_type\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource POST /v1/platform/sources/uploads",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/sources/uploads",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "sources",
+                "uploads"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource POST /v1/platform/sources/uploads\n\nRequired scopes: sources:write",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content_sha256\": \"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\n  \"content_type\": \"example\",\n  \"filename\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/sources/{source_id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/sources/{{source_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "sources",
+                "{{source_id}}"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/sources/{source_id}\n\nRequired scopes: sources:read"
+          },
+          "response": []
+        },
+        {
+          "name": "platform_api_resource GET /v1/platform/usage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/usage",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "usage"
+              ],
+              "query": []
+            },
+            "description": "platform_api_resource GET /v1/platform/usage\n\nRequired scopes: usage:read"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Metadata",
+      "item": [
+        {
+          "name": "public_metadata GET /v1/platform/health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "health"
+              ],
+              "query": []
+            },
+            "description": "public_metadata GET /v1/platform/health\n\nRequired scopes: none",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "public_metadata GET /v1/platform/openapi.json",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}",
+                "type": "text",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/platform/openapi.json",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "platform",
+                "openapi.json"
+              ],
+              "query": []
+            },
+            "description": "public_metadata GET /v1/platform/openapi.json\n\nRequired scopes: none",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

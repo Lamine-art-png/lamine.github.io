@@ -101,7 +101,7 @@ class CommercialIntelligenceRun(Base):
     error_detail = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
-    # Intelligence Platform v1 (alembic 042). A run is either a synchronous
+    # Intelligence Platform v1 (alembic 043). A run is either a synchronous
     # request or an asynchronous job; both share one idempotency namespace and
     # one money path.
     execution = Column(String(16), nullable=False, default="sync", server_default="sync")

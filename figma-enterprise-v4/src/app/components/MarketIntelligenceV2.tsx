@@ -3,6 +3,9 @@ import { ChevronDown, ChevronUp, Database, Loader2, Plus, RefreshCw, Save, Shiel
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { MarketIntelligence } from "./MarketIntelligence";
+import { CommercialIntelligenceHome } from "./CommercialIntelligenceHome";
+import { CommercialOnboarding } from "./CommercialOnboarding";
+import { ACCESS_HINTS, COMMERCIAL_COPY, providerLabel, stateLabel } from "./commercialCopy";
 
 type PositionSummary = {
   position_id: string;
@@ -18,7 +21,7 @@ type PositionSummary = {
 
 type Overview = { position_count: number; positions: PositionSummary[] };
 type Capabilities = { can_write?: boolean; role?: string; release_state?: string; cohort?: string };
-type ProviderState = { status?: string; source_name?: string; configured?: boolean; coverage?: string; configuration_hint?: string; runtime?: { circuit?: string } };
+type ProviderState = { status?: string; access?: string; source_name?: string; configured?: boolean; newest_observation_at?: string | null };
 type ProvidersResponse = { providers?: Record<string, ProviderState> };
 
 const COPY = [
@@ -31,28 +34,8 @@ const COPY = [
   "Add commercial position",
   "Add contract",
   "Update market price",
-  "Market data providers",
-  "Create position",
   "Create contract",
   "Save price",
-  "Position name",
-  "Commodity",
-  "Season",
-  "Country code",
-  "Region / state",
-  "Market structure",
-  "Local currency",
-  "Reporting currency",
-  "Quantity unit",
-  "Expected production",
-  "Carry inventory",
-  "Production cost per unit",
-  "Inventory cost per unit",
-  "Current realizable price",
-  "Price currency",
-  "Freight per unit",
-  "Storage per unit",
-  "USDA MyMarketNews report slug (optional)",
   "Position",
   "Contract code",
   "Buyer",
@@ -62,9 +45,12 @@ const COPY = [
   "Observed price",
   "Observed at",
   "No positions yet. Create the first commercial position to activate Market Intelligence.",
-  "Reference FX refreshes automatically from the ECB. U.S. cash-market observations use USDA MyMarketNews when a USDA API key is configured.",
   "Government and reference sources are labelled with their actual freshness. AGRO-AI never presents manual or delayed data as live.",
   "Saved.",
+  "Quantity unit",
+  "Data sources",
+  "Latest observation",
+  "Governed sources refresh automatically on a schedule. Each source shows its real status: available, not configured, or customer-supplied.",
 ] as const;
 
 function cleanNumber(value: string, fallback = 0) {
@@ -90,16 +76,16 @@ function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#65736A]">{children}</label>;
 }
 
-function ProviderBadge({ state }: { state: ProviderState }) {
+function ProviderBadge({ state, label }: { state: ProviderState; label: string }) {
   const status = String(state.status || "UNKNOWN").toUpperCase();
   const positive = ["LIVE", "DELAYED", "OK"].includes(status);
   const background = positive ? "#E7F4EC" : status === "NOT_CONFIGURED" ? "#FFF3D8" : "#FDECE7";
   const color = positive ? "#1F6A45" : status === "NOT_CONFIGURED" ? "#8A5A00" : "#A13F24";
-  return <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide" style={{ background, color }}>{status}</span>;
+  return <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide" style={{ background, color }}>{label}</span>;
 }
 
 export function MarketIntelligenceV2() {
-  const { tx } = usePortalCopy([], COPY as unknown as string[]);
+  const { tx, locale } = usePortalCopy([], [...COPY, ...COMMERCIAL_COPY]);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [providers, setProviders] = useState<Record<string, ProviderState>>({});
@@ -112,26 +98,6 @@ export function MarketIntelligenceV2() {
   const [revision, setRevision] = useState(0);
   const autoRefreshAttempted = useRef(false);
 
-  const [positionForm, setPositionForm] = useState({
-    name: "",
-    commodity: "corn",
-    season: String(new Date().getFullYear()),
-    country_code: "US",
-    region: "",
-    market_structure: "physical",
-    local_currency: "USD",
-    reporting_currency: "USD",
-    quantity_unit: "bushel",
-    expected_production: "",
-    inventory_quantity: "0",
-    production_cost_per_unit: "",
-    inventory_cost_per_unit: "",
-    current_realizable_price: "",
-    price_currency: "USD",
-    freight_per_unit: "0",
-    storage_per_unit: "0",
-    usda_mmn_slug: "",
-  });
   const [contractForm, setContractForm] = useState({
     position_id: "",
     contract_code: "",
@@ -203,59 +169,6 @@ export function MarketIntelligenceV2() {
     }
   };
 
-  const createPosition = async () => {
-    setError("");
-    const inventory = cleanNumber(positionForm.inventory_quantity);
-    const metadata: Record<string, unknown> = { production_cost_behavior: "fixed_total_at_baseline_yield" };
-    if (inventory > 0 && positionForm.inventory_cost_per_unit.trim()) metadata.inventory_cost_per_unit = positionForm.inventory_cost_per_unit;
-    if (positionForm.usda_mmn_slug.trim()) metadata.usda_mmn_slug = positionForm.usda_mmn_slug.trim();
-    const slug = `${positionForm.commodity}-${positionForm.season}-${Date.now().toString(36)}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-    try {
-      const created = await apiClient.post<{ id: string }>("/v1/market-intelligence/positions", {
-        position_key: slug,
-        name: positionForm.name.trim(),
-        commodity: positionForm.commodity.trim(),
-        season: positionForm.season.trim(),
-        country_code: positionForm.country_code.trim().toUpperCase(),
-        region: positionForm.region.trim() || null,
-        market_structure: positionForm.market_structure,
-        local_currency: positionForm.local_currency.trim().toUpperCase(),
-        reporting_currency: positionForm.reporting_currency.trim().toUpperCase(),
-        quantity_unit: positionForm.quantity_unit,
-        expected_production: cleanNumber(positionForm.expected_production),
-        inventory_quantity: inventory,
-        production_cost_per_unit: positionForm.production_cost_per_unit.trim() ? cleanNumber(positionForm.production_cost_per_unit) : null,
-        current_realizable_price: positionForm.current_realizable_price.trim() ? cleanNumber(positionForm.current_realizable_price) : null,
-        price_currency: positionForm.price_currency.trim().toUpperCase(),
-        freight_per_unit: cleanNumber(positionForm.freight_per_unit),
-        storage_per_unit: cleanNumber(positionForm.storage_per_unit),
-        metadata,
-      });
-      if (positionForm.current_realizable_price.trim()) {
-        await apiClient.post("/v1/market-intelligence/observations", {
-          position_id: created.id,
-          evidence_id: `manual-price-${created.id}-${Date.now()}`,
-          observation_type: "cash_price",
-          provider: "customer",
-          source_name: "Customer entered market price",
-          source_status: "MANUAL",
-          value: cleanNumber(positionForm.current_realizable_price),
-          unit: `${positionForm.price_currency.trim().toUpperCase()}/${positionForm.quantity_unit}`,
-          currency: positionForm.price_currency.trim().toUpperCase(),
-          observed_at: new Date().toISOString(),
-          quality: { grade: "customer_entered" },
-          licensing: { display_allowed: true },
-          metadata: { entry_surface: "enterprise_portal" },
-        });
-      }
-      await apiClient.post(`/v1/market-intelligence/positions/${encodeURIComponent(created.id)}/refresh`, {});
-      setManageOpen(false);
-      await changed("Commercial position created and market sources refreshed.");
-    } catch (cause) {
-      setError(errorMessage(cause));
-    }
-  };
-
   const createContract = async () => {
     if (!contractForm.position_id) return;
     setError("");
@@ -323,7 +236,6 @@ export function MarketIntelligenceV2() {
             <p className="mt-1 text-sm text-[#65736A]">{tx("Configure and refresh the commercial facts behind your crop and market intelligence.")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {canWrite ? <button onClick={() => void refreshAll()} disabled={refreshing || !overview?.position_count} className="inline-flex items-center gap-2 rounded-xl border border-[#C7D2C9] bg-white px-3.5 py-2 text-xs font-semibold text-[#234224] disabled:opacity-50">{refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}{refreshing ? tx("Refreshing…") : tx("Refresh market data")}</button> : null}
             {canWrite ? <button onClick={() => setManageOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-[#10231B] px-3.5 py-2 text-xs font-semibold text-white"><Database className="h-3.5 w-3.5" />{manageOpen ? tx("Close data manager") : tx("Manage data")}{manageOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button> : null}
           </div>
         </div>
@@ -338,36 +250,11 @@ export function MarketIntelligenceV2() {
                 ["position", tx("Add commercial position")],
                 ["contract", tx("Add contract")],
                 ["price", tx("Update market price")],
-                ["providers", tx("Market data providers")],
+                ["providers", tx("Data sources")],
               ] as const).map(([key, label]) => <button key={key} onClick={() => setTab(key)} className="rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: tab === key ? "#10231B" : "transparent", color: tab === key ? "#FFFFFF" : "#526057" }}>{label}</button>)}
             </div>
             <div className="p-5 sm:p-6">
-              {tab === "position" ? (
-                <div>
-                  <div className="mb-5"><h2 className="text-lg font-semibold text-[#10231B]">{tx("Add commercial position")}</h2><p className="mt-1 text-sm text-[#65736A]">Production, inventory, costs and price become the deterministic economic baseline.</p></div>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="xl:col-span-2"><Label>{tx("Position name")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.name} onChange={(e) => setPositionForm({ ...positionForm, name: e.target.value })} placeholder="2026 Iowa corn" /></div>
-                    <div><Label>{tx("Commodity")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.commodity} onChange={(e) => setPositionForm({ ...positionForm, commodity: e.target.value })} /></div>
-                    <div><Label>{tx("Season")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.season} onChange={(e) => setPositionForm({ ...positionForm, season: e.target.value })} /></div>
-                    <div><Label>{tx("Country code")}</Label><input maxLength={2} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.country_code} onChange={(e) => setPositionForm({ ...positionForm, country_code: e.target.value.toUpperCase() })} /></div>
-                    <div><Label>{tx("Region / state")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.region} onChange={(e) => setPositionForm({ ...positionForm, region: e.target.value })} placeholder="Iowa" /></div>
-                    <div><Label>{tx("Market structure")}</Label><select className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.market_structure} onChange={(e) => setPositionForm({ ...positionForm, market_structure: e.target.value })}><option value="physical">Physical</option><option value="hybrid">Physical + benchmark</option><option value="futures">Exchange-linked</option></select></div>
-                    <div><Label>{tx("Quantity unit")}</Label><select className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.quantity_unit} onChange={(e) => setPositionForm({ ...positionForm, quantity_unit: e.target.value })}><option value="bushel">Bushel</option><option value="tonne">Metric tonne</option><option value="kg">Kilogram</option><option value="pound">Pound</option></select></div>
-                    <div><Label>{tx("Local currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.local_currency} onChange={(e) => setPositionForm({ ...positionForm, local_currency: e.target.value.toUpperCase() })} /></div>
-                    <div><Label>{tx("Reporting currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.reporting_currency} onChange={(e) => setPositionForm({ ...positionForm, reporting_currency: e.target.value.toUpperCase() })} /></div>
-                    <div><Label>{tx("Expected production")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.expected_production} onChange={(e) => setPositionForm({ ...positionForm, expected_production: e.target.value })} placeholder="100000" /></div>
-                    <div><Label>{tx("Carry inventory")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.inventory_quantity} onChange={(e) => setPositionForm({ ...positionForm, inventory_quantity: e.target.value })} /></div>
-                    <div><Label>{tx("Production cost per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.production_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, production_cost_per_unit: e.target.value })} /></div>
-                    <div><Label>{tx("Inventory cost per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.inventory_cost_per_unit} onChange={(e) => setPositionForm({ ...positionForm, inventory_cost_per_unit: e.target.value })} /></div>
-                    <div><Label>{tx("Current realizable price")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.current_realizable_price} onChange={(e) => setPositionForm({ ...positionForm, current_realizable_price: e.target.value })} /></div>
-                    <div><Label>{tx("Price currency")}</Label><input maxLength={3} className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.price_currency} onChange={(e) => setPositionForm({ ...positionForm, price_currency: e.target.value.toUpperCase() })} /></div>
-                    <div><Label>{tx("Freight per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.freight_per_unit} onChange={(e) => setPositionForm({ ...positionForm, freight_per_unit: e.target.value })} /></div>
-                    <div><Label>{tx("Storage per unit")}</Label><input inputMode="decimal" className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.storage_per_unit} onChange={(e) => setPositionForm({ ...positionForm, storage_per_unit: e.target.value })} /></div>
-                    <div className="md:col-span-2"><Label>{tx("USDA MyMarketNews report slug (optional)")}</Label><input className={fieldClass()} style={{ borderColor: "#D6DDD0" }} value={positionForm.usda_mmn_slug} onChange={(e) => setPositionForm({ ...positionForm, usda_mmn_slug: e.target.value })} placeholder="e.g. 2850" /></div>
-                  </div>
-                  <button onClick={() => void createPosition()} disabled={!positionForm.name.trim() || !positionForm.expected_production.trim()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#234224] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-4 w-4" />{tx("Create position")}</button>
-                </div>
-              ) : null}
+              {tab === "position" ? <CommercialOnboarding onCreated={() => { setManageOpen(false); setNotice(tx("Saved.")); setRevision((value) => value + 1); void loadControlPlane(); }} /> : null}
 
               {tab === "contract" ? (
                 <div>
@@ -402,10 +289,11 @@ export function MarketIntelligenceV2() {
 
               {tab === "providers" ? (
                 <div>
-                  <div className="mb-5"><h2 className="text-lg font-semibold text-[#10231B]">{tx("Market data providers")}</h2><p className="mt-1 text-sm text-[#65736A]">{tx("Reference FX refreshes automatically from the ECB. U.S. cash-market observations use USDA MyMarketNews when a USDA API key is configured.")}</p></div>
+                  <div className="mb-5"><h2 className="text-lg font-semibold text-[#10231B]">{tx("Data sources")}</h2><p className="mt-1 text-sm text-[#65736A]">{tx("Governed sources refresh automatically on a schedule. Each source shows its real status: available, not configured, or customer-supplied.")}</p></div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {Object.entries(providers).map(([key, state]) => <div key={key} className="rounded-2xl border border-[#D6DDD0] bg-white p-4"><div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-[#10231B]">{state.source_name || key}</div><div className="mt-1 text-xs leading-5 text-[#7B877F]">{state.coverage || state.configuration_hint || "Governed provider"}</div></div><ProviderBadge state={state} /></div>{state.runtime?.circuit ? <div className="mt-3 text-[11px] text-[#65736A]">Circuit: {state.runtime.circuit}</div> : null}</div>)}
+                    {Object.entries(providers).map(([key, state]) => <div key={key} className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="break-words text-sm font-semibold text-[#10231B]">{providerLabel(tx, key, state.source_name)}</div>{state.access && ACCESS_HINTS[state.access] && state.status !== "DELAYED" ? <div className="mt-1 break-words text-xs leading-5 text-[#7B877F]">{tx(ACCESS_HINTS[state.access])}</div> : null}{state.newest_observation_at ? <div className="mt-1 text-xs text-[#65736A]">{tx("Latest observation")}: {new Date(state.newest_observation_at).toLocaleDateString(locale && locale !== "auto" ? locale : undefined)}</div> : null}</div><ProviderBadge state={state} label={stateLabel(tx, state.status)} /></div></div>)}
                   </div>
+                  <button onClick={() => void refreshAll()} disabled={refreshing || !overview?.position_count} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#C7D2C9] bg-white px-3.5 py-2 text-xs font-semibold text-[#234224] disabled:opacity-50">{refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}{refreshing ? tx("Refreshing…") : tx("Refresh market data")}</button>
                   <div className="mt-4 flex items-start gap-3 rounded-2xl bg-[#F3F7F2] p-4 text-xs leading-6 text-[#526057]"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2D6A4F]" /><span>{tx("Government and reference sources are labelled with their actual freshness. AGRO-AI never presents manual or delayed data as live.")}</span></div>
                 </div>
               ) : null}
@@ -414,8 +302,15 @@ export function MarketIntelligenceV2() {
         ) : null}
       </div>
 
-      {overview?.position_count ? <MarketIntelligence key={revision} /> : !manageOpen ? (
-        <div className="mx-auto max-w-4xl px-5 py-12 text-center"><p className="text-sm text-[#65736A]">{tx("No positions yet. Create the first commercial position to activate Market Intelligence.")}</p></div>
+      {overview?.position_count ? (
+        <>
+          <div className="mx-auto mt-4 max-w-[1500px] px-4 sm:px-6 lg:px-8"><CommercialIntelligenceHome key={`home-${revision}`} canWrite={canWrite} /></div>
+          <MarketIntelligence key={revision} />
+        </>
+      ) : !manageOpen ? (
+        canWrite ? (
+          <div className="mx-auto mt-4 max-w-4xl px-4 sm:px-6"><CommercialOnboarding onCreated={() => { setRevision((value) => value + 1); void loadControlPlane(); }} /></div>
+        ) : <div className="mx-auto max-w-4xl px-5 py-12 text-center"><p className="text-sm text-[#65736A]">{tx("No positions yet. Create the first commercial position to activate Market Intelligence.")}</p></div>
       ) : null}
     </div>
   );

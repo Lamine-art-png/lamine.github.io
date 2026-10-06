@@ -12,10 +12,18 @@ import {
 } from "lucide-react";
 import { apiClient, type ApiError } from "../api/client";
 import { usePortalCopy } from "../hooks/usePortalCopy";
+import { COMMERCIAL_COPY, IMPORTANCE_LABELS, answerText, attentionText, providerLabel, stateLabel, unitLabel, unsupportedScenarioLanguage, useCommercialFormatters, warningLabel } from "./commercialCopy";
 import { currentLocale } from "../i18n";
 
 const COPY = [
   "Market Intelligence",
+  "Scenario failed",
+  "Intelligence request failed",
+  "Calculated answer",
+  "AI answer grounded in your data",
+  "High confidence",
+  "Medium confidence",
+  "Low confidence",
   "Commercial decision intelligence for your operation",
   "AGRO-AI connects production, contracts, costs, market context and risk so your team can see what materially affects margin.",
   "Refresh",
@@ -56,10 +64,6 @@ const COPY = [
   "Connect customer-owned production, cost, inventory, contract and market data through the Market Intelligence API to activate this workspace.",
   "Commercial decision support only. AGRO-AI does not execute trades or provide personalized derivatives instructions.",
   "DEMO DATA",
-  "LIVE",
-  "DELAYED",
-  "STALE",
-  "MANUAL",
   "Source health",
   "Some calculations are intentionally suppressed until missing or conflicting inputs are resolved.",
   "Unable to load Market Intelligence.",
@@ -101,6 +105,7 @@ type Position = {
   over_contracted?: boolean;
   data_complete?: boolean;
   warnings?: string[];
+  warning_codes?: string[];
   missing_inputs?: string[];
   data_health?: { status?: string; confidence?: string; sources?: Source[]; counts?: Record<string, number> };
 };
@@ -119,7 +124,7 @@ type Overview = {
     total_positions: number;
     partial: boolean;
   }>;
-  attention: Array<{ importance: string; position_id?: string; title: string; summary: string }>;
+  attention: Array<{ importance: string; position_id?: string; code?: string; params?: Record<string, any>; title: string; summary: string }>;
   positions: Position[];
   data_health?: { status?: string };
 };
@@ -132,9 +137,11 @@ type ScenarioResponse = {
 };
 
 type AskResponse = {
+  scenario_parse?: { status?: string };
   intelligence?: {
     status?: string;
     summary?: string;
+    facts?: { code: string; params: Record<string, any> }[];
     confidence?: string;
     limitations?: string[];
     model_trace?: { provider?: string; model?: string; grounded?: boolean };
@@ -173,9 +180,9 @@ function quantity(value: string | null | undefined, unit: string, locale: string
   return `${new Intl.NumberFormat(numberLocale(locale), { maximumFractionDigits: 2, notation: Math.abs(number) >= 1_000_000 ? "compact" : "standard" }).format(number)} ${unit}`;
 }
 
-function pct(value: string | null | undefined) {
+function pct(value: string | null | undefined, locale?: string) {
   const number = numberValue(value);
-  return number === null ? "—" : `${number.toFixed(1)}%`;
+  return number === null ? "—" : new Intl.NumberFormat(numberLocale(locale || ""), { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(number / 100);
 }
 
 function sourceBadge(status: string | undefined) {
@@ -191,7 +198,8 @@ function sourceBadge(status: string | undefined) {
 }
 
 export function MarketIntelligence() {
-  const { locale, tx } = usePortalCopy([], COPY as unknown as string[]);
+  const { locale, tx, tf } = usePortalCopy([], [...COPY, ...COMMERCIAL_COPY]);
+  const commercialFormat = useCommercialFormatters(locale);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -242,7 +250,7 @@ export function MarketIntelligence() {
       });
       setScenario({ result: response.result, delta: response.delta, baseline: response.baseline, zero_change_invariant: response.zero_change_invariant });
     } catch (cause) {
-      setError((cause as ApiError).message || "Scenario failed");
+      setError((cause as ApiError).message || tx("Scenario failed"));
     } finally {
       setScenarioBusy(false);
     }
@@ -259,7 +267,7 @@ export function MarketIntelligence() {
         language: locale || "en",
       }));
     } catch (cause) {
-      setError((cause as ApiError).message || "Intelligence request failed");
+      setError((cause as ApiError).message || tx("Intelligence request failed"));
     } finally {
       setAskBusy(false);
     }
@@ -326,18 +334,18 @@ export function MarketIntelligence() {
                 <span className="ms-auto rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: "#F1EFE8", color: "#59665E" }}>{selected.market_structure}</span>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <SmallMetric label={tx("Expected production")} value={quantity(selected.expected_production, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Carry inventory")} value={quantity(selected.inventory_quantity, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Marketable supply")} value={quantity(selected.marketable_supply, selected.quantity_unit, locale)} />
-                <SmallMetric label={tx("Contracted")} value={`${quantity(selected.contracted_quantity, selected.quantity_unit, locale)} · ${pct(selected.contracted_percent)}`} />
-                <SmallMetric label={tx("Exposed")} value={`${quantity(selected.uncontracted_quantity, selected.quantity_unit, locale)} · ${pct(selected.exposed_percent)}`} warning={numberValue(selected.exposed_percent) !== null && Number(selected.exposed_percent) >= 60} />
+                <SmallMetric label={tx("Expected production")} value={quantity(selected.expected_production, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Carry inventory")} value={quantity(selected.inventory_quantity, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Marketable supply")} value={quantity(selected.marketable_supply, unitLabel(tx, selected.quantity_unit), locale)} />
+                <SmallMetric label={tx("Contracted")} value={`${quantity(selected.contracted_quantity, unitLabel(tx, selected.quantity_unit), locale)} · ${pct(selected.contracted_percent, locale)}`} />
+                <SmallMetric label={tx("Exposed")} value={`${quantity(selected.uncontracted_quantity, unitLabel(tx, selected.quantity_unit), locale)} · ${pct(selected.exposed_percent, locale)}`} warning={numberValue(selected.exposed_percent) !== null && Number(selected.exposed_percent) >= 60} />
                 <SmallMetric label={tx("Break-even")} value={money(selected.break_even_price, selected.reporting_currency, locale)} />
                 <SmallMetric label={tx("Current realizable")} value={money(selected.current_realizable_price, selected.reporting_currency, locale)} />
-                <SmallMetric label={tx("Margin")} value={`${money(selected.projected_margin, selected.reporting_currency, locale)} · ${pct(selected.projected_margin_percent)}`} />
+                <SmallMetric label={tx("Margin")} value={`${money(selected.projected_margin, selected.reporting_currency, locale)} · ${pct(selected.projected_margin_percent, locale)}`} />
               </div>
-              {selected.warnings?.length ? (
+              {selected.warning_codes?.length ? (
                 <div className="mt-5 rounded-xl border px-4 py-3" style={{ background: "#FFF7E7", borderColor: "#F1D69B" }}>
-                  {selected.warnings.map((warning) => <div key={warning} className="flex items-start gap-2 text-xs leading-5" style={{ color: "#77520E" }}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />{warning}</div>)}
+                  {selected.warning_codes.map((code) => <div key={code} className="flex items-start gap-2 text-xs leading-5" style={{ color: "#77520E" }}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />{warningLabel(tx, code)}</div>)}
                 </div>
               ) : null}
             </div>
@@ -347,13 +355,13 @@ export function MarketIntelligence() {
         <section className="rounded-3xl border p-5 sm:p-6" style={{ background: "#10231B", borderColor: "#19392C", color: "white" }}>
           <div className="flex items-center gap-2"><TrendingUp className="h-5 w-5" style={{ color: "#B6E85B" }} /><h2 className="text-lg font-semibold">{tx("What needs attention")}</h2></div>
           <div className="mt-5 space-y-3">
-            {overview.attention.length ? overview.attention.slice(0, 3).map((item, index) => (
+            {overview.attention.length ? overview.attention.slice(0, 3).map((item, index) => { const text = attentionText(tx, tf, commercialFormat.number, item); return (
               <button key={`${item.title}-${index}`} onClick={() => item.position_id && setSelectedId(item.position_id)} className="w-full rounded-2xl border p-4 text-start transition hover:bg-white/[0.04]" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: item.importance === "high" ? "#F5BC9F" : "#DDEB8F" }}>{item.importance}</div>
-                <div className="mt-2 text-sm font-semibold">{item.title}</div>
-                <div className="mt-1 text-xs leading-5" style={{ color: "rgba(255,255,255,0.64)" }}>{item.summary}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: item.importance === "high" ? "#F5BC9F" : "#DDEB8F" }}>{tx(IMPORTANCE_LABELS[item.importance] || IMPORTANCE_LABELS.medium)}</div>
+                <div className="mt-2 text-sm font-semibold">{text.title}</div>
+                <div className="mt-1 text-xs leading-5" style={{ color: "rgba(255,255,255,0.64)" }}>{text.summary}</div>
               </button>
-            )) : <p className="text-sm leading-6" style={{ color: "rgba(255,255,255,0.66)" }}>{tx("No material commercial exceptions are visible in the current structured position.")}</p>}
+            ); }) : <p className="text-sm leading-6" style={{ color: "rgba(255,255,255,0.66)" }}>{tx("No material commercial exceptions are visible in the current structured position.")}</p>}
           </div>
         </section>
       </div>
@@ -392,13 +400,12 @@ export function MarketIntelligence() {
             <button onClick={() => void ask()} disabled={askBusy || !question.trim()} className="mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "#0D2B1E" }}>
               {askBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{tx("Analyze")}
             </button>
-            {answer?.intelligence?.summary ? (
+            {answer?.intelligence ? (
               <div className="mt-5 rounded-2xl border p-4" style={{ borderColor: "#CFE0D6", background: "#F2F8F4" }}>
-                <p className="text-sm leading-7" style={{ color: "#183C2C" }}>{answer.intelligence.summary}</p>
+                <p className="whitespace-pre-line text-sm leading-7" style={{ color: "#183C2C" }} data-testid="market-answer">{[answerText(tx, tf, commercialFormat, answer.intelligence), answer.scenario_parse?.status === "unsupported_language" ? unsupportedScenarioLanguage(tx) : ""].filter(Boolean).join("\n")}</p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-medium uppercase tracking-wide" style={{ color: "#65736A" }}>
-                  <span>{answer.intelligence.status}</span>
-                  {answer.intelligence.confidence ? <span>· {answer.intelligence.confidence}</span> : null}
-                  {answer.intelligence.model_trace?.grounded ? <span>· grounded</span> : null}
+                  <span>{answer.intelligence.status === "deterministic" ? tx("Calculated answer") : tx("AI answer grounded in your data")}</span>
+                  {answer.intelligence.confidence ? <span>· {tx(({ high: "High confidence", medium: "Medium confidence", low: "Low confidence" } as Record<string, string>)[answer.intelligence.confidence] || "Medium confidence")}</span> : null}
                 </div>
               </div>
             ) : null}
@@ -413,7 +420,7 @@ export function MarketIntelligence() {
             {(selected.data_health?.sources || []).map((source) => {
               const badge = sourceBadge(source.status);
               return <div key={source.evidence_id || `${source.provider}-${source.source_name}`} className="rounded-2xl border p-4" style={{ borderColor: "#E1E5DD", background: "#FCFBF6" }}>
-                <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold" style={{ color: "#10231B" }}>{source.source_name || source.provider}</div><div className="mt-1 text-xs" style={{ color: "#7B877F" }}>{source.provider}</div></div><span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={badge.style}>{badge.state}</span></div>
+                <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold" style={{ color: "#10231B" }}>{providerLabel(tx, source.provider, source.source_name)}</div></div><span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={badge.style}>{stateLabel(tx, badge.state)}</span></div>
                 {source.observed_at ? <div className="mt-3 text-[11px]" style={{ color: "#8B948E" }}>{new Date(source.observed_at).toLocaleString(numberLocale(locale))}</div> : null}
               </div>;
             })}

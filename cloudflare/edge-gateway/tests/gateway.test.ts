@@ -107,6 +107,7 @@ describe("connector task envelope", () => {
     expect(validTask({ job_id: "job-1", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(true);
     expect(validTask({ job_id: "job-2", tenant_id: "tenant-1", task_type: "connector_ingest_object" })).toBe(true);
     expect(validTask({ job_id: "outbox-1", tenant_id: "tenant-1", task_type: "platform_webhook_delivery" })).toBe(true);
+    expect(validTask({ job_id: "job-4", tenant_id: "tenant-1", task_type: "market_intelligence_cycle" })).toBe(true);
     expect(validTask({ job_id: "", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
     expect(validTask({ job_id: "x".repeat(257), tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
     expect(validTask({ job_id: "job-3", tenant_id: "tenant-1", task_type: "unknown_task" })).toBe(false);

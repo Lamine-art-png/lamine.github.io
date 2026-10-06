@@ -39,7 +39,7 @@ _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
     "saas_requests": {"id", "organization_id", "workspace_id", "user_id", "type", "status", "priority", "subject", "message", "notification_status", "metadata_json", "created_at", "updated_at"},
-    # Intelligence Platform v1 (042) ownership and async-job columns: serving
+    # Intelligence Platform v1 (043) ownership and async-job columns: serving
     # these routes on a schema without them would break tenant isolation, so
     # readiness fails closed until the migration is complete.
     "platform_commercial_intelligence_runs": {"id", "organization_id", "api_project_id", "workspace_id", "execution", "session_id", "lease_expires_at", "request_payload_json", "cancel_requested_at"},
@@ -499,6 +499,7 @@ from app.api.v1.recommendations import router as recommendations_router  # noqa:
 from app.api.v1.reports import router as reports_router  # noqa: E402
 from app.api.v1.market_intelligence import router as market_intelligence_router  # noqa: E402
 from app.api.v1.market_intelligence_ingestion import router as market_intelligence_ingestion_router  # noqa: E402
+from app.api.v1.market_intelligence_commercial import router as market_intelligence_commercial_router  # noqa: E402
 from app.api.v1.router_compat import include_commercial_intelligence, materialize_included_routes  # noqa: E402
 from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
 from app.platform_api.errors import PlatformApiHTTPException, error_response  # noqa: E402
@@ -559,6 +560,7 @@ app.include_router(recommendations_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")
 app.include_router(market_intelligence_router, prefix="/v1")
 app.include_router(market_intelligence_ingestion_router, prefix="/v1")
+app.include_router(market_intelligence_commercial_router, prefix="/v1")
 app.include_router(webhooks_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402
