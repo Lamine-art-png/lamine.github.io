@@ -1,8 +1,9 @@
 name: Market Intelligence Production Closeout
 
-# One-shot production verification. This workflow runs only when this workflow
-# file itself is changed on main, so ordinary repository pushes do not create
-# production smoke data or re-trigger the closeout.
+# Production verification only. This runs only when this workflow file changes
+# on main. It creates clearly-labelled smoke data in the authenticated test
+# organization, exercises the real durable Commercial Intelligence cycle, and
+# archives the smoke position in an always() cleanup step.
 on:
   push:
     branches: [main]
@@ -47,31 +48,38 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  live-cycle-proof:
-    name: Live durable cycle proof
+  synthetic-live-cycle-proof:
+    name: Synthetic live durable cycle proof + cleanup
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
     env:
       QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      MARKET_INTELLIGENCE_SMOKE_TOKEN: ${{ secrets.MARKET_INTELLIGENCE_SMOKE_TOKEN }}
       LOOKBACK_MINUTES: "70"
       TIMEOUT_MINUTES: "15"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fail closed on missing operator secret
+
+      - name: Fail closed on missing secrets
         run: |
           set -euo pipefail
           test -n "${QUEUE_CONSUMER_TOKEN:-}" || { echo "Missing QUEUE_CONSUMER_TOKEN"; exit 1; }
+          test -n "${MARKET_INTELLIGENCE_SMOKE_TOKEN:-}" || { echo "Missing MARKET_INTELLIGENCE_SMOKE_TOKEN"; exit 1; }
+
       - name: Verify the exact deployed backend build
         run: |
           set -euo pipefail
           expected="$(bash .github/scripts/resolve-backend-release-sha.sh)"
           echo "Expected backend build: ${expected}"
           for _ in $(seq 1 45); do
-            payload="$(curl --fail --silent --show-error --max-time 20               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}"               "${API_URL}/v1/internal/release/health" 2>/dev/null || true)"
-            if printf '%s' "$payload" | jq -e --arg sha "$expected"               '.status == "ok" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .production_ready == true' >/dev/null 2>&1; then
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${API_URL}/v1/internal/release/health" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$expected" \
+              '.status == "ok" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .production_ready == true' >/dev/null 2>&1; then
               printf '%s' "$payload" | jq '{build_sha, schema_current, database_heads, repository_heads, queue_configured, production_ready}'
               echo "EXPECTED_BUILD_SHA=${expected}" >> "$GITHUB_ENV"
               exit 0
@@ -80,30 +88,93 @@ jobs:
           done
           echo "Production is not serving backend build ${expected}; refusing to prove an unknown release."
           exit 1
+
+      - name: Create labelled cycle-proof smoke position
+        id: create_smoke
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --max-time 60 -X POST \
+            -H "Authorization: Bearer ${MARKET_INTELLIGENCE_SMOKE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${API_URL}/v1/market-intelligence/onboarding" \
+            --data-binary @- <<JSON
+          {
+            "crop": "wheat",
+            "country_code": "FR",
+            "region": "Rouen",
+            "season": "cycle-proof-${GITHUB_RUN_ID}",
+            "name": "AGRO-AI cycle proof smoke (safe to delete)",
+            "expected_production": "1",
+            "production_cost_per_unit": "1"
+          }
+          JSON
+          )"
+          position_id="$(printf '%s' "$response" | jq -r '.id // empty')"
+          test -n "$position_id" || { echo "Smoke position creation did not return an id"; exit 1; }
+          echo "SMOKE_POSITION_ID=$position_id" >> "$GITHUB_ENV"
+          echo "Synthetic smoke position created for cycle proof."
+
+      - name: Verify proof sees an eligible position
+        run: |
+          set -euo pipefail
+          payload="$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            "${API_URL}/v1/internal/queue/market-cycle/proof")"
+          eligible="$(printf '%s' "$payload" | jq -r '.eligibility.eligible_positions')"
+          echo "eligible_positions=${eligible}"
+          test "${eligible}" -ge 1 || { echo "Synthetic position is not eligible for the cycle"; exit 1; }
+
       - name: Trigger the durable cycle
         run: |
           set -euo pipefail
           triggered_at="$(date -u +%Y-%m-%dT%H:%M:%S)"
           since="$(date -u -d "${triggered_at} UTC - ${LOOKBACK_MINUTES} minutes" +%Y-%m-%dT%H:%M:%S)"
           echo "PROOF_SINCE=${since}" >> "$GITHUB_ENV"
-          response="$(curl --fail --silent --show-error --max-time 60 -X POST             -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}"             "${API_URL}/v1/internal/queue/market-cycle")"
+          response="$(curl --fail --silent --show-error --max-time 60 -X POST \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            "${API_URL}/v1/internal/queue/market-cycle")"
           printf '%s' "$response" | jq '{status, reason, enqueued, recovered, already_pending, batch, published}'
           echo "Triggered at ${triggered_at}Z; counting cycle jobs created since ${since}Z"
+
       - name: Poll the aggregate cycle proof
         run: |
           set -euo pipefail
           deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
           verdict=""
           while :; do
-            if curl --fail --silent --show-error --max-time 30               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}"               "${API_URL}/v1/internal/queue/market-cycle/proof?since=${PROOF_SINCE}" -o proof.json 2>/dev/null; then
+            if curl --fail --silent --show-error --max-time 30 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${API_URL}/v1/internal/queue/market-cycle/proof?since=${PROOF_SINCE}" -o proof.json 2>/dev/null; then
               verdict="$(jq -r '.verdict' proof.json)"
               echo "$(date -u +%H:%M:%S) verdict=${verdict} jobs=$(jq -c '.jobs.by_status' proof.json) evaluated_orgs=$(jq '.evaluation.organizations_evaluated' proof.json)"
-              case "$verdict" in PASS|FAIL|NO_ELIGIBLE_POSITION|CYCLE_DISABLED) break ;; esac
+              case "$verdict" in PASS|FAIL|CYCLE_DISABLED) break ;; esac
             fi
             if [ "$(date +%s)" -ge "$deadline" ]; then break; fi
             sleep 20
           done
           echo "VERDICT=${verdict:-UNAVAILABLE}" >> "$GITHUB_ENV"
+
+      - name: Assert live cycle proof
+        run: |
+          set -euo pipefail
+          if [ ! -s proof.json ]; then
+            echo "CYCLE_PROOF=UNAVAILABLE: proof endpoint never answered"
+            exit 1
+          fi
+          jq -e --arg sha "$EXPECTED_BUILD_SHA" '.build_sha == $sha' proof.json >/dev/null \
+            || { echo "CYCLE_PROOF=FAIL: unexpected deployed build"; exit 1; }
+          test "$VERDICT" = "PASS" || { echo "CYCLE_PROOF=${VERDICT}: $(jq -r '.reasons | join(", ")' proof.json)"; exit 1; }
+          jq -e '
+            .latest_slot.shared_ingestion_complete == true
+            and .jobs.published >= 1
+            and .evaluation.organizations_evaluated >= 1
+            and .evaluation.slots_with_completed_shared_ingestion >= 1
+            and .evaluation.evaluations_without_completed_shared_ingestion == 0
+            and .evaluation.evaluations_without_slot_marker == 0
+            and .jobs.failed == 0' proof.json >/dev/null \
+            || { echo "CYCLE_PROOF=FAIL: PASS verdict without required evidence"; exit 1; }
+          echo "CYCLE_PROOF=PASS"
+
       - name: Upload aggregate cycle proof
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,32 +183,17 @@ jobs:
           path: proof.json
           if-no-files-found: ignore
           retention-days: 30
-      - name: Assert live cycle proof
+
+      - name: Archive cycle-proof smoke position
+        if: always()
         run: |
           set -euo pipefail
-          if [ ! -s proof.json ]; then
-            echo "CYCLE_PROOF=UNAVAILABLE: proof endpoint never answered"
-            exit 1
+          if [ -z "${SMOKE_POSITION_ID:-}" ]; then
+            echo "No smoke position id was created; nothing to archive."
+            exit 0
           fi
-          jq -e --arg sha "$EXPECTED_BUILD_SHA" '.build_sha == $sha' proof.json >/dev/null             || { echo "CYCLE_PROOF=FAIL: unexpected deployed build"; exit 1; }
-          case "$VERDICT" in
-            PASS)
-              jq -e '
-                .latest_slot.shared_ingestion_complete == true
-                and .jobs.published >= 1
-                and .evaluation.organizations_evaluated >= 1
-                and .evaluation.slots_with_completed_shared_ingestion >= 1
-                and .evaluation.evaluations_without_completed_shared_ingestion == 0
-                and .evaluation.evaluations_without_slot_marker == 0
-                and .jobs.failed == 0' proof.json >/dev/null                 || { echo "CYCLE_PROOF=FAIL: PASS verdict without required evidence"; exit 1; }
-              echo "CYCLE_PROOF=PASS"
-              ;;
-            NO_ELIGIBLE_POSITION)
-              echo "CYCLE_PROOF=NO_ELIGIBLE_POSITION: no active production Commercial Intelligence position exists."
-              exit 1
-              ;;
-            *)
-              echo "CYCLE_PROOF=${VERDICT}: $(jq -r '.reasons | join(", ")' proof.json)"
-              exit 1
-              ;;
-          esac
+          code="$(curl --silent --show-error --output cleanup-body.txt --write-out '%{http_code}' --max-time 60 -X DELETE \
+            -H "Authorization: Bearer ${MARKET_INTELLIGENCE_SMOKE_TOKEN}" \
+            "${API_URL}/v1/market-intelligence/positions/${SMOKE_POSITION_ID}")"
+          echo "cleanup_status=${code}"
+          test "$code" = "204" || { cat cleanup-body.txt; exit 1; }
