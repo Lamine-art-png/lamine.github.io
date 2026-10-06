@@ -7,6 +7,7 @@ credentials via AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE without stored keys.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import datetime, timedelta
 from typing import Any
@@ -16,6 +17,7 @@ import boto3
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError, CredentialRetrievalError, NoCredentialsError
 
 from app.core.config import settings
 from app.db.base import SessionLocal
@@ -28,6 +30,31 @@ logger = logging.getLogger(__name__)
 _scheduler: AsyncIOScheduler | None = None
 _last_event_result: dict[str, Any] | None = None
 _last_reconcile_result: dict[str, Any] | None = None
+
+
+
+
+
+def _safe_aws_error_code(exc: Exception) -> str:
+    if isinstance(exc, ClientError):
+        return str((exc.response.get("Error") or {}).get("Code") or "ClientError")[:80]
+    if isinstance(exc, NoCredentialsError):
+        return "NoCredentialsError"
+    if isinstance(exc, CredentialRetrievalError):
+        return "CredentialRetrievalError"
+    if isinstance(exc, BotoCoreError):
+        return exc.__class__.__name__[:80]
+    return exc.__class__.__name__[:80]
+
+
+def _log_credential_diagnostic(scope: str, exc: Exception) -> None:
+    logger.error(
+        "AWS Marketplace %s unavailable aws_error=%s role_arn_present=%s web_identity_token_file_present=%s",
+        scope,
+        _safe_aws_error_code(exc),
+        bool(os.environ.get("AWS_ROLE_ARN")),
+        bool(os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE")),
+    )
 
 
 def _aws_config() -> Config:
@@ -109,9 +136,9 @@ def process_events_once() -> dict[str, Any]:
         if counts.get("failed"):
             logger.warning("AWS Marketplace event worker completed with failed messages")
         return _last_event_result
-    except Exception:
+    except Exception as exc:
         _last_event_result = {"status": "unavailable", "checked_at": datetime.utcnow().isoformat()}
-        logger.error("AWS Marketplace event processing unavailable; check configuration and service health")
+        _log_credential_diagnostic("event_processing", exc)
         return _last_event_result
 
 
@@ -170,9 +197,9 @@ def reconcile_once() -> dict[str, Any]:
         if counts["failed"]:
             logger.warning("AWS Marketplace reconciliation completed with failed registrations")
         return _last_reconcile_result
-    except Exception:
+    except Exception as exc:
         _last_reconcile_result = {"status": "unavailable", "checked_at": datetime.utcnow().isoformat()}
-        logger.error("AWS Marketplace reconciliation unavailable; check configuration and service health")
+        _log_credential_diagnostic("reconciliation", exc)
         return _last_reconcile_result
 
 
