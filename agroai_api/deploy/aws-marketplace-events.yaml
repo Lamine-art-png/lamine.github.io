@@ -112,7 +112,7 @@ Resources:
             Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
             Resource: !GetAtt LicenseQueue.Arn
           - Effect: Allow
-            Action: [aws-marketplace:SearchAgreements, aws-marketplace:GetAgreementEntitlements]
+            Action: [aws-marketplace:SearchAgreements, aws-marketplace:GetAgreementEntitlements, aws-marketplace:GetEntitlements]
             Resource: '*'
   ResolveCustomerPolicy:
     Type: AWS::IAM::ManagedPolicy
