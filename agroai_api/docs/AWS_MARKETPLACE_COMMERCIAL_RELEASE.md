@@ -21,7 +21,10 @@ Event processing remains enabled. Use short-lived OIDC credentials only.
   passed or intentionally skipped. Its startup gate initially failed on a package
   download timeout; the rerun passed migration 046, image build and image startup.
   It maps exact-license AWS entitlements to Developer/Scale plans, disables AWS
-  overage, and prevents Stripe from billing AWS usage. Merge is not deployment proof.
+  overage, and prevents Stripe from billing AWS usage. Render deployment dep-db2qv695efls73c9ckeg is live on this commit.
+  Startup logs confirm migration 045 -> 046 at 02:35:02 UTC and successful startup.
+  Health returned 200 and the new instance verified the seller identity.
+  A live registration POST returned 503 with onboarding explicitly disabled.
 
 ## Exact commercial decisions already approved
 
