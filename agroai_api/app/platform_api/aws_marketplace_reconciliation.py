@@ -144,7 +144,9 @@ def sync_marketplace_subscription(db, row: AwsMarketplaceRegistration, *, active
     credits are enforced consistently; it must never trigger Stripe billing.
     """
     if not row.organization_id:
-        return not active
+        # The AWS license can be fully reconciled before the buyer links an
+        # AGRO-AI organization. Linking will materialize the internal plan record.
+        return True
     existing = (
         db.query(PlatformApiSubscription)
         .filter(
