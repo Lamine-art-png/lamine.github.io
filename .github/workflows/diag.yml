@@ -152,4 +152,47 @@ jobs:
           walk(details)
           PY
 
-# Fresh seller-account OIDC verification trigger: 2026-10-06
+      - name: Inspect commercial listing completeness read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          doc = json.loads((root / "product.json").read_text())
+          details = doc.get("DetailsDocument") or json.loads(doc.get("Details") or "{}")
+          # Emit presence and shape only: never dump private offer/customer/legal data.
+          fields = {"ProductTitle", "ShortDescription", "LongDescription", "Highlights",
+                    "Categories", "SearchKeywords", "LogoUrl", "AdditionalResources",
+                    "SupportInformation", "SupportDescription", "FulfillmentOptions",
+                    "FulfillmentUrl", "RegistrationUrl", "SaaSUrl", "Description",
+                    "Dimensions", "Offers", "LegalTerms", "RefundPolicy"}
+          def inspect(value, prefix=""):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      path = prefix + "." + key if prefix else key
+                      if key in fields:
+                          print("LISTING_FIELD=" + json.dumps({"path": path, "present": bool(item),
+                              "count": len(item) if isinstance(item, (list, dict)) else None}))
+                      inspect(item, path)
+              elif isinstance(value, list):
+                  for item in value:
+                      inspect(item, prefix + "[]")
+          inspect(details)
+          args = ["aws", "marketplace-catalog", "list-entities", "--region", "us-east-1",
+                  "--catalog", "AWSMarketplace", "--entity-type", "Offer",
+                  "--entity-type-filters", json.dumps({"OfferFilters": {"ProductId": {
+                      "ValueList": ["prod-rrjrdndw2eptq"]}}}), "--output", "json"]
+          result = subprocess.run(args, capture_output=True, text=True)
+          if result.returncode:
+              denied = "AccessDenied" in result.stderr or "not authorized" in result.stderr
+              print("OFFER_INSPECTION=" + ("blocked:aws-marketplace:ListEntities" if denied else "failed:inspect_catalog_cli"))
+          else:
+              offers = json.loads(result.stdout).get("EntitySummaryList", [])
+              print("OFFER_COUNT=" + str(len(offers)))
+              for offer in offers:
+                  print("OFFER_SUMMARY=" + json.dumps({"id": offer.get("EntityId"),
+                      "visibility": offer.get("Visibility"),
+                      "state": (offer.get("OfferSummary") or {}).get("State")}))
+          print("SELLER_FINANCIAL_STATUS=not_available_from_product_catalog")
+          PY
