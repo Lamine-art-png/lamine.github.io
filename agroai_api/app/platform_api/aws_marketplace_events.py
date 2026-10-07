@@ -96,7 +96,18 @@ remain separate. Database races are retried by SQS, never silently acknowledged.
     return "processed"
 
 
-def consume_license_messages(sqs, db_factory, *, queue_url: str, seller_account_id: str, product_code: str, region: str, agreements=None, product_id: str = ""):
+def consume_license_messages(
+    sqs,
+    db_factory,
+    *,
+    queue_url: str,
+    seller_account_id: str,
+    product_code: str,
+    region: str,
+    agreements=None,
+    product_id: str = "",
+    entitlements=None,
+):
     """One bounded batch. A failed message stays in SQS for retry/dead-lettering."""
     result = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=10, VisibilityTimeout=60)
     processed = failed = 0
@@ -105,10 +116,17 @@ def consume_license_messages(sqs, db_factory, *, queue_url: str, seller_account_
             try:
                 event = parse_license_event(message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
                 process_license_event(db, message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
-                if agreements is not None and product_id:
+                if agreements is not None and entitlements is not None and product_id:
                     from app.platform_api.aws_marketplace_reconciliation import reconcile_registration
                     row = db.query(AwsMarketplaceRegistration).filter_by(license_arn=event["license_arn"]).one()
-                    reconcile_registration(db, agreements, row, product_id)
+                    reconcile_registration(
+                        db,
+                        agreements,
+                        row,
+                        product_id,
+                        entitlements=entitlements,
+                        product_code=product_code,
+                    )
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
                 processed += 1
             except Exception:

@@ -59,7 +59,7 @@ jobs:
       - name: Assert a single migration head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "045_intelligence_platform_v1 (head)"
+          test "$(alembic heads)" = "046_aws_marketplace_plan_mapping (head)"
       - name: TEST self-service developer acceptance (release gate)
         id: self_service_gate
         shell: bash

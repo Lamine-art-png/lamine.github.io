@@ -152,11 +152,18 @@ def reserve_credits(
     overage = 0
     if included is not None and committed + reserved + credits > included:
         overage = committed + reserved + credits - max(included, committed + reserved)
-        if not plan.overages_allowed:
+        marketplace_fixed_entitlement = bool(
+            subscription is not None and subscription.billing_mode == "aws_marketplace"
+        )
+        if marketplace_fixed_entitlement or not plan.overages_allowed:
             platform_quota_decisions.labels(environment=principal.environment, outcome="quota_denied").inc()
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"code": "api_credit_quota_exceeded", "included_credits": included},
+                detail={
+                    "code": "api_credit_quota_exceeded",
+                    "included_credits": included,
+                    "billing_mode": "aws_marketplace" if marketplace_fixed_entitlement else subscription.billing_mode if subscription else "none",
+                },
             )
     row = PlatformCreditReservation(
         organization_id=organization.id,
@@ -247,7 +254,7 @@ def commit_credits(
         reservation.committed_at = datetime.utcnow()
         if reservation.overage_credits > 0:
             subscription, _plan = _subscription_and_plan(db, principal.organization_id)
-            if subscription:
+            if subscription and subscription.billing_mode == "stripe":
                 identifier = hashlib.sha256(f"agroai-api-meter:{event.id}".encode()).hexdigest()
                 db.add(
                     PlatformStripeMeterOutbox(

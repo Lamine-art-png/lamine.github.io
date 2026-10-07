@@ -26,6 +26,7 @@ from app.models.saas import Organization
 from app.api.deps import AuthContext, get_auth_context, require_approved_organization
 from app.platform_api.terms import require_user_acceptance
 from app.platform_api.aws_marketplace import InvalidMarketplaceIdentity, resolve_purchase
+from app.platform_api.aws_marketplace_reconciliation import sync_marketplace_subscription
 
 router = APIRouter(prefix="/marketplace/aws", tags=["aws-marketplace"])
 
@@ -159,6 +160,9 @@ def link_purchase(
     row.linked_at = datetime.utcnow()
     row.claim_token_hash = None
     row.claim_expires_at = None
+    if row.status == "active" and not sync_marketplace_subscription(db, row, active=True):
+        row.status = "license_confirmed"
+        row.reconciled_at = None
     try:
         db.commit()
     except IntegrityError:
@@ -182,4 +186,6 @@ def marketplace_status(
         "status": row.status,
         "reference": row.id,
         "last_reconciled_at": row.reconciled_at.isoformat() if row.reconciled_at else None,
+        "plan": row.plan_identifier,
+        "entitlement_expires_at": row.entitlement_expires_at.isoformat() if row.entitlement_expires_at else None,
     }

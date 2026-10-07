@@ -139,7 +139,8 @@ read-only diagnostic returns it.
       "Action": [
         "aws-marketplace:ResolveCustomer",
         "aws-marketplace:SearchAgreements",
-        "aws-marketplace:GetAgreementEntitlements"
+        "aws-marketplace:GetAgreementEntitlements",
+        "aws-marketplace:GetEntitlements"
       ],
       "Resource": "*"
     },

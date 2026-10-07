@@ -9,6 +9,7 @@ on:
       - 'agroai_api/app/models/aws_marketplace.py'
       - 'agroai_api/alembic/versions/043_aws_marketplace_registration.py'
       - 'agroai_api/alembic/versions/044_aws_marketplace_linking.py'
+      - 'agroai_api/alembic/versions/046_aws_marketplace_plan_mapping.py'
       - 'agroai_api/scripts/process_aws_marketplace_events.py'
       - 'agroai_api/scripts/reconcile_aws_marketplace.py'
       - 'agroai_api/scripts/bootstrap_aws_marketplace_oidc.sh'

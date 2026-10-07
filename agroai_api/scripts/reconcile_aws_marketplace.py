@@ -22,6 +22,7 @@ def main():
     if boto3.client("sts", region_name=settings.AWS_MARKETPLACE_REGION, config=config).get_caller_identity()["Account"] != seller:
         raise SystemExit("AWS credentials do not belong to the configured seller")
     agreements = boto3.client("marketplace-agreement", region_name=settings.AWS_MARKETPLACE_REGION, config=config)
+    entitlements = boto3.client("marketplace-entitlement", region_name=settings.AWS_MARKETPLACE_REGION, config=config)
     counts = {"checked": 0, "active": 0, "revoked": 0, "pending": 0, "failed": 0}
     with SessionLocal() as db:
         ids = [row.id for row in db.query(AwsMarketplaceRegistration.id).filter(AwsMarketplaceRegistration.status.in_(["active", "license_confirmed"])).all()]
@@ -31,7 +32,14 @@ def main():
                 row = db.get(AwsMarketplaceRegistration, registration_id)
                 if row is None:
                     continue
-                state = reconcile_registration(db, agreements, row, product_id)
+                state = reconcile_registration(
+                    db,
+                    agreements,
+                    row,
+                    product_id,
+                    entitlements=entitlements,
+                    product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE,
+                )
                 counts["checked"] += 1
                 counts["active" if state == "active" else "revoked" if state == "revoked" else "pending"] += 1
             except Exception:

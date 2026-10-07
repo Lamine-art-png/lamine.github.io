@@ -129,6 +129,11 @@ def process_events_once() -> dict[str, Any]:
             region_name=settings.AWS_MARKETPLACE_REGION,
             config=config,
         )
+        entitlements = boto3.client(
+            "marketplace-entitlement",
+            region_name=settings.AWS_MARKETPLACE_REGION,
+            config=config,
+        )
         counts = consume_license_messages(
             sqs,
             SessionLocal,
@@ -138,6 +143,7 @@ def process_events_once() -> dict[str, Any]:
             region=settings.AWS_MARKETPLACE_REGION,
             agreements=agreements,
             product_id=settings.AWS_MARKETPLACE_PRODUCT_ID,
+            entitlements=entitlements,
         )
         _last_event_result = {
             "status": "ok" if not counts.get("failed") else "partial",
@@ -169,10 +175,16 @@ def reconcile_once() -> dict[str, Any]:
             _last_reconcile_result = {"status": "wrong_aws_account", "checked_at": datetime.utcnow().isoformat()}
             logger.error("AWS Marketplace reconciliation credentials do not match the configured seller account")
             return _last_reconcile_result
+        config = _aws_config()
         agreements = boto3.client(
             "marketplace-agreement",
             region_name=settings.AWS_MARKETPLACE_REGION,
-            config=_aws_config(),
+            config=config,
+        )
+        entitlements = boto3.client(
+            "marketplace-entitlement",
+            region_name=settings.AWS_MARKETPLACE_REGION,
+            config=config,
         )
         counts = {"checked": 0, "active": 0, "revoked": 0, "pending": 0, "failed": 0}
         with SessionLocal() as db:
@@ -193,6 +205,8 @@ def reconcile_once() -> dict[str, Any]:
                         agreements,
                         row,
                         settings.AWS_MARKETPLACE_PRODUCT_ID,
+                        entitlements=entitlements,
+                        product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE,
                     )
                     counts["checked"] += 1
                     bucket = "active" if state == "active" else "revoked" if state == "revoked" else "pending"
