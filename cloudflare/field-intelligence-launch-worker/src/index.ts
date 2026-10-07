@@ -21,7 +21,7 @@ const FIELD_INTELLIGENCE_UPDATE_COVER_PATH = `${FIELD_INTELLIGENCE_UPDATE_ARTICL
 const FIELD_INTELLIGENCE_UPDATE_LOGO_PATH = `${FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH}/agro-ai-logo.png`;
 const PLATFORM_API_COVER_PATH = `${PLATFORM_API_ARTICLE_PATH}/cover.svg`;
 const PLATFORM_API_LOGO_PATH = `${PLATFORM_API_ARTICLE_PATH}/agro-ai-logo.png`;
-const AWS_MARKETPLACE_COVER_PATH = `${AWS_MARKETPLACE_ARTICLE_PATH}/cover.png`;
+const AWS_MARKETPLACE_COVER_PATH = `${AWS_MARKETPLACE_ARTICLE_PATH}/cover.svg`;
 const AWS_MARKETPLACE_LOGO_PATH = `${AWS_MARKETPLACE_ARTICLE_PATH}/agro-ai-logo.png`;
 const FIELD_INTELLIGENCE_COVER_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/cover.webp`;
 const FIELD_INTELLIGENCE_LOGO_PATH = `${FIELD_INTELLIGENCE_ARTICLE_PATH}/agro-ai-logo.png`;
@@ -36,7 +36,7 @@ const FIELD_INTELLIGENCE_UPDATE_COVER_SOURCE = "https://raw.githubusercontent.co
 const PLATFORM_API_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-launch/index.html";
 const PLATFORM_API_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-launch/cover.svg";
 const AWS_MARKETPLACE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-aws-marketplace/index.html";
-const AWS_MARKETPLACE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-aws-marketplace/cover.png";
+const AWS_MARKETPLACE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-aws-marketplace/cover.svg";
 const FIELD_INTELLIGENCE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-field-intelligence/index.html";
 const JOHN_DEERE_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-connected-john-deere-operations-center/index.html";
 const JOHN_DEERE_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp";
@@ -50,7 +50,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
     {
       path:"/news/agro-ai-platform-api-aws-marketplace",
-      image:"/news/agro-ai-platform-api-aws-marketplace/cover.png",
+      image:"/news/agro-ai-platform-api-aws-marketplace/cover.svg",
       category:"Company News",
       title:"AGRO-AI Platform API now available on AWS Marketplace",
       description:"Companies can procure AGRO-AI through AWS Marketplace and build agricultural intelligence directly into their own products, workflows and systems.",
@@ -356,7 +356,7 @@ export default {
     if (normalized === FIELD_INTELLIGENCE_UPDATE_LOGO_PATH) return officialLogoResponse(request);
 
     if (normalized === AWS_MARKETPLACE_ARTICLE_PATH) return awsMarketplaceArticleResponse(request);
-    if (normalized === AWS_MARKETPLACE_COVER_PATH) return repositoryAssetResponse(request, AWS_MARKETPLACE_COVER_SOURCE, "image/png", "reviewed-aws-marketplace-cover");
+    if (normalized === AWS_MARKETPLACE_COVER_PATH) return repositoryAssetResponse(request, AWS_MARKETPLACE_COVER_SOURCE, "image/svg+xml", "reviewed-aws-marketplace-cover");
     if (normalized === AWS_MARKETPLACE_LOGO_PATH) return officialLogoResponse(request);
 
     if (normalized === PLATFORM_API_ARTICLE_PATH) return platformApiArticleResponse(request);
