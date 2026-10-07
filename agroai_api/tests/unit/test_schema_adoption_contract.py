@@ -31,8 +31,8 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "045_intelligence_platform_v1"
-    assert {"license_arn", "customer_aws_account_id", "status", "license_updated_at"}.issubset(
+    assert HEAD_ALEMBIC_REVISION == "046_aws_marketplace_plan_mapping"
+    assert {"license_arn", "customer_aws_account_id", "status", "license_updated_at", "plan_identifier", "entitlement_expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["aws_marketplace_registrations"]
     )
     assert {"event_id", "payload_digest", "occurred_at"}.issubset(
