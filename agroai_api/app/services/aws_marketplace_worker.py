@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _scheduler: AsyncIOScheduler | None = None
 _last_event_result: dict[str, Any] | None = None
 _last_reconcile_result: dict[str, Any] | None = None
+_identity_verified_logged = False
 
 
 
@@ -89,12 +90,22 @@ def _event_configuration_valid() -> bool:
 
 
 def _credentials_match_seller() -> bool:
+    global _identity_verified_logged
     account = boto3.client(
         "sts",
         region_name=settings.AWS_MARKETPLACE_REGION,
         config=_aws_config(),
     ).get_caller_identity()["Account"]
-    return account == settings.AWS_MARKETPLACE_SELLER_ACCOUNT_ID
+    matches = account == settings.AWS_MARKETPLACE_SELLER_ACCOUNT_ID
+    if matches and not _identity_verified_logged:
+        logger.warning(
+            "AWS Marketplace seller identity verified account=%s role_arn_present=%s web_identity_token_file_present=%s",
+            account,
+            bool(os.environ.get("AWS_ROLE_ARN")),
+            bool(os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE")),
+        )
+        _identity_verified_logged = True
+    return matches
 
 
 def process_events_once() -> dict[str, Any]:
