@@ -8,12 +8,15 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.aws_marketplace import AwsMarketplaceRegistration
+from app.models.platform_product import PlatformApiPlan, PlatformApiSubscription
 from app.platform_api.aws_marketplace_reconciliation import (
     agreement_is_active,
     marketplace_plan_entitlement,
     reconcile_registration,
     require_marketplace_access,
+    sync_marketplace_subscription,
 )
 
 
@@ -172,4 +175,45 @@ def test_aws_billing_owner_blocks_stripe_checkout_boundary():
             billing._require_no_aws_billing(db, "org-test")
         assert exc.value.status_code == 409
         assert exc.value.detail["code"] == "aws_marketplace_billing_owned"
+    engine.dispose()
+
+
+def test_marketplace_plan_materializes_internal_subscription():
+    engine = create_engine("sqlite://")
+    PlatformApiPlan.__table__.create(engine)
+    PlatformApiSubscription.__table__.create(engine)
+    AwsMarketplaceRegistration.__table__.create(engine)
+    with Session(engine) as db:
+        plan = PlatformApiPlan(
+            catalog_version=settings.PLATFORM_API_PLAN_CATALOG_VERSION,
+            plan_identifier="developer",
+            display_name="Developer",
+            status="active",
+            active=True,
+            currency="USD",
+            included_credits=250000,
+            overages_allowed=True,
+            limits_json={"projects": 3},
+            support_tier="standard",
+        )
+        db.add(plan)
+        db.flush()
+        registration = AwsMarketplaceRegistration(
+            license_arn=LICENSE,
+            customer_aws_account_id="123456789012",
+            product_code="product-test",
+            organization_id="org-test",
+            plan_identifier="developer",
+            status="active",
+        )
+        db.add(registration)
+        db.flush()
+        assert sync_marketplace_subscription(db, registration, active=True)
+        db.commit()
+        subscription = db.query(PlatformApiSubscription).one()
+        assert subscription.plan_id == plan.id
+        assert subscription.billing_mode == "aws_marketplace"
+        assert subscription.status == "active"
+        assert subscription.entitlement_policy_json["dimension"] == "developer"
+        assert subscription.entitlement_policy_json["overages_allowed"] is False
     engine.dispose()
