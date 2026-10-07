@@ -35,7 +35,18 @@ def main():
         raise SystemExit("AWS credentials do not belong to the configured seller")
     sqs = boto3.client("sqs", region_name=region, config=config)
     agreements = boto3.client("marketplace-agreement", region_name=region, config=config)
-    counts = consume_license_messages(sqs, SessionLocal, queue_url=queue, seller_account_id=seller, product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE, region=region, agreements=agreements, product_id=settings.AWS_MARKETPLACE_PRODUCT_ID)
+    entitlements = boto3.client("marketplace-entitlement", region_name=region, config=config)
+    counts = consume_license_messages(
+        sqs,
+        SessionLocal,
+        queue_url=queue,
+        seller_account_id=seller,
+        product_code=settings.AWS_MARKETPLACE_PRODUCT_CODE,
+        region=region,
+        agreements=agreements,
+        product_id=settings.AWS_MARKETPLACE_PRODUCT_ID,
+        entitlements=entitlements,
+    )
     print(json.dumps(counts))
     if counts["failed"]:
         raise SystemExit(1)
