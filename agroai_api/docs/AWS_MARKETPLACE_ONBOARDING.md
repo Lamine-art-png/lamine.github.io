@@ -1,8 +1,9 @@
 # AWS Marketplace onboarding checkpoint
 
-The staged SaaS product has no offer or pricing terms. Keep onboarding disabled
-until approved terms, a deployed seller identity, and a real test purchase are
-verified. A code release alone does not authorize a public listing or charges.
+The staged SaaS product is still Draft. Keep onboarding disabled until pricing
+terms are approved, AWS plan dimensions are mapped and verified, and a real test
+purchase is completed. A code release alone does not authorize a public listing
+or charges.
 
 ## Purchase and access lifecycle
 
@@ -61,10 +62,12 @@ provisions access.
    must finish before a paid product can be published.
 2. Configure short-lived seller-account credentials for the deployed API and
    worker, deploy the migration, and verify exact release health and scheduler.
-3. If the approved offer has usage charges, add a durable hourly metering outbox
-   mapped to its dimensions. Use `CustomerAWSAccountId` and per-record
-   `LicenseArn`, and omit request-level `ProductCode` in `BatchMeterUsage`.
-4. Verify a real purchase, organization link, provisioning, usage if applicable,
+3. Initial AWS Developer and Scale contracts are fixed entitlements. The runtime
+   resolves the purchased `developer` or `scale` dimension with
+   `GetEntitlements`, maps it to the matching AGRO-AI plan, and blocks overage
+   instead of sending Stripe meter events. If a future AWS offer adds usage
+   charges, add a durable AWS Marketplace metering outbox before enabling them.
+4. Verify a real purchase, organization link, plan mapping, provisioning, usage,
    changes, cancellation, replay, and failure recovery before AWS review submission.
 
 Official references:
