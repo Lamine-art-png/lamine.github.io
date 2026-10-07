@@ -36,22 +36,24 @@ jobs:
       - name: Enforce revision graph contract
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
-          test "$(alembic heads)" = "045_intelligence_platform_v1 (head)"
-      - name: Migrate real PostgreSQL along the production lineage (044 -> 045, down, re-up)
+          test "$(alembic heads)" = "046_aws_marketplace_plan_mapping (head)"
+      - name: Migrate real PostgreSQL along the production lineage (044 -> 045 -> 046, down, re-up)
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: |
           set -euo pipefail
           # Production already runs 044_aws_marketplace_linking; prove the exact
-          # step it will take, that 045 downgrades cleanly, and re-upgrades.
+          # steps it will take, that the chain downgrades cleanly, and re-upgrades.
           alembic upgrade 044_aws_marketplace_linking
           test "$(alembic current 2>/dev/null | awk '{print $1}')" = "044_aws_marketplace_linking"
-          alembic upgrade head 2>&1 | tee upgrade-044-045.log
-          grep -q "Running upgrade 044_aws_marketplace_linking -> 045_intelligence_platform_v1" upgrade-044-045.log
-          alembic downgrade 044_aws_marketplace_linking 2>&1 | tee downgrade-045-044.log
-          grep -q "Running downgrade 045_intelligence_platform_v1 -> 044_aws_marketplace_linking" downgrade-045-044.log
+          alembic upgrade head 2>&1 | tee upgrade-044-046.log
+          grep -q "Running upgrade 044_aws_marketplace_linking -> 045_intelligence_platform_v1" upgrade-044-046.log
+          grep -q "Running upgrade 045_intelligence_platform_v1 -> 046_aws_marketplace_plan_mapping" upgrade-044-046.log
+          alembic downgrade 044_aws_marketplace_linking 2>&1 | tee downgrade-046-044.log
+          grep -q "Running downgrade 046_aws_marketplace_plan_mapping -> 045_intelligence_platform_v1" downgrade-046-044.log
+          grep -q "Running downgrade 045_intelligence_platform_v1 -> 044_aws_marketplace_linking" downgrade-046-044.log
           alembic upgrade head
-          test "$(alembic current 2>/dev/null | awk '{print $1}')" = "045_intelligence_platform_v1"
+          test "$(alembic current 2>/dev/null | awk '{print $1}')" = "046_aws_marketplace_plan_mapping"
       - name: Prove persisted revision equals repository head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
