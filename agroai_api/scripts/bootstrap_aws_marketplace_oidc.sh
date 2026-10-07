@@ -102,9 +102,18 @@ cat >"${GITHUB_POLICY}" <<'JSON'
         "events:DescribeRule",
         "events:ListTargetsByRule",
         "sqs:GetQueueAttributes",
-        "aws-marketplace:DescribeEntity"
+        "aws-marketplace:DescribeEntity",
+        "aws-marketplace:ListEntities"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "InspectMarketplaceRuntimePolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::987432215840:role/AgroAIMarketplaceRenderRuntime"
     }
   ]
 }
