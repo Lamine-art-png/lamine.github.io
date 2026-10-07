@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1152" viewBox="0 0 2048 1152" role="img" aria-labelledby="title desc">
+  <title id="title">AGRO-AI Platform API now available on AWS Marketplace</title>
+  <desc id="desc">AGRO-AI Platform API and AWS launch visual on a light blue gradient background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a6bccd"/>
+      <stop offset="48%" stop-color="#d5e0e8"/>
+      <stop offset="100%" stop-color="#f7f9fa"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#163f18"/>
+      <stop offset="45%" stop-color="#2f6f17"/>
+      <stop offset="100%" stop-color="#b9ef44"/>
+    </linearGradient>
+  </defs>
+  <rect width="2048" height="1152" fill="url(#bg)"/>
+  <g transform="translate(260 300)">
+    <circle cx="220" cy="150" r="102" fill="none" stroke="url(#ring)" stroke-width="50"/>
+    <path d="M148 103c33-50 96-77 146-41 35 25 48 69 33 106-12 31-42 54-79 59 25-17 39-41 38-68-1-35-24-63-59-72-28-8-57-2-79 16z" fill="#153f18" opacity=".95"/>
+    <text x="0" y="335" fill="#1d571a" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="700" letter-spacing="8">AGRO-AI</text>
+    <text x="-8" y="455" fill="#245d1d" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="400" letter-spacing="18">Platform API™</text>
+  </g>
+  <line x1="970" y1="392" x2="970" y2="684" stroke="#2c6a2a" stroke-width="4"/>
+  <g transform="translate(1135 310)">
+    <text x="0" y="245" fill="#111d2a" font-family="Arial, Helvetica, sans-serif" font-size="250" font-weight="700" letter-spacing="-16">aws</text>
+    <path d="M18 308 C 205 430, 470 430, 630 325" fill="none" stroke="#ff9900" stroke-width="28" stroke-linecap="round"/>
+    <path d="M594 314 L 650 302 L 634 358" fill="none" stroke="#ff9900" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="1024" y="1015" text-anchor="middle" fill="#245d1d" font-family="Arial, Helvetica, sans-serif" font-size="57" font-weight="400" letter-spacing="2">AGRO-AI Platform API, now available on AWS Marketplace</text>
+</svg>
