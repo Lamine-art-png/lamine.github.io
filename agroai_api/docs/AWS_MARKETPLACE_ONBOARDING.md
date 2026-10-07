@@ -1,5 +1,9 @@
 # AWS Marketplace onboarding checkpoint
 
+Current evidence and the controlled test procedure are recorded in
+[AWS_MARKETPLACE_COMMERCIAL_RELEASE.md](AWS_MARKETPLACE_COMMERCIAL_RELEASE.md).
+That dated report supersedes older infrastructure blockers.
+
 The staged SaaS product is still Draft. Keep onboarding disabled until pricing
 terms are approved, AWS plan dimensions are mapped and verified, and a real test
 purchase is completed. A code release alone does not authorize a public listing
@@ -32,19 +36,17 @@ provisions access.
 
 ## Deployment configuration
 
-- Apply database migrations through `044_aws_marketplace_linking`.
+- Apply database migrations through `046_aws_marketplace_plan_mapping`.
 - Configure `AWS_MARKETPLACE_PRODUCT_CODE` and `AWS_MARKETPLACE_PRODUCT_ID` from
   the actual seller product, and `AWS_MARKETPLACE_REGION=us-east-1`.
 - Use a short-lived seller-account workload identity with `ResolveCustomer` for
   the API and queue/agreement permissions for the worker. Do not create access keys.
-- Historical seller-account evidence says the `agroai-marketplace-events`
-  CloudFormation stack completed in `us-east-1`. Reverify its EventBridge rule,
-  encrypted SQS queue, dead-letter queue, policies and outputs with the read-only
-  `diag-oidc` workflow before activation. Configure
-  `AWS_MARKETPLACE_SELLER_ACCOUNT_ID` and `AWS_MARKETPLACE_QUEUE_URL` only from
-  those verified outputs.
-- Enable `AWS_MARKETPLACE_ONBOARDING_ENABLED` and
-  `AWS_MARKETPLACE_EVENTS_ENABLED` only for verified integration testing.
+- Seller-account OIDC and the CloudFormation/EventBridge/SQS resources have
+  been verified. Retain the verified seller account, region and queue configuration.
+  Do not recreate infrastructure or replace OIDC with access keys.
+- Keep `AWS_MARKETPLACE_EVENTS_ENABLED=true` and
+  `AWS_MARKETPLACE_ONBOARDING_ENABLED=false`. Enable onboarding only for a
+  controlled test after its commercial prerequisites are satisfied.
 - Production runs the bounded SQS consumer and hourly reconciliation inside the
   API process when `AWS_MARKETPLACE_EVENTS_ENABLED=true`. The standalone
   `scripts/process_aws_marketplace_events.py` and
@@ -57,11 +59,11 @@ provisions access.
 
 ## Remaining release gates
 
-1. Approve an AWS Marketplace pricing model, dimensions, rates, and applicable
-   terms. The draft currently has no offer. The seller public profile review
-   must finish before a paid product can be published.
-2. Configure short-lived seller-account credentials for the deployed API and
-   worker, deploy the migration, and verify exact release health and scheduler.
+1. Verify the actual offer, approved prices, legal terms, fulfillment configuration
+   and current seller financial eligibility. Offer inventory is not verified:
+   the current diagnostic role lacks `aws-marketplace:ListEntities`.
+2. Verify the deployed plan-mapping migration and actual runtime
+   `aws-marketplace:GetEntitlements` permission. Workload OIDC already works.
 3. Initial AWS Developer and Scale contracts are fixed entitlements. The runtime
    resolves the purchased `developer` or `scale` dimension with
    `GetEntitlements`, maps it to the matching AGRO-AI plan, and blocks overage
