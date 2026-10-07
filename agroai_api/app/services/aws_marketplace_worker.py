@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _scheduler: AsyncIOScheduler | None = None
 _last_event_result: dict[str, Any] | None = None
 _last_reconcile_result: dict[str, Any] | None = None
+_last_entitlements_probe: dict[str, Any] | None = None
 _identity_verified_logged = False
 
 
@@ -106,6 +107,56 @@ def _credentials_match_seller() -> bool:
         )
         _identity_verified_logged = True
     return matches
+
+
+def probe_entitlements_service_once() -> dict[str, Any]:
+    """Issue a real read-only GetEntitlements call for AWS Marketplace audit readiness."""
+    global _last_entitlements_probe
+    if not settings.AWS_MARKETPLACE_EVENTS_ENABLED:
+        return {"skipped": "disabled"}
+    if not _seller_identity_valid() or not settings.AWS_MARKETPLACE_PRODUCT_CODE:
+        _last_entitlements_probe = {
+            "status": "configuration_invalid",
+            "checked_at": datetime.utcnow().isoformat(),
+        }
+        logger.error("AWS Marketplace GetEntitlements audit probe configuration is invalid")
+        return _last_entitlements_probe
+    try:
+        if not _credentials_match_seller():
+            _last_entitlements_probe = {
+                "status": "wrong_aws_account",
+                "checked_at": datetime.utcnow().isoformat(),
+            }
+            logger.error("AWS Marketplace GetEntitlements audit probe credentials do not match seller account")
+            return _last_entitlements_probe
+
+        entitlements = boto3.client(
+            "marketplace-entitlement",
+            region_name="us-east-1",
+            config=_aws_config(),
+        )
+        response = entitlements.get_entitlements(
+            ProductCode=settings.AWS_MARKETPLACE_PRODUCT_CODE,
+            MaxResults=1,
+        )
+        count = len(response.get("Entitlements") or [])
+        _last_entitlements_probe = {
+            "status": "ok",
+            "entitlements_seen": count,
+            "checked_at": datetime.utcnow().isoformat(),
+        }
+        logger.warning(
+            "AWS Marketplace GetEntitlements audit probe succeeded entitlements_seen=%s",
+            count,
+        )
+        return _last_entitlements_probe
+    except Exception as exc:
+        _last_entitlements_probe = {
+            "status": "unavailable",
+            "checked_at": datetime.utcnow().isoformat(),
+        }
+        _log_credential_diagnostic("get_entitlements_audit_probe", exc)
+        return _last_entitlements_probe
 
 
 def process_events_once() -> dict[str, Any]:
@@ -234,6 +285,7 @@ def worker_status() -> dict[str, Any]:
         "configuration_valid": _event_configuration_valid() if settings.AWS_MARKETPLACE_EVENTS_ENABLED else False,
         "last_event_result": _last_event_result,
         "last_reconcile_result": _last_reconcile_result,
+        "last_entitlements_probe": _last_entitlements_probe,
     }
 
 
@@ -248,6 +300,8 @@ def start_aws_marketplace_worker() -> AsyncIOScheduler | None:
         return None
     if _scheduler is not None:
         return _scheduler
+
+    probe_entitlements_service_once()
 
     poll_seconds = max(15, int(getattr(settings, "AWS_MARKETPLACE_EVENT_POLL_SECONDS", 60)))
     reconcile_seconds = max(300, int(getattr(settings, "AWS_MARKETPLACE_RECONCILE_SECONDS", 3600)))
