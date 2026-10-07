@@ -196,3 +196,38 @@ jobs:
                       "state": (offer.get("OfferSummary") or {}).get("State")}))
           print("SELLER_FINANCIAL_STATUS=not_available_from_product_catalog")
           PY
+
+
+      - name: Verify live Render Marketplace IAM policy read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws iam get-role-policy             --role-name AgroAIMarketplaceRenderRuntime             --policy-name AgroAIMarketplaceRuntime             --output json > "$RUNNER_TEMP/render-role-policy.json"
+          python - <<'PY'
+          import json, os, pathlib, urllib.parse
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          doc = json.loads((root / "render-role-policy.json").read_text())
+          policy = doc.get("PolicyDocument") or {}
+          if isinstance(policy, str):
+              policy = json.loads(urllib.parse.unquote(policy))
+          actions = set()
+          for statement in policy.get("Statement", []):
+              raw = statement.get("Action", [])
+              if isinstance(raw, str):
+                  raw = [raw]
+              actions.update(raw)
+          required = {
+              "aws-marketplace:ResolveCustomer",
+              "aws-marketplace:SearchAgreements",
+              "aws-marketplace:GetAgreementEntitlements",
+              "aws-marketplace:GetEntitlements",
+              "sqs:ReceiveMessage",
+              "sqs:DeleteMessage",
+              "sqs:GetQueueAttributes",
+          }
+          missing = sorted(required - actions)
+          print("RUNTIME_POLICY_REQUIRED_PRESENT=" + str(not missing).lower())
+          if missing:
+              print("RUNTIME_POLICY_MISSING=" + ",".join(missing))
+              raise SystemExit(1)
+          PY
