@@ -231,3 +231,5 @@ jobs:
               print("RUNTIME_POLICY_MISSING=" + ",".join(missing))
               raise SystemExit(1)
           PY
+
+# Verify AWS Marketplace Limited transition: 2026-10-06 20:46 PDT
