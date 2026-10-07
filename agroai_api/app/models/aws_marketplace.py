@@ -22,6 +22,8 @@ class AwsMarketplaceRegistration(Base):
     linked_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     linked_at = Column(DateTime, nullable=True)
     reconciled_at = Column(DateTime, nullable=True)
+    plan_identifier = Column(String(32), nullable=True)
+    entitlement_expires_at = Column(DateTime, nullable=True)
 
 
 class AwsMarketplaceLicenseEvent(Base):
