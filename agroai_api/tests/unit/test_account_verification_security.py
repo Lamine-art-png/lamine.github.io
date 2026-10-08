@@ -172,6 +172,21 @@ def test_strict_registration_encrypts_phone_and_waits_for_email(client, db, monk
     assert db.query(SecurityAuditEvent).filter_by(event_type="registration_verification", outcome="preapproved_pending_email").count() == 1
 
 
+def test_registration_uses_profile_when_optional_website_contains_whitespace(client, monkeypatch):
+    monkeypatch.setattr(settings, "ACCOUNT_VERIFICATION_MODE", "enforce")
+    application = {
+        **STRONG_APPLICATION,
+        "email": "profile-based-owner@gmail.com",
+        "website_url": "   ",
+        "professional_profile_url": "https://www.linkedin.com/in/jane-farmer",
+        "planned_data_sources": "",
+        "intended_use": "Plan irrigation",
+    }
+    response = client.post("/v1/auth/register", json=application)
+    assert response.status_code == 201, response.text
+    assert response.json()["organization_verification"]["status"] == "preapproved_pending_email"
+
+
 def test_strict_registration_rejects_weak_consumer_application_without_account(client, db, monkeypatch):
     monkeypatch.setattr(settings, "ACCOUNT_VERIFICATION_MODE", "enforce")
     payload = {
