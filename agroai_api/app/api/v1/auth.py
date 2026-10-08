@@ -325,7 +325,6 @@ def _registration_evidence_complete(payload: RegisterRequest) -> bool:
             payload.acres_or_sites,
             payload.primary_crops or payload.crop,
             payload.intended_use,
-            payload.planned_data_sources,
         )
     ) and bool(str(payload.website_url or payload.professional_profile_url or "").strip())
 
@@ -417,19 +416,10 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     evidence_complete = _registration_evidence_complete(payload)
     decision = evaluate_organization(_verification_input(payload)) if (enforce_verification or evidence_complete) else None
 
-    if enforce_verification and not evidence_complete:
-        reason_codes = ["complete_organization_verification_required"]
-        _register_failure(db, request, email=email, reason_codes=reason_codes)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "organization_verification_rejected",
-                "message": "Live portal access is reserved for verifiable agricultural organizations and professionals.",
-                "reason_codes": reason_codes,
-            },
-        )
-
-    if decision is not None and not decision.approved:
+    # Always return the precise, actionable verification reasons rather than
+    # hiding an omitted field behind a generic "verification required" error.
+    # Approval still requires all identity and operational evidence below.
+    if enforce_verification and decision is not None and not decision.approved:
         _register_failure(db, request, email=email, reason_codes=decision.reason_codes, score=decision.score)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
