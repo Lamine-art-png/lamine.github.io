@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { CheckCircle2, Code2, Loader2, ShieldCheck, TerminalSquare } from "lucide-react";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { RegisterPayload } from "../api/client";
+import { explainRegistrationError } from "./registrationGuidance";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
@@ -30,7 +31,7 @@ const initialRegisterForm: RegisterPayload = {
   primary_crops: "",
   intended_use: "",
   planned_data_sources: "",
-  workspace_name: "",
+  workspace_name: "Developer evaluation workspace",
   crop: "",
   region: "",
   terms_accepted: false,
@@ -187,9 +188,11 @@ export function PlatformAuthScreen() {
     }
     setWorking(true);
     try {
-      await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region });
+      await register({ ...registerForm, workspace_name: registerForm.workspace_name.trim() || "Developer evaluation workspace", planned_data_sources: registerForm.planned_data_sources.trim(), intended_use: registerForm.intended_use.trim(), crop: registerForm.primary_crops, region: registerForm.operating_region });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the developer account.");
+      const guidance = explainRegistrationError(cause);
+      if (guidance) { setRegisterStep(guidance.step); setError(guidance.message); }
+      else setError(cause instanceof Error ? cause.message : "Unable to create the developer account.");
     } finally {
       setWorking(false);
     }
@@ -223,6 +226,11 @@ export function PlatformAuthScreen() {
     }
     if (!filled(registerForm.professional_role) || !filled(registerForm.phone_number) || !filled(registerForm.country) || !filled(registerForm.operating_region) || !filled(registerForm.acres_or_sites) || !filled(registerForm.primary_crops)) {
       setError("Complete the operating details to continue.");
+      return;
+    }
+    const phoneDigits = registerForm.phone_number.replace(/\D/g, "");
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      setError("Enter a phone number with 8–15 digits, including the country code.");
       return;
     }
     if (form && !form.reportValidity()) return;
@@ -294,7 +302,7 @@ export function PlatformAuthScreen() {
                     <Field label="Password" note="At least 12 characters. Do not include your email name."><Input type="password" value={registerForm.password} onChange={(event) => setRegisterForm({ ...registerForm, password: event.target.value })} minLength={12} maxLength={128} autoComplete="new-password" required /></Field>
                     <div className="grid gap-4 sm:grid-cols-2"><Field label="Legal organization name"><Input value={registerForm.organization_name} onChange={(event) => setRegisterForm({ ...registerForm, organization_name: event.target.value })} autoComplete="organization" required /></Field><Field label="Organization type"><select value={registerForm.organization_type} onChange={(event) => setRegisterForm({ ...registerForm, organization_type: event.target.value })} className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 text-sm" required><option value="">Select organization type</option>{organizationTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field></div>
                     <div className="grid gap-4 sm:grid-cols-2"><Field label="Organization website"><Input type="url" value={registerForm.website_url} onChange={(event) => setRegisterForm({ ...registerForm, website_url: event.target.value })} placeholder="https://company.com" /></Field><Field label="Professional profile"><Input type="url" value={registerForm.professional_profile_url} onChange={(event) => setRegisterForm({ ...registerForm, professional_profile_url: event.target.value })} placeholder="LinkedIn or equivalent" /></Field></div>
-                    <p className="-mt-3 text-[10px] leading-5 text-[#7A867E]">Use at least one verifiable organization website or professional profile.</p>
+                    <p className="-mt-3 text-[10px] leading-5 text-[#7A867E]">Add one public website or professional profile (such as LinkedIn). No public profile? <a href="mailto:contact@agroai-pilot.com?subject=Developer%20account%20verification" className="font-semibold underline">Ask about another way to verify.</a></p>
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D6DDD0] bg-white p-4">
                       <input type="checkbox" checked={registerForm.terms_accepted && registerForm.authority_confirmed} onChange={(event) => setRegisterForm({ ...registerForm, terms_accepted: event.target.checked, authority_confirmed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-[#9BA89F] accent-[#10231B]" required />
                       <span className="text-[11px] leading-5 text-[#52645A]">
@@ -307,15 +315,15 @@ export function PlatformAuthScreen() {
                   </> : null}
 
                   {registerStep === 2 ? <>
-                    <div className="grid gap-4 sm:grid-cols-2"><Field label="Professional role"><Input value={registerForm.professional_role} onChange={(event) => setRegisterForm({ ...registerForm, professional_role: event.target.value })} placeholder="Farm manager, CTO, agronomist…" required /></Field><Field label="Phone number"><Input type="tel" value={registerForm.phone_number} onChange={(event) => setRegisterForm({ ...registerForm, phone_number: event.target.value })} autoComplete="tel" placeholder="Include country code" required /></Field></div>
+                    <div className="grid gap-4 sm:grid-cols-2"><Field label="Professional role"><Input value={registerForm.professional_role} onChange={(event) => setRegisterForm({ ...registerForm, professional_role: event.target.value })} placeholder="Farm manager, CTO, agronomist…" required /></Field><Field label="Phone number (8–15 digits, include country code)"><Input type="tel" value={registerForm.phone_number} onChange={(event) => setRegisterForm({ ...registerForm, phone_number: event.target.value })} autoComplete="tel" placeholder="Include country code" required /></Field></div>
                     <div className="grid gap-4 sm:grid-cols-2"><Field label="Country"><Input value={registerForm.country} onChange={(event) => setRegisterForm({ ...registerForm, country: event.target.value })} autoComplete="country-name" required /></Field><Field label="Operating region"><Input value={registerForm.operating_region} onChange={(event) => setRegisterForm({ ...registerForm, operating_region: event.target.value })} placeholder="California Central Valley" required /></Field></div>
                     <div className="grid gap-4 sm:grid-cols-2"><Field label="Acres or sites"><Input value={registerForm.acres_or_sites} onChange={(event) => setRegisterForm({ ...registerForm, acres_or_sites: event.target.value })} placeholder="2,500 acres across four farms" required /></Field><Field label="Primary crops or segment"><Input value={registerForm.primary_crops} onChange={(event) => setRegisterForm({ ...registerForm, primary_crops: event.target.value })} placeholder="Almonds, pistachios, irrigation services…" required /></Field></div>
                   </> : null}
 
                   {registerStep === 3 ? <>
-                    <Field label="What are you building with AGRO-AI?" note="Describe the agricultural users, decision or workflow, and the intelligence you need."><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} className="min-h-[105px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="We manage irrigated fields and need to bring field evidence, water decisions, and operating intelligence into our product..." required /></Field>
-                    <Field label="Planned data sources"><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} minLength={8} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="John Deere, WiseConn, files, weather, internal systems…" required /></Field>
-                    <Field label="Initial workspace name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Developer evaluation workspace" required /></Field>
+                    <Field label="What are you building with AGRO-AI?" note={`A short, real agricultural goal is enough. At least 12 characters (${registerForm.intended_use.trim().length} entered).`}><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={12} maxLength={1200} className="min-h-[105px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="We manage irrigated fields and need to bring field evidence, water decisions, and operating intelligence into our product..." required /></Field>
+                    <Field label="Planned data sources (optional)" note="You can connect systems or upload files later. Leave blank if unsure."><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="e.g. CSV, Excel or WiseConn; can be added later" /></Field>
+                    <Field label="Initial workspace name (optional)"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Developer evaluation workspace" /></Field>
                     <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[11px] leading-5 text-[#52645A]">After email verification, eligible owners/admins can accept the current developer agreements and activate bounded TEST access automatically. Account creation does not enable LIVE projects, billing, provider credentials, production webhooks, or physical execution.</div>
                   </> : null}
 
