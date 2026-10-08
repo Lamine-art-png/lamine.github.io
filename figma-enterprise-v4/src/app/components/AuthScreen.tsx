@@ -115,7 +115,11 @@ export function AuthScreen() {
     if (registerForm.planned_data_sources.trim().length > 0 && registerForm.planned_data_sources.trim().length < 3) { setError("Name a data source with at least 3 characters, or leave it blank."); return; }
     setIsSubmitting(true);
     try { await register({ ...registerForm, workspace_name: registerForm.workspace_name.trim() || "Evaluation workspace", planned_data_sources: registerForm.planned_data_sources.trim(), intended_use: registerForm.intended_use.trim(), crop: registerForm.primary_crops, region: registerForm.operating_region }); }
-    catch (err) { setError(err instanceof Error ? err.message : "Unable to create account."); }
+    catch (err) {
+      const guidance = explainRegistrationError(err);
+      if (guidance) { setRegisterStep(guidance.step); setError(guidance.message); }
+      else setError(err instanceof Error ? err.message : "Unable to create account.");
+    }
     finally { setIsSubmitting(false); }
   }
 
