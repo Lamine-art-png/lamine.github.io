@@ -251,7 +251,7 @@ def evaluate_organization(payload: VerificationInput) -> VerificationDecision:
         score += 8
 
     intended_use = _normalized_text(payload.intended_use)
-    if len(intended_use) < 50:
+    if len(intended_use) < 12:
         reason_codes.append("detailed_use_case_required")
     else:
         # Registration is global. The operational goal can be written in any
