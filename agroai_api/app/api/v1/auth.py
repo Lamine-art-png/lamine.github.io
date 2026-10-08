@@ -419,7 +419,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     # Always return the precise, actionable verification reasons rather than
     # hiding an omitted field behind a generic "verification required" error.
     # Approval still requires all identity and operational evidence below.
-    if enforce_verification and decision is not None and not decision.approved:
+    if decision is not None and not decision.approved:
         _register_failure(db, request, email=email, reason_codes=decision.reason_codes, score=decision.score)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
