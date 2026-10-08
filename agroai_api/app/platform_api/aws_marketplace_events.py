@@ -111,12 +111,16 @@ def consume_license_messages(
     """One bounded batch. A failed message stays in SQS for retry/dead-lettering."""
     result = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=10, VisibilityTimeout=60)
     processed = failed = 0
+    failure_stages = {"parse": 0, "persist": 0, "reconcile": 0, "ack": 0}
     for message in result.get("Messages", []):
         with db_factory() as db:
+            stage = "parse"
             try:
                 event = parse_license_event(message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
+                stage = "persist"
                 process_license_event(db, message["Body"], seller_account_id=seller_account_id, product_code=product_code, region=region)
                 if agreements is not None and entitlements is not None and product_id:
+                    stage = "reconcile"
                     from app.platform_api.aws_marketplace_reconciliation import reconcile_registration
                     row = db.query(AwsMarketplaceRegistration).filter_by(license_arn=event["license_arn"]).one()
                     reconcile_registration(
@@ -127,10 +131,17 @@ def consume_license_messages(
                         entitlements=entitlements,
                         product_code=product_code,
                     )
+                stage = "ack"
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
                 processed += 1
             except Exception:
-                # Never log bodies, customer IDs, receipt handles or SDK exceptions.
+                # Record only the safe processing stage. Never expose event bodies,
+                # customer IDs, receipt handles, purchase tokens or exception text.
                 db.rollback()
                 failed += 1
-    return {"processed": processed, "failed": failed}
+                failure_stages[stage] += 1
+    return {
+        "processed": processed,
+        "failed": failed,
+        "failure_stages": {name: count for name, count in failure_stages.items() if count},
+    }
