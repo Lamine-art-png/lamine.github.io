@@ -10,6 +10,11 @@ const flows = [
 
 for (const [name, source] of flows) {
   assert.match(source, /function advanceRegisterStep\(form\?: HTMLFormElement \| null\)/, `${name}: Continue must validate the active form`);
+  assert.match(source, /explainRegistrationError\(/, `${name}: server rejection reason codes must map to the correct signup step`);
+  assert.match(source, /translatePortalLiteral\(issue\.message, legalLocale\)/, `${name}: error guidance must use the active locale`);
+  assert.match(source, /minLength=\{12\}/, `${name}: concise use-case requirement must match the backend`);
+  assert.match(source, /Request access<\/a>/, `${name}: legitimate organizations need an alternate verification route`);
+
   assert.match(source, /registerForm\.password\.length < 12/, `${name}: 12-character password policy must be explicit before advancing`);
   assert.match(source, /registerForm\.password\.toLowerCase\(\)\.includes\(emailName\)/, `${name}: frontend password validation must mirror the backend email-name rule`);
   assert.match(source, /form && !form\.reportValidity\(\)/, `${name}: browser email and URL validity must run on Continue`);
