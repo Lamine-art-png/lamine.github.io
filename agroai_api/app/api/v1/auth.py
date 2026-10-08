@@ -23,6 +23,7 @@ from app.core.rate_limiting import limiter
 from app.core.security import create_access_token
 from app.db.base import get_db
 from app.models.saas import (
+    AccountRecoveryToken,
     Organization,
     OrganizationMembership,
     OrganizationVerificationProfile,
@@ -127,6 +128,12 @@ class LoginRequest(BaseModel):
         if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
             raise ValueError("valid email required")
         return value
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+    confirm_password: str = Field(min_length=12, max_length=128)
 
 
 class EmailVerificationRequest(BaseModel):
@@ -740,6 +747,96 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     )
     db.commit()
     return _session_response(user, membership.organization, membership)
+
+
+@router.post("/change-password")
+@limiter.limit("5/minute")
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Change an authenticated customer's password without breaking the active browser session.
+
+    The current password is required, every older browser/CLI session is invalidated
+    through credentials_changed_at, outstanding recovery links are consumed, and a
+    fresh organization-scoped browser token is returned to the caller.
+    """
+
+    user = ctx.user
+    ip_address, user_agent = _request_metadata(request)
+
+    if not user.password_hash or not pwd_context.verify(payload.current_password, user.password_hash):
+        record_security_event(
+            db,
+            event_type="password_change",
+            outcome="rejected",
+            organization_id=ctx.organization.id if ctx.organization else None,
+            user_id=user.id,
+            subject=user.email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={"reason": "current_password_incorrect"},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "current_password_incorrect"},
+        )
+
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "password_confirmation_mismatch"},
+        )
+
+    if pwd_context.verify(payload.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "password_unchanged"},
+        )
+
+    policy_error = password_policy_error(payload.new_password, email=user.email)
+    if policy_error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "password_policy_failed", "message": policy_error},
+        )
+
+    now = datetime.utcnow()
+    user.password_hash = pwd_context.hash(payload.new_password)
+    user.credentials_changed_at = now
+    user.failed_login_attempts = 0
+    user.failed_login_window_started_at = None
+    user.locked_until = None
+
+    # A successful password change invalidates every unused recovery link.
+    db.query(AccountRecoveryToken).filter(
+        AccountRecoveryToken.user_id == user.id,
+        AccountRecoveryToken.used_at.is_(None),
+    ).update({AccountRecoveryToken.used_at: now}, synchronize_session=False)
+
+    record_security_event(
+        db,
+        event_type="password_change",
+        outcome="success",
+        organization_id=ctx.organization.id if ctx.organization else None,
+        user_id=user.id,
+        subject=user.email,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        metadata={"older_sessions_invalidated": True, "recovery_links_invalidated": True},
+    )
+    db.commit()
+    db.refresh(user)
+
+    if not ctx.organization or not ctx.membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
+
+    session = _session_response(user, ctx.organization, ctx.membership)
+    session["status"] = "password_changed"
+    return session
 
 
 @router.post("/logout")
