@@ -158,6 +158,44 @@ def test_delete_failure_retries_without_applying_event_again(sessions):
         assert db.query(AwsMarketplaceLicenseEvent).count() == 1
 
 
+def test_reconciliation_failure_is_classified_and_retried(sessions):
+    body = event()
+
+    class Queue:
+        deleted = []
+
+        def receive_message(self, **kwargs):
+            return {"Messages": [{"Body": body, "ReceiptHandle": "synthetic"}]}
+
+        def delete_message(self, **kwargs):
+            self.deleted.append(kwargs["ReceiptHandle"])
+
+    class Agreements:
+        def search_agreements(self, **kwargs):
+            raise RuntimeError("simulated agreement API outage")
+
+    queue = Queue()
+    result = consume_license_messages(
+        queue,
+        sessions,
+        queue_url="synthetic",
+        agreements=Agreements(),
+        entitlements=object(),
+        product_id="prod-synthetic",
+        **CONFIG,
+    )
+
+    assert result == {
+        "processed": 0,
+        "failed": 1,
+        "failure_stages": {"reconcile": 1},
+    }
+    assert queue.deleted == []
+    with sessions() as db:
+        assert db.query(AwsMarketplaceLicenseEvent).count() == 1
+        assert db.query(AwsMarketplaceRegistration).one().status == "license_confirmed"
+
+
 def test_commit_failure_never_acknowledges_or_persists_event(sessions):
     class Queue:
         def receive_message(self, **kwargs):
