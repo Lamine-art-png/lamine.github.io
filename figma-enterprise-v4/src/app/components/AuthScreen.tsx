@@ -2,6 +2,8 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { CheckCircle2, Code2, Loader2, ShieldCheck } from "lucide-react";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { RegisterPayload } from "../api/client";
+import { explainRegistrationError } from "./registrationErrorGuidance";
+import { translatePortalLiteral } from "../portalLiteralCatalog";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
@@ -112,7 +114,11 @@ export function AuthScreen() {
     if (!registerForm.terms_accepted || !registerForm.authority_confirmed) { setError("Accept the Terms of Service and confirm you are authorized to bind your organization."); return; }
     setIsSubmitting(true);
     try { await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region }); }
-    catch (err) { setError(err instanceof Error ? err.message : "Unable to create account."); }
+    catch (err) {
+      const issue = explainRegistrationError(err);
+      if (issue) { setRegisterStep(issue.step); setError(translatePortalLiteral(issue.message, legalLocale)); }
+      else setError(err instanceof Error ? err.message : "Unable to create account.");
+    }
     finally { setIsSubmitting(false); }
   }
 
