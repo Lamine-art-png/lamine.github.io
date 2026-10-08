@@ -86,6 +86,50 @@ def test_portuguese_operational_goal_is_not_rejected_by_english_keyword_gate():
     assert "agricultural_use_case_not_detected" not in decision.reason_codes
 
 
+def test_concise_legitimate_goal_and_no_integrations_are_accepted():
+    decision = evaluate_organization(
+        _verification_input(
+            email="owner@gmail.com",
+            intended_use="Plan irrigation",
+            planned_data_sources="",
+            acres_or_sites="3",
+            website_url="",
+            professional_profile_url="https://www.linkedin.com/in/jane-farmer",
+        )
+    )
+    assert decision.approved is True, decision.reason_codes
+    assert "detailed_use_case_required" not in decision.reason_codes
+    assert "data_sources_required" not in decision.reason_codes
+    assert "operational_scale_required" not in decision.reason_codes
+
+
+def test_placeholder_goal_is_rejected_even_when_it_exceeds_twelve_characters():
+    decision = evaluate_organization(
+        _verification_input(
+            intended_use="just doing this for fun",
+            planned_data_sources="",
+        )
+    )
+    assert decision.approved is False
+    assert "detailed_use_case_required" in decision.reason_codes
+
+
+def test_registration_accepts_real_short_goal_without_known_data_sources(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "ACCOUNT_VERIFICATION_MODE", "enforce")
+    response = client.post(
+        "/v1/auth/register",
+        json={
+            **STRONG_APPLICATION,
+            "email": "new-farm-owner@gmail.com",
+            "intended_use": "Plan irrigation",
+            "planned_data_sources": "",
+            "acres_or_sites": "3",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["organization_verification"]["status"] == "preapproved_pending_email"
+
+
 def test_disposable_and_placeholder_applications_are_rejected():
     disposable = evaluate_organization(_verification_input(email="owner@mailinator.com"))
     placeholder = evaluate_organization(
