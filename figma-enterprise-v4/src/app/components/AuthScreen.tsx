@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { CheckCircle2, Code2, Loader2, ShieldCheck } from "lucide-react";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { RegisterPayload } from "../api/client";
+import { explainRegistrationError } from "./registrationGuidance";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
@@ -18,7 +19,7 @@ const initialRegisterForm: RegisterPayload = {
   name: "", email: "", password: "", organization_name: "", organization_type: "",
   professional_role: "", phone_number: "", website_url: "", professional_profile_url: "",
   country: "", operating_region: "", acres_or_sites: "", primary_crops: "",
-  intended_use: "", planned_data_sources: "", workspace_name: "", crop: "", region: "",
+  intended_use: "", planned_data_sources: "", workspace_name: "Evaluation workspace", crop: "", region: "",
   terms_accepted: false, authority_confirmed: false,
   terms_version: SELF_SERVICE_TERMS_VERSION, privacy_version: SELF_SERVICE_PRIVACY_VERSION,
 };
@@ -111,7 +112,7 @@ export function AuthScreen() {
     if (!registerForm.website_url?.trim() && !registerForm.professional_profile_url?.trim()) { setError("Add an organization website or a verifiable professional profile."); return; }
     if (!registerForm.terms_accepted || !registerForm.authority_confirmed) { setError("Accept the Terms of Service and confirm you are authorized to bind your organization."); return; }
     setIsSubmitting(true);
-    try { await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region }); }
+    try { await register({ ...registerForm, workspace_name: registerForm.workspace_name.trim() || "Evaluation workspace", planned_data_sources: registerForm.planned_data_sources.trim(), intended_use: registerForm.intended_use.trim(), crop: registerForm.primary_crops, region: registerForm.operating_region }); }
     catch (err) { setError(err instanceof Error ? err.message : "Unable to create account."); }
     finally { setIsSubmitting(false); }
   }
@@ -146,6 +147,11 @@ export function AuthScreen() {
       setError("Complete the operating details to continue.");
       return;
     }
+    const phoneDigits = registerForm.phone_number.replace(/\D/g, "");
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      setError("Enter a phone number with 8–15 digits, including the country code.");
+      return;
+    }
     if (form && !form.reportValidity()) return;
     setRegisterStep(3);
   }
@@ -173,7 +179,7 @@ export function AuthScreen() {
     <main className="flex items-start justify-center px-5 py-8 lg:min-h-screen lg:px-8 lg:py-10"><div className={`w-full ${mode === "register" && !verification ? "max-w-[720px]" : "max-w-[460px]"} rounded-[20px] border border-[rgba(16,35,27,.1)] bg-[#FFFDF8] p-7 shadow-[0_24px_70px_rgba(16,35,27,.12)]`}><div className="mb-4 flex justify-end"><div className="w-full max-w-[280px]"><LanguageSelector compact /></div></div>
       {verification ? <VerificationPanel /> : <Tabs value={mode} onValueChange={setMode} className="gap-5">
         <TabsList className="grid w-full grid-cols-2 rounded-xl bg-[#F3EFE5] p-1"><TabsTrigger value="login" className="rounded-lg text-[13px]">Login</TabsTrigger><TabsTrigger value="register" className="rounded-lg text-[13px]">Create account</TabsTrigger></TabsList>
-        {error ? <div className="rounded-md border border-[#B94A48]/25 bg-[#B94A48]/8 px-3 py-2 text-sm text-[#7A2E2B]">{error}</div> : null}
+        {error ? <div role="alert" className="rounded-md border border-[#B94A48]/25 bg-[#B94A48]/8 px-3 py-2 text-sm text-[#7A2E2B]">{error}</div> : null}
         <TabsContent value="login"><div className="mb-4"><h2 className="text-[18px] font-semibold text-[#10231B]">Secure sign-in</h2><p className="mt-1 text-[13px] leading-6 text-[#65736A]">{platformHostname ? "Sign in to your verified organization and Platform API access state." : "Sign in to a verified AGRO-AI organization workspace."}</p></div><form className="space-y-4" onSubmit={handleLogin}><Field label="Email"><Input type="email" value={loginForm.email} onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })} autoComplete="email" required /></Field><Field label="Password"><Input type="password" value={loginForm.password} onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })} autoComplete="current-password" required /></Field><div className="flex justify-end"><a href="/recover-account" className="text-[13px] font-medium text-[#2D6A4F] hover:text-[#1E5B40] hover:underline">Forgot password?</a></div><Button type="submit" disabled={isSubmitting} className="w-full bg-[#10231B] text-white hover:bg-[#183528]">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Sign in</Button><a href="/appeal" className="block text-center text-[12px] font-medium text-[#2D6A4F] hover:underline">{ACCESS_APPEAL_LABEL}</a></form></TabsContent>
         <TabsContent value="register">
           <div className="mb-5">
@@ -195,7 +201,7 @@ export function AuthScreen() {
               <Field label="Password"><Input type="password" value={registerForm.password} onChange={(event) => setRegisterForm({ ...registerForm, password: event.target.value })} autoComplete="new-password" minLength={12} maxLength={128} required /><p className="mt-1.5 text-[11px] leading-5 text-[#78837C]">Use at least 12 characters. Do not include your email name.</p></Field>
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Legal organization name"><Input value={registerForm.organization_name} onChange={(event) => setRegisterForm({ ...registerForm, organization_name: event.target.value })} autoComplete="organization" required /></Field><Field label="Organization type"><select value={registerForm.organization_type} onChange={(event) => setRegisterForm({ ...registerForm, organization_type: event.target.value })} className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 py-1 text-sm text-[#10231B] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" required><option value="">Select organization type</option>{organizationTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field></div>
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Organization website"><Input type="url" value={registerForm.website_url} onChange={(event) => setRegisterForm({ ...registerForm, website_url: event.target.value })} placeholder="https://company.com" /></Field><Field label="Professional or company profile"><Input type="url" value={registerForm.professional_profile_url} onChange={(event) => setRegisterForm({ ...registerForm, professional_profile_url: event.target.value })} placeholder="LinkedIn or public business profile" /></Field></div>
-              <p className="-mt-3 text-[11px] leading-5 text-[#78837C]">Use at least one verifiable website or professional profile.</p>
+              <p className="-mt-3 text-[11px] leading-5 text-[#78837C]">Add one public website or professional profile (such as LinkedIn) so we can verify your organization. No website or profile? <a href="mailto:contact@agroai-pilot.com?subject=Organization%20verification%20help" className="font-semibold underline">Ask us about another verification method.</a></p>
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#D6DDD0] bg-white p-4">
                 <input
                   type="checkbox"
@@ -214,14 +220,14 @@ export function AuthScreen() {
             </> : null}
 
             {registerStep === 2 ? <>
-              <div className="grid gap-4 sm:grid-cols-2"><Field label="Professional role"><Input value={registerForm.professional_role} onChange={(event) => setRegisterForm({ ...registerForm, professional_role: event.target.value })} placeholder="Farm manager, agronomist, CTO, CEO..." required /></Field><Field label="Phone number"><Input type="tel" value={registerForm.phone_number} onChange={(event) => setRegisterForm({ ...registerForm, phone_number: event.target.value })} autoComplete="tel" placeholder="Include country code" required /></Field></div>
+              <div className="grid gap-4 sm:grid-cols-2"><Field label="Professional role"><Input value={registerForm.professional_role} onChange={(event) => setRegisterForm({ ...registerForm, professional_role: event.target.value })} placeholder="Farm manager, agronomist, CTO, CEO..." required /></Field><Field label="Phone number (8–15 digits, include country code)"><Input type="tel" value={registerForm.phone_number} onChange={(event) => setRegisterForm({ ...registerForm, phone_number: event.target.value })} autoComplete="tel" placeholder="Include country code" required /></Field></div>
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Country"><Input value={registerForm.country} onChange={(event) => setRegisterForm({ ...registerForm, country: event.target.value })} autoComplete="country-name" required /></Field><Field label="Operating region"><Input value={registerForm.operating_region} onChange={(event) => setRegisterForm({ ...registerForm, operating_region: event.target.value })} placeholder="California Central Valley" required /></Field></div>
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Acres, hectares, sites, or customers served"><Input value={registerForm.acres_or_sites} onChange={(event) => setRegisterForm({ ...registerForm, acres_or_sites: event.target.value })} placeholder="2,500 acres across 4 farms" required /></Field><Field label="Crops or agricultural segment"><Input value={registerForm.primary_crops} onChange={(event) => setRegisterForm({ ...registerForm, primary_crops: event.target.value })} placeholder="Almonds, vineyards, irrigation services..." required /></Field></div>
             </> : null}
 
             {registerStep === 3 ? <>
-              <div className="grid gap-4 sm:grid-cols-2"><Field label="Initial operation name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="North ranch operations" required /></Field><Field label="Systems or data sources to connect"><Input value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} placeholder="WiseConn, OpenET, John Deere, PDFs..." required /></Field></div>
-              <Field label="What should AGRO-AI help your team do first?"><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} rows={4} className="w-full resize-y rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 text-[#10231B] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" placeholder="Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI." required /></Field>
+              <div className="grid gap-4 sm:grid-cols-2"><Field label="Initial operation name (optional)"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Evaluation workspace" /></Field><Field label="Data you might connect (optional)"><Input value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} placeholder="e.g. CSV, Excel, or WiseConn; you can decide later" /></Field></div>
+              <Field label="What should AGRO-AI help your team do first? (at least 12 characters)"><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={12} maxLength={1200} rows={4} className="w-full resize-y rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 text-[#10231B] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" placeholder="e.g. Plan irrigation for our fields" required /><p className="mt-1 text-[11px] text-[#65736A]">{registerForm.intended_use.trim().length} characters · 12 minimum. A short, real agricultural goal is enough.</p></Field>
               <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[12px] leading-5 text-[#52645A]">AGRO-AI screens the organization automatically before operational access is activated. Disposable inboxes, fabricated organizations, placeholder evidence, and non-agricultural use cases are rejected; legitimate personal inboxes remain eligible when the supporting evidence is strong.</div>
             </> : null}
 
