@@ -30,7 +30,7 @@ const initialRegisterForm: RegisterPayload = {
   primary_crops: "",
   intended_use: "",
   planned_data_sources: "",
-  workspace_name: "",
+  workspace_name: "Developer evaluation workspace",
   crop: "",
   region: "",
   terms_accepted: false,
@@ -313,8 +313,8 @@ export function PlatformAuthScreen() {
                   </> : null}
 
                   {registerStep === 3 ? <>
-                    <Field label="What are you building with AGRO-AI?" note="Describe the agricultural users, decision or workflow, and the intelligence you need."><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} className="min-h-[105px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="We manage irrigated fields and need to bring field evidence, water decisions, and operating intelligence into our product..." required /></Field>
-                    <Field label="Planned data sources"><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} minLength={8} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="John Deere, WiseConn, files, weather, internal systems…" required /></Field>
+                    <Field label="What are you building with AGRO-AI?" note="Describe the agricultural users, decision or workflow, and the intelligence you need."><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={12} maxLength={1200} className="min-h-[105px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="We manage irrigated fields and need to bring field evidence, water decisions, and operating intelligence into our product..." required /><span className="mt-1 block text-[11px] text-[#64736A]">{registerForm.intended_use.trim().length}/12</span></Field>
+                    <Field label="Planned data sources"><span className="text-[11px] text-[#64736A]">Optional</span><textarea value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} minLength={3} className="min-h-[78px] w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 outline-none focus:border-ring" placeholder="John Deere, WiseConn, files, weather, internal systems…" /></Field>
                     <Field label="Initial workspace name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="Developer evaluation workspace" required /></Field>
                     <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[11px] leading-5 text-[#52645A]">After email verification, eligible owners/admins can accept the current developer agreements and activate bounded TEST access automatically. Account creation does not enable LIVE projects, billing, provider credentials, production webhooks, or physical execution.</div>
                   </> : null}
