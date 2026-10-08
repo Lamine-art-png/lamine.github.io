@@ -206,7 +206,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # Matches the edge gateway's allowed request headers (X-Request-Id is a
     # bounded client correlation id, see bounded_client_correlation_id).
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key", "X-Request-Id"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Accept-Language", "X-API-Key", "Idempotency-Key", "X-Request-Id"],
     expose_headers=["x-agroai-runtime", "x-agroai-error", "x-agroai-app-ms", "x-agroai-bootstrap-ms", "server-timing"],
 )
 
@@ -251,7 +251,7 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, X-API-Key, Idempotency-Key"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Accept-Language, X-API-Key, Idempotency-Key"
         response.headers["Vary"] = "Origin"
     response.headers["x-agroai-runtime"] = VERSION
     return response

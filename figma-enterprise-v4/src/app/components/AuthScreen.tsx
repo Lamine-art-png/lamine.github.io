@@ -18,7 +18,7 @@ const initialRegisterForm: RegisterPayload = {
   name: "", email: "", password: "", organization_name: "", organization_type: "",
   professional_role: "", phone_number: "", website_url: "", professional_profile_url: "",
   country: "", operating_region: "", acres_or_sites: "", primary_crops: "",
-  intended_use: "", planned_data_sources: "", workspace_name: "", crop: "", region: "",
+  intended_use: "", planned_data_sources: "", workspace_name: "Evaluation workspace", crop: "", region: "",
   terms_accepted: false, authority_confirmed: false,
   terms_version: SELF_SERVICE_TERMS_VERSION, privacy_version: SELF_SERVICE_PRIVACY_VERSION,
 };
@@ -220,8 +220,8 @@ export function AuthScreen() {
             </> : null}
 
             {registerStep === 3 ? <>
-              <div className="grid gap-4 sm:grid-cols-2"><Field label="Initial operation name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="North ranch operations" required /></Field><Field label="Systems or data sources to connect"><Input value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} placeholder="WiseConn, OpenET, John Deere, PDFs..." required /></Field></div>
-              <Field label="What should AGRO-AI help your team do first?"><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={50} maxLength={1200} rows={4} className="w-full resize-y rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 text-[#10231B] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" placeholder="Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI." required /></Field>
+              <div className="grid gap-4 sm:grid-cols-2"><Field label="Initial operation name"><Input value={registerForm.workspace_name} onChange={(event) => setRegisterForm({ ...registerForm, workspace_name: event.target.value })} placeholder="North ranch operations" required /></Field><Field label="Systems or data sources to connect"><span className="text-[11px] text-[#64736A]">Optional</span><Input value={registerForm.planned_data_sources} onChange={(event) => setRegisterForm({ ...registerForm, planned_data_sources: event.target.value })} placeholder="WiseConn, OpenET, John Deere, PDFs..." minLength={3} /></Field></div>
+              <Field label="What should AGRO-AI help your team do first?"><textarea value={registerForm.intended_use} onChange={(event) => setRegisterForm({ ...registerForm, intended_use: event.target.value })} minLength={12} maxLength={1200} rows={4} className="w-full resize-y rounded-md border border-input bg-input-background px-3 py-2 text-sm leading-6 text-[#10231B] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" placeholder="Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI." required /><span className="mt-1 block text-[11px] text-[#64736A]">{registerForm.intended_use.trim().length}/12</span></Field>
               <div className="rounded-xl border border-[#D7E4CF] bg-[#F6FAF1] p-4 text-[12px] leading-5 text-[#52645A]">AGRO-AI screens the organization automatically before operational access is activated. Disposable inboxes, fabricated organizations, placeholder evidence, and non-agricultural use cases are rejected; legitimate personal inboxes remain eligible when the supporting evidence is strong.</div>
             </> : null}
 

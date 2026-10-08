@@ -239,7 +239,7 @@ def evaluate_organization(payload: VerificationInput) -> VerificationDecision:
         score += 4
 
     acres = _normalized_text(payload.acres_or_sites)
-    if len(acres) < 1 or _is_placeholder(acres):
+    if not acres or (_is_placeholder(acres) and not (acres.isdigit() and int(acres) > 0)):
         reason_codes.append("operational_scale_required")
     else:
         score += 9
@@ -251,7 +251,12 @@ def evaluate_organization(payload: VerificationInput) -> VerificationDecision:
         score += 8
 
     intended_use = _normalized_text(payload.intended_use)
-    if len(intended_use) < 50:
+    # A short genuine goal is sufficient: no arbitrary essay requirement.
+    # Reject obviously fabricated descriptions while permitting concise,
+    # multilingual agricultural workflows and structured crop context.
+    if len(intended_use) < 12 or (
+        _is_placeholder(intended_use) and not _contains_agricultural_context(intended_use)
+    ):
         reason_codes.append("detailed_use_case_required")
     else:
         # Registration is global. The operational goal can be written in any
@@ -272,10 +277,13 @@ def evaluate_organization(payload: VerificationInput) -> VerificationDecision:
             reason_codes.append("agricultural_use_case_not_detected")
 
     planned_sources = _normalized_text(payload.planned_data_sources)
-    if len(planned_sources) < 8 or _is_placeholder(planned_sources):
-        reason_codes.append("data_sources_required")
-    else:
-        score += 7
+    # Integrations can be chosen after registration. Do not reject genuine
+    # farmers because they do not yet know which software they will connect.
+    if planned_sources:
+        if len(planned_sources) < 3 or _is_placeholder(planned_sources):
+            reason_codes.append("data_sources_required")
+        else:
+            score += 7
 
     evidence_domain = website_domain or profile_domain
     if not evidence_domain:

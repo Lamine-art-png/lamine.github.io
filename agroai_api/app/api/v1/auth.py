@@ -325,7 +325,6 @@ def _registration_evidence_complete(payload: RegisterRequest) -> bool:
             payload.acres_or_sites,
             payload.primary_crops or payload.crop,
             payload.intended_use,
-            payload.planned_data_sources,
         )
     ) and bool(str(payload.website_url or payload.professional_profile_url or "").strip())
 
@@ -418,7 +417,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     decision = evaluate_organization(_verification_input(payload)) if (enforce_verification or evidence_complete) else None
 
     if enforce_verification and not evidence_complete:
-        reason_codes = ["complete_organization_verification_required"]
+        reason_codes = list(decision.reason_codes) if decision is not None else ["complete_organization_verification_required"]
         _register_failure(db, request, email=email, reason_codes=reason_codes)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

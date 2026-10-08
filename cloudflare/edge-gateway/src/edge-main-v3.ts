@@ -156,7 +156,7 @@ function mergeFastpathHeaders(response: Response, request: Request, env: I18nFas
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-allow-methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
-    headers.set("access-control-allow-headers", "authorization,content-type,x-request-id,idempotency-key");
+    headers.set("access-control-allow-headers", "authorization,content-type,accept-language,x-request-id,idempotency-key");
     headers.set("access-control-max-age", "86400");
     headers.set("vary", "Origin");
   }
