@@ -202,7 +202,16 @@ def process_events_once() -> dict[str, Any]:
             "checked_at": datetime.utcnow().isoformat(),
         }
         if counts.get("failed"):
-            logger.warning("AWS Marketplace event worker completed with failed messages")
+            failure_stages = counts.get("failure_stages") or {}
+            summary = ",".join(
+                f"{name}:{failure_stages[name]}"
+                for name in ("parse", "persist", "reconcile", "ack")
+                if failure_stages.get(name)
+            ) or "unknown"
+            logger.warning(
+                "AWS Marketplace event worker completed with failed messages failure_stages=%s",
+                summary,
+            )
         return _last_event_result
     except Exception as exc:
         _last_event_result = {"status": "unavailable", "checked_at": datetime.utcnow().isoformat()}
