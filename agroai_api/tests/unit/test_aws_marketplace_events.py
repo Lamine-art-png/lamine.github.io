@@ -125,7 +125,11 @@ def test_queue_ack_only_after_commit_failed_events_are_retried(sessions):
                 assert db.query(AwsMarketplaceLicenseEvent).count() == 1
             self.deleted.append(kwargs["ReceiptHandle"])
     queue = Queue()
-    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {"processed": 1, "failed": 1}
+    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {
+        "processed": 1,
+        "failed": 1,
+        "failure_stages": {"parse": 1},
+    }
     assert queue.deleted == ["good"]
 
 
@@ -140,10 +144,56 @@ def test_delete_failure_retries_without_applying_event_again(sessions):
             if self.attempts == 1:
                 raise RuntimeError("simulated SQS outage")
     queue = Queue()
-    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {"processed": 0, "failed": 1}
-    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {"processed": 1, "failed": 0}
+    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {
+        "processed": 0,
+        "failed": 1,
+        "failure_stages": {"ack": 1},
+    }
+    assert consume_license_messages(queue, sessions, queue_url="synthetic", **CONFIG) == {
+        "processed": 1,
+        "failed": 0,
+        "failure_stages": {},
+    }
     with sessions() as db:
         assert db.query(AwsMarketplaceLicenseEvent).count() == 1
+
+
+def test_reconciliation_failure_is_classified_and_retried(sessions):
+    body = event()
+
+    class Queue:
+        deleted = []
+
+        def receive_message(self, **kwargs):
+            return {"Messages": [{"Body": body, "ReceiptHandle": "synthetic"}]}
+
+        def delete_message(self, **kwargs):
+            self.deleted.append(kwargs["ReceiptHandle"])
+
+    class Agreements:
+        def search_agreements(self, **kwargs):
+            raise RuntimeError("simulated agreement API outage")
+
+    queue = Queue()
+    result = consume_license_messages(
+        queue,
+        sessions,
+        queue_url="synthetic",
+        agreements=Agreements(),
+        entitlements=object(),
+        product_id="prod-synthetic",
+        **CONFIG,
+    )
+
+    assert result == {
+        "processed": 0,
+        "failed": 1,
+        "failure_stages": {"reconcile": 1},
+    }
+    assert queue.deleted == []
+    with sessions() as db:
+        assert db.query(AwsMarketplaceLicenseEvent).count() == 1
+        assert db.query(AwsMarketplaceRegistration).one().status == "license_confirmed"
 
 
 def test_commit_failure_never_acknowledges_or_persists_event(sessions):
@@ -158,7 +208,11 @@ def test_commit_failure_never_acknowledges_or_persists_event(sessions):
             raise RuntimeError("simulated database outage")
         db.commit = fail_commit
         return db
-    assert consume_license_messages(Queue(), failing_session, queue_url="synthetic", **CONFIG) == {"processed": 0, "failed": 1}
+    assert consume_license_messages(Queue(), failing_session, queue_url="synthetic", **CONFIG) == {
+        "processed": 0,
+        "failed": 1,
+        "failure_stages": {"persist": 1},
+    }
     with sessions() as db:
         assert db.query(AwsMarketplaceLicenseEvent).count() == 0
         assert db.query(AwsMarketplaceRegistration).count() == 0
