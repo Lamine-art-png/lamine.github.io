@@ -25,3 +25,18 @@ def test_unlisted_header_still_rejected(client):
         headers={"Origin": "https://app.agroai-pilot.com", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "x-debug-override"},
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("origin", ["https://app.agroai-pilot.com", "https://platform.agroai-pilot.com"])
+def test_localized_registration_preflight_allows_browser_language_header(client, origin):
+    response = client.options(
+        "/v1/auth/register",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,accept-language",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "accept-language" in response.headers["access-control-allow-headers"].lower()
