@@ -2,6 +2,8 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { CheckCircle2, Code2, Loader2, ShieldCheck, TerminalSquare } from "lucide-react";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { RegisterPayload } from "../api/client";
+import { explainRegistrationError } from "./registrationErrorGuidance";
+import { translatePortalLiteral } from "../portalLiteralCatalog";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { LanguageSelector } from "./LanguageSelector";
@@ -189,7 +191,9 @@ export function PlatformAuthScreen() {
     try {
       await register({ ...registerForm, crop: registerForm.primary_crops, region: registerForm.operating_region });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the developer account.");
+      const issue = explainRegistrationError(cause);
+      if (issue) { setRegisterStep(issue.step); setError(translatePortalLiteral(issue.message, legalLocale)); }
+      else setError(cause instanceof Error ? cause.message : "Unable to create the developer account.");
     } finally {
       setWorking(false);
     }
