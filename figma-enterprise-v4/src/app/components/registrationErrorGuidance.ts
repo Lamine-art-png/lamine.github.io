@@ -4,7 +4,7 @@
 export type RegistrationStep = 1 | 2 | 3;
 export type RegistrationGuidance = { step: RegistrationStep; message: string };
 const BY_REASON: Record<string, RegistrationGuidance> = {
-  disposable_email_domain: { step: 1, message: "Disposable email addresses are not accepted. Use a permanent email address instead." },
+  disposable_email_domain: { step: 1, message: "AGRO-AI screens the organization automatically before operational access is activated. Disposable inboxes, fabricated organizations, placeholder evidence, and non-agricultural use cases are rejected; legitimate personal inboxes remain eligible when the supporting evidence is strong." },
   invalid_name: { step: 1, message: "Complete your account and organization details to continue." },
   unverifiable_organization_name: { step: 1, message: "Complete your account and organization details to continue." },
   unsupported_organization_type: { step: 1, message: "Select organization type" },
@@ -19,7 +19,7 @@ const BY_REASON: Record<string, RegistrationGuidance> = {
   operational_scale_required: { step: 2, message: "Complete the operating details to continue." },
   consumer_email_requires_operational_scale: { step: 2, message: "Complete the operating details to continue." },
   agricultural_segment_required: { step: 2, message: "Complete the operating details to continue." },
-  detailed_use_case_required: { step: 3, message: "Describe a genuine agricultural operation or workflow, not placeholder text. Use at least 12 characters." },
+  detailed_use_case_required: { step: 3, message: "Describe the operation, the decision or workflow you want to improve, and how your team expects to use AGRO-AI." },
   agricultural_use_case_not_detected: { step: 3, message: "Genuine agricultural use case" },
   data_sources_required: { step: 3, message: "Planned data sources" },
   complete_organization_verification_required: { step: 1, message: "Complete your account and organization details to continue." },
