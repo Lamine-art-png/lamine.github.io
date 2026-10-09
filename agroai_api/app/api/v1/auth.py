@@ -326,7 +326,7 @@ def _registration_evidence_complete(payload: RegisterRequest) -> bool:
             payload.primary_crops or payload.crop,
             payload.intended_use,
         )
-    ) and bool(str(payload.website_url or payload.professional_profile_url or "").strip())
+    ) and any(str(value or "").strip() for value in (payload.website_url, payload.professional_profile_url))
 
 
 def _verification_input(payload: RegisterRequest) -> VerificationInput:

@@ -75,7 +75,18 @@ const outputs = {
 };
 for (const [file,content] of Object.entries(outputs)) {
  const dest = path.join(root,'shared/localization',file);
- if (process.argv.includes('--check')) { if (!fs.existsSync(dest) || fs.readFileSync(dest,'utf8')!==content) throw new Error(`Stale canonical source: ${file}`); }
+ if (process.argv.includes('--check')) {
+   if (!fs.existsSync(dest) || fs.readFileSync(dest,'utf8') !== content) {
+     const existing = fs.existsSync(dest) ? JSON.parse(fs.readFileSync(dest,'utf8')) : {};
+     const expected = JSON.parse(content);
+     const oldCatalog = existing.catalog || existing;
+     const newCatalog = expected.catalog || expected;
+     const added = Object.entries(newCatalog).filter(([key]) => !(key in oldCatalog)).slice(0, 20);
+     const removed = Object.entries(oldCatalog).filter(([key]) => !(key in newCatalog)).slice(0, 20);
+     const changed = Object.entries(newCatalog).filter(([key, value]) => key in oldCatalog && oldCatalog[key] !== value).slice(0, 20);
+     throw new Error(`Stale canonical source: ${file}. added=${JSON.stringify(added)} removed=${JSON.stringify(removed)} changed=${JSON.stringify(changed)}`);
+   }
+ }
  else fs.writeFileSync(dest,content);
 }
 console.log(JSON.stringify({keys:Object.keys(source).length,extraLiterals:Object.keys(literals).length,sourceFingerprint:fingerprint}));
