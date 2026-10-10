@@ -138,6 +138,7 @@ jobs:
             tests/unit/test_field_vision_eval_harness.py \
             tests/unit/test_field_vision_staging_smoke.py \
             tests/unit/test_field_detection.py \
+            tests/unit/test_crop_estimation.py \
             tests/unit/test_field_operating_loop.py \
             tests/unit/test_live_field_context.py \
             tests/unit/test_object_storage.py \
