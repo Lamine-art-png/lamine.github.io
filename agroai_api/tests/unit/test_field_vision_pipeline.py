@@ -142,3 +142,69 @@ def test_structured_high_severity_photo_still_escalates(client, db, fake_store, 
     assert obs["severity"] in {"high", "critical"}
     assert obs["status"] == "needs_review"
     assert obs["structured"]["vision"]["visible_facts"][0]["support_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Specialized detection lane (feature-flagged)
+# ---------------------------------------------------------------------------
+
+def test_detection_flag_off_leaves_no_trace(client, db, fake_store, monkeypatch):
+    monkeypatch.delenv("FIELD_DETECTION_ENABLED", raising=False)
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, '{"summary": "Rows", "severity": "low", "image_quality": "clear", "confidence": 0.5}')
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-off")
+    assert "detections" not in obs["structured"]
+    assert "detection_status" not in obs["provenance"]
+    stages = {
+        run.stage for run in db.query(FieldObservationProcessingRun)
+        .filter(FieldObservationProcessingRun.observation_id == obs["id"]).all()
+    }
+    assert "detection" not in stages
+
+
+def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db, fake_store, monkeypatch):
+    from app.services import field_detection as detection
+    from app.services import field_intelligence_vision_extension as extension
+
+    class FakeDetector:
+        name = "fake_detector"
+
+        def detect(self, image, content_type, profile, frame):
+            return detection.DetectionResult(
+                status="ok", frame=frame, model_id="fake-almond-detector", model_version="test",
+                detections=[detection.Detection(label="nut", score=0.7, box=[0.1 * i, 0.1, 0.05, 0.05]) for i in range(1, 6)],
+            )
+
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setattr(extension, "get_detection_provider", lambda: FakeDetector())
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, '{"summary": "Nuts on lower limbs", "severity": "info", "image_quality": "clear", "confidence": 0.5}')
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-on")
+
+    detections = obs["structured"]["detections"]
+    assert detections["crop_profile"]["crop_id"] == "almond"  # resolved from "Almonds"
+    assert detections["models"] == ["fake-almond-detector@test"]
+    assert detections["review_status"] == "unreviewed"
+    assert detections["validation_status"] == "unvalidated"
+    assert detections["counts"]["totals"] == [{"label": "nut", "observed_lower_bound": 5, "sum_upper_bound": 5}]
+    assert detections["counts"]["extrapolation"] == "none"
+    assert obs["severity"] in {"info", "low"}
+    assert obs["provenance"]["detection_status"] == "completed"
+    run = (
+        db.query(FieldObservationProcessingRun)
+        .filter(FieldObservationProcessingRun.observation_id == obs["id"], FieldObservationProcessingRun.stage == "detection")
+        .first()
+    )
+    assert run is not None and run.status == "completed" and run.model == "fake-almond-detector@test"
+
+
+def test_detection_enabled_but_unconfigured_is_reported(client, db, fake_store, monkeypatch):
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.delenv("FIELD_DETECTION_ENDPOINT", raising=False)
+    monkeypatch.delenv("FIELD_DETECTION_API_KEY", raising=False)
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, '{"summary": "Rows", "severity": "low", "image_quality": "clear", "confidence": 0.5}')
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-misconfigured")
+    assert "detections" not in obs["structured"]
+    assert obs["provenance"]["detection_status"] == "not_run"
+    assert obs["provenance"]["detection_reason"] == "detector_not_configured"

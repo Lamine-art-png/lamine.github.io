@@ -10,7 +10,12 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.models.field_intelligence import FieldCaptureSession, FieldObservation, FieldObservationAsset
+from app.services.crop_profiles import resolve_profile
 from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
+from app.services.detection_tracking import summarize_counts
+from app.services.field_detection import (
+    DETECTION_CONTRACT_VERSION, DisabledDetectionProvider, FrameRef, detection_enabled, get_detection_provider,
+)
 from app.services.field_video import MAX_VIDEO_BYTES, extract_video_audio, extract_video_frames
 from app.services.field_vision import MAX_IMAGE_BYTES, analyze_field_images
 
@@ -53,6 +58,73 @@ def _repair_text_inference(svc: Any, observation: FieldObservation) -> None:
             "extraction_model": model or None,
         })
         observation.provenance_json = provenance
+
+
+_MAX_STORED_DETECTION_FRAMES = 8
+
+
+def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_inputs: list[tuple], vision_analysis: dict, attempt: int) -> None:
+    """Specialized detection lane; runs only when FIELD_DETECTION_ENABLED is set.
+
+    Results are added as reviewable evidence (``structured["detections"]``)
+    and never change severity or status on their own. Frames the general
+    vision layer judged poor are excluded from counts.
+    """
+    provenance = dict(observation.provenance_json or {})
+    profile = resolve_profile(observation.crop)
+    provider = get_detection_provider()
+    if isinstance(provider, DisabledDetectionProvider) or profile is None:
+        provenance["detection_status"] = "not_run"
+        provenance["detection_reason"] = provider.reason if isinstance(provider, DisabledDetectionProvider) else "crop_profile_not_supported"
+        observation.provenance_json = provenance
+        return
+
+    frame_indexes: dict[str | None, int] = {}
+    results = []
+    for payload, content_type, context in media_inputs:
+        asset_id = context.get("asset_id")
+        index = frame_indexes.get(asset_id, 0)
+        frame_indexes[asset_id] = index + 1
+        frame = FrameRef(
+            asset_id=asset_id, media_kind=context.get("media_kind"),
+            frame_timestamp_seconds=context.get("frame_timestamp_seconds"), frame_index=index,
+        )
+        results.append(provider.detect(payload, content_type, profile, frame))
+
+    poor = {
+        (moment.get("asset_id"), moment.get("frame_timestamp_seconds"))
+        for moment in vision_analysis.get("media_moments") or []
+        if moment.get("image_quality") == "poor"
+    }
+    counts = summarize_counts(results, excluded_frames=poor)
+    statuses = sorted({result.status for result in results})
+    ok = [result for result in results if result.status == "ok"]
+    models = sorted({f"{result.model_id}@{result.model_version or 'unversioned'}" for result in ok if result.model_id})
+    structured = dict(observation.structured_json or {})
+    structured["detections"] = {
+        "contract_version": DETECTION_CONTRACT_VERSION,
+        "crop_profile": profile.to_dict(),
+        "provider": provider.name,
+        "models": models,
+        "statuses": statuses,
+        "frames": [result.to_dict() for result in results[:_MAX_STORED_DETECTION_FRAMES]],
+        "counts": counts,
+        "review_status": "unreviewed",
+        "validation_status": profile.validation_status,
+        "human_review_required": True,
+    }
+    observation.structured_json = structured
+    provenance.update({"detection_status": "completed" if ok else "failed", "detection_models": models})
+    observation.provenance_json = provenance
+    svc._record_run(
+        db, observation, stage="detection", provider=provider.name,
+        stage_status="completed" if ok else "failed",
+        model=models[0] if models else None, language=None,
+        latency_ms=sum(result.latency_ms or 0 for result in results) or None,
+        error=";".join(sorted({result.error for result in results if result.error}))[:500] or None,
+        attempt_count=attempt,
+        output={"frames": len(results), "frames_ok": len(ok), "labels": counts.get("labels", []), "totals": counts.get("totals", [])},
+    )
 
 
 def install_field_vision_extension(svc: Any) -> None:
@@ -359,6 +431,12 @@ def install_field_vision_extension(svc: Any) -> None:
                     "read_errors": read_errors,
                     "frame_errors": frame_errors,
                 },
+            )
+
+        if detection_enabled():
+            _run_detection(
+                svc, db, observation, media_inputs,
+                result.analysis if result.succeeded else {}, int(job.attempt_count or 1),
             )
 
         correlation = svc.correlate_observation(db, observation)
