@@ -871,6 +871,7 @@ def harvest_window(payload: HarvestWindowIn) -> dict:
         crop_id=profile.crop_id if profile else None,
     ))
     result["weather_source"] = payload.weather_source
+    result["suggested_actions"] = crop_estimation.harvest_action_suggestions(result, datetime.now(timezone.utc).date())
     return result
 
 

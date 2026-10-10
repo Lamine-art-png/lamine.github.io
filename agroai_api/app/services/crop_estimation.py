@@ -274,6 +274,36 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
     }
 
 
+HARVEST_SUGGESTION_HORIZON_DAYS = 30
+HARVEST_ACTION_CODES = (
+    "verify_maturity_by_sampling",
+    "confirm_harvest_labor_and_equipment",
+    "confirm_storage_transport_and_buyer_commitments",
+)
+
+
+def harvest_action_suggestions(window_result: dict[str, Any], today: date) -> list[dict[str, Any]]:
+    """Suggested preparation steps when a supported window is near.
+
+    Suggestions are machine codes for the portal to localize. They never
+    create tasks, change contracts, or schedule equipment: each needs a
+    person to review and, if appropriate, turn it into a task.
+    """
+    status = window_result.get("status")
+    window = window_result.get("window") or {}
+    if status not in {"projected", "within_target_range"} or not window.get("earliest"):
+        return []
+    earliest = date.fromisoformat(window["earliest"])
+    if status == "projected" and (earliest - today).days > HARVEST_SUGGESTION_HORIZON_DAYS:
+        return []
+    due = max(today, earliest - timedelta(days=7))
+    return [
+        {"action_code": code, "due_by": due.isoformat(), "requires_approval": True, "creates_task": False,
+         "basis": f"harvest_window_{status}"}
+        for code in HARVEST_ACTION_CODES
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Production from a sampling design
 # ---------------------------------------------------------------------------

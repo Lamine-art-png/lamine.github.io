@@ -237,3 +237,16 @@ def test_market_yield_proposal_never_applies_itself():
     assert proposal["yield_per_area"] == "375.00" and proposal["quantity_unit"] == "kg"
     assert "Review before applying" in proposal["note"]
     assert est.market_yield_proposal(est.estimate_production(_production(detection_rate=None)), estimate_id="x") is None
+
+
+def test_harvest_suggestions_only_near_a_supported_window():
+    result = est.estimate_harvest_window(_request())  # earliest 2026-07-09
+    assert est.harvest_action_suggestions(result, date(2026, 5, 1)) == []  # more than 30 days away
+    near = est.harvest_action_suggestions(result, date(2026, 6, 20))
+    assert [item["action_code"] for item in near] == list(est.HARVEST_ACTION_CODES)
+    assert all(item["requires_approval"] and not item["creates_task"] for item in near)
+    assert near[0]["due_by"] == "2026-07-02"
+    late = est.harvest_action_suggestions(result, date(2026, 7, 6))
+    assert late[0]["due_by"] == "2026-07-06"  # never due in the past
+    insufficient = est.estimate_harvest_window(_request(target=None))
+    assert est.harvest_action_suggestions(insufficient, date(2026, 7, 1)) == []
