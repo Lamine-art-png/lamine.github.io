@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from datetime import date as date_type
+from decimal import Decimal
 from typing import Literal
 
 import json
@@ -27,7 +29,10 @@ from starlette.concurrency import run_in_threadpool
 from app.api.deps import AuthContext, get_auth_context
 from app.core.config import settings
 from app.db.base import SessionLocal, get_db
+from app.services import crop_estimation
 from app.services import field_intelligence as svc
+from app.services.crop_intelligence import field_condition_summary
+from app.services.crop_profiles import all_profiles, resolve_profile
 from app.services.field_live_rate_limit import check_field_live_analysis_limit
 from app.services.field_transcription import transcribe_audio
 from app.services.field_vision import analyze_field_images
@@ -709,6 +714,183 @@ def create_task(
 ) -> dict:
     task = svc.create_task_from_observation(db, ctx, observation_id, payload.model_dump())
     return {"status": "created", "task": task}
+
+
+# ---------------------------------------------------------------------------
+# Crop Intelligence: detections, field condition, harvest window, production
+# ---------------------------------------------------------------------------
+
+_MAX_WEATHER_DAYS = 400
+_MAX_ANALOG_YEARS = 30
+
+
+class WeatherDayIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date_type
+    tmax_c: float
+    tmin_c: float
+
+
+class MaturityTargetIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    low_gdd: float = Field(gt=0, le=20000)
+    high_gdd: float = Field(gt=0, le=20000)
+    source: str = Field(min_length=1, max_length=500)
+    source_type: Literal["supplier_published", "grower_historical", "fitted_model"]
+    variety: str | None = Field(default=None, max_length=_MAX_NAME)
+
+
+class HarvestWindowIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    crop: str | None = Field(default=None, max_length=_MAX_NAME)
+    biofix: date
+    biofix_type: Literal["planting", "transplant", "emergence", "bud_break", "bloom", "other"]
+    as_of: date
+    degree_day_method: Literal["simple_average", "modified_average_86_50"] | None = None
+    base_c: float | None = Field(default=None, ge=-10, le=40)
+    upper_cutoff_c: float | None = Field(default=None, ge=0, le=50)
+    target: MaturityTargetIn | None = None
+    observed: list[WeatherDayIn] = Field(default_factory=list, max_length=_MAX_WEATHER_DAYS)
+    analog_years: dict[int, list[WeatherDayIn]] = Field(default_factory=dict)
+    weather_source: str | None = Field(default=None, max_length=500)
+
+    @field_validator("analog_years")
+    @classmethod
+    def _analog_years(cls, value):
+        if len(value) > _MAX_ANALOG_YEARS:
+            raise ValueError(f"at most {_MAX_ANALOG_YEARS} analog years")
+        for year, days in value.items():
+            if not (1900 <= int(year) <= 2200) or len(days) > 366:
+                raise ValueError("analog years need a plausible year and at most 366 days each")
+        return value
+
+
+class EstimateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: float
+    standard_error: float = Field(ge=0)
+
+
+class ProductionEstimateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unit: str = Field(min_length=1, max_length=40)
+    object_label: str = Field(min_length=1, max_length=60)
+    design: str = Field(min_length=1, max_length=60)
+    population_units: int = Field(ge=1, le=100_000_000)
+    sample_counts: list[float] = Field(min_length=1, max_length=5000)
+    count_source: str = Field(min_length=1, max_length=60)
+    detector_validation_id: str | None = Field(default=None, max_length=_MAX_NAME)
+    detection_rate: EstimateIn | None = None
+    unit_weight_kg: EstimateIn | None = None
+    marketable_fraction: EstimateIn | None = None
+    area_hectares: Decimal | None = Field(default=None, gt=0, le=Decimal("1000000"))
+    include_market_proposal: bool = False
+
+
+def _estimate(value: EstimateIn | None) -> crop_estimation.Estimate | None:
+    return None if value is None else crop_estimation.Estimate(value.value, value.standard_error)
+
+
+def _weather(days: list[WeatherDayIn]) -> list[crop_estimation.WeatherDay]:
+    return [crop_estimation.WeatherDay(item.date, item.tmax_c, item.tmin_c) for item in days]
+
+
+@router.get("/crop-profiles")
+def crop_profiles() -> dict:
+    """Supported crop vocabularies and conventions; none is validated yet."""
+    return {"status": "ok", "profiles": [profile.to_dict() for profile in all_profiles()]}
+
+
+@router.get("/observations/{observation_id}/detections")
+def observation_detections(
+    observation_id: str,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    observation = svc.get_observation(db, ctx, observation_id)
+    structured = observation.structured_json if isinstance(observation.structured_json, dict) else {}
+    provenance = observation.provenance_json if isinstance(observation.provenance_json, dict) else {}
+    detections = structured.get("detections") if isinstance(structured.get("detections"), dict) else None
+    return {
+        "status": "ok",
+        "observation_id": observation.id,
+        "detection_status": provenance.get("detection_status") or ("completed" if detections else "not_run"),
+        "detection_reason": provenance.get("detection_reason"),
+        "detections": detections,
+        "human_review_required": True,
+    }
+
+
+@router.get("/fields/{field_id}/crop-condition")
+def field_crop_condition(
+    field_id: str,
+    workspace_id: str | None = Query(default=None),
+    block_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    rows, total = svc.list_observations(db, ctx, {
+        "workspace_id": workspace_id, "field_id": field_id, "block_id": block_id, "limit": limit, "offset": 0,
+    })
+    summary = field_condition_summary([svc.serialize_observation(db, obs) for obs in rows], field_id=field_id)
+    return {"status": "ok", "total_observations": total, **{k: v for k, v in summary.items() if k != "status"},
+            "summary_status": summary["status"]}
+
+
+@router.post("/crop-intelligence/harvest-window", dependencies=[Depends(enforce_json_body_limit)])
+def harvest_window(payload: HarvestWindowIn) -> dict:
+    """Harvest window from supplied, sourced inputs. Nothing is persisted."""
+    profile = resolve_profile(payload.crop)
+    method = payload.degree_day_method
+    base = payload.base_c
+    upper = payload.upper_cutoff_c
+    if method is None and profile is not None and profile.degree_day_method is not None:
+        method = profile.degree_day_method.method
+        base = profile.degree_day_method.base_c if base is None else base
+        upper = profile.degree_day_method.upper_cutoff_c if upper is None else upper
+    if method is None or base is None:
+        return {
+            "status": "insufficient_evidence", "window": None, "crop_id": profile.crop_id if profile else None,
+            "reasons": ["degree_day_method_and_base_temperature_required"],
+        }
+    target = None if payload.target is None else crop_estimation.MaturityTarget(
+        low_gdd=payload.target.low_gdd, high_gdd=payload.target.high_gdd, source=payload.target.source,
+        source_type=payload.target.source_type, variety=payload.target.variety,
+    )
+    result = crop_estimation.estimate_harvest_window(crop_estimation.HarvestWindowRequest(
+        biofix=payload.biofix, biofix_type=payload.biofix_type, as_of=payload.as_of,
+        config=crop_estimation.DegreeDayConfig(method, float(base), None if upper is None else float(upper)),
+        target=target, observed=_weather(payload.observed),
+        analog_years={int(year): _weather(days) for year, days in payload.analog_years.items()},
+        crop_id=profile.crop_id if profile else None,
+    ))
+    result["weather_source"] = payload.weather_source
+    return result
+
+
+@router.post("/crop-intelligence/production-estimate", dependencies=[Depends(enforce_json_body_limit)])
+def production_estimate(payload: ProductionEstimateIn) -> dict:
+    """Production from a sampling design. Nothing is persisted or applied;
+    an optional Market Intelligence proposal must be reviewed and submitted
+    by a person with write access."""
+    result = crop_estimation.estimate_production(crop_estimation.ProductionRequest(
+        unit=payload.unit, object_label=payload.object_label, design=payload.design,
+        population_units=payload.population_units, sample_counts=payload.sample_counts,
+        count_source=payload.count_source, detection_rate=_estimate(payload.detection_rate),
+        unit_weight_kg=_estimate(payload.unit_weight_kg), marketable_fraction=_estimate(payload.marketable_fraction),
+        area_hectares=payload.area_hectares, detector_validation_id=payload.detector_validation_id,
+    ))
+    if payload.include_market_proposal:
+        estimate_id = "crop-est-" + hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()[:16]
+        result["estimate_id"] = estimate_id
+        result["market_yield_proposal"] = crop_estimation.market_yield_proposal(result, estimate_id=estimate_id)
+    return result
 
 
 # ---------------------------------------------------------------------------
