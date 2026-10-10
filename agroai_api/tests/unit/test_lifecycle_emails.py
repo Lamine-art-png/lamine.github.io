@@ -693,3 +693,13 @@ def test_wolof_preference_gets_wolof_email_and_language_change_applies(client, d
     db.commit()
     _run(db, user, days=1)
     assert lc.sent[-1]["subject"] == french["connect_data.subject"] and _row(db, user, "connect_data").locale == "fr-FR"
+
+
+def test_only_welcome_copies_official_mailbox(client, db, lc, monkeypatch):
+    monkeypatch.setattr(settings, "LIFECYCLE_EMAIL_AUDIT_BCC", "contact@agroai-pilot.com", raising=False)
+    user, _org = _signup(client, db, "welcome-audit@example.com")
+    assert _steps(lc) == ["welcome"]
+    assert lc.sent[0]["bcc_email"] == "contact@agroai-pilot.com"
+    assert _run(db, user, days=1) == "sent"
+    assert _steps(lc) == ["welcome", "connect_data"]
+    assert lc.sent[-1]["bcc_email"] is None
