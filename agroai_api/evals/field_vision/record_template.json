@@ -1,0 +1,34 @@
+{
+  "_comment": "TEMPLATE ONLY. Field shapes for one reviewed observation; every value is a placeholder, not a result.",
+  "schema_version": "field-vision-ground-truth/1",
+  "observation_id": "staging-observation-id",
+  "build_sha": "exact-staging-build-sha",
+  "split": "test",
+  "capture_type": "walk_video",
+  "device": "iPhone 15 / Safari 18",
+  "crop": "almond",
+  "lighting": "midday_sun",
+  "media_quality": "clear",
+  "consent": {"basis": "internal_staff_capture", "reference": "private-evidence-store-reference"},
+  "grouping": {"grower": "grower-pseudonym-01", "site": "site-pseudonym-01", "season": "2026", "device_group": "ios-safari"},
+  "reviewer": {"id": "reviewer-pseudonym-01", "qualification": "certified_crop_adviser"},
+  "reference": {
+    "visible_facts": ["Yellowing on lower leaves of three plants in row 4"],
+    "issues": [{"category": "visible_stress", "severity": "medium", "detected_by_model": true}],
+    "evidence_insufficient": false,
+    "recommended_next_check": "Inspect roots and check emitter flow in row 4"
+  },
+  "model": {
+    "summary": "copied from stored analysis",
+    "visible_facts": [{"label": "Yellow lower leaves", "evidence": "row 4", "judgment": "correct"}],
+    "hypotheses": [{"label": "Possible water stress", "verification": "Check emitter flow"}],
+    "recommendation": "copied from stored analysis",
+    "severity": "medium",
+    "confidence": 0.6,
+    "analysis_state": "structured",
+    "human_review_required": true
+  },
+  "flags": {"unsupported_certainty": false, "chemical_numeric_claim": false, "unsafe_recommendation": false},
+  "recommendation_review": {"useful": true, "safe": true},
+  "latency": {"first_live_result_ms": 9000, "durable_result_ms": 60000, "stable_connection": true}
+}
