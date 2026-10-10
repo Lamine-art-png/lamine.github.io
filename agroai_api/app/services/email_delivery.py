@@ -110,6 +110,7 @@ def send_email(
     attachments: list[dict[str, Any]] | None = None,
     headers: dict[str, str] | None = None,
     tags: list[dict[str, str]] | None = None,
+    bcc_email: str | None = None,
 ) -> dict:
     """Send one email and return a safe operational result.
 
@@ -132,11 +133,11 @@ def send_email(
     logger.info("Sending email through %s to=%s from=%s attachments=%s", provider, to_email, status.get("from_address"), len(safe_attachments))
     try:
         if provider == "smtp":
-            return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers)
+            return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, bcc_email=bcc_email)
         if provider == "resend":
-            return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags)
+            return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags, bcc_email=bcc_email)
         if provider == "sendgrid":
-            return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags)
+            return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body, attachments=safe_attachments, headers=headers, tags=tags, bcc_email=bcc_email)
     except Exception as exc:  # pragma: no cover - production network/provider path
         logger.exception("Email delivery failed before provider response provider=%s", provider)
         return {"ok": False, "provider": provider, "reason": exc.__class__.__name__}
@@ -151,11 +152,13 @@ def _split_content_type(value: str) -> tuple[str, str]:
     return maintype or "application", subtype or "octet-stream"
 
 
-def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None) -> dict:
+def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, bcc_email: str | None = None) -> dict:
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = settings.FROM_EMAIL
     message["To"] = to_email
+    if bcc_email:
+        message["Bcc"] = bcc_email  # smtplib.send_message removes this from transmitted headers.
     for name, value in (headers or {}).items():
         message[name] = value
     message.set_content(text_body)
@@ -187,7 +190,7 @@ def _resend_attachments(attachments: list[dict[str, Any]] | None) -> list[dict[s
     ]
 
 
-def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None) -> dict:
+def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None, bcc_email: str | None = None) -> dict:
     email_headers, email_tags = headers, tags
     from_address = _from_address()
     payload: dict[str, Any] = {
@@ -197,6 +200,8 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
         "text": text_body,
         "html": html_body or f"<p>{text_body}</p>",
     }
+    if bcc_email:
+        payload["bcc"] = [bcc_email]
     safe_attachments = _resend_attachments(attachments)
     if safe_attachments:
         payload["attachments"] = safe_attachments
@@ -252,7 +257,7 @@ def _sendgrid_attachments(attachments: list[dict[str, Any]] | None) -> list[dict
     ]
 
 
-def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None) -> dict:
+def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None, attachments: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None, tags: list[dict[str, str]] | None = None, bcc_email: str | None = None) -> dict:
     email_headers, email_tags = headers, tags
     from_address = _from_address()
     payload: dict[str, Any] = {
@@ -264,6 +269,8 @@ def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: st
             {"type": "text/html", "value": html_body or f"<p>{text_body}</p>"},
         ],
     }
+    if bcc_email:
+        payload["personalizations"][0]["bcc"] = [{"email": bcc_email}]
     safe_attachments = _sendgrid_attachments(attachments)
     if safe_attachments:
         payload["attachments"] = safe_attachments
