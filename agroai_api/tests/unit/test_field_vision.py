@@ -16,7 +16,12 @@ def test_visual_output_is_bounded_and_never_upgrades_invalid_severity():
         }
     )
     assert result["severity"] == "info"
-    assert result["confidence"] == 1.0
+    # An out-of-range self-reported confidence is a contract violation, never
+    # evidence of certainty: it must become unknown, not 100%.
+    assert result["confidence"] is None
+    assert result["confidence_status"] == "invalid"
+    assert "confidence_not_in_unit_interval" in result["contract_violations"]
+    assert "severity_not_in_contract" in result["contract_violations"]
     assert len(result["summary"]) == 1600
     assert len(result["observations"]) == 12
     assert len(result["uncertainties"]) == 12

@@ -300,6 +300,15 @@ async def prepare(
                 prepared.sources.append(source)
                 continue
             source["status"] = "analyzed"
+            if analysis.get("analysis_state") == "degraded":
+                source["analysis_state"] = "degraded"
+                prepared.limitations.append(
+                    f"The image analysis for {_clean(row.filename, 200)} was not structured; treat it as unverified context only."
+                )
+            if analysis.get("images_fallback_model"):
+                prepared.limitations.append(
+                    f"The image analysis for {_clean(row.filename, 200)} used a fallback vision model that has not been evaluated."
+                )
             prepared.sources.append(source)
             context.evidence.append({"type": "image_analysis", "file_id": row.id, "title": row.filename, "analysis": analysis})
             sections.append((

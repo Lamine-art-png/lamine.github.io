@@ -521,6 +521,11 @@ export const apiClient = {
     createTask: (observationId: string, payload: unknown) => post(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}/tasks`, payload),
     search: (query: string) => get(`/v1/field-intelligence/search?${query}`),
     map: (workspaceId?: string) => get(`/v1/field-intelligence/map${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    cropProfiles: () => get("/v1/field-intelligence/crop-profiles"),
+    observationDetections: (observationId: string) => get(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}/detections`),
+    fieldCropCondition: (fieldId: string, workspaceId?: string) => get(`/v1/field-intelligence/fields/${encodeURIComponent(fieldId)}/crop-condition${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    harvestWindow: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/harvest-window", payload),
+    productionEstimate: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/production-estimate", payload),
     assetBlob: async (assetId: string, range?: string): Promise<Blob> => {
       const token = localStorage.getItem(tokenKey);
       const headers = new Headers();
