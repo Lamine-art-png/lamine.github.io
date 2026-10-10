@@ -595,6 +595,7 @@ def _send_step(db: Session, enrollment: LifecycleEmailEnrollment, step: Step, de
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             },
             tags=[{"name": "category", "value": "lifecycle"}, {"name": "step", "value": step.key}],
+            bcc_email=(settings.LIFECYCLE_EMAIL_AUDIT_BCC.strip() or None) if step.key == "welcome" else None,
         )
     except Exception as exc:  # pragma: no cover - send_email contains provider errors
         result = {"ok": False, "reason": exc.__class__.__name__}
