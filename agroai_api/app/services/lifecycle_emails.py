@@ -355,6 +355,36 @@ def _number(value: Any, locale: str) -> str:
         return f"{int(value):,}" if isinstance(value, int) else str(value)
 
 
+_DEMO_PAGE = "https://agroai-pilot.com/book-a-demo"
+# Stable localized labels for common signups; other locales use AGRO-AI's
+# existing bounded transactional translation without changing the source
+# fingerprint of the complete lifecycle-language catalogs.
+_DEMO_CTA = {
+    "en": "Book a demo",
+    "pt-BR": "Agendar uma demonstração",
+    "fr": "Réserver une démonstration",
+    "fr-FR": "Réserver une démonstration",
+    "es": "Reservar una demostración",
+    "de": "Demo buchen",
+    "it": "Prenota una demo",
+    "nl": "Demo boeken",
+    "ar": "احجز عرضًا توضيحيًا",
+    "hi": "डेमो बुक करें",
+    "ja": "デモを予約",
+    "zh": "预约演示",
+    "zh-CN": "预约演示",
+    "sw": "Weka nafasi ya onyesho",
+}
+
+
+def _demo_cta(locale: str) -> str:
+    if locale in _DEMO_CTA:
+        return _DEMO_CTA[locale]
+    from app.services.transactional_i18n import localize_transactional_strings
+
+    return localize_transactional_strings(locale, {"demo_cta": "Book a demo"})["demo_cta"]
+
+
 def render(step: str, variant: str | None, copy: dict[str, str], *, locale: str, user: User, org: Organization, signals: Signals) -> dict[str, str]:
     from app.services.commercial_control import BASE_ENTITLEMENTS
 
@@ -411,6 +441,8 @@ def render(step: str, variant: str | None, copy: dict[str, str], *, locale: str,
     cta_key = {"connect_data": "connect_data.cta", "ask": "ask.cta", "field": "field.cta", "market": "market.cta"}.get(cta_step, f"{prefix}.cta")
     query = urlencode({"lang": locale, "utm_source": "agroai", "utm_medium": "email", "utm_campaign": f"lifecycle_{step}"})
     url = f"{portal_origin()}{route}?{query}"
+    demo_url = f"{_DEMO_PAGE}?{urlencode({'utm_source': 'agroai', 'utm_medium': 'email', 'utm_campaign': f'lifecycle_{step}', 'utm_content': 'book_demo'})}"
+    demo_cta = _demo_cta(locale)
     subject = c(f"{prefix}.subject")
     preview = c(f"{prefix}.preview")
     greeting = c("common.greeting") if values["name"] else c("common.greeting_generic")
@@ -419,14 +451,15 @@ def render(step: str, variant: str | None, copy: dict[str, str], *, locale: str,
     html = _html(locale=locale, preview=preview, headline=c(f"{prefix}.headline"), greeting=greeting, paragraphs=paragraphs,
                  bullets=bullets, after=paragraphs_after, cta=c(cta_key), url=url, fallback=c("common.button_fallback"),
                  signoff=c("common.signoff"), reason=c("common.reason"), unsubscribe=c("common.unsubscribe"),
-                 unsubscribe_note=c("common.unsubscribe_note"), unsubscribe_url=unsub, company=c("common.company"), address=address)
-    text_lines = [greeting, "", *paragraphs, *(f"- {b}" for b in bullets), *paragraphs_after, "", f"{c(cta_key)}: {url}", "", c("common.signoff"), "", "--", c("common.reason"), f"{c('common.unsubscribe')}: {unsub}", c("common.unsubscribe_note"), c("common.company"), address]
+                 unsubscribe_note=c("common.unsubscribe_note"), unsubscribe_url=unsub, company=c("common.company"), address=address,
+                 demo_cta=demo_cta, demo_url=demo_url)
+    text_lines = [greeting, "", *paragraphs, *(f"- {b}" for b in bullets), *paragraphs_after, "", f"{c(cta_key)}: {url}", f"{demo_cta}: {demo_url}", "", c("common.signoff"), "", "--", c("common.reason"), f"{c('common.unsubscribe')}: {unsub}", c("common.unsubscribe_note"), c("common.company"), address]
     return {"subject": subject, "preview": preview, "html": html, "text": "\n".join(line for line in text_lines if line is not None).strip() + "\n", "url": url, "unsubscribe_url": unsub}
 
 
 def _html(*, locale: str, preview: str, headline: str, greeting: str, paragraphs: list[str], bullets: list[str], after: list[str],
           cta: str, url: str, fallback: str, signoff: str, reason: str, unsubscribe: str, unsubscribe_note: str,
-          unsubscribe_url: str, company: str, address: str) -> str:
+          unsubscribe_url: str, company: str, address: str, demo_cta: str, demo_url: str) -> str:
     from app.services.language_registry import family_direction
 
     e = lambda value: escape(value, quote=True)  # noqa: E731
@@ -444,7 +477,8 @@ def _html(*, locale: str, preview: str, headline: str, greeting: str, paragraphs
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:18px;border:1px solid #e5e0d6;overflow:hidden;text-align:{align};" dir="{direction}">
 <tr><td style="background:#082f23;padding:28px 32px;color:#ffffff;"><div style="font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#d9f99d;font-weight:700;">AGRO-AI</div><h1 style="margin:14px 0 0;font-size:24px;line-height:1.3;font-weight:750;">{e(headline)}</h1></td></tr>
 <tr><td style="padding:32px;"><p style="margin:0 0 16px;font-size:16px;line-height:1.6;">{e(greeting)}</p>{p}{blist}{a}
-<table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;"><tr><td align="center" style="border-radius:10px;background:#0b3326;"><a href="{e(url)}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">{e(cta)}</a></td></tr></table>
+<table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0 12px;"><tr><td align="center" style="border-radius:10px;background:#0b3326;"><a href="{e(url)}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;border-radius:10px;">{e(cta)}</a></td></tr></table>
+<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;"><tr><td align="center" style="border-radius:10px;border:1px solid #0b3326;"><a href="{e(demo_url)}" style="display:inline-block;padding:12px 22px;color:#0b3326;text-decoration:none;font-size:14px;font-weight:700;border-radius:10px;">{e(demo_cta)}</a></td></tr></table>
 <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#637267;">{e(fallback)}</p>
 <p style="word-break:break-all;margin:0 0 24px;font-size:13px;line-height:1.6;"><a href="{e(url)}" style="color:#0b6b43;">{e(url)}</a></p>
 <p style="margin:0;font-size:15px;line-height:1.6;">{e(signoff)}</p></td></tr>
