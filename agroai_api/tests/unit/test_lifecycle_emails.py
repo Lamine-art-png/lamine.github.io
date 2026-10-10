@@ -703,3 +703,26 @@ def test_only_welcome_copies_official_mailbox(client, db, lc, monkeypatch):
     assert _run(db, user, days=1) == "sent"
     assert _steps(lc) == ["welcome", "connect_data"]
     assert lc.sent[-1]["bcc_email"] is None
+
+
+def test_future_onboarding_emails_have_one_book_demo_button(client, db, lc):
+    user, _org = _signup(client, db, "demo-cta@example.com")
+    assert _steps(lc) == ["welcome"]
+    first = lc.sent[0]
+    assert first["html_body"].count("utm_content=book_demo") == 1
+    assert "Book a demo" in first["html_body"]
+    assert "https://agroai-pilot.com/book-a-demo?" in first["html_body"]
+    assert "/onboarding?lang=en" in first["html_body"]
+    assert "Book a demo: https://agroai-pilot.com/book-a-demo?" in first["text_body"]
+    assert _run(db, user, days=1) == "sent"
+    follow_up = lc.sent[-1]
+    assert follow_up["html_body"].count("utm_content=book_demo") == 1
+    assert "https://agroai-pilot.com/book-a-demo?" in follow_up["html_body"]
+
+
+def test_demo_cta_respects_existing_signup_language(client, db, lc):
+    _signup(client, db, "portuguese-demo@example.com", locale="pt-BR")
+    sent = lc.sent[0]
+    assert "Agendar uma demonstração" in sent["html_body"]
+    assert "Agendar uma demonstração: https://agroai-pilot.com/book-a-demo?" in sent["text_body"]
+    assert "Book a demo" not in sent["html_body"]
