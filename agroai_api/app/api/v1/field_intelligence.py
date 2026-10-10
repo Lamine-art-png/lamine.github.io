@@ -294,6 +294,7 @@ async def live_field_analysis(
             "durable": False,
             "error": result.error or "live_vision_unavailable",
             "retryable": bool(result.retryable),
+            "latency_ms": result.latency_ms,
             "rate_limit_remaining": decision.remaining,
         }
     return {
@@ -301,8 +302,15 @@ async def live_field_analysis(
         "preliminary": True,
         "durable": False,
         "sampled_at": datetime.now(timezone.utc).isoformat(),
+        "frame_timestamp_seconds": frame_timestamp_seconds,
         "provider": result.provider,
         "model": result.model,
+        "latency_ms": result.latency_ms,
+        # "degraded" means the provider answered in prose rather than the
+        # structured contract: show it for review, never as a finding.
+        "analysis_state": result.analysis.get("analysis_state", "structured"),
+        "provider_fallback": bool(result.analysis.get("images_fallback_model")),
+        "confidence_kind": result.analysis.get("confidence_kind"),
         "analysis": result.analysis,
         "human_review_required": True,
         "rate_limit_remaining": decision.remaining,

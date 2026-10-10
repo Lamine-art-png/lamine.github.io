@@ -222,8 +222,15 @@ def install_field_vision_extension(svc: Any) -> None:
             output={
                 "asset_ids": asset_ids,
                 "media_items_analyzed": int(result.analysis.get("images_analyzed") or 0),
+                "media_items_degraded": int(result.analysis.get("images_degraded") or 0),
                 "video_frames_analyzed": video_frame_count,
+                "analysis_state": result.analysis.get("analysis_state"),
                 "confidence": result.analysis.get("confidence"),
+                "confidence_kind": result.analysis.get("confidence_kind"),
+                "severity": result.analysis.get("severity"),
+                "peak_severity": result.analysis.get("peak_severity"),
+                "contract_violations": list(result.analysis.get("contract_violations") or []),
+                "safety_flags": list(result.analysis.get("safety_flags") or []),
                 "read_errors": read_errors,
                 "frame_errors": frame_errors,
                 "human_review_required": True,
@@ -239,6 +246,9 @@ def install_field_vision_extension(svc: Any) -> None:
             "vision_video_frames_analyzed": video_frame_count,
             "vision_human_review_required": True,
             "vision_language": output_language,
+            "vision_analysis_state": result.analysis.get("analysis_state") if result.succeeded else None,
+            "vision_confidence_kind": result.analysis.get("confidence_kind") if result.succeeded else None,
+            "vision_contract_version": result.analysis.get("contract_version") if result.succeeded else None,
         })
         observation.provenance_json = provenance
 
@@ -246,32 +256,48 @@ def install_field_vision_extension(svc: Any) -> None:
             structured = dict(observation.structured_json or {})
             structured["vision"] = result.analysis
             observation.structured_json = structured
+            degraded = result.analysis.get("analysis_state") == "degraded"
 
             summary = str(result.analysis.get("summary") or "").strip()
             if summary:
-                if not (observation.summary or "").strip():
+                # Unstructured provider prose is kept for the reviewer but is
+                # labelled as unverified and never replaces the operator's words.
+                label = "Unverified visual note" if degraded else "Visual evidence"
+                if not (observation.summary or "").strip() and not degraded:
                     observation.summary = summary
-                elif summary.lower() not in str(observation.summary).lower():
-                    observation.summary = f"{observation.summary} Visual evidence: {summary}"[:4000]
+                elif summary.lower() not in str(observation.summary or "").lower():
+                    observation.summary = f"{observation.summary or ''} {label}: {summary}".strip()[:4000]
 
             follow_up = str(result.analysis.get("recommended_follow_up") or "").strip()
-            if follow_up and not (observation.recommended_action or "").strip():
+            if follow_up and not degraded and not (observation.recommended_action or "").strip():
                 observation.recommended_action = follow_up
 
-            visual_severity = str(result.analysis.get("severity") or "info").lower()
+            # ``severity`` is corroborated across frames; an isolated spike is
+            # reported as ``peak_severity`` and routed to review, not escalated.
+            visual_severity = "info" if degraded else str(result.analysis.get("severity") or "info").lower()
             current_severity = str(observation.severity or "info").lower()
             if _SEVERITY_ORDER.get(visual_severity, 0) > _SEVERITY_ORDER.get(current_severity, 0):
                 observation.severity = visual_severity
+            peak_severity = str(result.analysis.get("peak_severity") or visual_severity).lower()
+            uncorroborated_peak = _SEVERITY_ORDER.get(peak_severity, 0) > _SEVERITY_ORDER.get(visual_severity, 0)
 
-            try:
-                visual_confidence = float(result.analysis.get("confidence") or 0.0)
-            except (TypeError, ValueError):
-                visual_confidence = 0.0
-            observation.confidence = max(float(observation.confidence or 0.0), min(visual_confidence * 0.85, 0.85))
+            # Self-reported model confidence is uncalibrated: unknown stays
+            # unknown and never raises the observation's confidence.
+            visual_confidence = result.analysis.get("confidence")
+            if not degraded and isinstance(visual_confidence, (int, float)) and not isinstance(visual_confidence, bool):
+                bounded = max(0.0, min(float(visual_confidence), 1.0))
+                observation.confidence = max(float(observation.confidence or 0.0), min(bounded * 0.85, 0.85))
 
             uncertainties = list(observation.uncertain_fields_json or [])
+            review_markers = ["visual_analysis_requires_human_confirmation"]
+            if degraded:
+                review_markers.append("visual_analysis_unstructured_unverified")
+            if uncorroborated_peak:
+                review_markers.append("visual_severity_uncorroborated_single_frame")
+            if result.analysis.get("safety_flags"):
+                review_markers.append("visual_unsupported_measurement_removed")
             for item in (
-                "visual_analysis_requires_human_confirmation",
+                *review_markers,
                 *list(result.analysis.get("uncertainties") or []),
             ):
                 text = str(item).strip()[:300]
@@ -284,6 +310,8 @@ def install_field_vision_extension(svc: Any) -> None:
             if issues or hypotheses or _SEVERITY_ORDER.get(visual_severity, 0) >= _SEVERITY_ORDER["medium"]:
                 if not observation.event_type or observation.event_type == "observation":
                     observation.event_type = "issue"
+                observation.status = "needs_review"
+            if degraded or uncorroborated_peak:
                 observation.status = "needs_review"
 
             visual_search = " ".join([
@@ -305,7 +333,12 @@ def install_field_vision_extension(svc: Any) -> None:
                     "model": result.model,
                     "asset_ids": asset_ids,
                     "media_analyzed": int(result.analysis.get("images_analyzed") or 0),
+                    "media_degraded": int(result.analysis.get("images_degraded") or 0),
                     "video_frames_analyzed": video_frame_count,
+                    "analysis_state": result.analysis.get("analysis_state"),
+                    "severity": visual_severity,
+                    "peak_severity": peak_severity,
+                    "safety_flags": list(result.analysis.get("safety_flags") or []),
                     "human_review_required": True,
                 },
             )

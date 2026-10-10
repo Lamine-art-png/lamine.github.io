@@ -773,7 +773,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       }, new File([blob], `live-field-${Date.now()}.jpg`, { type: "image/jpeg" }), controller.signal);
       if (session !== liveVisionSessionRef.current) return;
       if (response?.status === "ok" && response?.analysis) {
-        setLiveVision(response.analysis);
+        setLiveVision({ ...response.analysis, analysis_state: response.analysis_state || response.analysis.analysis_state || "structured" });
         setLiveVisionState("ready");
       } else {
         setLiveVisionState("unavailable");
@@ -1115,6 +1115,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#92C7A9]">
                 <Sparkles className="h-4 w-4" /> {t("fieldIntel.liveVisionTitle")}
                 {liveVisionState === "sampling" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {liveVision?.analysis_state === "degraded" && <span className="rounded-full bg-[#FFF4E5] px-2 py-0.5 text-[10px] normal-case tracking-normal text-[#8A4B00]">{t("fieldIntel.needsReview")}</span>}
               </div>
               {liveVision?.summary
                 ? <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-white/90">{liveVision.summary}</p>
@@ -1306,6 +1307,7 @@ function ObservationDrawer({ t, observation, onClose, onReload }: any) {
       {(vision.summary || vision.observations?.length) && <DrawerSection title={t("fieldIntel.correlation")}>
         <div className="rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
           <div className="flex items-center gap-2 text-[12px] font-semibold text-[#1B5E3F]"><Camera className="h-4 w-4" />{t("fieldIntel.photoEvidence")} + {t("askAgroAi")}</div>
+          {vision.analysis_state === "degraded" && <span className="mt-2 inline-flex rounded-full bg-[#FFF4E5] px-2 py-1 text-[11px] font-semibold text-[#8A4B00]">{t("fieldIntel.needsReview")}</span>}
           <p className="mt-2 text-[13px] leading-6 text-[#3B4A41]">{vision.summary || "—"}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
             {vision.crop_condition && vision.crop_condition !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.cropCondition")}: {String(vision.crop_condition).replaceAll("_", " ")}</span>}
@@ -1315,7 +1317,7 @@ function ObservationDrawer({ t, observation, onClose, onReload }: any) {
           {Array.isArray(vision.visible_facts) && vision.visible_facts.length > 0 && <div className="mt-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.visibleFacts")}</div>
             <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
-              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ms-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
+              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{typeof item?.confidence === "number" && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1 && <span className="ms-1 text-[#65736A]" title={t("fieldIntel.humanReviewRequired")}>({Math.round(item.confidence * 100)}%)</span>}</li>)}
             </ul>
           </div>}
           {Array.isArray(vision.hypotheses) && vision.hypotheses.length > 0 && <div className="mt-3">
