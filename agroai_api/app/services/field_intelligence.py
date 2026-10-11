@@ -34,7 +34,7 @@ from app.models.field_intelligence import (
     FieldStorageReservation,
 )
 from app.models.operational_records import EvidenceRecord, IngestionJob
-from app.models.saas import Workspace
+from app.models.saas import Organization, Workspace
 from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
 from app.services.field_observation_correlation import correlate_observation
 from app.services.field_observation_extraction import extract_observation
@@ -52,6 +52,7 @@ PROCESS_JOB_TYPE = "field_intelligence_process"
 ASSET_DELETE_JOB_TYPE = "field_intelligence_asset_delete"
 ORPHAN_CLEANUP_JOB_TYPE = "field_intelligence_orphan_cleanup"
 MAX_PROCESS_ATTEMPTS = 5
+FREE_FIELD_REPROCESS_LIMIT = 2
 PROCESS_LEASE_SECONDS = 120
 ASSET_READ_MAX_BYTES = 64 * 1024 * 1024
 
@@ -1130,6 +1131,9 @@ def reprocess_observation(db: Session, ctx: AuthContext, observation_id: str) ->
     observation = get_observation(db, ctx, observation_id)
     authorize_workspace_action(db, ctx, observation.workspace_id, write=True)
     require_capability(db, ctx, "field_intelligence.extraction")
+    if not _has_active_process_job(db, observation.id) and not _reprocess_capacity_available(db, observation):
+        # Repeated free reprocessing must not trigger unlimited provider calls.
+        require_capability(db, ctx, "intelligence.deep_analysis")
     _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
     db.commit()
     db.refresh(observation)
@@ -2040,9 +2044,30 @@ def patch_observation(db: Session, ctx: AuthContext, observation_id: str, change
             )
         observation.status = changes["status"]
     _audit(observation, "observation_corrected", actor=ctx.user.id, details={"fields": sorted(changes.keys())})
-    # A transcript correction re-runs extraction/correlation/evidence downstream.
+    # Free customers can still correct records after their paid-model retry
+    # allowance is exhausted: deterministic extraction uses no provider AI.
     if correction_changed:
-        _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
+        if _has_active_process_job(db, observation.id) or _reprocess_capacity_available(db, observation):
+            _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
+        else:
+            extraction = extract_observation(
+                corrected,
+                field_hint=observation.field_name,
+                block_hint=observation.block_name,
+                crop_hint=observation.crop,
+                event_type_hint=observation.event_type,
+                occurred_at=observation.occurred_at,
+                allow_model=False,
+            )
+            observation.structured_json = extraction.model_dump(mode="json")
+            observation.summary = extraction.summary or corrected[:280]
+            observation.recommended_action = extraction.recommended_follow_up
+            observation.confidence = extraction.confidence
+            observation.status = "needs_review"
+            observation.model_provider = "deterministic"
+            observation.model_name = extraction.method
+            _audit(observation, "correction_saved_without_remote_ai", actor=ctx.user.id)
+            _refresh_linked_evidence(db, observation)
     else:
         _refresh_linked_evidence(db, observation)
     db.commit()
@@ -2067,6 +2092,32 @@ def _has_active_process_job(db: Session, observation_id: str) -> bool:
             .all()
         )
     )
+
+
+def _reprocess_capacity_available(db: Session, observation: FieldObservation) -> bool:
+    """Bound remote reprocessing for Free-equivalent plans, without new schema."""
+    from app.services.commercial_control import resolve_effective_entitlements
+
+    org = (
+        db.query(Organization)
+        .filter(Organization.id == observation.tenant_id)
+        .with_for_update()
+        .first()
+    )
+    if org is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    if resolve_effective_entitlements(db, org).enabled("intelligence.deep_analysis"):
+        return True
+    count = (
+        db.query(func.count(IngestionJob.id))
+        .filter(
+            IngestionJob.tenant_id == observation.tenant_id,
+            IngestionJob.job_type == PROCESS_JOB_TYPE,
+            IngestionJob.idempotency_key.like(f"fi-proc-{observation.id}-%"),
+        )
+        .scalar()
+    )
+    return int(count or 0) < FREE_FIELD_REPROCESS_LIMIT
 
 
 def _enqueue_reprocess(db: Session, observation: FieldObservation, *, ctx_user_id: str | None) -> bool:
