@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
-import { usePortalCopy } from "../hooks/usePortalCopy";
 import { apiClient } from "../api/client";
 import { fieldApi } from "../fieldIntelligence/fieldApi";
 import {
@@ -75,11 +74,6 @@ function pipelineStep(status: string | undefined, hasTranscript: boolean, hasVis
 
 export function FieldIntelligenceV2() {
   const { t, effectiveLocale } = useLocale();
-  const { tx } = usePortalCopy(["fieldIntelligence", "shared"], [
-    "Your first field result is ready. Continue with Professional for ongoing intelligence and reporting.",
-    "Continue with Professional — $299/month",
-    "Checkout is temporarily unavailable. You can retry from Billing.",
-  ]);
   const { entitlements, currentWorkspace, workspaces, currentOrganization, user } = useAuth() as any;
   const workspaceId: string | undefined = currentWorkspace?.id || workspaces?.[0]?.id;
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -109,9 +103,9 @@ export function FieldIntelligenceV2() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setBanner(tx("Checkout is temporarily unavailable. You can retry from Billing."));
+      setBanner(t("dynamic.pricing.checkoutFailed"));
     } catch {
-      setBanner(tx("Checkout is temporarily unavailable. You can retry from Billing."));
+      setBanner(t("dynamic.pricing.checkoutFailed"));
     } finally {
       setUpgradeBusy(false);
     }
@@ -230,9 +224,9 @@ export function FieldIntelligenceV2() {
       </header>
 
       {banner && <div role="status" className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#EDF7F1] px-4 py-3 text-[13px] font-medium text-[#1B5E3F]">{banner}</div>}
-      {freeWorkspace && firstFieldResultReady && <section aria-label={tx("Continue with Professional — $299/month")} className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-4 py-3">
-        <p className="max-w-2xl text-[13px] leading-6 text-[#1B5E3F]">{tx("Your first field result is ready. Continue with Professional for ongoing intelligence and reporting.")}</p>
-        <button type="button" disabled={upgradeBusy} onClick={() => void upgradeAfterFirstResult()} className="min-h-[44px] rounded-lg bg-[#0D2B1E] px-4 text-[13px] font-semibold text-white disabled:opacity-60">{tx("Continue with Professional — $299/month")}</button>
+      {freeWorkspace && firstFieldResultReady && <section aria-label={t("commercialBoundary.upgradeTo").replace("{plan}", t("commercialBoundary.plan.professional"))} className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-4 py-3">
+        <p className="max-w-2xl text-[13px] leading-6 text-[#1B5E3F]"><strong>{t("dynamic.overview.readyReview")}</strong> — {t("dynamic.pricing.copyProfessional")}</p>
+        <button type="button" disabled={upgradeBusy} onClick={() => void upgradeAfterFirstResult()} className="min-h-[44px] rounded-lg bg-[#0D2B1E] px-4 text-[13px] font-semibold text-white disabled:opacity-60">{t("commercialBoundary.upgradeTo").replace("{plan}", t("commercialBoundary.plan.professional"))} — $299{t("commercialBoundary.perMonth")}</button>
       </section>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[430px_minmax(0,1fr)]">
