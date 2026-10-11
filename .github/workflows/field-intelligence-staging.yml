@@ -8,11 +8,22 @@ on:
       confirm:
         description: "Type STAGE_FIELD_INTELLIGENCE to proceed"
         required: true
+      pr_number:
+        description: "Open draft PR to stage (for example 562)"
+        required: true
+      mode:
+        description: "qualify = identity contract and read-only checks only; deploy = full staging deploy"
+        required: true
+        default: "qualify"
+        type: choice
+        options:
+          - qualify
+          - deploy
       sha:
-        description: "Exact feature branch SHA to stage"
+        description: "Exact PR head SHA to stage"
         required: true
       merge_sha:
-        description: "Exact current PR #258 synthetic merge commit SHA"
+        description: "Exact current synthetic merge commit SHA of that PR"
         required: true
       run_smoke:
         description: "Run the 20-step staging smoke (true/false)"
@@ -35,8 +46,7 @@ concurrency:
 
 env:
   NODE_VERSION: "22"
-  STAGING_BRANCH: feature/field-intelligence-launch
-  STAGING_PR: "258"
+  STAGING_PR: ${{ inputs.pr_number }}
   STAGING_PORTAL_BRANCH: field-intelligence-staging
 
 jobs:
@@ -70,6 +80,10 @@ jobs:
           REQUESTED_MERGE_SHA: ${{ inputs.merge_sha }}
         run: |
           set -euo pipefail
+          case "${STAGING_PR}" in ''|*[!0-9]*) echo "Refusing: pr_number must be numeric."; exit 1 ;; esac
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${STAGING_PR}")"
+          STAGING_BRANCH="$(printf '%s' "$pr_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["head"]["ref"])')"
+          export STAGING_BRANCH
           git fetch origin main "${STAGING_BRANCH}"
           branch_head="$(git rev-parse "origin/${STAGING_BRANCH}")"
           main_head="$(git rev-parse origin/main)"
@@ -77,14 +91,15 @@ jobs:
             echo "Refusing: requested SHA is not the ${STAGING_BRANCH} head."
             exit 1
           fi
-          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${STAGING_PR}")"
           PR_JSON="$pr_json" BRANCH_HEAD="$branch_head" MAIN_HEAD="$main_head" REQUESTED_MERGE_SHA="$REQUESTED_MERGE_SHA" \
             python3 - <<'PY'
           import json, os, sys
           pr = json.loads(os.environ["PR_JSON"])
           failures = []
-          if pr.get("state") != "open": failures.append("PR #258 is not open")
-          if not pr.get("draft"): failures.append("PR #258 must remain draft")
+          number = os.environ["STAGING_PR"]
+          if pr.get("state") != "open": failures.append(f"PR #{number} is not open")
+          if not pr.get("draft"): failures.append(f"PR #{number} must remain draft")
+          if ((pr.get("head") or {}).get("repo") or {}).get("full_name") != os.environ["GITHUB_REPOSITORY"]: failures.append("PR head must be a branch of this repository, not a fork")
           if (pr.get("base") or {}).get("ref") != "main": failures.append("PR base is not main")
           if (pr.get("head") or {}).get("ref") != os.environ["STAGING_BRANCH"]: failures.append("PR head branch is not the staging branch")
           if (pr.get("head") or {}).get("sha") != os.environ["BRANCH_HEAD"]: failures.append("PR head SHA does not equal the requested staging SHA")
@@ -135,7 +150,7 @@ jobs:
               if run.get("head_sha") != sha:
                   continue
               prs = run.get("pull_requests") or []
-              matches = [p for p in prs if p.get("number") == 258
+              matches = [p for p in prs if p.get("number") == int(os.environ["STAGING_PR"])
                          and (p.get("head") or {}).get("sha") == sha
                          and (p.get("base") or {}).get("sha") == main_sha]
               if not matches:
@@ -161,6 +176,8 @@ jobs:
     name: Compile and test exact staging source
     needs: validate-source
     runs-on: ubuntu-latest
+    outputs:
+      expected_head: ${{ steps.contracts.outputs.expected_head }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -169,12 +186,16 @@ jobs:
         with:
           python-version: "3.11"
       - name: Backend, worker, launch, staging, and storage contracts
+        id: contracts
         working-directory: agroai_api
         run: |
           python -m pip install -q -r requirements.txt pytest
           sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
           python -m compileall -q app alembic scripts
-          test "$(alembic heads)" = "027_field_intelligence_launch (head)"
+          heads="$(alembic heads)"
+          test "$(printf '%s\n' "$heads" | grep -c '(head)')" -eq 1
+          expected_head="$(printf '%s\n' "$heads" | sed -n 's/ (head)$//p')"
+          echo "expected_head=${expected_head}" >> "$GITHUB_OUTPUT"
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
             tests/unit/test_field_intelligence.py \
             tests/unit/test_field_intelligence_hardening.py \
@@ -213,6 +234,10 @@ jobs:
     env:
       STAGE_SHA: ${{ needs.validate-source.outputs.sha }}
       STAGE_MERGE_SHA: ${{ needs.validate-source.outputs.merge_sha }}
+      EXPECTED_HEAD: ${{ needs.build-and-test.outputs.expected_head }}
+      FIELD_STAGING_VISION_ENDPOINT: ${{ secrets.FIELD_STAGING_VISION_ENDPOINT }}
+      FIELD_STAGING_DETECTION_ENABLED: ${{ vars.FIELD_STAGING_DETECTION_ENABLED }}
+      FIELD_STAGING_DETECTION_ENDPOINT: ${{ secrets.FIELD_STAGING_DETECTION_ENDPOINT }}
       FIELD_STAGING_API_URL: ${{ vars.FIELD_STAGING_API_URL }}
       FIELD_STAGING_PORTAL_URL: ${{ vars.FIELD_STAGING_PORTAL_URL }}
       FIELD_STAGING_DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
@@ -262,7 +287,24 @@ jobs:
         working-directory: agroai_api
         run: python scripts/field_intelligence_staging_contract.py | tee ../staging-contract-report.json
 
-      - name: Migrate staging database to the exact launch revision
+      - name: Preflight the staging database upgrade path (read-only)
+        working-directory: agroai_api
+        run: python scripts/field_intelligence_migration.py preflight --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-preflight.json
+
+      - name: Report the currently deployed staging build (read-only)
+        run: |
+          set -euo pipefail
+          payload="$(curl --fail --silent --max-time 20 "${FIELD_STAGING_API_URL%/}/v1/health" 2>/dev/null || echo '{}')"
+          PAYLOAD="$payload" python3 - <<'PY' | tee staging-current-build.json
+          import json, os
+          try: payload = json.loads(os.environ["PAYLOAD"])
+          except ValueError: payload = {}
+          keys = ("status", "version", "sha", "build_sha", "release_sha", "commit")
+          print(json.dumps({key: payload.get(key) for key in keys if key in payload} or {"reachable": False}))
+          PY
+
+      - name: Migrate staging database to the repository head
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
         run: |
           set -euo pipefail
@@ -270,7 +312,8 @@ jobs:
           python scripts/field_intelligence_migration.py upgrade --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-upgrade.json
           python scripts/field_intelligence_migration.py verify --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-verify.json
 
-      - name: Prove 027 to 026 rollback on a disposable database and always clean it
+      - name: Prove head to rollback-floor rollback on a disposable database and always clean it
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
         shell: bash
         run: |
@@ -314,12 +357,14 @@ jobs:
           done
 
       - name: Trigger staging API deployment
+        if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 30 -X POST "$FIELD_STAGING_DEPLOY_HOOK" >/dev/null
           echo "Staging API deployment triggered for verified service ${FIELD_STAGING_API_SERVICE_ID}."
 
       - name: Wait for staging API to report the exact SHA
+        if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 90); do
@@ -340,6 +385,7 @@ jobs:
           exit 1
 
       - name: Trigger verified staging worker deployment
+        if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
           if [ "$FIELD_STAGING_WORKER_MODE" = "dedicated" ]; then
@@ -350,6 +396,7 @@ jobs:
           fi
 
       - name: Verify worker liveness and exact-SHA heartbeat
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
         run: |
           set -euo pipefail
@@ -373,6 +420,7 @@ jobs:
           PY
 
       - name: Probe staging object storage
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
         env:
           CONNECTOR_OBJECT_STORAGE_BACKEND: ${{ vars.FIELD_STAGING_OBJECT_STORAGE_BACKEND }}
@@ -410,6 +458,7 @@ jobs:
           PY
 
       - name: Verify API readiness, rollout, worker, transcription, and release alignment
+        if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
           readiness="$(curl --fail --silent --max-time 30 "${FIELD_STAGING_API_URL%/}/v1/readiness")"
@@ -429,7 +478,7 @@ jobs:
           alignment = rollout.get("release_alignment") or {}
           assert alignment.get("api_sha") == os.environ["STAGE_SHA"], alignment
           assert alignment.get("worker_shas") == [os.environ["STAGE_SHA"]], alignment
-          assert alignment.get("database_heads") == ["027_field_intelligence_launch"], alignment
+          assert alignment.get("database_heads") == [os.environ["EXPECTED_HEAD"]], alignment
           allowed_external = {"portal_sha_unreported", "edge_sha_unreported"}
           unexpected = set(alignment.get("mismatches") or []) - allowed_external
           assert not unexpected, {"unexpected_alignment_mismatches": sorted(unexpected), "alignment": alignment}
@@ -442,6 +491,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - name: Build and deploy the staging portal against only the staging API
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: ${{ vars.FIELD_STAGING_API_URL }}
@@ -470,6 +520,7 @@ jobs:
             --commit-hash "$STAGE_SHA"
 
       - name: Verify the live staging portal
+        if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
           metadata="$(curl --fail --silent --max-time 30 "${FIELD_STAGING_PORTAL_URL%/}/deployment-meta.json")"
@@ -495,6 +546,7 @@ jobs:
           PY
 
       - name: Verify staging database revision
+        if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
         run: |
           python3 - <<'PY'
@@ -502,13 +554,13 @@ jobs:
           engine = sa.create_engine(os.environ["FIELD_STAGING_DATABASE_URL"])
           with engine.connect() as connection:
               revisions = sorted(row[0] for row in connection.execute(sa.text("SELECT version_num FROM alembic_version")))
-          assert revisions == ["027_field_intelligence_launch"], revisions
+          assert revisions == [os.environ["EXPECTED_HEAD"]], revisions
           print(json.dumps({"database_revisions": revisions}))
           engine.dispose()
           PY
 
       - name: Run the 20-step staging smoke
-        if: ${{ inputs.run_smoke == 'true' }}
+        if: ${{ inputs.mode == 'deploy' && inputs.run_smoke == 'true' }}
         working-directory: agroai_api
         env:
           FIELD_SMOKE_BASE_URL: ${{ vars.FIELD_STAGING_API_URL }}
@@ -528,7 +580,7 @@ jobs:
         if: always()
         run: |
           mkdir -p staging-evidence
-          for file in staging-contract-report.json staging-migration-preflight.json \
+          for file in staging-contract-report.json staging-migration-preflight.json staging-current-build.json \
                       staging-migration-upgrade.json staging-migration-verify.json \
                       staging-rollback-proof.jsonl staging-smoke.log; do
             [ -f "$file" ] && cp "$file" staging-evidence/ || true

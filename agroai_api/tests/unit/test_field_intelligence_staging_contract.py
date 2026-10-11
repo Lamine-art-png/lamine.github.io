@@ -167,6 +167,24 @@ def test_production_runtime_credentials_are_not_inherited():
         assert any(name in item for item in payload["failures"])
 
 
+def test_vision_and_detection_endpoints_are_segregated():
+    for name in ("FIELD_STAGING_VISION_ENDPOINT", "FIELD_STAGING_DETECTION_ENDPOINT"):
+        code, payload = run_contract({name: "https://api-preview.agroai-pilot.com/v1/internal/edge/field-vision"})
+        assert code == 1 and any("PRODUCTION hostname" in item for item in payload["failures"]), name
+        code, payload = run_contract({name: "http://vision-staging.internal/run"})
+        assert code == 1 and any(f"{name} must be https" in item for item in payload["failures"]), name
+    code, payload = run_contract({"FIELD_STAGING_VISION_ENDPOINT": "https://api.cloudflare.com/client/v4/accounts/stageacct123/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"})
+    assert code == 0 and payload["checks"]["vision_endpoint_host"] == "api.cloudflare.com", payload
+
+
+def test_detection_cannot_be_enabled_in_staging():
+    code, payload = run_contract({"FIELD_STAGING_DETECTION_ENABLED": "true"})
+    assert code == 1
+    assert any("specialized detection must stay disabled" in item for item in payload["failures"])
+    code, payload = run_contract({"FIELD_STAGING_DETECTION_ENABLED": "false"})
+    assert code == 0 and payload["checks"]["detection_enabled"] is False
+
+
 def test_staging_portal_project_must_be_distinct():
     code, payload = run_contract({"FIELD_STAGING_PORTAL_PROJECT": "agroai-portal"})
     assert code == 1
@@ -247,7 +265,10 @@ def test_workflow_checks_runtime_readiness_worker_storage_and_live_portal():
     assert "deployment-meta.json" in text
     assert "Verify the live staging portal" in text
     assert "VITE_DEPLOYMENT_ENVIRONMENT: staging" in text
-    assert "027_field_intelligence_launch" in text
+    # The expected database head is the repository head, never a stale literal.
+    assert "027_field_intelligence_launch" not in text
+    assert 'expected_head="$(printf' in text
+    assert 'os.environ["EXPECTED_HEAD"]' in text
 
 
 def test_workflow_cleans_disposable_rollback_database_on_success_and_failure():
@@ -281,3 +302,57 @@ def test_live_smoke_uses_real_speech_and_reads_append_only_audit():
     assert "/v1/field-intelligence/admin/audit" in smoke
     assert 'step("audit provenance recorded", True' not in smoke
     assert "espeak-ng" in workflow and "FIELD_SMOKE_AUDIO_PATH" in workflow
+
+
+
+def _step_blocks(text: str) -> dict[str, str]:
+    blocks: dict[str, str] = {}
+    current = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- name: ") and line.startswith("      - name: "):
+            current = stripped[len("- name: "):]
+            blocks[current] = ""
+        elif current is not None:
+            blocks[current] += line + "\n"
+    return blocks
+
+
+def test_workflow_targets_an_explicit_pr_and_defaults_to_read_only_qualification():
+    text = _workflow_text()
+    assert "pr_number:" in text and 'STAGING_PR: ${{ inputs.pr_number }}' in text
+    assert '"258"' not in text and "== 258" not in text and "feature/field-intelligence-launch" not in text
+    assert 'default: "qualify"' in text
+    assert "pr_number must be numeric" in text
+    assert "not a fork" in text
+
+
+def test_qualify_mode_never_reaches_a_deploy_hook_migration_or_write():
+    blocks = _step_blocks(_workflow_text())
+    read_only = {
+        "Validate immutable staging resource identities",
+        "Preflight the staging database upgrade path (read-only)",
+        "Report the currently deployed staging build (read-only)",
+    }
+    for name in read_only:
+        assert "inputs.mode == 'deploy'" not in blocks[name], name
+    deploy_only = [
+        "Migrate staging database to the repository head",
+        "Prove head to rollback-floor rollback on a disposable database and always clean it",
+        "Trigger staging API deployment",
+        "Wait for staging API to report the exact SHA",
+        "Trigger verified staging worker deployment",
+        "Verify worker liveness and exact-SHA heartbeat",
+        "Probe staging object storage",
+        "Verify API readiness, rollout, worker, transcription, and release alignment",
+        "Build and deploy the staging portal against only the staging API",
+        "Verify the live staging portal",
+        "Verify staging database revision",
+        "Run the 20-step staging smoke",
+    ]
+    for name in deploy_only:
+        assert "inputs.mode == 'deploy'" in blocks[name].splitlines()[0], name
+    # Every network POST, deploy hook and database write lives in a deploy-only step.
+    for name, body in blocks.items():
+        if any(marker in body for marker in ("-X POST", "DEPLOY_HOOK\"", "migration.py upgrade", "CREATE DATABASE", "wrangler")):
+            assert name in deploy_only, name
