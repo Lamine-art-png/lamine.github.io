@@ -7,14 +7,16 @@ from app.services.crop_intelligence import field_condition_summary, freshness
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 
 
-def _obs(obs_id, hours_ago, *, severity="low", status="completed", issues=(), condition=None, totals=None, action=None):
+def _obs(obs_id, hours_ago, *, severity="low", status="completed", issues=(), condition=None, totals=None, action=None,
+         block=None, per_asset=None):
     structured = {}
     if issues or condition:
         structured["vision"] = {"possible_issues": list(issues), "crop_condition": condition, "analysis_state": "structured",
                                 "confidence": None, "confidence_kind": "model_self_reported_uncalibrated"}
     if totals is not None:
-        structured["detections"] = {"counts": {"totals": totals}}
+        structured["detections"] = {"counts": {"totals": totals, "per_asset": per_asset or []}}
     return {
+        "block_name": block,
         "id": obs_id, "occurred_at": (NOW - timedelta(hours=hours_ago)).isoformat(), "severity": severity,
         "status": status, "summary": f"summary {obs_id}", "recommended_action": action, "structured": structured,
         "task_ids": [],
@@ -42,7 +44,10 @@ def test_changes_between_latest_and_previous():
     assert summary["latest"]["observation_id"] == "new"  # sorted newest first regardless of input order
     assert summary["latest"]["freshness"] == "fresh"
     kinds = {change["kind"]: change for change in summary["changes"]}
-    assert kinds["severity_increased"] == {"kind": "severity_increased", "from": "low", "to": "high"}
+    assert kinds["severity_increased"] == {"kind": "severity_increased", "from": "low", "to": "high",
+                                           "scope": "same_block_same_method"}
+    assert summary["comparison"] == {"basis": "same_block_same_method", "previous_observation_id": "old",
+                                     "block_key": "__field__", "method": "visual"}
     assert kinds["new_visible_issue"]["issues"] == ["visible lesions"]
     assert kinds["issue_not_seen_again"]["issues"] == ["possible leak"]
     assert summary["open_reviews"] == 1
@@ -81,3 +86,77 @@ def test_stale_evidence_and_default_next_action():
 def test_deleted_observations_are_ignored():
     summary = field_condition_summary([_obs("a", 1, status="deleted"), _obs("b", 5)], now=NOW)
     assert summary["observations_considered"] == 1 and summary["latest"]["observation_id"] == "b"
+
+
+
+# ---------------------------------------------------------------------------
+# Comparable scope (audit finding 4)
+# ---------------------------------------------------------------------------
+
+def test_different_blocks_are_not_compared_as_a_trend():
+    rows = [
+        _obs("a", 20, severity="high", condition="damaged", issues=["x"], block="Block 1"),
+        _obs("b", 1, severity="low", condition="healthy", issues=["x"], block="Block 9"),
+    ]
+    summary = field_condition_summary(rows, now=NOW)
+    assert summary["comparison"] == {"basis": "no_comparable_prior"}
+    assert summary["changes"] == []
+    blocks = {block["block_key"]: block for block in summary["field_snapshot"]["blocks"]}
+    assert set(blocks) == {"name:block 1", "name:block 9"}
+    assert "not a trend" in summary["field_snapshot"]["note"]
+
+
+def test_comparison_uses_the_most_recent_same_block_same_method_observation():
+    rows = [
+        _obs("b9-old", 40, severity="low", condition="healthy", issues=["x"], block="Block 9"),
+        _obs("b1", 20, severity="critical", condition="damaged", issues=["y"], block="Block 1"),
+        _obs("b9-new", 2, severity="medium", condition="stressed", issues=["x"], block="block  9"),
+    ]
+    summary = field_condition_summary(rows, now=NOW)
+    assert summary["comparison"]["previous_observation_id"] == "b9-old"
+    kinds = {change["kind"] for change in summary["changes"]}
+    assert kinds == {"severity_increased", "conflicting_recent_assessments"}
+    assert all(change["scope"] == "same_block_same_method" for change in summary["changes"])
+
+
+def test_visual_and_report_observations_are_not_compared():
+    rows = [_obs("report", 10, severity="high"), _obs("visual", 1, severity="low", issues=["x"])]
+    summary = field_condition_summary(rows, now=NOW)
+    assert summary["latest"]["method"] == "visual"
+    assert summary["comparison"] == {"basis": "no_comparable_prior"} and summary["changes"] == []
+
+
+def test_count_change_requires_matching_coverage():
+    def asset(frames, method="max_single_frame_lower_bound"):
+        return [{"counts": {"cluster": {"count_method": method, "frames_considered": frames}}}]
+
+    before = [{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 20}]
+    after = [{"label": "cluster", "observed_lower_bound": 30, "sum_upper_bound": 60}]
+    different = field_condition_summary([
+        _obs("a", 50, totals=before, per_asset=asset(3)), _obs("b", 1, totals=after, per_asset=asset(6)),
+    ], now=NOW)
+    assert not [c for c in different["changes"] if c["kind"] == "detection_count_changed"]
+    same = field_condition_summary([
+        _obs("a", 50, totals=before, per_asset=asset(3)), _obs("b", 1, totals=after, per_asset=asset(3)),
+    ], now=NOW)
+    assert [c["kind"] for c in same["changes"]] == ["detection_count_changed"]
+
+
+def test_future_dated_records_are_excluded_not_fresh():
+    rows = [_obs("past", 5, severity="low"), _obs("future", -72, severity="critical")]
+    summary = field_condition_summary(rows, now=NOW)
+    assert summary["latest"]["observation_id"] == "past"
+    assert summary["excluded"][0]["observation_id"] == "future"
+    assert any(change["kind"] == "future_dated_records_excluded" for change in summary["changes"])
+    assert summary["observations_considered"] == 1
+    assert freshness(-24) == "future_dated"
+
+
+def test_small_clock_skew_is_tolerated():
+    summary = field_condition_summary([_obs("skew", -0.05)], now=NOW)  # three minutes ahead
+    assert summary["latest"]["observation_id"] == "skew" and summary["latest"]["freshness"] == "fresh"
+
+
+def test_only_future_records_gives_no_observations():
+    summary = field_condition_summary([_obs("future", -10)], now=NOW)
+    assert summary["status"] == "no_observations" and len(summary["excluded"]) == 1
