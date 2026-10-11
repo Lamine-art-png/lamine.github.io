@@ -699,6 +699,7 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
         return max(set(useful), key=useful.count) if useful else default
 
     analysis_state = "structured" if structured else "degraded"
+    degraded_reasons = [str(item["degraded_reason"]) for item in completed if item.get("degraded_reason")]
     analysis = {
         "summary": " ".join(dict.fromkeys(summaries))[:2400],
         "visible_facts": _merge_findings(fact_frames, limit=24),
@@ -735,10 +736,14 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
         "images_fallback_model": sum(1 for item in completed if item.get("provider_fallback")),
         "images_received": min(len(images), MAX_IMAGES),
         "analysis_state": analysis_state,
+        "degraded_reasons": sorted(set(degraded_reasons)),
         "contract_violations": sorted(set(contract_violations)),
         "safety_flags": sorted(set(safety_flags)),
         "contract_version": ANALYSIS_CONTRACT_VERSION,
         "human_review_required": True,
         "language": str(context.get("language") or "en").strip()[:16] or "en",
     }
+    if analysis_state == "degraded" and degraded_reasons:
+        # Most frequent per-frame reason, so the stored result says why it is review-only.
+        analysis["degraded_reason"] = max(set(degraded_reasons), key=degraded_reasons.count)
     return FieldVisionResult(provider=provider, status="completed", model=model, latency_ms=latency, analysis=analysis)

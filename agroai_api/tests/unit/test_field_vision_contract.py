@@ -183,6 +183,17 @@ def test_partial_json_single_photo_does_not_escalate(monkeypatch):
     assert analysis["analysis_state"] == "degraded"
     assert analysis["severity"] == "info"
     assert analysis["peak_severity"] == "info"
+    # The stored aggregate must say why it is review-only.
+    assert analysis["degraded_reason"] == "provider_json_contract_violation"
+    assert analysis["degraded_reasons"] == ["provider_json_contract_violation"]
+
+
+def test_structured_aggregate_lists_degraded_frames_without_degrading(monkeypatch):
+    prose = vision._bounded_analysis(vision._json_from_text("prose only"))
+    analysis = _run(monkeypatch, [(_structured(), None), (prose, None)]).analysis
+    assert analysis["analysis_state"] == "structured"
+    assert "degraded_reason" not in analysis
+    assert analysis["degraded_reasons"] == ["provider_output_not_structured"]
 
 
 @pytest.mark.parametrize("field", sorted(vision.CONTRACT_FIELDS))
