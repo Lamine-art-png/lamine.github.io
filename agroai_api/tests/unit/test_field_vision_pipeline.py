@@ -206,6 +206,7 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
             )
 
     monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
     monkeypatch.setattr(extension, "get_detection_provider", lambda: FakeDetector())
     _, _, headers = _auth(db)
     _provider_returns(monkeypatch, _contract(summary="Nuts on lower limbs"))
@@ -227,10 +228,13 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
         .first()
     )
     assert run is not None and run.status == "completed" and run.model == "fake-almond-detector@test"
+    assert run.output_json["frames_sent"] == 1
+    assert detections["limits"]["max_frames_per_observation"] == 8
 
 
 def test_detection_enabled_but_unconfigured_is_reported(client, db, fake_store, monkeypatch):
     monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
     monkeypatch.delenv("FIELD_DETECTION_ENDPOINT", raising=False)
     monkeypatch.delenv("FIELD_DETECTION_API_KEY", raising=False)
     _, _, headers = _auth(db)
@@ -239,3 +243,25 @@ def test_detection_enabled_but_unconfigured_is_reported(client, db, fake_store, 
     assert "detections" not in obs["structured"]
     assert obs["provenance"]["detection_status"] == "not_run"
     assert obs["provenance"]["detection_reason"] == "detector_not_configured"
+
+
+
+def test_detection_requires_the_organization_in_the_canary_allowlist(client, db, fake_store, monkeypatch):
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "some-other-org")
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-not-canary")
+    assert "detections" not in obs["structured"]
+    assert obs["provenance"]["detection_reason"] == "organization_not_in_detection_canary"
+
+
+def test_detection_daily_frame_budget_is_enforced(client, db, fake_store, monkeypatch):
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
+    monkeypatch.setenv("FIELD_DETECTION_DAILY_FRAME_BUDGET", "0")
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-budget")
+    assert "detections" not in obs["structured"]
+    assert obs["provenance"]["detection_reason"] == "detection_daily_frame_budget_exhausted"

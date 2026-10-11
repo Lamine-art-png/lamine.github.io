@@ -310,3 +310,33 @@ def test_registries_ship_empty():
     from app.services import crop_model_registry as registry
 
     assert registry.VERIFIED_DETECTORS == () and registry.VERIFIED_EVALUATIONS == ()
+
+
+
+# ---------------------------------------------------------------------------
+# Release controls: kill switch, canary allowlist, limits
+# ---------------------------------------------------------------------------
+
+def test_kill_switch_and_canary_allowlist(monkeypatch):
+    monkeypatch.delenv("FIELD_DETECTION_ENABLED", raising=False)
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-a")
+    assert detection.detection_allowed_for("org-a") == (False, "detection_disabled")
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    assert detection.detection_allowed_for("org-a") == (True, "allowed")
+    assert detection.detection_allowed_for("org-b") == (False, "organization_not_in_detection_canary")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "")
+    assert detection.detection_allowed_for("org-a") == (False, "organization_not_in_detection_canary")  # empty = nobody
+
+
+def test_detection_limits_are_bounded(monkeypatch):
+    for name in ("FIELD_DETECTION_MAX_FRAMES_PER_OBSERVATION", "FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS", "FIELD_DETECTION_DAILY_FRAME_BUDGET"):
+        monkeypatch.delenv(name, raising=False)
+    defaults = detection.detection_limits()
+    assert (defaults.max_frames_per_observation, defaults.observation_budget_seconds, defaults.daily_frame_budget_per_organization) == (8, 60.0, 200)
+    monkeypatch.setenv("FIELD_DETECTION_MAX_FRAMES_PER_OBSERVATION", "500")
+    monkeypatch.setenv("FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS", "nan")
+    monkeypatch.setenv("FIELD_DETECTION_DAILY_FRAME_BUDGET", "not-a-number")
+    limits = detection.detection_limits()
+    assert limits.max_frames_per_observation == 8
+    assert limits.observation_budget_seconds == 60.0
+    assert limits.daily_frame_budget_per_organization == 200

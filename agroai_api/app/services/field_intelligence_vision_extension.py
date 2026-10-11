@@ -6,6 +6,8 @@ and keeps every visual conclusion explicitly reviewable.
 """
 from __future__ import annotations
 
+import time
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,7 +16,8 @@ from app.services.crop_profiles import resolve_profile
 from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
 from app.services.detection_tracking import summarize_counts
 from app.services.field_detection import (
-    DETECTION_CONTRACT_VERSION, DisabledDetectionProvider, FrameRef, detection_enabled, get_detection_provider,
+    DETECTION_CONTRACT_VERSION, DetectionResult, DisabledDetectionProvider, FrameRef, detection_allowed_for,
+    detection_enabled, detection_limits, get_detection_provider,
 )
 from app.services.field_video import MAX_VIDEO_BYTES, extract_video_audio, extract_video_frames
 from app.services.field_vision import MAX_IMAGE_BYTES, analyze_field_images
@@ -63,6 +66,21 @@ def _repair_text_inference(svc: Any, observation: FieldObservation) -> None:
 _MAX_STORED_DETECTION_FRAMES = 8
 
 
+def _detection_frames_today(db: Any, tenant_id: str) -> int:
+    """Frames sent to the detector for this organization since 00:00 UTC."""
+    from app.models.field_intelligence import FieldObservationProcessingRun
+
+    midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = (
+        db.query(FieldObservationProcessingRun.output_json)
+        .filter(FieldObservationProcessingRun.tenant_id == tenant_id)
+        .filter(FieldObservationProcessingRun.stage == "detection")
+        .filter(FieldObservationProcessingRun.created_at >= midnight)
+        .all()
+    )
+    return sum(int((row[0] or {}).get("frames_sent") or 0) for row in rows)
+
+
 def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_inputs: list[tuple], vision_analysis: dict, attempt: int) -> None:
     """Specialized detection lane; runs only when FIELD_DETECTION_ENABLED is set.
 
@@ -71,17 +89,33 @@ def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_input
     vision layer judged poor are excluded from counts.
     """
     provenance = dict(observation.provenance_json or {})
+
+    def not_run(reason: str) -> None:
+        provenance["detection_status"] = "not_run"
+        provenance["detection_reason"] = reason
+        observation.provenance_json = provenance
+
+    allowed, reason = detection_allowed_for(observation.tenant_id)
+    if not allowed:
+        not_run(reason)
+        return
     profile = resolve_profile(observation.crop)
     provider = get_detection_provider()
     if isinstance(provider, DisabledDetectionProvider) or profile is None:
-        provenance["detection_status"] = "not_run"
-        provenance["detection_reason"] = provider.reason if isinstance(provider, DisabledDetectionProvider) else "crop_profile_not_supported"
-        observation.provenance_json = provenance
+        not_run(provider.reason if isinstance(provider, DisabledDetectionProvider) else "crop_profile_not_supported")
+        return
+    limits = detection_limits()
+    used_today = _detection_frames_today(db, observation.tenant_id)
+    remaining = limits.daily_frame_budget_per_organization - used_today
+    if remaining <= 0:
+        not_run("detection_daily_frame_budget_exhausted")
         return
 
     frame_indexes: dict[str | None, int] = {}
     results = []
-    for payload, content_type, context in media_inputs:
+    skipped: dict[str, int] = {}
+    started = time.monotonic()
+    for position, (payload, content_type, context) in enumerate(media_inputs):
         asset_id = context.get("asset_id")
         index = frame_indexes.get(asset_id, 0)
         frame_indexes[asset_id] = index + 1
@@ -89,6 +123,13 @@ def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_input
             asset_id=asset_id, media_kind=context.get("media_kind"),
             frame_timestamp_seconds=context.get("frame_timestamp_seconds"), frame_index=index,
         )
+        if position >= limits.max_frames_per_observation or position >= remaining:
+            skipped["frame_limit"] = skipped.get("frame_limit", 0) + 1
+            continue
+        if time.monotonic() - started > limits.observation_budget_seconds:
+            skipped["time_budget"] = skipped.get("time_budget", 0) + 1
+            results.append(DetectionResult(status="failed", frame=frame, provider=provider.name, error="observation_time_budget_exhausted"))
+            continue
         results.append(provider.detect(payload, content_type, profile, frame))
 
     poor = {
@@ -113,6 +154,12 @@ def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_input
         "statuses": statuses,
         "frames": [result.to_dict() for result in results[:_MAX_STORED_DETECTION_FRAMES]],
         "counts": counts,
+        "frames_skipped": skipped,
+        "limits": {
+            "max_frames_per_observation": limits.max_frames_per_observation,
+            "observation_budget_seconds": limits.observation_budget_seconds,
+            "daily_frame_budget_per_organization": limits.daily_frame_budget_per_organization,
+        },
         "review_status": "unreviewed",
         "validation_status": profile.validation_status,
         "human_review_required": True,
@@ -127,7 +174,8 @@ def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_input
         latency_ms=sum(result.latency_ms or 0 for result in results) or None,
         error=";".join(sorted({result.error for result in results if result.error}))[:500] or None,
         attempt_count=attempt,
-        output={"frames": len(results), "frames_ok": len(ok), "labels": counts.get("labels", []), "totals": counts.get("totals", [])},
+        output={"frames": len(results), "frames_ok": len(ok), "frames_sent": sum(1 for r in results if r.error != "observation_time_budget_exhausted"),
+                "frames_skipped": skipped, "labels": counts.get("labels", []), "totals": counts.get("totals", [])},
     )
 
 

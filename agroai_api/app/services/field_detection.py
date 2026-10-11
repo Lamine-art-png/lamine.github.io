@@ -268,7 +268,49 @@ def _env(name: str) -> str:
 
 
 def detection_enabled() -> bool:
+    """Global kill switch: false (the default) stops all specialized detection."""
     return _env("FIELD_DETECTION_ENABLED").lower() in {"1", "true", "yes", "on"}
+
+
+def _bounded_int(name: str, default: int, low: int, high: int) -> int:
+    try:
+        value = int(_env(name) or default)
+    except ValueError:
+        value = default
+    return max(low, min(value, high))
+
+
+def _bounded_float(name: str, default: float, low: float, high: float) -> float:
+    try:
+        value = float(_env(name) or default)
+    except ValueError:
+        value = default
+    return max(low, min(value, high)) if value == value else default  # NaN falls back to the default
+
+
+@dataclass(frozen=True)
+class DetectionLimits:
+    max_frames_per_observation: int
+    observation_budget_seconds: float
+    daily_frame_budget_per_organization: int
+
+
+def detection_limits() -> DetectionLimits:
+    return DetectionLimits(
+        max_frames_per_observation=_bounded_int("FIELD_DETECTION_MAX_FRAMES_PER_OBSERVATION", 8, 1, 8),
+        observation_budget_seconds=_bounded_float("FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS", 60.0, 5.0, 300.0),
+        daily_frame_budget_per_organization=_bounded_int("FIELD_DETECTION_DAILY_FRAME_BUDGET", 200, 0, 100_000),
+    )
+
+
+def detection_allowed_for(organization_id: str | None) -> tuple[bool, str]:
+    """Kill switch plus a fail-closed canary allowlist of organization ids."""
+    if not detection_enabled():
+        return False, "detection_disabled"
+    allowlist = {item.strip() for item in _env("FIELD_DETECTION_ORG_ALLOWLIST").split(",") if item.strip()}
+    if not organization_id or organization_id not in allowlist:
+        return False, "organization_not_in_detection_canary"
+    return True, "allowed"
 
 
 def _endpoint_allowed(endpoint: str) -> bool:
