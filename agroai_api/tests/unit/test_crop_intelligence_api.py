@@ -124,7 +124,15 @@ def test_nonfinite_numbers_are_rejected_at_the_route(client, db):
               '"sample_counts":[10,NaN,8,11,9],"count_source":"manual_count"}'
     response = client.post(f"{BASE}/crop-intelligence/production-estimate", content=raw_nan,
                            headers={**headers, "Content-Type": "application/json"})
-    assert response.status_code == 422
+    # Raw NaN is not JSON; the 422 must still serialize, echoing the rejected value as a string.
+    assert response.status_code == 422, response.text
+    assert any(error.get("input") == "NaN" for error in response.json()["detail"])
+    raw_infinity = raw_nan.replace("NaN", "Infinity").replace('"count_source"', '"area_hectares":-Infinity,"count_source"')
+    response = client.post(f"{BASE}/crop-intelligence/production-estimate", content=raw_infinity,
+                           headers={**headers, "Content-Type": "application/json"})
+    assert response.status_code == 422, response.text
+    inputs = {error.get("input") for error in response.json()["detail"]}
+    assert "Infinity" in inputs
 
     window = {
         "biofix": "2026-04-01", "biofix_type": "planting", "as_of": "2026-04-30", "base_c": "NaN",

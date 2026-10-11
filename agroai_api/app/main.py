@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import math
 import re
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -543,6 +544,17 @@ async def scoped_http_exception_handler(request: Request, exc: StarletteHTTPExce
     )
 
 
+def _json_safe_errors(value: Any) -> Any:
+    """Validation errors echo the rejected input; NaN/Infinity cannot be serialized as JSON."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return "NaN" if math.isnan(value) else ("Infinity" if value > 0 else "-Infinity")
+    if isinstance(value, dict):
+        return {key: _json_safe_errors(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_errors(item) for item in value]
+    return value
+
+
 @app.exception_handler(RequestValidationError)
 async def scoped_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     if request.url.path.startswith("/v1/platform/"):
@@ -558,7 +570,9 @@ async def scoped_validation_exception_handler(request: Request, exc: RequestVali
             status_code=422,
             headers=headers,
         )
-    return await request_validation_exception_handler(request, exc)
+    return await request_validation_exception_handler(
+        request, RequestValidationError(_json_safe_errors(exc.errors()), body=exc.body)
+    )
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(access_appeals_router, prefix="/v1")
