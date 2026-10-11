@@ -32,7 +32,7 @@ def test_harvest_window_uses_profile_method_and_refuses_without_target(client, d
         "target": {"low_gdd": 1000, "high_gdd": 1200, "source": "Hybrid sheet (test)", "source_type": "supplier_published"},
         "observed": _days(date(2026, 4, 1), 30),
         "analog_years": {str(year): _days(date(year, 1, 1), 365) for year in range(2019, 2024)},
-        "weather_source": "test station",
+        "weather_source": "test station", "analog_weather_source": "test station history",
     }
     result = client.post(f"{BASE}/crop-intelligence/harvest-window", json=body, headers=headers).json()
     assert result["crop_id"] == "corn"

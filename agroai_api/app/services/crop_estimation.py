@@ -163,6 +163,8 @@ class HarvestWindowRequest:
     analog_years: dict[int, Sequence[WeatherDay]] = field(default_factory=dict)
     crop_id: str | None = None
     horizon_days: int = 240
+    observed_source: str | None = None   # station or dataset identity for the observed series
+    analog_source: str | None = None     # station or dataset identity for the analog seasons
 
 
 def _percentile(values: Sequence[float], q: float) -> float:
@@ -172,19 +174,57 @@ def _percentile(values: Sequence[float], q: float) -> float:
     return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
 
 
-def _days_to_reach(start: date, needed: float, analog: dict[tuple[int, int], WeatherDay], config: DegreeDayConfig, horizon: int) -> int | None:
+def _same_day_in_year(day: date, year: int) -> date:
+    try:
+        return day.replace(year=year)
+    except ValueError:  # 29 February in a non-leap year
+        return day.replace(year=year, day=28)
+
+
+def validate_analog_season(year: int, series: Sequence[WeatherDay], as_of: date, horizon: int) -> tuple[dict[date, WeatherDay], list[str]]:
+    """Validate one analog season and index it by real date.
+
+    Analog season ``year`` starts on the as-of month/day in that year and may
+    run into the following year (a season crossing New Year), so its days
+    must fall in ``year`` or ``year + 1``. Any duplicate date, non-finite or
+    implausible temperature, Tmax below Tmin, or day labelled with another
+    year rejects the whole season rather than silently overriding values.
+    """
+    problems: list[str] = []
+    by_date: dict[date, WeatherDay] = {}
+    for item in series:
+        if item.day.year not in (year, year + 1):
+            problems.append(f"analog_year_mislabeled:{item.day.isoformat()}")
+            continue
+        if item.day in by_date:
+            problems.append(f"duplicate_weather_day:{item.day.isoformat()}")
+            continue
+        values = (item.tmax_c, item.tmin_c)
+        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in values):
+            problems.append(f"non_finite_temperature:{item.day.isoformat()}")
+            continue
+        if not all(PLAUSIBLE_TEMPERATURE_C[0] <= value <= PLAUSIBLE_TEMPERATURE_C[1] for value in values):
+            problems.append(f"implausible_temperature:{item.day.isoformat()}")
+            continue
+        if item.tmax_c < item.tmin_c:
+            problems.append(f"tmax_below_tmin:{item.day.isoformat()}")
+            continue
+        by_date[item.day] = item
+    start = _same_day_in_year(as_of, year)
+    if not problems and not any(start < day <= start + timedelta(days=horizon) for day in by_date):
+        problems.append("analog_season_has_no_days_after_as_of")
+    return by_date, problems[:20]
+
+
+def _days_to_reach(start: date, needed: float, season: dict[date, WeatherDay], config: DegreeDayConfig, horizon: int) -> int | None:
     """Days after ``start`` until ``needed`` degree days accumulate using the
-    analog year's weather for the same calendar days; ``None`` if not reached
-    within the horizon or if the analog series has a gap."""
+    analog season's real dates; ``None`` if not reached within the horizon
+    or if the season has a gap before the target is reached."""
     if needed <= 0:
         return 0
     total = 0.0
     for offset in range(1, horizon + 1):
-        current = start + timedelta(days=offset)
-        key = (current.month, current.day)
-        if key == (2, 29) and key not in analog:
-            key = (2, 28)
-        item = analog.get(key)
+        item = season.get(start + timedelta(days=offset))
         if item is None:
             return None
         total += daily_degree_days(item.tmax_c, item.tmin_c, config)
@@ -203,6 +243,10 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
         reasons.append("as_of_before_biofix")
     observed, weather_problems = validate_weather(request.observed, request.biofix, request.as_of) if request.as_of >= request.biofix else ([], [])
     reasons.extend(weather_problems)
+    if not str(request.observed_source or "").strip():
+        reasons.append("observed_weather_source_required")
+    if request.analog_years and not str(request.analog_source or "").strip():
+        reasons.append("analog_weather_source_required")
 
     base = {
         "estimation_version": ESTIMATION_VERSION,
@@ -216,6 +260,7 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
             "source": request.target.source, "source_type": request.target.source_type, "variety": request.target.variety,
         },
         "calibration_status": "uncalibrated_for_this_field",
+        "weather_sources": {"observed": request.observed_source, "analog": request.analog_source},
         "weather_dependencies": [
             "Observed accumulation depends on the completeness and siting of the supplied weather series.",
             "Projected dates assume future temperatures resemble the analog years supplied.",
@@ -238,21 +283,30 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
 
     end_offsets: list[int] = []
     start_offsets: list[int] = []
-    unusable: list[int] = []
+    rejected: list[dict[str, Any]] = []
+    incomplete: list[int] = []
     for year, series in sorted(request.analog_years.items()):
-        analog = {(item.day.month, item.day.day): item for item in series}
-        days_low = _days_to_reach(request.as_of, target.low_gdd - accumulated, analog, request.config, request.horizon_days)
-        days_high = _days_to_reach(request.as_of, target.high_gdd - accumulated, analog, request.config, request.horizon_days)
+        if year >= request.as_of.year:
+            rejected.append({"year": year, "reasons": ["analog_year_not_before_as_of_season"]})
+            continue
+        season, problems = validate_analog_season(year, series, request.as_of, request.horizon_days)
+        if problems:
+            rejected.append({"year": year, "reasons": problems})
+            continue
+        start = _same_day_in_year(request.as_of, year)
+        days_low = _days_to_reach(start, target.low_gdd - accumulated, season, request.config, request.horizon_days)
+        days_high = _days_to_reach(start, target.high_gdd - accumulated, season, request.config, request.horizon_days)
         if days_low is None or days_high is None:
-            unusable.append(year)
+            incomplete.append(year)
             continue
         start_offsets.append(days_low)
         end_offsets.append(days_high)
+    base["analog_years_rejected"] = rejected
+    base["analog_years_unusable"] = incomplete
     if len(start_offsets) < MIN_ANALOG_YEARS:
         return {
             **base, "status": "insufficient_evidence", "window": None,
             "reasons": [f"analog_years_usable:{len(start_offsets)}<{MIN_ANALOG_YEARS}"],
-            "analog_years_unusable": unusable,
         }
     earliest = request.as_of + timedelta(days=round(_percentile(start_offsets, 0.1)))
     latest = request.as_of + timedelta(days=round(_percentile(end_offsets, 0.9)))
@@ -270,7 +324,6 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
             "interval": f"10th percentile of target-low dates to 90th percentile of target-high dates across {len(start_offsets)} analog years",
         },
         "analog_years_used": len(start_offsets),
-        "analog_years_unusable": unusable,
     }
 
 

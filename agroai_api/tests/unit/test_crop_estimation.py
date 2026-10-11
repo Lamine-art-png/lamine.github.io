@@ -90,6 +90,7 @@ def _request(**overrides):
     values = {
         "biofix": BIOFIX, "biofix_type": "planting", "as_of": AS_OF, "config": MODIFIED, "target": _target(),
         "observed": OBSERVED, "analog_years": {year: _analog_year(year, 30) for year in range(2019, 2024)}, "crop_id": "corn",
+        "observed_source": "test station 1", "analog_source": "test station 1 history",
     }
     values.update(overrides)
     return est.HarvestWindowRequest(**values)
@@ -297,3 +298,87 @@ def test_nonfinite_degree_day_and_target_inputs_are_insufficient(bad):
     assert est.estimate_harvest_window(_request(config=est.DegreeDayConfig("modified_average_86_50", bad, 30.0)))["status"] == "insufficient_evidence"
     assert est.estimate_harvest_window(_request(config=est.DegreeDayConfig("modified_average_86_50", 10.0, bad)))["status"] == "insufficient_evidence"
     assert est.estimate_harvest_window(_request(target=_target(low_gdd=bad)))["status"] == "insufficient_evidence"
+
+
+
+# ---------------------------------------------------------------------------
+# Analog-season validation (audit finding 3)
+# ---------------------------------------------------------------------------
+
+def _good_analogs():
+    return {year: _analog_year(year, 30) for year in range(2017, 2024)}  # 7 seasons, 2 spare
+
+
+def _rejected(result, year):
+    return next(item["reasons"] for item in result["analog_years_rejected"] if item["year"] == year)
+
+
+def test_analog_duplicates_are_rejected_not_overridden():
+    analogs = _good_analogs()
+    analogs[2017] = [*analogs[2017], est.WeatherDay(date(2017, 6, 1), 45, 30)]  # second, conflicting 1 June
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert any(reason.startswith("duplicate_weather_day:2017-06-01") for reason in _rejected(result, 2017))
+    assert result["analog_years_used"] == 6
+
+
+def test_mislabeled_analog_year_is_rejected():
+    analogs = _good_analogs()
+    analogs[2018] = _analog_year(2012, 30)  # 2012 dates filed under 2018
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert _rejected(result, 2018)[0].startswith("analog_year_mislabeled:2012-")
+
+
+def test_analog_tmax_below_tmin_and_nonfinite_are_rejected():
+    analogs = _good_analogs()
+    analogs[2017] = [est.WeatherDay(day.day, 5, 25) for day in analogs[2017]]
+    analogs[2018] = [est.WeatherDay(day.day, float("nan") if day.day == date(2018, 7, 1) else 30, 10) for day in analogs[2018]]
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert _rejected(result, 2017)[0].startswith("tmax_below_tmin:")
+    assert _rejected(result, 2018) == ["non_finite_temperature:2018-07-01"]
+    assert result["analog_years_used"] == 5 and result["status"] == "projected"
+
+
+def test_audit_reproduction_no_longer_uses_invalid_seasons():
+    analogs = {year: _analog_year(year, 30) for year in range(2019, 2023)}
+    analogs[2023] = [est.WeatherDay(day.day, 5, 25) for day in _analog_year(2023, 30)]
+    analogs[2024] = _analog_year(2018, 30)
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert result["status"] == "insufficient_evidence"
+    assert result["reasons"] == ["analog_years_usable:4<5"]
+    assert {item["year"] for item in result["analog_years_rejected"]} == {2023, 2024}
+
+
+def test_analog_year_must_precede_the_current_season():
+    analogs = {**_good_analogs(), 2026: _analog_year(2026, 30)}
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert _rejected(result, 2026) == ["analog_year_not_before_as_of_season"]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [({"observed_source": None}, "observed_weather_source_required"),
+     ({"analog_source": " "}, "analog_weather_source_required")],
+)
+def test_weather_source_identity_is_required(overrides, reason):
+    result = est.estimate_harvest_window(_request(**overrides))
+    assert result["status"] == "insufficient_evidence" and reason in result["reasons"]
+
+
+def test_season_crossing_new_year_uses_the_following_january():
+    def season(year):
+        # Cold January/February of the *same* calendar year (before the season) must be ignored;
+        # the season itself runs 1 Nov of `year` through 30 Apr of `year + 1` at 10 degree days/day.
+        early = [est.WeatherDay(date(year, 1, 1) + timedelta(days=i), 5, 0) for i in range(59)]
+        start = date(year, 11, 1)
+        days = [est.WeatherDay(start + timedelta(days=i), 30, 10) for i in range((date(year + 1, 4, 30) - start).days + 1)]
+        return early + days
+
+    biofix, as_of = date(2026, 11, 1), date(2026, 11, 15)
+    result = est.estimate_harvest_window(_request(
+        biofix=biofix, as_of=as_of, observed=_series(biofix, 15, 30),
+        target=_target(low_gdd=750, high_gdd=950), analog_years={year: season(year) for year in range(2019, 2024)},
+    ))
+    # 150 accumulated; 600 more at 10/day -> 60 days -> 14 Jan 2027; 800 more -> 80 days -> 3 Feb 2027.
+    assert result["status"] == "projected"
+    assert result["window"]["earliest"] == "2027-01-14"
+    assert result["window"]["latest"] == "2027-02-03"

@@ -759,6 +759,7 @@ class HarvestWindowIn(BaseModel):
     observed: list[WeatherDayIn] = Field(default_factory=list, max_length=_MAX_WEATHER_DAYS)
     analog_years: dict[int, list[WeatherDayIn]] = Field(default_factory=dict)
     weather_source: str | None = Field(default=None, max_length=500)
+    analog_weather_source: str | None = Field(default=None, max_length=500)
 
     @field_validator("analog_years")
     @classmethod
@@ -874,8 +875,8 @@ def harvest_window(payload: HarvestWindowIn) -> dict:
         target=target, observed=_weather(payload.observed),
         analog_years={int(year): _weather(days) for year, days in payload.analog_years.items()},
         crop_id=profile.crop_id if profile else None,
+        observed_source=payload.weather_source, analog_source=payload.analog_weather_source,
     ))
-    result["weather_source"] = payload.weather_source
     result["suggested_actions"] = crop_estimation.harvest_action_suggestions(result, datetime.now(timezone.utc).date())
     return result
 
