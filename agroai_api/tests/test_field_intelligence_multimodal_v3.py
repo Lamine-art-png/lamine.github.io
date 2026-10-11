@@ -25,8 +25,8 @@ def test_field_intelligence_multimodal_v3_source_contract():
     assert "degraded" in edge
     assert "imageDataUri" in edge
     assert "temperature: 0.1" in edge
-    assert '@router.post("/live-analysis")' in routes
-    assert '@router.post("/live-transcription")' in routes
+    assert '@router.post("/live-analysis", dependencies=[Depends(enforce_paid_live_field_ai)])' in routes
+    assert '@router.post("/live-transcription", dependencies=[Depends(enforce_paid_live_field_ai)])' in routes
     assert "_LIVE_FRAME_MAX_BYTES = 1_500_000" in routes
     assert "_LIVE_AUDIO_MAX_BYTES = 4_000_000" in routes
     assert "transcribe_audio" in routes
