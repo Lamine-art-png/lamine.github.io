@@ -555,5 +555,11 @@ _register(
 )
 
 
+# Crop Intelligence estimators live in their own module; it does not import this one.
+from app.services.crop_scientific_tools import register_crop_tools  # noqa: E402
+
+register_crop_tools(_register)
+
+
 def get_scientific_tool_registry() -> ScientificToolRegistry:
     return REGISTRY
