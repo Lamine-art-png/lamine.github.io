@@ -199,7 +199,7 @@ def test_production_estimate_separates_counted_density_extrapolated_and_producti
         ({"count_source": "validated_detector"}, "validated_detector_requires_validation_reference"),
         ({"sample_counts": [10, 12, 8, 11]}, "sample_units:4<5"),
         ({"population_units": 3}, "population_units_must_be_known_and_at_least_the_sample"),
-        ({"sample_counts": [10, -1, 8, 11, 9]}, "sample_counts_must_be_non_negative"),
+        ({"sample_counts": [10, -1, 8, 11, 9]}, "sample_counts_must_be_finite_and_non_negative"),
         ({"detection_rate": est.Estimate(1.4, 0.1)}, "detection_rate_above_one"),
     ],
 )
@@ -250,3 +250,50 @@ def test_harvest_suggestions_only_near_a_supported_window():
     assert late[0]["due_by"] == "2026-07-06"  # never due in the past
     insufficient = est.estimate_harvest_window(_request(target=None))
     assert est.harvest_action_suggestions(insufficient, date(2026, 7, 1)) == []
+
+
+# ---------------------------------------------------------------------------
+# Non-finite inputs (audit finding 2)
+# ---------------------------------------------------------------------------
+
+NONFINITE = [float("nan"), float("inf"), float("-inf")]
+
+
+@pytest.mark.parametrize("bad", NONFINITE)
+@pytest.mark.parametrize("field", ["detection_rate", "unit_weight_kg", "marketable_fraction"])
+@pytest.mark.parametrize("part", ["value", "standard_error"])
+def test_nonfinite_calibration_inputs_are_rejected(bad, field, part):
+    good = {"detection_rate": est.Estimate(0.8, 0.04), "unit_weight_kg": est.Estimate(0.15, 0.0075),
+            "marketable_fraction": est.Estimate(0.9, 0.02)}[field]
+    broken = est.Estimate(bad, good.standard_error) if part == "value" else est.Estimate(good.value, bad)
+    overrides = {"marketable_fraction": est.Estimate(0.9, 0.02), field: broken}
+    result = est.estimate_production(_production(**overrides))
+    assert result["status"] == "not_estimable"
+    assert f"{field}_invalid" in result["reasons"]
+    assert "expected_production_kg" not in result
+
+
+@pytest.mark.parametrize("bad", NONFINITE)
+def test_nonfinite_sample_counts_are_rejected(bad):
+    result = est.estimate_production(_production(sample_counts=[10, 12, bad, 11, 9]))
+    assert result["status"] == "not_estimable"
+    assert "sample_counts_must_be_finite_and_non_negative" in result["reasons"]
+
+
+@pytest.mark.parametrize("area", [Decimal("NaN"), Decimal("Infinity"), Decimal("0"), Decimal("-1")])
+def test_invalid_area_is_rejected(area):
+    result = est.estimate_production(_production(area_hectares=area))
+    assert result["status"] == "not_estimable" and "area_hectares_invalid" in result["reasons"]
+
+
+def test_estimates_never_contain_nonfinite_numbers():
+    import json
+    result = est.estimate_production(_production(marketable_fraction=est.Estimate(0.9, 0.02)))
+    json.dumps(result, allow_nan=False)  # raises ValueError on NaN/Infinity anywhere in the payload
+
+
+@pytest.mark.parametrize("bad", NONFINITE)
+def test_nonfinite_degree_day_and_target_inputs_are_insufficient(bad):
+    assert est.estimate_harvest_window(_request(config=est.DegreeDayConfig("modified_average_86_50", bad, 30.0)))["status"] == "insufficient_evidence"
+    assert est.estimate_harvest_window(_request(config=est.DegreeDayConfig("modified_average_86_50", 10.0, bad)))["status"] == "insufficient_evidence"
+    assert est.estimate_harvest_window(_request(target=_target(low_gdd=bad)))["status"] == "insufficient_evidence"

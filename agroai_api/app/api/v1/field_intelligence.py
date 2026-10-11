@@ -725,7 +725,8 @@ _MAX_ANALOG_YEARS = 30
 
 
 class WeatherDayIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     date: date_type
     tmax_c: float
@@ -733,7 +734,8 @@ class WeatherDayIn(BaseModel):
 
 
 class MaturityTargetIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     low_gdd: float = Field(gt=0, le=20000)
     high_gdd: float = Field(gt=0, le=20000)
@@ -743,7 +745,8 @@ class MaturityTargetIn(BaseModel):
 
 
 class HarvestWindowIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     crop: str | None = Field(default=None, max_length=_MAX_NAME)
     biofix: date
@@ -769,14 +772,16 @@ class HarvestWindowIn(BaseModel):
 
 
 class EstimateIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     value: float
     standard_error: float = Field(ge=0)
 
 
 class ProductionEstimateIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     unit: str = Field(min_length=1, max_length=40)
     object_label: str = Field(min_length=1, max_length=60)

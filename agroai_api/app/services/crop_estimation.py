@@ -332,6 +332,10 @@ class ProductionRequest:
     detector_validation_id: str | None = None
 
 
+def _finite(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _ratio_cv(estimate: Estimate | None) -> float:
     if estimate is None or estimate.value == 0:
         return 0.0
@@ -361,14 +365,21 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
     if request.population_units <= 0 or request.population_units < n:
         reasons.append("population_units_must_be_known_and_at_least_the_sample")
     if any(not math.isfinite(value) or value < 0 for value in counts):
-        reasons.append("sample_counts_must_be_non_negative")
+        reasons.append("sample_counts_must_be_finite_and_non_negative")
+    if isinstance(request.population_units, bool) or not isinstance(request.population_units, int):
+        reasons.append("population_units_must_be_an_integer")
     for name, estimate in (("detection_rate", request.detection_rate), ("unit_weight_kg", request.unit_weight_kg),
                            ("marketable_fraction", request.marketable_fraction)):
-        if estimate is not None and (estimate.value <= 0 or estimate.standard_error < 0):
+        if estimate is None:
+            continue
+        # NaN fails every comparison, so finiteness is checked explicitly.
+        if not (_finite(estimate.value) and _finite(estimate.standard_error)) or estimate.value <= 0 or estimate.standard_error < 0:
             reasons.append(f"{name}_invalid")
-    if request.detection_rate is not None and request.detection_rate.value > 1:
+    if request.area_hectares is not None and (not request.area_hectares.is_finite() or request.area_hectares <= 0):
+        reasons.append("area_hectares_invalid")
+    if request.detection_rate is not None and _finite(request.detection_rate.value) and request.detection_rate.value > 1:
         reasons.append("detection_rate_above_one")
-    if request.marketable_fraction is not None and request.marketable_fraction.value > 1:
+    if request.marketable_fraction is not None and _finite(request.marketable_fraction.value) and request.marketable_fraction.value > 1:
         reasons.append("marketable_fraction_above_one")
 
     directly_counted = sum(counts) if counts else 0.0

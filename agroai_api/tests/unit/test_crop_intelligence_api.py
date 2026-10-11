@@ -99,3 +99,35 @@ def test_field_crop_condition_summarizes_and_isolates_tenants(client, db):
     _, _, other_headers = _auth(db, email="other2@example.com", org_id="org-other-2", workspace_id="ws-other-2")
     foreign = client.get(f"{BASE}/fields/field-north/crop-condition", headers=other_headers).json()
     assert foreign["summary_status"] == "no_observations"
+
+
+def test_nonfinite_numbers_are_rejected_at_the_route(client, db):
+    """Audit finding 2: pydantic accepts "NaN"/"Infinity" unless told not to."""
+    _, _, headers = _auth(db)
+    base = {
+        "unit": "vine", "object_label": "cluster", "design": "simple_random", "population_units": 100,
+        "sample_counts": [10, 12, 8, 11, 9], "count_source": "manual_count",
+        "detection_rate": {"value": 0.8, "standard_error": 0.04}, "unit_weight_kg": {"value": 0.15, "standard_error": 0.0075},
+    }
+    variants = [
+        {**base, "sample_counts": [10, "NaN", 8, 11, 9]},
+        {**base, "sample_counts": [10, "Infinity", 8, 11, 9]},
+        {**base, "unit_weight_kg": {"value": "NaN", "standard_error": 0.01}},
+        {**base, "unit_weight_kg": {"value": 0.15, "standard_error": "Infinity"}},
+        {**base, "detection_rate": {"value": "-Infinity", "standard_error": 0.01}},
+        {**base, "area_hectares": "NaN"},
+    ]
+    for body in variants:
+        response = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers)
+        assert response.status_code == 422, body
+    raw_nan = '{"unit":"vine","object_label":"cluster","design":"simple_random","population_units":100,' \
+              '"sample_counts":[10,NaN,8,11,9],"count_source":"manual_count"}'
+    response = client.post(f"{BASE}/crop-intelligence/production-estimate", content=raw_nan,
+                           headers={**headers, "Content-Type": "application/json"})
+    assert response.status_code == 422
+
+    window = {
+        "biofix": "2026-04-01", "biofix_type": "planting", "as_of": "2026-04-30", "base_c": "NaN",
+        "degree_day_method": "simple_average", "observed": [{"date": "2026-04-01", "tmax_c": "Infinity", "tmin_c": 10}],
+    }
+    assert client.post(f"{BASE}/crop-intelligence/harvest-window", json=window, headers=headers).status_code == 422
