@@ -26,6 +26,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Iterable, Sequence
 
+from app.services import crop_model_registry
+
 ESTIMATION_VERSION = "crop-estimation/1"
 DEGREE_DAY_METHODS = {"simple_average", "modified_average_86_50"}
 TARGET_SOURCES = {"supplier_published", "grower_historical", "fitted_model"}
@@ -411,8 +413,15 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
         reasons.append("non_probability_sample_cannot_be_extrapolated")
     if request.count_source not in COUNT_SOURCES:
         reasons.append("counts_must_be_manual_or_from_a_validated_detector")
-    if request.count_source == "validated_detector" and not request.detector_validation_id:
-        reasons.append("validated_detector_requires_validation_reference")
+    evaluation = None
+    if request.count_source == "validated_detector":
+        if not request.detector_validation_id:
+            reasons.append("validated_detector_requires_validation_reference")
+        else:
+            # A client-supplied id is not proof: only the server-side registry verifies a detector.
+            evaluation = crop_model_registry.verified_evaluation(request.detector_validation_id)
+            if evaluation is None:
+                reasons.append("detector_evaluation_not_in_server_registry")
     if n < MIN_SAMPLE_UNITS:
         reasons.append(f"sample_units:{n}<{MIN_SAMPLE_UNITS}")
     if request.population_units <= 0 or request.population_units < n:
@@ -446,7 +455,21 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
         "population_units": request.population_units,
         "directly_counted_objects": directly_counted,
         "calibration_status": "uncalibrated_for_this_field",
+        "input_provenance": {
+            "sample_counts": (
+                f"registry_verified_detector:{evaluation.evaluation_id}" if evaluation is not None
+                else "user_supplied_unverified"
+            ),
+            "calibration": "user_supplied_unverified",
+            "population_units": "user_supplied_unverified",
+        },
     }
+    if evaluation is not None:
+        result["detector_evaluation"] = {
+            "evaluation_id": evaluation.evaluation_id, "model_id": evaluation.model_id,
+            "model_version": evaluation.model_version, "crop_id": evaluation.crop_id,
+            "report_ref": evaluation.report_ref, "registry_version": crop_model_registry.REGISTRY_VERSION,
+        }
     if reasons:
         return {**result, "status": "not_estimable", "reasons": reasons}
 
@@ -522,6 +545,7 @@ def market_yield_proposal(estimate: dict[str, Any], *, estimate_id: str) -> dict
         "apply_to_production": False,
         "note": (
             f"Crop Intelligence estimate {estimate_id} ({estimate.get('design')}, n={estimate.get('sampled_units')}, "
-            f"{estimate.get('count_source')}); 95% interval for block production {low}–{high} kg. Review before applying."
+            f"{estimate.get('count_source')}); 95% interval for block production {low}–{high} kg. "
+            "Inputs are user-supplied and unverified by AGRO-AI. Review before applying."
         )[:1000],
     }

@@ -216,6 +216,7 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
     assert detections["models"] == ["fake-almond-detector@test"]
     assert detections["review_status"] == "unreviewed"
     assert detections["validation_status"] == "unvalidated"
+    assert detections["model_verification"] == "unregistered_unverified"
     assert detections["counts"]["totals"] == [{"label": "nut", "observed_lower_bound": 5, "sum_upper_bound": 5}]
     assert detections["counts"]["extrapolation"] == "none"
     assert obs["severity"] in {"info", "low"}

@@ -156,7 +156,10 @@ def _payload(**overrides):
 def test_parse_detector_response_is_strict():
     result = detection.parse_detector_response(_payload(), profile=GRAPE, frame=detection.FrameRef(asset_id="a"), image=b"x", content_type="image/png")
     assert result.status == "ok"
-    assert result.model_id == "rtdetr-grape-test" and result.model_license == "Apache-2.0"
+    assert result.model_id == "rtdetr-grape-test" and result.reported_model_license == "Apache-2.0"
+    # Upstream identity is self-attested: unregistered models are never "verified".
+    assert result.model_verification == "unregistered_unverified"
+    assert result.registered_model_license is None
     assert [item.label for item in result.detections] == ["cluster", "cluster", "berry", "berry"]
     assert result.detections[1].box == [0.1, 0.2, 0.2, 0.2]  # pixel box normalized
     assert result.detections[2].mask is not None
@@ -267,3 +270,43 @@ def test_track_label_respects_gap_and_label():
     tracks = track_label(frames, "cluster", max_gap=1)
     assert len(tracks) == 2  # the gap of two empty frames ends the first track
     assert all(track.hits == 1 for track in tracks)
+
+
+
+# ---------------------------------------------------------------------------
+# Server-side model registry (audit finding 5)
+# ---------------------------------------------------------------------------
+
+def test_registered_detector_is_verified_only_for_its_crops(monkeypatch):
+    from app.services import crop_model_registry as registry
+
+    monkeypatch.setattr(registry, "VERIFIED_DETECTORS", (registry.VerifiedDetector(
+        model_id="rtdetr-grape-test", version="0.0-test", license="Apache-2.0 (verified)", weights_sha256="0" * 64,
+        crop_ids=("wine_grape",), evaluation_id="eval-test",
+    ),))
+    grape = detection.parse_detector_response(_payload(), profile=GRAPE, frame=detection.FrameRef(), image=b"x", content_type="image/png")
+    assert grape.model_verification == "registry_verified"
+    assert grape.registered_model_license == "Apache-2.0 (verified)"
+    almond = crop_profiles.get_profile("almond")
+    other = detection.parse_detector_response(
+        _payload(detections=[{"label": "nut", "score": 0.5, "box": [0.1, 0.1, 0.1, 0.1]}]),
+        profile=almond, frame=detection.FrameRef(), image=b"x", content_type="image/png",
+    )
+    assert other.model_verification == "unregistered_unverified"  # registered for grapes only
+
+
+def test_wrong_version_is_not_verified(monkeypatch):
+    from app.services import crop_model_registry as registry
+
+    monkeypatch.setattr(registry, "VERIFIED_DETECTORS", (registry.VerifiedDetector(
+        model_id="rtdetr-grape-test", version="1.0", license="Apache-2.0", weights_sha256="0" * 64,
+        crop_ids=("wine_grape",), evaluation_id="eval-test",
+    ),))
+    result = detection.parse_detector_response(_payload(), profile=GRAPE, frame=detection.FrameRef(), image=b"x", content_type="image/png")
+    assert result.model_verification == "unregistered_unverified"
+
+
+def test_registries_ship_empty():
+    from app.services import crop_model_registry as registry
+
+    assert registry.VERIFIED_DETECTORS == () and registry.VERIFIED_EVALUATIONS == ()

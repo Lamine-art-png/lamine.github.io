@@ -221,13 +221,42 @@ def test_missing_calibration_stops_at_the_supported_level():
     assert "expected_production_kg" not in count_only
 
 
-def test_marketable_fraction_and_validated_detector():
-    result = est.estimate_production(_production(
-        count_source="validated_detector", detector_validation_id="eval-2026-grape-v1",
-        marketable_fraction=est.Estimate(0.9, 0.02),
-    ))
+def test_marketable_fraction():
+    result = est.estimate_production(_production(marketable_fraction=est.Estimate(0.9, 0.02)))
     assert result["status"] == "estimated"
     assert result["expected_marketable_kg"]["value"] == pytest.approx(168.75, abs=0.1)
+
+
+def test_self_attested_detector_validation_is_not_trusted():
+    """Audit finding 5: a client-supplied validation id is not proof."""
+    result = est.estimate_production(_production(count_source="validated_detector", detector_validation_id="eval-2026-grape-v1"))
+    assert result["status"] == "not_estimable"
+    assert "detector_evaluation_not_in_server_registry" in result["reasons"]
+
+
+def test_registry_verified_detector_counts_are_accepted_and_labelled(monkeypatch):
+    from app.services import crop_model_registry as registry
+
+    monkeypatch.setattr(registry, "VERIFIED_EVALUATIONS", (registry.VerifiedEvaluation(
+        evaluation_id="eval-test-grape", model_id="rtdetr-grape-test", model_version="0.0-test", crop_id="wine_grape",
+        dataset="test-holdout", split_policy="grouped by grower/site/season", report_ref="evals/reports/test.md",
+        reviewed_by="test reviewer",
+    ),))
+    result = est.estimate_production(_production(count_source="validated_detector", detector_validation_id="eval-test-grape"))
+    assert result["status"] == "estimated"
+    assert result["input_provenance"]["sample_counts"] == "registry_verified_detector:eval-test-grape"
+    assert result["input_provenance"]["calibration"] == "user_supplied_unverified"
+    assert result["detector_evaluation"]["report_ref"] == "evals/reports/test.md"
+
+
+def test_manual_inputs_are_labelled_user_supplied_unverified():
+    result = est.estimate_production(_production())
+    assert result["input_provenance"] == {
+        "sample_counts": "user_supplied_unverified", "calibration": "user_supplied_unverified",
+        "population_units": "user_supplied_unverified",
+    }
+    proposal = est.market_yield_proposal(result, estimate_id="est-x")
+    assert "unverified" in proposal["note"] and proposal["apply_to_production"] is False
 
 
 def test_market_yield_proposal_never_applies_itself():

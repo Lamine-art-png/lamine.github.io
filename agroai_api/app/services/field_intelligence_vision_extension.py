@@ -106,6 +106,10 @@ def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_input
         "crop_profile": profile.to_dict(),
         "provider": provider.name,
         "models": models,
+        "model_verification": (
+            "registry_verified" if ok and all(result.model_verification == "registry_verified" for result in ok)
+            else "unregistered_unverified"
+        ),
         "statuses": statuses,
         "frames": [result.to_dict() for result in results[:_MAX_STORED_DETECTION_FRAMES]],
         "counts": counts,

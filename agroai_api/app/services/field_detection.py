@@ -40,6 +40,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.services import crop_model_registry
 from app.services.crop_profiles import CropProfile
 from app.services.image_geometry import box_to_display, jpeg_exif_orientation, normalize_box, polygon_to_display
 
@@ -84,7 +85,9 @@ class DetectionResult:
     detections: list[Detection] = field(default_factory=list)
     model_id: str | None = None
     model_version: str | None = None
-    model_license: str | None = None
+    reported_model_license: str | None = None   # as stated by the detector; not verified
+    model_verification: str = "unregistered_unverified"  # or "registry_verified"
+    registered_model_license: str | None = None
     provider: str = "none"
     latency_ms: int | None = None
     error: str | None = None
@@ -100,7 +103,9 @@ class DetectionResult:
             "detections": [item.to_dict() for item in self.detections],
             "model_id": self.model_id,
             "model_version": self.model_version,
-            "model_license": self.model_license,
+            "reported_model_license": self.reported_model_license,
+            "model_verification": self.model_verification,
+            "registered_model_license": self.registered_model_license,
             "provider": self.provider,
             "latency_ms": self.latency_ms,
             "error": self.error,
@@ -197,10 +202,16 @@ def parse_detector_response(
         detections.append(Detection(label=label, score=round(score, 4), box=normalized, mask=mask))
 
     size = (width, height) if width and height else None
+    version = str(model.get("version") or "").strip()[:100] or None
+    # Upstream identity strings are self-attested; only the server registry verifies.
+    registered = crop_model_registry.verified_detector(model_id, version)
+    if registered is not None and profile.crop_id not in registered.crop_ids:
+        registered = None
     return DetectionResult(
-        status="ok", frame=frame, detections=detections, model_id=model_id,
-        model_version=str(model.get("version") or "").strip()[:100] or None,
-        model_license=str(model.get("license") or "").strip()[:100] or None,
+        status="ok", frame=frame, detections=detections, model_id=model_id, model_version=version,
+        reported_model_license=str(model.get("license") or "").strip()[:100] or None,
+        model_verification="registry_verified" if registered is not None else "unregistered_unverified",
+        registered_model_license=registered.license if registered is not None else None,
         dropped=dropped, image_size=size, orientation_corrected=orientation != 1,
     )
 

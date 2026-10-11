@@ -131,3 +131,16 @@ def test_nonfinite_numbers_are_rejected_at_the_route(client, db):
         "degree_day_method": "simple_average", "observed": [{"date": "2026-04-01", "tmax_c": "Infinity", "tmin_c": 10}],
     }
     assert client.post(f"{BASE}/crop-intelligence/harvest-window", json=window, headers=headers).status_code == 422
+
+
+
+def test_self_attested_detector_validation_is_rejected_at_the_route(client, db):
+    _, _, headers = _auth(db)
+    body = {
+        "unit": "vine", "object_label": "cluster", "design": "simple_random", "population_units": 100,
+        "sample_counts": [10, 12, 8, 11, 9], "count_source": "validated_detector", "detector_validation_id": "trust-me",
+        "detection_rate": {"value": 0.8, "standard_error": 0.04}, "unit_weight_kg": {"value": 0.15, "standard_error": 0.0075},
+    }
+    result = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers).json()
+    assert result["status"] == "not_estimable"
+    assert "detector_evaluation_not_in_server_registry" in result["reasons"]
