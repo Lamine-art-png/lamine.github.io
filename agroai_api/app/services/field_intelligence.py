@@ -2095,7 +2095,7 @@ def _has_active_process_job(db: Session, observation_id: str) -> bool:
 
 
 def _reprocess_capacity_available(db: Session, observation: FieldObservation) -> bool:
-    """Bound remote reprocessing for Free-equivalent plans, without new schema."""
+    """bound repeated external-model work on free-equivalent plans."""
     from app.services.commercial_control import resolve_effective_entitlements
 
     org = (
