@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "64ab6dbd9c2dff24e086f3fab91125a1999f47729792f99160d52f7b04b36223",
+  "sourceFingerprint": "a5882a08c0d2e95503e4961d61131447296b377da573a168e2af2524fe9e938b",
   "catalog": {
     "account": "Account",
     "accountProfile": "Account profile",
@@ -1329,6 +1329,7 @@
     "literal.2007a3b85605b6d1": "Projected margin under the current inputs: {share}.",
     "literal.204a5eb2cd28bcfd": "Cost",
     "literal.205b3db3e4e7b5d7": "Could not open billing portal.",
+    "literal.206233f6cc5251cb": "Continue with Professional — $299/month",
     "literal.20e8d28ffaedc6e5": "Decision note sent to the applicant:",
     "literal.20ee7427711a6a9b": "Task could not be created. Please retry.",
     "literal.2125a44f6295a663": "Send recovery instructions",
@@ -1818,6 +1819,7 @@
     "literal.549538eafa42a89b": "United States row crops",
     "literal.54985bdc23ed2c9f": "Custom integrations",
     "literal.54bdeb4f9d0c1c5f": "Safe API Explorer",
+    "literal.54dbf9375e439805": "Checkout is temporarily unavailable. You can retry from Billing.",
     "literal.54dc3d945b90502b": "Additional information could not be submitted.",
     "literal.5502b3de4eb7c7a1": "Medium confidence",
     "literal.5563a92bf8a7293d": "Truth label",
@@ -3095,6 +3097,7 @@
     "literal.e57918132e79015a": "Dry beans",
     "literal.e58cfffb4e72a1c4": "Private beta enrollment required",
     "literal.e5b8d26b60e51c78": "List fields from your server",
+    "literal.e5f5914c67a0719e": "Your first field result is ready. Continue with Professional for ongoing intelligence and reporting.",
     "literal.e61245ec53eaffdc": "Use at least one verifiable organization website or professional profile.",
     "literal.e648882055389c87": "The Playground request failed.",
     "literal.e697cc1e45afa541": "Attach files",
