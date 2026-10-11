@@ -5,6 +5,7 @@ expectations; they are not agronomic results.
 """
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -411,3 +412,70 @@ def test_season_crossing_new_year_uses_the_following_january():
     assert result["status"] == "projected"
     assert result["window"]["earliest"] == "2027-01-14"
     assert result["window"]["latest"] == "2027-02-03"
+
+
+# ---------------------------------------------------------------------------
+# Maturity stage proportions (almond hull split as the first use case)
+# ---------------------------------------------------------------------------
+
+def _trees(splits=(2, 4, 6, 3, 5), per_tree=10):
+    return [est.StageSample(f"tree-{i}", {"hull_split": s, "hull_intact": per_tree - s}) for i, s in enumerate(splits)]
+
+
+def _stages(**overrides):
+    values = {"crop_id": "almond", "design": "simple_random", "samples": _trees(), "count_source": "manual_count"}
+    values.update(overrides)
+    return est.StageProportionRequest(**values)
+
+
+def test_hull_split_share_and_cluster_interval():
+    result = est.estimate_stage_proportions(_stages())
+    assert result["status"] == "estimated" and result["scope"] == "block_estimate"
+    split = result["stage_shares"]["hull_split"]
+    # p = 20/50; residuals (-2, 0, 2, -1, 1) -> var = 2.5 / (5 * 10^2) -> se 0.0707; t(4) = 2.776
+    assert split["share"] == 0.4
+    assert split["interval_95"] == pytest.approx([0.2037, 0.5963], abs=1e-4)
+    assert result["stage_shares"]["hull_open_dry"]["share"] == 0.0
+    assert result["objects_observed"] == 50 and result["sampled_units"] == 5
+
+
+def test_finite_population_correction_narrows_interval():
+    wide = est.estimate_stage_proportions(_stages())["stage_shares"]["hull_split"]["interval_95"]
+    narrow = est.estimate_stage_proportions(_stages(population_units=50))["stage_shares"]["hull_split"]["interval_95"]
+    assert narrow[1] - narrow[0] == pytest.approx((wide[1] - wide[0]) * math.sqrt(0.9), abs=1e-3)
+
+
+@pytest.mark.parametrize(("threshold", "status"), [(0.2, "ready"), (0.5, "uncertain"), (0.6, "not_ready")])
+def test_readiness_uses_the_interval_not_the_point(threshold, status):
+    rule = est.ReadinessRule(("hull_split", "hull_open_dry"), threshold, "Grower harvest plan (test)")
+    readiness = est.estimate_stage_proportions(_stages(readiness=rule))["readiness"]
+    assert readiness["status"] == status
+    assert readiness["observed_share"] == 0.4 and readiness["threshold_source"] == "Grower harvest plan (test)"
+
+
+def test_convenience_sample_describes_sampled_units_only():
+    rule = est.ReadinessRule(("hull_split",), 0.2, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(design="edge_row_walk", readiness=rule))
+    assert result["scope"] == "sampled_units_only"
+    assert "interval_95" not in result["stage_shares"]["hull_split"]
+    assert result["readiness"]["status"] == "not_assessed_non_probability_sample"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"samples": _trees((2, 4, 6, 3))}, "sample_units_with_objects:4<5"),
+        ({"samples": [*_trees(), est.StageSample("x", {"ripe_cherry": 3})]}, "stages_not_in_almond_scale:ripe_cherry"),
+        ({"samples": [*_trees()[:4], est.StageSample("x", {"hull_split": float("nan")})]}, "stage_counts_must_be_finite_and_non_negative"),
+        ({"count_source": "validated_detector", "detector_validation_id": "trust-me"}, "detector_evaluation_not_in_server_registry"),
+        ({"count_source": "guessed"}, "counts_must_be_manual_or_from_a_validated_detector"),
+        ({"crop_id": "corn"}, "stages_not_in_corn_scale:hull_intact,hull_split"),
+        ({"readiness": est.ReadinessRule(("hull_split",), 0.2, " ")}, "readiness_threshold_source_required"),
+        ({"readiness": est.ReadinessRule(("ripe",), 0.2, "x")}, "readiness_stages_not_in_scale"),
+        ({"readiness": est.ReadinessRule(("hull_split",), 1.5, "x")}, "readiness_threshold_must_be_a_share_in_(0,1]"),
+    ],
+)
+def test_stage_proportions_refuse_unsupported_inputs(overrides, reason):
+    result = est.estimate_stage_proportions(_stages(**overrides))
+    assert result["status"] == "not_estimable"
+    assert reason in result["reasons"]

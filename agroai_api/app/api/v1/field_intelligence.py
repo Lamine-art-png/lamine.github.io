@@ -798,6 +798,33 @@ class ProductionEstimateIn(BaseModel):
     include_market_proposal: bool = False
 
 
+class StageSampleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    unit_id: str = Field(min_length=1, max_length=_MAX_NAME)
+    counts: dict[str, float] = Field(max_length=20)
+
+
+class ReadinessRuleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    ready_stages: list[str] = Field(min_length=1, max_length=20)
+    threshold_share: float = Field(gt=0, le=1)
+    source: str = Field(min_length=1, max_length=500)
+
+
+class StageProportionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    crop: str = Field(min_length=1, max_length=_MAX_NAME)
+    design: str = Field(min_length=1, max_length=60)
+    samples: list[StageSampleIn] = Field(min_length=1, max_length=2000)
+    count_source: str = Field(min_length=1, max_length=60)
+    detector_validation_id: str | None = Field(default=None, max_length=_MAX_NAME)
+    population_units: int | None = Field(default=None, ge=1, le=100_000_000)
+    readiness: ReadinessRuleIn | None = None
+
+
 def _estimate(value: EstimateIn | None) -> crop_estimation.Estimate | None:
     return None if value is None else crop_estimation.Estimate(value.value, value.standard_error)
 
@@ -898,6 +925,25 @@ def production_estimate(payload: ProductionEstimateIn) -> dict:
         result["estimate_id"] = estimate_id
         result["market_yield_proposal"] = crop_estimation.market_yield_proposal(result, estimate_id=estimate_id)
     return result
+
+
+@router.post("/crop-intelligence/maturity-stages", dependencies=[Depends(enforce_json_body_limit)])
+def maturity_stages(payload: StageProportionIn) -> dict:
+    """Share of sampled objects at each maturity stage (for example almond hull
+    split) with an interval and an optional readiness call against a sourced
+    threshold. Nothing is persisted."""
+    profile = resolve_profile(payload.crop)
+    if profile is None:
+        return {"status": "not_estimable", "crop_id": None, "reasons": ["crop_profile_not_supported"]}
+    return crop_estimation.estimate_stage_proportions(crop_estimation.StageProportionRequest(
+        crop_id=profile.crop_id, design=payload.design,
+        samples=[crop_estimation.StageSample(item.unit_id, dict(item.counts)) for item in payload.samples],
+        count_source=payload.count_source, detector_validation_id=payload.detector_validation_id,
+        population_units=payload.population_units,
+        readiness=None if payload.readiness is None else crop_estimation.ReadinessRule(
+            tuple(payload.readiness.ready_stages), payload.readiness.threshold_share, payload.readiness.source,
+        ),
+    ))
 
 
 # ---------------------------------------------------------------------------

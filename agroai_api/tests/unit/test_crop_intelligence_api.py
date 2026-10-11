@@ -144,3 +144,20 @@ def test_self_attested_detector_validation_is_rejected_at_the_route(client, db):
     result = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers).json()
     assert result["status"] == "not_estimable"
     assert "detector_evaluation_not_in_server_registry" in result["reasons"]
+
+
+def test_almond_hull_split_maturity_route(client, db):
+    _, _, headers = _auth(db)
+    body = {
+        "crop": "Almonds", "design": "simple_random", "count_source": "manual_count",
+        "samples": [{"unit_id": f"tree-{i}", "counts": {"hull_split": s, "hull_intact": 10 - s}} for i, s in enumerate((2, 4, 6, 3, 5))],
+        "readiness": {"ready_stages": ["hull_split", "hull_open_dry"], "threshold_share": 0.5, "source": "Grower plan (test)"},
+    }
+    result = client.post(f"{BASE}/crop-intelligence/maturity-stages", json=body, headers=headers).json()
+    assert result["crop_id"] == "almond" and result["status"] == "estimated"
+    assert result["stage_shares"]["hull_split"]["share"] == 0.4
+    assert result["readiness"]["status"] == "uncertain"
+    bad = {**body, "samples": [{"unit_id": "t", "counts": {"hull_split": "NaN"}}]}
+    assert client.post(f"{BASE}/crop-intelligence/maturity-stages", json=bad, headers=headers).status_code == 422
+    unsupported = client.post(f"{BASE}/crop-intelligence/maturity-stages", json={**body, "crop": "dragonfruit"}, headers=headers).json()
+    assert unsupported["reasons"] == ["crop_profile_not_supported"]

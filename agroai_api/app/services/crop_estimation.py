@@ -549,3 +549,139 @@ def market_yield_proposal(estimate: dict[str, Any], *, estimate_id: str) -> dict
             "Inputs are user-supplied and unverified by AGRO-AI. Review before applying."
         )[:1000],
     }
+
+
+# ---------------------------------------------------------------------------
+# Maturity stage proportions (e.g. almond hull split, tomato colour, coffee ripeness)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class StageSample:
+    unit_id: str                    # sampled tree, vine, plant or branch
+    counts: dict[str, float]        # maturity stage -> objects observed on this unit
+
+
+@dataclass
+class ReadinessRule:
+    ready_stages: tuple[str, ...]   # stages that count toward readiness
+    threshold_share: float          # share of objects at ready stages that defines readiness
+    source: str                     # who set the threshold (grower, adviser, published guidance)
+
+
+@dataclass
+class StageProportionRequest:
+    crop_id: str
+    design: str
+    samples: Sequence[StageSample]
+    count_source: str
+    detector_validation_id: str | None = None
+    population_units: int | None = None
+    readiness: ReadinessRule | None = None
+
+
+def _ratio_estimate(y: list[float], m: list[float], population_units: int | None) -> tuple[float, float]:
+    """Ratio estimator for a proportion when objects are clustered in sample units.
+
+    p = sum(y) / sum(m); Var(p) = (1 - f) / (n * mbar^2) * sum((y_i - p m_i)^2) / (n - 1).
+    """
+    n = len(m)
+    total = sum(m)
+    p = sum(y) / total
+    mbar = total / n
+    fpc = 1 - n / population_units if population_units and population_units >= n else 1.0
+    residual = sum((yi - p * mi) ** 2 for yi, mi in zip(y, m)) / (n - 1)
+    return p, math.sqrt(max(fpc, 0.0) * residual / (n * mbar * mbar))
+
+
+def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any]:
+    """Share of observed objects at each maturity stage, with honest scope.
+
+    With a probability sample of units the shares carry intervals that
+    describe the block; otherwise they describe only the sampled units and
+    no readiness call is made. Readiness compares the interval with a
+    threshold whose source is stated: ready only when the whole interval is
+    at or above it, not ready when it is entirely below, uncertain between.
+    """
+    from app.services.crop_profiles import get_profile
+
+    reasons: list[str] = []
+    profile = get_profile(request.crop_id)
+    stages = tuple(profile.maturity_stages) if profile else ()
+    if profile is None or not stages:
+        reasons.append("crop_profile_has_no_maturity_scale")
+    if request.count_source not in COUNT_SOURCES:
+        reasons.append("counts_must_be_manual_or_from_a_validated_detector")
+    evaluation = None
+    if request.count_source == "validated_detector":
+        evaluation = crop_model_registry.verified_evaluation(request.detector_validation_id)
+        if evaluation is None:
+            reasons.append("detector_evaluation_not_in_server_registry")
+    rows: list[dict[str, float]] = []
+    for sample in request.samples:
+        counts = dict(sample.counts or {})
+        unknown = sorted(set(counts) - set(stages))
+        if unknown:
+            reasons.append(f"stages_not_in_{request.crop_id}_scale:{','.join(unknown)}"[:200])
+            break
+        if any(not _finite(value) or value < 0 for value in counts.values()):
+            reasons.append("stage_counts_must_be_finite_and_non_negative")
+            break
+        rows.append(counts)
+    units = [row for row in rows if sum(row.values()) > 0]
+    if len(units) < MIN_SAMPLE_UNITS:
+        reasons.append(f"sample_units_with_objects:{len(units)}<{MIN_SAMPLE_UNITS}")
+    rule = request.readiness
+    if rule is not None:
+        if not rule.ready_stages or any(stage not in stages for stage in rule.ready_stages):
+            reasons.append("readiness_stages_not_in_scale")
+        if not _finite(rule.threshold_share) or not 0 < rule.threshold_share <= 1:
+            reasons.append("readiness_threshold_must_be_a_share_in_(0,1]")
+        if not str(rule.source or "").strip():
+            reasons.append("readiness_threshold_source_required")
+
+    result: dict[str, Any] = {
+        "estimation_version": ESTIMATION_VERSION,
+        "crop_id": request.crop_id,
+        "maturity_scale": profile.maturity_scale if profile else None,
+        "design": request.design,
+        "sampled_units": len(units),
+        "objects_observed": sum(sum(row.values()) for row in units),
+        "input_provenance": {
+            "stage_counts": (f"registry_verified_detector:{evaluation.evaluation_id}" if evaluation is not None
+                             else "user_supplied_unverified"),
+        },
+    }
+    if reasons:
+        return {**result, "status": "not_estimable", "reasons": reasons}
+
+    probability = request.design in PROBABILITY_DESIGNS
+    m = [sum(row.values()) for row in units]
+    critical = t_critical_95(len(units) - 1)
+    shares: dict[str, dict[str, Any]] = {}
+    for stage in stages:
+        y = [row.get(stage, 0.0) for row in units]
+        p, se = _ratio_estimate(y, m, request.population_units)
+        entry: dict[str, Any] = {"share": round(p, 4)}
+        if probability:
+            entry["interval_95"] = [round(max(0.0, p - critical * se), 4), round(min(1.0, p + critical * se), 4)]
+        shares[stage] = entry
+    result["stage_shares"] = shares
+    result["scope"] = "block_estimate" if probability else "sampled_units_only"
+
+    if rule is not None:
+        y = [sum(row.get(stage, 0.0) for stage in rule.ready_stages) for row in units]
+        p, se = _ratio_estimate(y, m, request.population_units)
+        readiness: dict[str, Any] = {
+            "ready_stages": list(rule.ready_stages), "threshold_share": rule.threshold_share,
+            "threshold_source": rule.source, "observed_share": round(p, 4),
+        }
+        if not probability:
+            readiness["status"] = "not_assessed_non_probability_sample"
+        else:
+            low, high = max(0.0, p - critical * se), min(1.0, p + critical * se)
+            readiness["interval_95"] = [round(low, 4), round(high, 4)]
+            readiness["status"] = "ready" if low >= rule.threshold_share else "not_ready" if high < rule.threshold_share else "uncertain"
+        result["readiness"] = readiness
+    result["status"] = "estimated"
+    result["interval_method"] = "ratio estimator with sample units as clusters; Student t on units"
+    return result

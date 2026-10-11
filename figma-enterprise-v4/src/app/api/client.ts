@@ -526,6 +526,7 @@ export const apiClient = {
     fieldCropCondition: (fieldId: string, workspaceId?: string) => get(`/v1/field-intelligence/fields/${encodeURIComponent(fieldId)}/crop-condition${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
     harvestWindow: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/harvest-window", payload),
     productionEstimate: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/production-estimate", payload),
+    maturityStages: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/maturity-stages", payload),
     assetBlob: async (assetId: string, range?: string): Promise<Blob> => {
       const token = localStorage.getItem(tokenKey);
       const headers = new Headers();
