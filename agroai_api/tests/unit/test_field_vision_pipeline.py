@@ -257,11 +257,31 @@ def test_detection_requires_the_organization_in_the_canary_allowlist(client, db,
 
 
 def test_detection_daily_frame_budget_is_enforced(client, db, fake_store, monkeypatch):
+    """Frames already sent today count against the organization's budget."""
+    from app.services import field_detection as detection
+    from app.services import field_intelligence_vision_extension as extension
+
+    calls = []
+
+    class CountingDetector:
+        name = "counting_detector"
+
+        def detect(self, image, content_type, profile, frame):
+            calls.append(frame)
+            return detection.DetectionResult(status="ok", frame=frame, model_id="fake-almond-detector", model_version="test",
+                                             detections=[detection.Detection(label="nut", score=0.7, box=[0.1, 0.1, 0.05, 0.05])])
+
     monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
     monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
-    monkeypatch.setenv("FIELD_DETECTION_DAILY_FRAME_BUDGET", "0")
+    monkeypatch.setenv("FIELD_DETECTION_DAILY_FRAME_BUDGET", "1")
+    monkeypatch.setattr(extension, "get_detection_provider", lambda: CountingDetector())
     _, _, headers = _auth(db)
     _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
-    obs = _photo_observation(client, db, headers, capture_id="cap-det-budget")
-    assert "detections" not in obs["structured"]
-    assert obs["provenance"]["detection_reason"] == "detection_daily_frame_budget_exhausted"
+
+    first = _photo_observation(client, db, headers, capture_id="cap-det-budget-1")
+    assert first["provenance"]["detection_status"] == "completed" and len(calls) == 1
+
+    second = _photo_observation(client, db, headers, capture_id="cap-det-budget-2")
+    assert "detections" not in second["structured"]
+    assert second["provenance"]["detection_reason"] == "detection_daily_frame_budget_exhausted"
+    assert len(calls) == 1  # no frame sent once the budget is used

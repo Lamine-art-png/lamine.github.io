@@ -15,6 +15,8 @@ def _days(start: date, count: int, tmax: float = 30.0, tmin: float = 10.0) -> li
 def test_routes_require_authentication(client):
     assert client.get(f"{BASE}/crop-profiles").status_code == 401
     assert client.post(f"{BASE}/crop-intelligence/harvest-window", json={}).status_code == 401
+    assert client.post(f"{BASE}/crop-intelligence/production-estimate", json={}).status_code == 401
+    assert client.post(f"{BASE}/crop-intelligence/maturity-stages", json={}).status_code == 401
     assert client.get(f"{BASE}/fields/f1/crop-condition").status_code == 401
 
 
