@@ -8,6 +8,7 @@ numeric chemistry/yield claims that RGB imagery cannot support are removed.
 """
 from __future__ import annotations
 
+import json
 import math
 
 import pytest
@@ -17,6 +18,18 @@ from app.services import field_vision_safety as safety
 
 MODEL = vision.DEFAULT_MODEL
 ENDPOINT = f"https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/{MODEL}"
+
+
+def _contract_json(**overrides) -> str:
+    """A complete provider response that satisfies the structured contract."""
+    raw = {
+        "summary": "Row visible.", "visible_facts": [], "hypotheses": [], "observations": [], "possible_issues": [],
+        "crop_condition": "unknown", "coverage_assessment": "unknown", "equipment_condition": "unknown",
+        "severity": "info", "image_quality": "clear", "confidence": 0.6, "recommended_follow_up": "Walk the row.",
+        "verification_required": True, "uncertainties": [],
+    }
+    raw.update(overrides)
+    return json.dumps(raw)
 
 
 def _structured(**overrides):
@@ -98,10 +111,17 @@ def test_model_confidence_is_strict(raw, expected, status):
         assert value == pytest.approx(expected)
 
 
-def test_missing_confidence_is_unknown_not_zero_or_one():
+def test_missing_confidence_is_unknown_and_review_only():
     analysis = _structured(confidence=None)
     assert analysis["confidence"] is None
     assert analysis["confidence_status"] == "missing"
+    assert analysis["analysis_state"] == "degraded"
+    assert "contract_invalid:confidence" in analysis["contract_violations"]
+
+
+def test_complete_contract_is_structured_with_no_violations():
+    analysis = _structured()
+    assert analysis["analysis_state"] == "structured"
     assert analysis["contract_violations"] == []
 
 
@@ -142,21 +162,67 @@ def test_json_without_content_is_degraded():
     raw = vision._json_from_text('{"severity": "critical", "confidence": 0.99}')
     analysis = vision._bounded_analysis(raw)
     assert analysis["analysis_state"] == "degraded"
-    assert analysis["degraded_reason"] == "provider_json_missing_content"
+    assert analysis["degraded_reason"] == "provider_json_contract_violation"
     assert analysis["severity"] == "info"
     assert analysis["confidence"] is None
 
 
-def test_fenced_json_is_structured():
-    raw = vision._json_from_text('```json\n{"summary": "Dry patch", "severity": "low", "confidence": 0.5}\n```')
+def test_partial_json_cannot_become_a_structured_finding():
+    """Audit case: a summary-only object claiming critical severity."""
+    raw = vision._json_from_text('{"summary":"Spots","severity":"critical","confidence":0.9}')
+    analysis = vision._bounded_analysis(raw)
+    assert analysis["analysis_state"] == "degraded"
+    assert analysis["severity"] == "info" and analysis["confidence"] is None
+    assert "contract_missing:image_quality" in analysis["contract_violations"]
+    assert "contract_missing:visible_facts" in analysis["contract_violations"]
+
+
+def test_partial_json_single_photo_does_not_escalate(monkeypatch):
+    partial = vision._bounded_analysis(vision._json_from_text('{"summary":"Spots","severity":"critical","confidence":0.9}'))
+    analysis = _run(monkeypatch, [(partial, {"media_kind": "photo", "asset_id": "photo-1"})]).analysis
+    assert analysis["analysis_state"] == "degraded"
+    assert analysis["severity"] == "info"
+    assert analysis["peak_severity"] == "info"
+
+
+@pytest.mark.parametrize("field", sorted(vision.CONTRACT_FIELDS))
+def test_every_contract_field_is_required(field):
+    raw = json.loads(_contract_json())
+    raw.pop(field)
+    analysis = vision._bounded_analysis(raw)
+    assert analysis["analysis_state"] == "degraded"
+    assert f"contract_missing:{field}" in analysis["contract_violations"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("summary", ""), ("summary", 7), ("visible_facts", "brown leaves"), ("visible_facts", [{"evidence": "no label"}]),
+        ("hypotheses", [3]), ("observations", [1, 2]), ("possible_issues", "leak"), ("crop_condition", "fine"),
+        ("coverage_assessment", None), ("equipment_condition", ["normal"]), ("severity", "catastrophic"),
+        ("image_quality", 1), ("confidence", "0.7x"), ("recommended_follow_up", None),
+        ("verification_required", "yes"), ("uncertainties", [None]),
+    ],
+)
+def test_mistyped_contract_fields_degrade(field, value):
+    raw = json.loads(_contract_json())
+    raw[field] = value
+    analysis = vision._bounded_analysis(raw)
+    assert analysis["analysis_state"] == "degraded"
+    assert f"contract_invalid:{field}" in analysis["contract_violations"]
+    assert analysis["severity"] == "info"
+
+
+def test_fenced_full_contract_is_structured_and_enum_case_tolerated():
+    raw = vision._json_from_text("```json\n" + _contract_json(severity="LOW", image_quality=" Usable ") + "\n```")
     analysis = vision._bounded_analysis(raw)
     assert analysis["analysis_state"] == "structured"
-    assert analysis["severity"] == "low"
-    assert analysis["confidence"] == 0.5
+    assert analysis["severity"] == "low" and analysis["image_quality"] == "usable"
 
 
 def test_unknown_image_quality_is_normalised():
     assert _structured(image_quality="blurry-ish")["image_quality"] == "unknown"
+    assert _structured(image_quality="blurry-ish")["analysis_state"] == "degraded"
     assert _structured(image_quality="POOR")["image_quality"] == "poor"
 
 
@@ -192,12 +258,20 @@ def test_provider_prose_end_to_end_is_degraded(monkeypatch):
     assert result.analysis["severity"] == "info"
 
 
-def test_provider_confidence_nine_end_to_end_is_unknown(monkeypatch):
-    _configure_provider(monkeypatch, {"result": {"response": '{"summary": "Leaf spots", "severity": "medium", "confidence": 9}'}})
+def test_provider_confidence_nine_end_to_end_is_unknown_and_review_only(monkeypatch):
+    _configure_provider(monkeypatch, {"result": {"response": _contract_json(severity="medium", confidence=9)}})
     result = vision._analyze_one(b"\xff\xd8\xffimage", "image/jpeg", {})
-    assert result.analysis["analysis_state"] == "structured"
+    assert result.analysis["analysis_state"] == "degraded"
+    assert result.analysis["severity"] == "info"
     assert result.analysis["confidence"] is None
     assert result.analysis["confidence_status"] == "invalid"
+
+
+def test_provider_full_contract_end_to_end_is_structured(monkeypatch):
+    _configure_provider(monkeypatch, {"result": {"response": _contract_json(severity="medium", confidence=0.7)}})
+    result = vision._analyze_one(b"\xff\xd8\xffimage", "image/jpeg", {})
+    assert result.analysis["analysis_state"] == "structured"
+    assert result.analysis["severity"] == "medium" and result.analysis["confidence"] == 0.7
 
 
 def test_provider_http_error_is_truthful(monkeypatch):
@@ -234,6 +308,21 @@ def test_corroborated_video_severity_is_kept(monkeypatch):
         (_structured(severity="low"), _video_frame(5.0)),
     ]
     assert _run(monkeypatch, frames).analysis["severity"] == "high"
+
+
+def test_unknown_quality_frame_is_not_trusted(monkeypatch):
+    frame = _structured(severity="critical", image_quality="unknown")
+    assert frame["analysis_state"] == "structured"  # "unknown" is a valid contract value...
+    analysis = _run(monkeypatch, [(frame, {"media_kind": "photo", "asset_id": "photo-1"})]).analysis
+    assert analysis["severity"] == "low"  # ...but not evidence the image could be judged
+    assert analysis["severity_basis"]["uncorroborated_frames"][0]["reason"] == "untrusted_frame"
+
+
+def test_frame_without_explicit_structured_state_is_not_trusted(monkeypatch):
+    frame = dict(_structured(severity="high"))
+    frame.pop("analysis_state")
+    analysis = _run(monkeypatch, [(frame, {"media_kind": "photo", "asset_id": "photo-1"})]).analysis
+    assert analysis["severity"] == "low"
 
 
 def test_poor_quality_frame_is_capped(monkeypatch):
@@ -280,8 +369,9 @@ def test_confidence_mean_ignores_invalid_and_degraded(monkeypatch):
     analysis = _run(monkeypatch, frames).analysis
     assert analysis["analysis_state"] == "structured"
     assert analysis["confidence"] == pytest.approx(0.6)
-    assert analysis["confidence_summary"] == {"reported": 2, "missing_or_invalid": 1, "min": 0.4, "max": 0.8}
-    assert analysis["images_degraded"] == 1
+    # The confidence-9 frame violates the contract, so it is degraded rather than structured.
+    assert analysis["confidence_summary"] == {"reported": 2, "missing_or_invalid": 0, "min": 0.4, "max": 0.8}
+    assert analysis["images_degraded"] == 2
     assert "confidence_not_in_unit_interval" in analysis["contract_violations"]
 
 
@@ -398,7 +488,7 @@ def test_operator_note_is_fenced_as_untrusted_data():
 def test_edge_fallback_model_is_marked(monkeypatch):
     _configure_provider(monkeypatch, {
         "success": True,
-        "result": {"response": '{"summary": "Wet soil", "severity": "high", "confidence": 0.7}'},
+        "result": {"response": _contract_json(summary="Wet soil", severity="high", confidence=0.7)},
         "model": "@cf/llava-hf/llava-1.5-7b-hf",
         "degraded": True,
     })
@@ -409,7 +499,7 @@ def test_edge_fallback_model_is_marked(monkeypatch):
 
 
 def test_primary_model_is_not_marked_fallback(monkeypatch):
-    _configure_provider(monkeypatch, {"success": True, "result": {"response": '{"summary": "Rows", "confidence": 0.5}'}, "model": MODEL, "degraded": False})
+    _configure_provider(monkeypatch, {"success": True, "result": {"response": _contract_json(confidence=0.5)}, "model": MODEL, "degraded": False})
     result = vision._analyze_one(b"\xff\xd8\xffimage", "image/jpeg", {})
     assert result.analysis["provider_fallback"] is False
     assert result.analysis["model_role"] == "primary"

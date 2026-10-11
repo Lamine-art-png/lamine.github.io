@@ -31,7 +31,7 @@ SEVERITY_BY_RANK = {rank: name for name, rank in SEVERITY_ORDER.items()}
 
 # Output contract version for the bounded visual analysis. Bump when the
 # meaning of a field changes; additive fields keep the same major version.
-ANALYSIS_CONTRACT_VERSION = "field-vision-analysis/2"
+ANALYSIS_CONTRACT_VERSION = "field-vision-analysis/3"
 # A vision-language model's self-reported confidence is not an empirically
 # calibrated probability. No calibration has been fitted against reviewed
 # ground truth yet, so every confidence carries this kind and a null version.
@@ -187,7 +187,65 @@ def _extract_text(payload: Any) -> str:
     return ""
 
 
-_CONTENT_KEYS = ("summary", "visible_facts", "hypotheses", "observations", "possible_issues", "possible_issue")
+_ALLOWED_CONDITION = {"healthy", "mostly_healthy", "stressed", "damaged", "unknown"}
+_ALLOWED_COVERAGE = {"adequate", "uneven", "incomplete", "not_visible", "unknown"}
+_ALLOWED_EQUIPMENT = {"normal", "attention_needed", "unsafe", "not_visible", "unknown"}
+TRUSTED_IMAGE_QUALITY = {"clear", "usable"}
+
+
+def _is_str(value: Any) -> bool:
+    return isinstance(value, str)
+
+
+def _is_str_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _is_finding_list(value: Any) -> bool:
+    return isinstance(value, list) and all(
+        isinstance(item, dict) and isinstance(item.get("label"), str) and item.get("label", "").strip()
+        for item in value
+    )
+
+
+def _is_enum(value: Any, allowed: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower() in allowed
+
+
+def _is_unit_interval(value: Any) -> bool:
+    return _model_confidence(value)[1] == "reported"
+
+
+# The full structured contract the prompt requests. Every field must be
+# present with the right type; anything less is degraded to review-only.
+CONTRACT_FIELDS: dict[str, Any] = {
+    "summary": lambda value: _is_str(value) and bool(value.strip()),
+    "visible_facts": _is_finding_list,
+    "hypotheses": _is_finding_list,
+    "observations": _is_str_list,
+    "possible_issues": _is_str_list,
+    "crop_condition": lambda value: _is_enum(value, _ALLOWED_CONDITION),
+    "coverage_assessment": lambda value: _is_enum(value, _ALLOWED_COVERAGE),
+    "equipment_condition": lambda value: _is_enum(value, _ALLOWED_EQUIPMENT),
+    "severity": lambda value: _is_enum(value, SEVERITY_ORDER),
+    "image_quality": lambda value: _is_enum(value, ALLOWED_IMAGE_QUALITY),
+    "confidence": _is_unit_interval,
+    "recommended_follow_up": _is_str,
+    "verification_required": lambda value: isinstance(value, bool),
+    "uncertainties": _is_str_list,
+}
+
+
+def contract_errors(raw: dict[str, Any]) -> list[str]:
+    """Missing or mistyped contract fields, as ``missing:<field>`` / ``invalid:<field>``."""
+    errors: list[str] = []
+    for name, check in CONTRACT_FIELDS.items():
+        if name not in raw:
+            errors.append(f"missing:{name}")
+            continue
+        if not check(raw[name]):
+            errors.append(f"invalid:{name}")
+    return errors
 
 
 def _parse_provider_json(text: str) -> dict[str, Any] | None:
@@ -207,14 +265,15 @@ def _parse_provider_json(text: str) -> dict[str, Any] | None:
 
 
 def _json_from_text(text: str) -> dict[str, Any]:
-    """Parse provider output; prose that is not the contract is marked degraded.
+    """Parse provider output. Prose that is not a JSON object is degraded here;
+    a JSON object is checked against the full contract in ``_bounded_analysis``.
 
     Degraded output keeps the provider text for human review but carries no
     confidence and no severity, so it can never be mistaken for, or escalate
     like, a structured visual analysis.
     """
     parsed = _parse_provider_json(text)
-    if parsed is not None and any(parsed.get(key) for key in _CONTENT_KEYS):
+    if parsed is not None:
         return parsed
     return {
         "summary": text[:1200] if text else "",
@@ -224,7 +283,7 @@ def _json_from_text(text: str) -> dict[str, Any]:
         "confidence": None,
         "recommended_follow_up": "Review the original image and verify conditions in the field.",
         "uncertainties": ["The provider did not return structured visual output."],
-        "_degraded_reason": "provider_output_not_structured" if parsed is None else "provider_json_missing_content",
+        "_degraded_reason": "provider_output_not_structured",
     }
 
 
@@ -251,7 +310,7 @@ def _model_confidence(value: Any) -> tuple[float | None, str]:
 
 def _bounded_analysis(raw: dict[str, Any]) -> dict[str, Any]:
     violations: list[str] = []
-    severity = str(raw.get("severity") or "info").lower()
+    severity = str(raw.get("severity") or "info").strip().lower()
     if severity not in SEVERITY_ORDER:
         violations.append("severity_not_in_contract")
         severity = "info"
@@ -259,6 +318,10 @@ def _bounded_analysis(raw: dict[str, Any]) -> dict[str, Any]:
     if confidence_status == "invalid":
         violations.append("confidence_not_in_unit_interval")
     degraded_reason = raw.get("_degraded_reason")
+    missing_or_invalid = [] if degraded_reason else contract_errors(raw)
+    if missing_or_invalid:
+        degraded_reason = "provider_json_contract_violation"
+        violations.extend(f"contract_{error}" for error in missing_or_invalid)
 
     def strings(value: Any, *, limit: int = 12) -> list[str]:
         if not isinstance(value, list):
@@ -290,13 +353,13 @@ def _bounded_analysis(raw: dict[str, Any]) -> dict[str, Any]:
             rows.append(row)
         return rows
 
-    allowed_condition = {"healthy", "mostly_healthy", "stressed", "damaged", "unknown"}
-    allowed_coverage = {"adequate", "uneven", "incomplete", "not_visible", "unknown"}
-    allowed_equipment = {"normal", "attention_needed", "unsafe", "not_visible", "unknown"}
-    crop_condition = str(raw.get("crop_condition") or "unknown").lower()
-    coverage = str(raw.get("coverage_assessment") or "unknown").lower()
-    equipment = str(raw.get("equipment_condition") or "unknown").lower()
-    image_quality = str(raw.get("image_quality") or "unknown").lower()
+    allowed_condition = _ALLOWED_CONDITION
+    allowed_coverage = _ALLOWED_COVERAGE
+    allowed_equipment = _ALLOWED_EQUIPMENT
+    crop_condition = str(raw.get("crop_condition") or "unknown").strip().lower()
+    coverage = str(raw.get("coverage_assessment") or "unknown").strip().lower()
+    equipment = str(raw.get("equipment_condition") or "unknown").strip().lower()
+    image_quality = str(raw.get("image_quality") or "unknown").strip().lower()
     if image_quality not in ALLOWED_IMAGE_QUALITY:
         image_quality = "unknown"
     possible_issues = strings(raw.get("possible_issues"))
@@ -343,6 +406,9 @@ def _bounded_analysis(raw: dict[str, Any]) -> dict[str, Any]:
         analysis["degraded_reason"] = str(degraded_reason)
         analysis["severity"] = "info"
         analysis["confidence"] = None
+        analysis["crop_condition"] = "unknown"
+        analysis["coverage_assessment"] = "unknown"
+        analysis["equipment_condition"] = "unknown"
     if redactions:
         analysis["uncertainties"] = [
             *analysis["uncertainties"],
@@ -493,8 +559,9 @@ def _corroborated_severity(completed: list[dict[str, Any]]) -> tuple[str, str, l
 
     Within one evidence unit (one recording, or one photo) a level counts only
     when at least two trustworthy frames reach it, unless the unit has a
-    single trustworthy frame. Unstructured, poor-quality, or fallback-model
-    frames cannot raise severity above ``UNCORROBORATED_SEVERITY_CAP``. The overall severity is the
+    single trustworthy frame. Degraded (incomplete or unstructured), poor or
+    unknown quality, and fallback-model frames cannot raise severity above
+    ``UNCORROBORATED_SEVERITY_CAP``. The overall severity is the
     highest unit severity. Returns (severity, peak_severity, uncorroborated).
     """
     cap = SEVERITY_ORDER[UNCORROBORATED_SEVERITY_CAP]
@@ -502,12 +569,14 @@ def _corroborated_severity(completed: list[dict[str, Any]]) -> tuple[str, str, l
     peak = 0
     for index, item in enumerate(completed):
         rank = SEVERITY_ORDER.get(str(item.get("severity") or "info"), 0)
+        # Trust requires an explicit structured analysis of an image the model
+        # itself judged clear or usable; missing or "unknown" quality is not trusted.
         trusted = (
-            item.get("analysis_state", "structured") == "structured"
-            and item.get("image_quality") != "poor"
+            item.get("analysis_state") == "structured"
+            and item.get("image_quality") in TRUSTED_IMAGE_QUALITY
             and not item.get("provider_fallback")
         )
-        if item.get("analysis_state", "structured") == "structured":
+        if item.get("analysis_state") == "structured":
             peak = max(peak, rank)
         units.setdefault(_evidence_unit(index, item), []).append((rank, trusted, item))
 
@@ -567,7 +636,7 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
             retryable=any("429" in item or "50" in item for item in failures),
         )
 
-    structured = [item for item in completed if item.get("analysis_state", "structured") == "structured"]
+    structured = [item for item in completed if item.get("analysis_state") == "structured"]
     # Degraded (unstructured) frames are kept for review only when nothing
     # structured exists; they never contribute issues, conditions, or confidence.
     basis = structured or completed
@@ -600,7 +669,7 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
                 "severity": item.get("severity"),
                 "confidence": item.get("confidence"),
                 "image_quality": item.get("image_quality", "unknown"),
-                "analysis_state": item.get("analysis_state", "structured"),
+                "analysis_state": item.get("analysis_state"),
                 "model_role": item.get("model_role", "primary"),
                 "possible_issues": item.get("possible_issues") or [],
             })

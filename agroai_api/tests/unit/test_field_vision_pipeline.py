@@ -9,6 +9,7 @@ confidence, and that each case is routed to human review with a reason.
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
 
@@ -19,6 +20,18 @@ from app.services.object_storage import S3ObjectStore
 from tests.unit.test_field_intelligence import FakeStoreClient, _auth, _complete, _fetch, _initiate, _process
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"7" * 256
+
+
+def _contract(**overrides) -> str:
+    """A complete provider response satisfying the structured contract."""
+    raw = {
+        "summary": "Rows visible.", "visible_facts": [], "hypotheses": [], "observations": [], "possible_issues": [],
+        "crop_condition": "unknown", "coverage_assessment": "unknown", "equipment_condition": "unknown",
+        "severity": "info", "image_quality": "clear", "confidence": 0.5, "recommended_follow_up": "",
+        "verification_required": True, "uncertainties": [],
+    }
+    raw.update(overrides)
+    return json.dumps(raw)
 
 
 @pytest.fixture
@@ -74,15 +87,29 @@ def test_unstructured_provider_prose_cannot_escalate(client, db, fake_store, mon
     assert "spray immediately" not in (obs["recommended_action"] or "")
 
 
+def test_partial_provider_json_cannot_escalate_durable_observation(client, db, fake_store, monkeypatch):
+    """Audit case: summary-only JSON claiming critical severity on one photo."""
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, '{"summary":"Spots","severity":"critical","confidence":0.9}')
+    obs = _photo_observation(client, db, headers, capture_id="cap-partial")
+    assert obs["structured"]["vision"]["analysis_state"] == "degraded"
+    assert obs["structured"]["vision"]["degraded_reason"] == "provider_json_contract_violation"
+    assert obs["severity"] not in {"medium", "high", "critical"}
+    assert obs["status"] == "needs_review"
+    assert "visual_analysis_unstructured_unverified" in obs["uncertain_fields"]
+
+
 def test_invalid_confidence_does_not_raise_observation_confidence(client, db, fake_store, monkeypatch):
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Leaf spotting on two plants", "severity": "medium", "image_quality": "clear", "confidence": 9}')
+    _provider_returns(monkeypatch, _contract(summary="Leaf spotting on two plants", severity="medium", confidence=9))
     obs = _photo_observation(client, db, headers, capture_id="cap-conf")
 
     vision_result = obs["structured"]["vision"]
-    assert vision_result["analysis_state"] == "structured"
+    # An out-of-range confidence violates the contract: review-only, never a finding.
+    assert vision_result["analysis_state"] == "degraded"
     assert vision_result["confidence"] is None
-    assert vision_result["confidence_summary"]["missing_or_invalid"] == 1
+    assert obs["severity"] not in {"medium", "high", "critical"}
+    assert obs["status"] == "needs_review"
     # The old behaviour clamped 9 to 1.0 and lifted the observation to 0.85.
     assert (obs["confidence"] or 0.0) < 0.85
     vision_run = (
@@ -100,7 +127,7 @@ def test_invalid_confidence_does_not_raise_observation_confidence(client, db, fa
 
 def test_poor_quality_critical_frame_is_reviewed_not_escalated(client, db, fake_store, monkeypatch):
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Possible flooding, image very dark", "severity": "critical", "image_quality": "poor", "confidence": 0.4}')
+    _provider_returns(monkeypatch, _contract(summary="Possible flooding, image very dark", severity="critical", image_quality="poor", confidence=0.4))
     obs = _photo_observation(client, db, headers, capture_id="cap-poor")
 
     assert obs["structured"]["vision"]["severity"] == "low"
@@ -112,7 +139,7 @@ def test_poor_quality_critical_frame_is_reviewed_not_escalated(client, db, fake_
 
 def test_fallback_model_frame_is_reviewed_not_escalated(client, db, fake_store, monkeypatch):
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Burst lateral", "severity": "critical", "image_quality": "clear", "confidence": 0.9}', fallback=True)
+    _provider_returns(monkeypatch, _contract(summary="Burst lateral", severity="critical", confidence=0.9), fallback=True)
     obs = _photo_observation(client, db, headers, capture_id="cap-fallback")
 
     assert obs["structured"]["vision"]["images_fallback_model"] == 1
@@ -122,7 +149,7 @@ def test_fallback_model_frame_is_reviewed_not_escalated(client, db, fake_store, 
 
 def test_unsupported_measurement_is_removed_and_flagged(client, db, fake_store, monkeypatch):
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Chlorosis; residue about 0.3 ppm", "severity": "low", "image_quality": "clear", "confidence": 0.5, "recommended_follow_up": "Apply 2 L/ha of product."}')
+    _provider_returns(monkeypatch, _contract(summary="Chlorosis; residue about 0.3 ppm", severity="low", recommended_follow_up="Apply 2 L/ha of product."))
     obs = _photo_observation(client, db, headers, capture_id="cap-chem")
 
     vision_result = obs["structured"]["vision"]
@@ -135,7 +162,10 @@ def test_unsupported_measurement_is_removed_and_flagged(client, db, fake_store, 
 def test_structured_high_severity_photo_still_escalates(client, db, fake_store, monkeypatch):
     """Trustworthy single-photo evidence keeps its severity (with review)."""
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Burst drip line spraying water", "visible_facts": [{"label": "Water spraying from drip line", "evidence": "visible jet", "confidence": 0.8}], "severity": "high", "image_quality": "clear", "confidence": 0.8}')
+    _provider_returns(monkeypatch, _contract(
+        summary="Burst drip line spraying water", severity="high", confidence=0.8,
+        visible_facts=[{"label": "Water spraying from drip line", "evidence": "visible jet", "confidence": 0.8}],
+    ))
     obs = _photo_observation(client, db, headers, capture_id="cap-high")
 
     assert obs["structured"]["vision"]["severity"] == "high"
@@ -151,7 +181,7 @@ def test_structured_high_severity_photo_still_escalates(client, db, fake_store, 
 def test_detection_flag_off_leaves_no_trace(client, db, fake_store, monkeypatch):
     monkeypatch.delenv("FIELD_DETECTION_ENABLED", raising=False)
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Rows", "severity": "low", "image_quality": "clear", "confidence": 0.5}')
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
     obs = _photo_observation(client, db, headers, capture_id="cap-det-off")
     assert "detections" not in obs["structured"]
     assert "detection_status" not in obs["provenance"]
@@ -178,7 +208,7 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
     monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
     monkeypatch.setattr(extension, "get_detection_provider", lambda: FakeDetector())
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Nuts on lower limbs", "severity": "info", "image_quality": "clear", "confidence": 0.5}')
+    _provider_returns(monkeypatch, _contract(summary="Nuts on lower limbs"))
     obs = _photo_observation(client, db, headers, capture_id="cap-det-on")
 
     detections = obs["structured"]["detections"]
@@ -203,7 +233,7 @@ def test_detection_enabled_but_unconfigured_is_reported(client, db, fake_store, 
     monkeypatch.delenv("FIELD_DETECTION_ENDPOINT", raising=False)
     monkeypatch.delenv("FIELD_DETECTION_API_KEY", raising=False)
     _, _, headers = _auth(db)
-    _provider_returns(monkeypatch, '{"summary": "Rows", "severity": "low", "image_quality": "clear", "confidence": 0.5}')
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
     obs = _photo_observation(client, db, headers, capture_id="cap-det-misconfigured")
     assert "detections" not in obs["structured"]
     assert obs["provenance"]["detection_status"] == "not_run"
