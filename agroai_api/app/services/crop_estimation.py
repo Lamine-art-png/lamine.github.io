@@ -296,6 +296,9 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
     rejected: list[dict[str, Any]] = []
     incomplete: list[int] = []
     for year, series in sorted(request.analog_years.items()):
+        if not MIN_SEASON_DATE.year <= year <= MAX_SEASON_DATE.year:
+            rejected.append({"year": year, "reasons": ["analog_year_outside_1900_to_2200"]})
+            continue
         if year >= request.as_of.year:
             rejected.append({"year": year, "reasons": ["analog_year_not_before_as_of_season"]})
             continue
@@ -620,9 +623,11 @@ def _production_body(request: ProductionRequest, result: dict[str, Any], counts:
     critical = t_critical_95(df)
     counted = float(sum(counts))
     density = Estimate(mean, mean_se)
+    density_low, density_high = density.interval(critical)
     result["visible_density_per_unit"] = {
         "value": round(mean, 4), "standard_error": round(mean_se, 4),
-        "interval_95": [round(bound, 4) for bound in density.interval(critical)],
+        # The objects counted are in the population, so the mean is at least counted / N.
+        "interval_95": [round(max(density_low, counted / request.population_units), 4), round(density_high, 4)],
     }
     visible_total = Estimate(request.population_units * mean, request.population_units * mean_se)
     # A population total can never be below the objects actually counted in it.
@@ -842,31 +847,23 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
     # Every unit in the population sampled (units with no objects included): no sampling variance.
     census = request.population_units is not None and request.population_units == sampled
     fpc = 1 - sampled / request.population_units if request.population_units else 1.0
-    # Units differ in size, so the worst case uses fewer effective units.
-    n_eff = len(units) * (sum(m) / len(m)) / max(m)
+    # Unit shares lie in [0, 1], so the estimated variance of the ratio is at most
+    # fpc * p(1 - p) * n / ((n - 1) * n_eff), with n_eff = n * mean(m) / max(m) for units of
+    # unequal size. A Wilson score interval on n_w = n_eff * (n - 1) / n / fpc therefore uses a
+    # variance never below the design-based estimate, holds whatever the spread of unit shares,
+    # and depends on the data only through p, so more favourable data can never give a less
+    # favourable call.
+    n_units = len(units)
+    n_w = n_units * (sum(m) / n_units) / max(m) * (n_units - 1) / n_units / fpc if not census else 0.0
 
-    def interval(y: list[float]) -> tuple[float, float, str | None]:
-        """Never narrower than a bound that holds whatever the spread of unit shares.
-
-        The design-based interval (p +/- t * se) is anti-conservative when few
-        units happen to agree: near-identical shares give se close to 0 although
-        unsampled units may differ a lot. Unit shares lie in [0, 1], so their
-        variance is at most p(1 - p); the reported interval is the union of the
-        design-based interval and a Wilson score interval under that worst case,
-        so more favourable data can never give a less favourable call.
-        """
-        p, se = _ratio_estimate(y, m, request.population_units, sampled)
+    def interval(y: list[float]) -> tuple[float, float]:
+        p, _ = _ratio_estimate(y, m, request.population_units, sampled)
         if census:
-            return p, p, None
-        design_low, design_high = max(0.0, p - critical * se), min(1.0, p + critical * se)
-        n_w = n_eff / fpc  # the finite population correction applies to the worst case too
+            return p, p
         z2 = critical * critical
         centre = (p + z2 / (2 * n_w)) / (1 + z2 / n_w)
         half = critical * math.sqrt(p * (1 - p) / n_w + z2 / (4 * n_w * n_w)) / (1 + z2 / n_w)
-        worst_low, worst_high = max(0.0, centre - half), min(1.0, centre + half)
-        binding = worst_low < design_low or worst_high > design_high
-        return (min(design_low, worst_low), max(design_high, worst_high),
-                "worst_case_between_unit_variance" if binding else "design_based")
+        return max(0.0, centre - half), min(1.0, centre + half)
 
     shares: dict[str, dict[str, Any]] = {}
     for stage in stages:
@@ -874,10 +871,8 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
         p, _ = _ratio_estimate(y, m, request.population_units, sampled)
         entry: dict[str, Any] = {"share": round(p, 4)}
         if probability:
-            low, high, basis = interval(y)
+            low, high = interval(y)
             entry["interval_95"] = [round(low, 4), round(high, 4)]
-            if basis:
-                entry["interval_basis"] = basis
         shares[stage] = entry
     result["stage_shares"] = shares
     result["scope"] = "block_estimate" if probability else "sampled_units_only"
@@ -897,15 +892,13 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
                 else "not_assessed_non_probability_sample"
             )
         else:
-            low, high, basis = interval(y)
+            low, high = interval(y)
             readiness["interval_95"] = [round(low, 4), round(high, 4)]
-            if basis:
-                readiness["interval_basis"] = basis
             readiness["status"] = "ready" if low >= rule.threshold_share else "not_ready" if high < rule.threshold_share else "uncertain"
         result["readiness"] = readiness
     result["status"] = "estimated"
     result["interval_method"] = (
-        "ratio estimator with sample units as clusters (Student t on units), widened where needed to a Wilson "
-        "bound under the worst-case between-unit variance p(1 - p)"
+        "ratio estimator with sample units as clusters; Wilson score interval (Student t on units) under the "
+        "worst-case between-unit variance, which is never below the design-based variance estimate"
     )
     return result

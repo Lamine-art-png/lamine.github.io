@@ -89,7 +89,7 @@ def test_stage_tool_matches_the_estimator():
         "ready_stages": ["hull_split"], "threshold_share": 0.2, "source": "Grower harvest plan (test)"}))
     assert result.status == "COMPUTED"
     assert result.output["stage_shares"]["hull_split"]["share"] == 0.4
-    assert result.output["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2598, 0.5588], abs=1e-4)
+    assert result.output["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2582, 0.5607], abs=1e-4)
     assert result.output["readiness"]["status"] == "ready"
 
 
@@ -187,5 +187,23 @@ def test_stratified_production_through_the_registry_is_population_weighted():
 )
 def test_out_of_range_numbers_are_rejected_before_computation(tool_id, inputs, reason):
     result = get_scientific_tool_registry().run(tool_id, inputs)
+    assert result.status == "INVALID_INPUT"
+    assert reason in result.invalid_inputs[0].split(";")
+
+
+@pytest.mark.parametrize(
+    ("inputs", "reason"),
+    [
+        (_harvest(analog_years={"-3000000000": []}), "analog_years_outside_1900_to_2200"),
+        (_harvest(analog_years={"twenty-nineteen": []}), "analog_years_keys_must_be_years"),
+        (_harvest(base_c=-1e307), "base_c_out_of_range"),
+        (_harvest(base_c=-11.0), "base_c_out_of_range"),
+        (_harvest(upper_cutoff_c=1.5e308), "upper_cutoff_c_out_of_range"),
+        (_harvest(target_high_gdd=1e300), "target_high_gdd_out_of_range"),
+    ],
+)
+def test_harvest_tool_applies_the_route_bounds(inputs, reason):
+    """Round-5 review: these overflowed (500) or produced an infinite GDD sum through the tool path."""
+    result = get_scientific_tool_registry().run(HARVEST, inputs)
     assert result.status == "INVALID_INPUT"
     assert reason in result.invalid_inputs[0].split(";")

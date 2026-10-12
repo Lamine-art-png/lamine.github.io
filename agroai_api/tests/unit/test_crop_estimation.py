@@ -6,6 +6,7 @@ expectations; they are not agronomic results.
 from __future__ import annotations
 
 import math
+import random
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -436,12 +437,11 @@ def test_hull_split_share_and_cluster_interval():
     result = est.estimate_stage_proportions(_stages())
     assert result["status"] == "estimated" and result["scope"] == "block_estimate"
     split = result["stage_shares"]["hull_split"]
-    # p = 20/50; residuals (-2, 0, 2, -1, 1) -> var = 2.5 / (5 * 10^2) -> se 0.0707; t(4) = 2.776 -> design [0.2037, 0.5963].
-    # Five trees cannot rule out a wide spread of tree-level shares: the worst-case Wilson bound
-    # (variance p(1 - p) over 5 trees, z = 2.776) is [0.0743, 0.8470], and the union is reported.
+    # p = 20/50; the design-based interval would be [0.2037, 0.5963] (se 0.0707, t(4) = 2.776), but five
+    # trees cannot rule out a wide spread of tree-level shares. Wilson score interval under the worst-case
+    # between-tree variance on n_w = n * (n - 1) / n = 4 (equal tree sizes, no fpc), z = 2.776: [0.0629, 0.8687].
     assert split["share"] == 0.4
-    assert split["interval_95"] == pytest.approx([0.0743, 0.8470], abs=1e-4)
-    assert split["interval_basis"] == "worst_case_between_unit_variance"
+    assert split["interval_95"] == pytest.approx([0.0629, 0.8687], abs=1e-4)
     assert result["stage_shares"]["hull_open_dry"]["share"] == 0.0
     assert result["objects_observed"] == 50 and result["sampled_units"] == 5
 
@@ -458,7 +458,7 @@ def test_finite_population_correction_narrows_interval():
 
 @pytest.mark.parametrize(("threshold", "status"), [(0.2, "ready"), (0.5, "uncertain"), (0.6, "not_ready")])
 def test_readiness_uses_the_interval_not_the_point(threshold, status):
-    # 40 trees (the five-tree pattern eight times): interval [0.2598, 0.5588] around 0.4.
+    # 40 trees (the five-tree pattern eight times): interval [0.2582, 0.5607] around 0.4.
     rule = est.ReadinessRule(("hull_split", "hull_open_dry"), threshold, "Grower harvest plan (test)")
     readiness = est.estimate_stage_proportions(_stages(samples=_trees((2, 4, 6, 3, 5) * 8), readiness=rule))["readiness"]
     assert readiness["status"] == status
@@ -671,16 +671,15 @@ def test_identical_stage_shares_use_a_conservative_bound(count, population, spli
                                                     readiness=rule))
     assert result["status"] == "estimated"
     assert result["readiness"]["status"] == status
-    assert result["readiness"]["interval_basis"] == "worst_case_between_unit_variance"
     low, high = result["readiness"]["interval_95"]
     assert low <= split / (split + intact) <= high and high - low > 0
 
 
 def test_conservative_bound_numbers():
-    # p = 1 over 5 trees, t(4) = 2.776: Wilson lower bound (1 + z^2/10) / (1 + z^2/5) - z * sqrt(z^2/100) / (1 + z^2/5) = 0.3935
+    # p = 1 over 5 trees, n_w = 4, t(4) = 2.776: Wilson lower bound (1 + z^2/8) / (1 + z^2/4) - z * sqrt(z^2/64) / (1 + z^2/4) = 0.3417
     rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
     result = est.estimate_stage_proportions(_stages(samples=_uniform_trees(5, 4, 0), readiness=rule))
-    assert result["readiness"]["interval_95"] == pytest.approx([0.3935, 1.0], abs=1e-4)
+    assert result["readiness"]["interval_95"] == pytest.approx([0.3417, 1.0], abs=1e-4)
 
 
 def test_census_and_population_validation_for_stage_shares():
@@ -699,18 +698,55 @@ def test_proportional_fractional_counts_are_recognised_as_identical_shares():
                for i, (a, b) in enumerate([(0.3, 0.6), (0.1, 0.2), (0.7, 1.4), (0.9, 1.8), (1.1, 2.2)])]
     rule = est.ReadinessRule(("hull_split",), 0.3333, "Grower harvest plan (test)")
     result = est.estimate_stage_proportions(_stages(samples=samples, readiness=rule))
-    assert result["stage_shares"]["hull_split"]["interval_basis"] == "worst_case_between_unit_variance"
+    low, high = result["stage_shares"]["hull_split"]["interval_95"]
+    assert high - low > 0.3  # not a zero-width interval from float noise
     assert result["readiness"]["status"] == "uncertain"
 
 
-def test_widely_spread_samples_keep_the_design_based_interval():
-    # 40 trees alternating 0/10 and 10/10: the observed spread already exceeds the worst case
-    # over 40 units, so the design-based interval (p +/- t * se) binds.
-    result = est.estimate_stage_proportions(_stages(samples=_trees((0, 10) * 20)))
-    split = result["stage_shares"]["hull_split"]
-    assert split["interval_basis"] == "design_based"
-    se = math.sqrt(sum((y - 0.5 * 10) ** 2 for y in (0, 10) * 20) / 39 / (40 * 10 * 10))
-    assert split["interval_95"] == pytest.approx([0.5 - est.t_critical_95(39) * se, 0.5 + est.t_critical_95(39) * se], abs=1e-4)
+def test_worst_case_variance_is_never_below_the_design_based_estimate():
+    """The bound behind the stage interval: Var_design(p) <= p(1 - p) / n_w with n_w = n_eff * (n - 1) / n."""
+    rng = random.Random(562)
+    for _ in range(5000):
+        n = rng.randint(5, 40)
+        sizes = [rng.randint(1, 30) for _ in range(n)]
+        splits = [rng.randint(0, size) for size in sizes]
+        p, se = est._ratio_estimate([float(v) for v in splits], [float(v) for v in sizes], None)
+        n_w = n * (sum(sizes) / n) / max(sizes) * (n - 1) / n
+        assert se * se <= p * (1 - p) / n_w + 1e-12, (splits, sizes)
+
+
+def test_one_more_split_hull_never_lowers_a_bound_or_the_call():
+    """Round-5 review: the union with the design interval could still flip near a threshold."""
+    rng = random.Random(2026)
+    order = {"not_ready": 0, "uncertain": 1, "ready": 2}
+    for _ in range(3000):
+        n = rng.randint(5, 30)
+        sizes = [rng.randint(2, 20) for _ in range(n)]
+        splits = [rng.randint(0, size - 1) for size in sizes]
+        threshold = rng.choice([0.02, 0.1, 0.5, 0.8, 0.9, 0.95])
+        rule = est.ReadinessRule(("hull_split",), threshold, "Grower harvest plan (test)")
+
+        def call(values):
+            samples = [est.StageSample(f"t{i}", {"hull_split": a, "hull_intact": b - a}) for i, (a, b) in enumerate(zip(values, sizes))]
+            return est.estimate_stage_proportions(_stages(samples=samples, population_units=10_000, readiness=rule))["readiness"]
+
+        before = call(splits)
+        moved = list(splits)
+        moved[rng.randrange(n)] += 1  # one hull on one tree goes from intact to split
+        if any(a > b for a, b in zip(moved, sizes)):
+            continue
+        after = call(moved)
+        assert after["interval_95"][0] >= before["interval_95"][0] - 1e-9, (splits, sizes)
+        assert after["interval_95"][1] >= before["interval_95"][1] - 1e-9, (splits, sizes)
+        assert order[after["status"]] >= order[before["status"]], (splits, sizes, threshold)
+
+
+def test_round5_example_is_monotone():
+    rule = est.ReadinessRule(("hull_split",), 0.95, "Grower harvest plan (test)")
+    lagging = [est.StageSample(f"t{i}", {"hull_split": 17, "hull_intact": 3}) for i in range(9)]
+    one = est.estimate_stage_proportions(_stages(samples=[*lagging, est.StageSample("x", {"hull_split": 1, "hull_intact": 19})], readiness=rule))
+    two = est.estimate_stage_proportions(_stages(samples=[*lagging, est.StageSample("x", {"hull_split": 2, "hull_intact": 18})], readiness=rule))
+    assert one["readiness"]["status"] == two["readiness"]["status"] == "not_ready"
 
 
 def test_monotone_readiness_more_split_never_gives_a_better_call_from_less():
@@ -758,3 +794,17 @@ def test_no_harvest_suggestions_for_a_window_that_has_ended():
     window = {"status": "projected", "window": {"earliest": "2026-07-01", "latest": "2026-07-20"}}
     assert est.harvest_action_suggestions(window, date(2026, 10, 12)) == []
     assert est.harvest_action_suggestions(window, date(2026, 6, 20))  # still ahead: suggestions issued
+
+
+def test_density_interval_is_consistent_with_the_objects_counted():
+    result = est.estimate_production(_production(design="simple_random", population_units=200,
+                                                 sample_counts=[0] * 9 + [500], unit_weight_kg=None))
+    low = result["visible_density_per_unit"]["interval_95"][0]
+    assert low == pytest.approx(500 / 200)  # 500 objects counted among 200 units: at least 2.5 per unit
+    assert low * 200 == pytest.approx(result["extrapolated_visible_objects"]["interval_95"][0])
+
+
+def test_analog_years_outside_a_plausible_range_are_rejected_not_crashed():
+    analogs = {**_good_analogs(), -3_000_000_000: _analog_year(2019, 30)}
+    result = est.estimate_harvest_window(_request(analog_years=analogs))
+    assert {"year": -3_000_000_000, "reasons": ["analog_year_outside_1900_to_2200"]} in result["analog_years_rejected"]
