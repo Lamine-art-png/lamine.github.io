@@ -373,18 +373,26 @@ class Estimate:
 
 
 @dataclass
+class Stratum:
+    stratum_id: str
+    population_units: int                      # N_h: units in this stratum
+    sample_counts: Sequence[float]             # visible count per sampled unit in this stratum
+
+
+@dataclass
 class ProductionRequest:
     unit: str                                  # e.g. "vine", "tree", "row_meter"
     object_label: str                          # e.g. "cluster"
     design: str
     population_units: int                      # N: units in the block
-    sample_counts: Sequence[float]             # visible count per sampled unit
+    sample_counts: Sequence[float]             # visible count per sampled unit (unstratified designs)
     count_source: str
     detection_rate: Estimate | None = None     # visible / true objects, from paired hand counts
     unit_weight_kg: Estimate | None = None     # mass per object
     marketable_fraction: Estimate | None = None
     area_hectares: Decimal | None = None
     detector_validation_id: str | None = None
+    strata: Sequence[Stratum] | None = None    # required for, and only for, stratified_random
 
 
 def _finite(value: object) -> bool:
@@ -397,20 +405,92 @@ def _ratio_cv(estimate: Estimate | None) -> float:
     return estimate.standard_error / estimate.value
 
 
+STRATIFIED_DESIGN = "stratified_random"
+MAX_SAMPLED_UNITS = 5000
+
+
+def _simple_random_mean(counts: Sequence[float], population_units: int) -> tuple[float, float, int]:
+    """Mean per unit, its standard error with finite population correction, and degrees of freedom."""
+    n = len(counts)
+    mean = sum(counts) / n
+    variance = sum((value - mean) ** 2 for value in counts) / (n - 1)
+    return mean, math.sqrt(variance / n * (1 - n / population_units)), n - 1
+
+
+def _stratified_mean(strata: Sequence[Stratum]) -> tuple[float, float, int]:
+    """Stratified expansion estimator (Cochran, Sampling Techniques, ch. 5).
+
+    Total = sum N_h * ybar_h; Var(total) = sum N_h^2 (1 - n_h/N_h) s_h^2 / n_h.
+    Degrees of freedom by Satterthwaite, floored to an integer (conservative)
+    and kept between min(n_h - 1) and sum(n_h - 1).
+    """
+    population = sum(stratum.population_units for stratum in strata)
+    total = variance = numerator = denominator = 0.0
+    for stratum in strata:
+        counts = [float(value) for value in stratum.sample_counts]
+        n_h, big_n = len(counts), stratum.population_units
+        mean_h = sum(counts) / n_h
+        s2_h = sum((value - mean_h) ** 2 for value in counts) / (n_h - 1)
+        a_h = big_n * (big_n - n_h) / n_h
+        total += big_n * mean_h
+        variance += a_h * s2_h
+        denominator += (a_h * s2_h) ** 2 / (n_h - 1)
+    numerator = variance ** 2
+    df_max = sum(len(stratum.sample_counts) - 1 for stratum in strata)
+    df_min = min(len(stratum.sample_counts) - 1 for stratum in strata)
+    df = df_max if denominator == 0 else max(df_min, min(df_max, int(numerator / denominator)))
+    return total / population, math.sqrt(variance) / population, max(1, df)
+
+
+def _strata_problems(request: ProductionRequest) -> list[str]:
+    problems: list[str] = []
+    strata = list(request.strata or [])
+    if request.design != STRATIFIED_DESIGN:
+        return ["strata_require_stratified_random_design"] if strata else []
+    if len(strata) < 2:
+        return ["stratified_random_requires_at_least_2_strata_with_population_and_samples"]
+    if request.sample_counts:
+        problems.append("stratified_random_uses_per_stratum_counts_not_pooled_sample_counts")
+    ids = [str(stratum.stratum_id or "").strip() for stratum in strata]
+    if any(not stratum_id for stratum_id in ids) or len(set(ids)) != len(ids):
+        problems.append("stratum_ids_must_be_present_and_unique")
+    for stratum in strata:
+        counts = list(stratum.sample_counts or [])
+        population = stratum.population_units
+        if isinstance(population, bool) or not isinstance(population, int) or population < len(counts):
+            problems.append(f"stratum_population_must_be_an_integer_at_least_its_sample:{stratum.stratum_id}"[:200])
+        if len(counts) < 2:
+            problems.append(f"stratum_needs_at_least_2_sampled_units:{stratum.stratum_id}"[:200])
+        if any(not _finite(value) or value < 0 for value in counts):
+            problems.append("sample_counts_must_be_finite_and_non_negative")
+    if not problems and request.population_units != sum(stratum.population_units for stratum in strata):
+        problems.append("population_units_must_equal_the_sum_of_stratum_populations")
+    return problems
+
+
 def estimate_production(request: ProductionRequest) -> dict[str, Any]:
     """Expansion estimator with finite population correction.
 
-    Total visible objects = N x mean visible per unit. Dividing by the
-    detection (visibility) rate gives total objects; multiplying by unit
-    weight gives production. Relative standard errors of independent factors
-    combine in quadrature (delta method); the interval uses the Student t
-    value for the sample's degrees of freedom.
+    Total visible objects = N x mean visible per unit. For stratified_random
+    the mean is the population-weighted stratified mean, never the pooled
+    sample mean, and strata with their population sizes are required.
+    Dividing by the detection (visibility) rate gives total objects;
+    multiplying by unit weight gives production. Relative standard errors of
+    independent factors combine in quadrature (delta method); the interval
+    uses the Student t value for the design's degrees of freedom.
     """
     reasons: list[str] = []
-    counts = [float(value) for value in request.sample_counts]
+    stratified = request.design == STRATIFIED_DESIGN
+    if stratified:
+        counts = [float(value) for stratum in (request.strata or []) for value in (stratum.sample_counts or [])]
+    else:
+        counts = [float(value) for value in request.sample_counts]
     n = len(counts)
     if request.design not in PROBABILITY_DESIGNS:
         reasons.append("non_probability_sample_cannot_be_extrapolated")
+    reasons.extend(_strata_problems(request))
+    if n > MAX_SAMPLED_UNITS:
+        reasons.append(f"sampled_units:{n}>{MAX_SAMPLED_UNITS}")
     if request.count_source not in COUNT_SOURCES:
         reasons.append("counts_must_be_manual_or_from_a_validated_detector")
     evaluation = None
@@ -471,13 +551,25 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
             "report_ref": evaluation.report_ref, "registry_version": crop_model_registry.REGISTRY_VERSION,
         }
     if reasons:
-        return {**result, "status": "not_estimable", "reasons": reasons}
+        return {**result, "status": "not_estimable", "reasons": list(dict.fromkeys(reasons))}
 
-    mean = directly_counted / n
-    variance = sum((value - mean) ** 2 for value in counts) / (n - 1)
-    fpc = 1 - n / request.population_units
-    mean_se = math.sqrt(variance / n * fpc)
-    critical = t_critical_95(n - 1)
+    if stratified:
+        mean, mean_se, df = _stratified_mean(list(request.strata or []))
+        result["variance_method"] = "stratified_expansion_satterthwaite_df"
+        result["strata"] = [
+            {"stratum_id": stratum.stratum_id, "population_units": stratum.population_units,
+             "sampled_units": len(stratum.sample_counts),
+             "mean_visible_per_unit": round(sum(stratum.sample_counts) / len(stratum.sample_counts), 4)}
+            for stratum in request.strata or []
+        ]
+    else:
+        mean, mean_se, df = _simple_random_mean(counts, request.population_units)
+        result["variance_method"] = (
+            "simple_random_fpc_approximation_for_systematic_sample" if request.design == "systematic_random_start"
+            else "simple_random_fpc"
+        )
+    result["degrees_of_freedom"] = df
+    critical = t_critical_95(df)
     density = Estimate(mean, mean_se)
     result["visible_density_per_unit"] = {
         "value": round(mean, 4), "standard_error": round(mean_se, 4),
@@ -525,7 +617,7 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
         per_hectare = Decimal(str(round(production.value, 6))) / request.area_hectares
         result["expected_production_kg_per_hectare"] = format(per_hectare.quantize(Decimal("0.01")), "f")
     result["status"] = "estimated"
-    result["interval_method"] = "Student t on sampled units; relative errors of calibration factors combined in quadrature"
+    result["interval_method"] = "Student t on the design's degrees of freedom; relative errors of calibration factors combined in quadrature"
     return result
 
 
@@ -654,7 +746,10 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
     if reasons:
         return {**result, "status": "not_estimable", "reasons": reasons}
 
-    probability = request.design in PROBABILITY_DESIGNS
+    # Pooled cluster ratios are only a block estimate for unstratified probability
+    # designs; a stratified sample needs stratum population weights, which this
+    # contract does not carry, so it describes the sampled units only.
+    probability = request.design in PROBABILITY_DESIGNS and request.design != STRATIFIED_DESIGN
     m = [sum(row.values()) for row in units]
     critical = t_critical_95(len(units) - 1)
     shares: dict[str, dict[str, Any]] = {}
@@ -667,6 +762,8 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
         shares[stage] = entry
     result["stage_shares"] = shares
     result["scope"] = "block_estimate" if probability else "sampled_units_only"
+    if request.design == STRATIFIED_DESIGN:
+        result["scope_reason"] = "stratified_design_needs_stratum_population_weights"
 
     if rule is not None:
         y = [sum(row.get(stage, 0.0) for stage in rule.ready_stages) for row in units]
@@ -676,7 +773,10 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
             "threshold_source": rule.source, "observed_share": round(p, 4),
         }
         if not probability:
-            readiness["status"] = "not_assessed_non_probability_sample"
+            readiness["status"] = (
+                "not_assessed_stratified_without_stratum_weights" if request.design == STRATIFIED_DESIGN
+                else "not_assessed_non_probability_sample"
+            )
         else:
             low, high = max(0.0, p - critical * se), min(1.0, p + critical * se)
             readiness["interval_95"] = [round(low, 4), round(high, 4)]

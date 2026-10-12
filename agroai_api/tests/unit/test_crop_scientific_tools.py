@@ -154,3 +154,18 @@ def test_platform_tool_registry_exposes_the_crop_tools():
     assert completed["status"] == "completed" and completed["output"]["expected_production_kg"]["value"] == 187.5
     refused = tools[PRODUCTION].handler(None, _production(design="convenience_walk"))
     assert refused["status"] == "invalid_input" and refused["output"] == {}
+
+
+def test_stratified_production_through_the_registry_is_population_weighted():
+    registry = get_scientific_tool_registry()
+    strata = [{"stratum_id": "high-load", "population_units": 10, "sample_counts": [10] * 5},
+              {"stratum_id": "low-load", "population_units": 90, "sample_counts": [1] * 5}]
+    result = registry.run(PRODUCTION, _production(design="stratified_random", sample_counts=None, strata=strata,
+                                                  detection_rate=None, unit_weight_kg=None))
+    assert result.status == "COMPUTED"
+    assert result.output["extrapolated_visible_objects"]["value"] == 190.0
+    assert result.normalized_inputs["strata"] == 2
+
+    refused = registry.run(PRODUCTION, _production(design="stratified_random"))
+    assert refused.status == "INVALID_INPUT"
+    assert "stratified_random_requires_at_least_2_strata_with_population_and_samples" in refused.invalid_inputs[0].split(";")

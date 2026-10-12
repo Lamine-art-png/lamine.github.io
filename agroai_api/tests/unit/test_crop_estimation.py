@@ -479,3 +479,86 @@ def test_stage_proportions_refuse_unsupported_inputs(overrides, reason):
     result = est.estimate_stage_proportions(_stages(**overrides))
     assert result["status"] == "not_estimable"
     assert reason in result["reasons"]
+
+
+# ---------------------------------------------------------------------------
+# Stratified designs (second review): population-weighted, never pooled
+# ---------------------------------------------------------------------------
+
+def _strata(high=(10, 10, 10, 10, 10), low=(1, 1, 1, 1, 1)):
+    return [est.Stratum("high-load", 10, list(high)), est.Stratum("low-load", 90, list(low))]
+
+
+def _stratified(**overrides):
+    values = {"design": "stratified_random", "population_units": 100, "sample_counts": [], "strata": _strata(),
+              "detection_rate": None, "unit_weight_kg": None}
+    values.update(overrides)
+    return _production(**values)
+
+
+def test_stratified_total_is_population_weighted_not_the_pooled_mean():
+    """Reviewer's example: 10 trees at 10 fruit and 90 at 1, five sampled from each."""
+    result = est.estimate_production(_stratified())
+    assert result["status"] == "density_only"
+    assert result["extrapolated_visible_objects"]["value"] == 190.0  # the pooled mean would give 550
+    assert result["visible_density_per_unit"]["value"] == 1.9
+    assert result["variance_method"] == "stratified_expansion_satterthwaite_df"
+    assert [s["mean_visible_per_unit"] for s in result["strata"]] == [10.0, 1.0]
+
+
+def test_stratified_variance_and_satterthwaite_degrees_of_freedom():
+    # A: N=10, n=5, mean 10, s^2=2; B: N=90, n=5, mean 1, s^2=0.5.
+    # Var(total) = 100*0.5*2/5 + 8100*(85/90)*0.5/5 = 20 + 765 = 785 -> SE 28.018.
+    # df = 785^2 / (20^2/4 + 765^2/4) = 4.21 -> 4 (t = 2.776).
+    result = est.estimate_production(_stratified(strata=_strata(high=(8, 10, 12, 10, 10), low=(0, 1, 2, 1, 1))))
+    assert result["degrees_of_freedom"] == 4
+    assert result["extrapolated_visible_objects"]["value"] == 190.0
+    assert result["extrapolated_visible_objects"]["interval_95"] == pytest.approx([112.2, 267.8], abs=0.1)
+    assert result["visible_density_per_unit"]["standard_error"] == pytest.approx(0.2802, abs=1e-4)
+
+
+def test_stratified_estimate_carries_calibration_through():
+    result = est.estimate_production(_stratified(detection_rate=est.Estimate(0.8, 0.04), unit_weight_kg=est.Estimate(0.15, 0.0075)))
+    assert result["status"] == "estimated"
+    assert result["estimated_total_objects"]["value"] == pytest.approx(237.5)
+    assert result["expected_production_kg"]["value"] == pytest.approx(35.6, abs=0.1)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"strata": None, "sample_counts": [10, 12, 8, 11, 9]}, "stratified_random_requires_at_least_2_strata_with_population_and_samples"),
+        ({"strata": _strata()[:1]}, "stratified_random_requires_at_least_2_strata_with_population_and_samples"),
+        ({"sample_counts": [1, 2, 3]}, "stratified_random_uses_per_stratum_counts_not_pooled_sample_counts"),
+        ({"population_units": 120}, "population_units_must_equal_the_sum_of_stratum_populations"),
+        ({"strata": [est.Stratum("a", 10, [1, 2, 3]), est.Stratum("a", 90, [1, 2, 3])]}, "stratum_ids_must_be_present_and_unique"),
+        ({"strata": [est.Stratum("a", 10, [1]), est.Stratum("b", 90, [1, 2, 3, 4])]}, "stratum_needs_at_least_2_sampled_units:a"),
+        ({"strata": [est.Stratum("a", 2, [1, 2, 3]), est.Stratum("b", 98, [1, 2, 3])]}, "stratum_population_must_be_an_integer_at_least_its_sample:a"),
+        ({"strata": [est.Stratum("a", 10, [1, float("nan"), 3]), est.Stratum("b", 90, [1, 2, 3])]}, "sample_counts_must_be_finite_and_non_negative"),
+    ],
+)
+def test_stratified_design_without_valid_strata_fails_closed(overrides, reason):
+    result = est.estimate_production(_stratified(**overrides))
+    assert result["status"] == "not_estimable"
+    assert reason in result["reasons"]
+    assert len(result["reasons"]) == len(set(result["reasons"]))
+
+
+def test_strata_are_refused_for_unstratified_designs():
+    result = est.estimate_production(_production(strata=_strata()))
+    assert result["status"] == "not_estimable"
+    assert "strata_require_stratified_random_design" in result["reasons"]
+
+
+def test_unstratified_designs_report_their_variance_method():
+    assert est.estimate_production(_production())["variance_method"] == "simple_random_fpc_approximation_for_systematic_sample"
+    assert est.estimate_production(_production(design="simple_random"))["variance_method"] == "simple_random_fpc"
+
+
+def test_stratified_stage_shares_describe_sampled_units_only():
+    rule = est.ReadinessRule(("hull_split",), 0.2, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(design="stratified_random", readiness=rule))
+    assert result["scope"] == "sampled_units_only"
+    assert result["scope_reason"] == "stratified_design_needs_stratum_population_weights"
+    assert "interval_95" not in result["stage_shares"]["hull_split"]
+    assert result["readiness"]["status"] == "not_assessed_stratified_without_stratum_weights"

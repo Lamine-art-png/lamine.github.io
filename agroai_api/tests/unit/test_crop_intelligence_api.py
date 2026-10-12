@@ -171,3 +171,21 @@ def test_almond_hull_split_maturity_route(client, db):
     assert client.post(f"{BASE}/crop-intelligence/maturity-stages", json=bad, headers=headers).status_code == 422
     unsupported = client.post(f"{BASE}/crop-intelligence/maturity-stages", json={**body, "crop": "dragonfruit"}, headers=headers).json()
     assert unsupported["reasons"] == ["crop_profile_not_supported"]
+
+
+def test_stratified_production_route_uses_stratum_weights(client, db):
+    """Second review: stratified designs must not use the pooled sample mean."""
+    _, _, headers = _auth(db)
+    body = {
+        "unit": "tree", "object_label": "fruit", "design": "stratified_random", "population_units": 100,
+        "count_source": "manual_count",
+        "strata": [{"stratum_id": "high-load", "population_units": 10, "sample_counts": [10, 10, 10, 10, 10]},
+                   {"stratum_id": "low-load", "population_units": 90, "sample_counts": [1, 1, 1, 1, 1]}],
+    }
+    result = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers).json()
+    assert result["extrapolated_visible_objects"]["value"] == 190.0
+    assert result["variance_method"] == "stratified_expansion_satterthwaite_df"
+    pooled = {**body, "strata": None, "sample_counts": [10] * 5 + [1] * 5}
+    refused = client.post(f"{BASE}/crop-intelligence/production-estimate", json=pooled, headers=headers).json()
+    assert refused["status"] == "not_estimable"
+    assert "stratified_random_requires_at_least_2_strata_with_population_and_samples" in refused["reasons"]

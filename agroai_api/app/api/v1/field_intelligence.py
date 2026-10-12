@@ -799,6 +799,14 @@ class EstimateIn(BaseModel):
     standard_error: float = Field(ge=0)
 
 
+class StratumIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    stratum_id: str = Field(min_length=1, max_length=_MAX_NAME)
+    population_units: int = Field(ge=1, le=100_000_000)
+    sample_counts: list[float] = Field(min_length=1, max_length=5000)
+
+
 class ProductionEstimateIn(BaseModel):
     # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -807,7 +815,9 @@ class ProductionEstimateIn(BaseModel):
     object_label: str = Field(min_length=1, max_length=60)
     design: str = Field(min_length=1, max_length=60)
     population_units: int = Field(ge=1, le=100_000_000)
-    sample_counts: list[float] = Field(min_length=1, max_length=5000)
+    # Unstratified designs use sample_counts; stratified_random uses strata instead.
+    sample_counts: list[float] = Field(default_factory=list, max_length=5000)
+    strata: list[StratumIn] | None = Field(default=None, max_length=50)
     count_source: str = Field(min_length=1, max_length=60)
     detector_validation_id: str | None = Field(default=None, max_length=_MAX_NAME)
     detection_rate: EstimateIn | None = None
@@ -938,6 +948,9 @@ def production_estimate(payload: ProductionEstimateIn) -> dict:
         count_source=payload.count_source, detection_rate=_estimate(payload.detection_rate),
         unit_weight_kg=_estimate(payload.unit_weight_kg), marketable_fraction=_estimate(payload.marketable_fraction),
         area_hectares=payload.area_hectares, detector_validation_id=payload.detector_validation_id,
+        strata=None if payload.strata is None else [
+            crop_estimation.Stratum(item.stratum_id, item.population_units, item.sample_counts) for item in payload.strata
+        ],
     ))
     if payload.include_market_proposal:
         estimate_id = "crop-est-" + hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()[:16]

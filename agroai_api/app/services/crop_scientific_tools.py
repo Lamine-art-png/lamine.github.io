@@ -19,6 +19,7 @@ from app.services.crop_profiles import resolve_profile
 MAX_WEATHER_DAYS = 400
 MAX_ANALOG_YEARS = 30
 MAX_SAMPLE_UNITS = 2000
+MAX_STRATA = 50
 
 
 def _number(value: Any, name: str) -> float:
@@ -86,10 +87,30 @@ def _harvest_window(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
                     "observed_days": len(request.observed), "analog_years": sorted(request.analog_years)}
 
 
+def _strata(value: Any) -> list[est.Stratum] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or len(value) > MAX_STRATA:
+        raise ValueError(f"strata_must_be_a_list_of_at_most_{MAX_STRATA}_strata")
+    strata = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("sample_counts"), list):
+            raise ValueError("strata_need_stratum_id_population_units_and_sample_counts")
+        population = item.get("population_units")
+        if isinstance(population, bool) or not isinstance(population, int):
+            raise ValueError("stratum_population_units_must_be_an_integer")
+        if len(item["sample_counts"]) > MAX_SAMPLE_UNITS:
+            raise ValueError(f"stratum_sample_counts_must_have_at_most_{MAX_SAMPLE_UNITS}_counts")
+        strata.append(est.Stratum(str(item.get("stratum_id") or "")[:200], population,
+                                  [_number(count, "strata.sample_counts") for count in item["sample_counts"]]))
+    return strata
+
+
 def _production(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    counts = inputs["sample_counts"]
-    if not isinstance(counts, list) or not counts or len(counts) > MAX_SAMPLE_UNITS:
-        raise ValueError(f"sample_counts_must_be_a_list_of_1_to_{MAX_SAMPLE_UNITS}_counts")
+    counts = inputs.get("sample_counts") or []
+    if not isinstance(counts, list) or len(counts) > MAX_SAMPLE_UNITS:
+        raise ValueError(f"sample_counts_must_be_a_list_of_at_most_{MAX_SAMPLE_UNITS}_counts")
+    strata = _strata(inputs.get("strata"))
     area = inputs.get("area_hectares")
     area_value = None if area is None else Decimal(str(_number(area, "area_hectares")))
     population = inputs["population_units"]
@@ -102,11 +123,12 @@ def _production(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
         detection_rate=_estimate(inputs.get("detection_rate"), "detection_rate"),
         unit_weight_kg=_estimate(inputs.get("unit_weight_kg"), "unit_weight_kg"),
         marketable_fraction=_estimate(inputs.get("marketable_fraction"), "marketable_fraction"),
-        area_hectares=area_value, detector_validation_id=inputs.get("detector_validation_id"),
+        area_hectares=area_value, detector_validation_id=inputs.get("detector_validation_id"), strata=strata,
     ))
     if result["status"] == "not_estimable":
         raise ValueError(";".join(result.get("reasons") or ["not_estimable"])[:1000])
-    return result, {"sampled_units": len(counts), "population_units": population}
+    return result, {"sampled_units": result["sampled_units"], "population_units": population,
+                    "strata": None if strata is None else len(strata)}
 
 
 def _stage_proportions(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -161,13 +183,17 @@ def register_crop_tools(register: Callable[..., None]) -> None:
     register(
         tool_id="crop.production.sampling_estimate.v1", domain="yield_estimation",
         description="Estimate block production from a probability sample of units with visibility and unit-weight calibration.",
-        required_inputs=["unit", "object_label", "design", "population_units", "sample_counts", "count_source"],
-        optional_inputs=["detection_rate", "unit_weight_kg", "marketable_fraction", "area_hectares", "detector_validation_id"],
-        expected_units={"sample_counts": "objects per sampled unit", "unit_weight_kg": "kg per object", "area_hectares": "ha"},
+        required_inputs=["unit", "object_label", "design", "population_units", "count_source"],
+        optional_inputs=["sample_counts", "strata", "detection_rate", "unit_weight_kg", "marketable_fraction", "area_hectares",
+                         "detector_validation_id"],
+        expected_units={"sample_counts": "objects per sampled unit", "strata": "list of {stratum_id, population_units, sample_counts}",
+                        "unit_weight_kg": "kg per object", "area_hectares": "ha"},
         valid_ranges={"design": "simple_random, systematic_random_start or stratified_random", "count_source": "manual_count, or validated_detector with a detector_validation_id in the server registry",
-                      "sample_counts": "at least 5 finite non-negative counts"},
-        output_schema={"status": "estimated | count_only | density_only", "expected_production_kg": "value and 95% interval"},
-        calculation_method="Expansion estimator with finite population correction; relative errors of calibration factors combined in quadrature; Student t interval.",
+                      "sample_counts": "at least 5 finite non-negative counts (unstratified designs)",
+                      "strata": "required for stratified_random: at least 2 strata, each with its population and at least 2 counts; populations sum to population_units"},
+        output_schema={"status": "estimated | count_only | density_only", "expected_production_kg": "value and 95% interval",
+                       "variance_method": "simple_random_fpc | stratified_expansion_satterthwaite_df"},
+        calculation_method="Expansion estimator with finite population correction; stratified designs use the population-weighted stratified mean with Satterthwaite degrees of freedom; relative errors of calibration factors combined in quadrature; Student t interval.",
         runner=_production,
         limitations=["Convenience samples are not extrapolated.", "Inputs are user-supplied and unverified unless counts come from a registry-verified detector."],
     )
@@ -182,6 +208,7 @@ def register_crop_tools(register: Callable[..., None]) -> None:
         output_schema={"stage_shares": "share and 95% interval per stage", "readiness": "ready | not_ready | uncertain | not_assessed"},
         calculation_method="Ratio estimator with sampled units as clusters; Student t interval; readiness compares the interval with the threshold.",
         runner=_stage_proportions,
-        limitations=["Without a probability sample, shares describe only the sampled units and no readiness call is made.",
+        limitations=["Without an unstratified probability sample, shares describe only the sampled units and no readiness call is made; "
+                     "stratified samples need stratum population weights, which this tool does not take.",
                      "The readiness threshold must come from the grower, an adviser or published guidance."],
     )
