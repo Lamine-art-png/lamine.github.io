@@ -12,6 +12,7 @@ type ApiOffer = {
 };
 type ApiSubscription = { status: string; plan: string | null; billing_interval?: string };
 type ApiBilling = { subscription?: ApiSubscription };
+type CheckoutReadiness = { eligible: boolean; code: string };
 type CheckoutResult = { checkout_url?: string };
 type PortalResult = { portal_url?: string };
 
@@ -36,6 +37,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [catalogReady, setCatalogReady] = useState(false);
+  const [checkoutEligible, setCheckoutEligible] = useState(false);
   const [refreshed, setRefreshed] = useState(0);
   const checkoutReturned = new URLSearchParams(window.location.search).get("checkout") === "success";
 
@@ -50,6 +52,8 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
         if (canPurchase) {
           const billing = await apiClient.get<ApiBilling>("/v1/platform/developer/billing");
           if (mounted) setSubscription(billing.subscription || null);
+          const eligibility = await apiClient.get<CheckoutReadiness>("/v1/platform/developer/billing/checkout-readiness");
+          if (mounted) setCheckoutEligible(Boolean(eligibility.eligible));
         }
       } catch (cause) {
         if (mounted) setError(cause instanceof Error ? cause.message : "Backend unavailable. Retry.");
@@ -60,7 +64,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
   }, [canPurchase, refreshed]);
 
   async function purchase(plan: "developer" | "scale") {
-    if (busy || !canPurchase || ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(subscription?.status || "")) return;
+    if (busy || !canPurchase || !checkoutEligible || ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(subscription?.status || "")) return;
     setBusy(plan);
     setError("");
     try {
@@ -119,7 +123,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {plans.map((offer) => {
           const amount = period === "annual" ? offer.annual_price_cents : offer.monthly_price_cents;
-          const allowed = canPurchase && catalogReady && !subscribed && !busy;
+          const allowed = canPurchase && checkoutEligible && catalogReady && !subscribed && !busy;
           return <div key={offer.identifier} className="flex flex-col rounded-xl border border-[#D5DFD4] bg-[#FCFDFB] p-5">
             <div className="text-[16px] font-semibold text-[#10231B]">{offer.name}</div>
             <div className="mt-3 text-[28px] font-semibold text-[#10231B]">{price(amount)}<span className="ml-1 text-[12px] font-medium text-[#748078]">/{period === "annual" ? "year" : "month"}</span></div>
@@ -128,7 +132,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
               <p>{price(offer.overage_price_per_1000_cents)} <span>per 1,000 additional credits</span></p>
             </div>
             <button type="button" disabled={!allowed} onClick={() => void purchase(offer.identifier as "developer" | "scale")} className="mt-5 min-h-[44px] rounded-xl bg-[#102F22] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
-              {busy === offer.identifier ? <span>Opening Stripe…</span> : subscribed ? <span>Current subscription managed above</span> : canPurchase ? <span>Continue to Stripe checkout</span> : <span>Production access required</span>}
+              {busy === offer.identifier ? <span>Opening Stripe…</span> : subscribed ? <span>Current subscription managed above</span> : allowed ? <span>Continue to Stripe checkout</span> : <span>Production access required</span>}
             </button>
           </div>;
         })}
