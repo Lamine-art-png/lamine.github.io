@@ -87,6 +87,29 @@ export function FieldIntelligenceV2() {
   const [severityFilter, setSeverityFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [banner, setBanner] = useState<string | null>(null);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const liveFieldAiEnabled = (entitlements?.capabilities || {})["intelligence.deep_analysis"] === "enabled";
+  const freeWorkspace = ["free", "pilot"].includes(String(currentOrganization?.plan || "free").toLowerCase());
+  const firstFieldResultReady = observations.some((row) => ["completed", "needs_review"].includes(String(row.status || "")));
+
+  async function upgradeAfterFirstResult() {
+    if (upgradeBusy) return;
+    setUpgradeBusy(true);
+    try {
+      const response = await apiClient.billing.checkout({
+        plan_id: "professional", billing_period: "monthly", locale: effectiveLocale,
+      }) as Record<string, unknown>;
+      if (typeof response.checkout_url === "string" && response.checkout_url) {
+        window.location.assign(response.checkout_url);
+        return;
+      }
+      setBanner(t("dynamic.pricing.checkoutFailed"));
+    } catch {
+      setBanner(t("dynamic.pricing.checkoutFailed"));
+    } finally {
+      setUpgradeBusy(false);
+    }
+  }
 
   useEffect(() => {
     configureIdentity(currentOrganization?.id || null, user?.id || null);
@@ -201,6 +224,10 @@ export function FieldIntelligenceV2() {
       </header>
 
       {banner && <div role="status" className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#EDF7F1] px-4 py-3 text-[13px] font-medium text-[#1B5E3F]">{banner}</div>}
+      {freeWorkspace && firstFieldResultReady && <section aria-label={t("commercialBoundary.upgradeTo").replace("{plan}", t("commercialBoundary.plan.professional"))} className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] px-4 py-3">
+        <p className="max-w-2xl text-[13px] leading-6 text-[#1B5E3F]"><strong>{t("dynamic.overview.readyReview")}</strong> — {t("dynamic.pricing.copyProfessional")}</p>
+        <button type="button" disabled={upgradeBusy} onClick={() => void upgradeAfterFirstResult()} className="min-h-[44px] rounded-lg bg-[#0D2B1E] px-4 text-[13px] font-semibold text-white disabled:opacity-60">{t("commercialBoundary.upgradeTo").replace("{plan}", t("commercialBoundary.plan.professional"))} — $299{t("commercialBoundary.perMonth")}</button>
+      </section>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[430px_minmax(0,1fr)]">
         <SmartComposer
@@ -208,6 +235,7 @@ export function FieldIntelligenceV2() {
           workspaceId={workspaceId}
           language={effectiveLocale}
           selectedObservation={selected}
+          liveFieldAiEnabled={liveFieldAiEnabled}
           onSaved={async (message: string) => {
             setBanner(message);
             setView("timeline");
@@ -278,7 +306,7 @@ function Capability({ icon, title, detail }: { icon: ReactNode; title: string; d
   </div>;
 }
 
-function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved }: any) {
+function SmartComposer({ t, workspaceId, language, selectedObservation, liveFieldAiEnabled, onSaved }: any) {
   const [note, setNote] = useState("");
   const [fieldName, setFieldName] = useState("");
   const [blockName, setBlockName] = useState("");
@@ -725,7 +753,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       };
       recorder.start(750);
       startRecognition(String(language || "en"));
-      startLiveSpeechSampling(stream);
+      if (liveFieldAiEnabled) startLiveSpeechSampling(stream);
       setRecording(true);
       elapsedRef.current = 0;
       setElapsed(0);
@@ -738,7 +766,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       releaseStream();
       setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.micDenied") : t("fieldIntel.micUnsupported"));
     }
-  }, [captureLocation, clearTimer, language, releaseStream, setRecordedAudio, startLiveSpeechSampling, startRecognition, stopRecognition, stopRecording, t]);
+  }, [captureLocation, clearTimer, language, liveFieldAiEnabled, releaseStream, setRecordedAudio, startLiveSpeechSampling, startRecognition, stopRecognition, stopRecording, t]);
 
 
   const captureLiveVisionFrame = useCallback(async () => {
@@ -821,7 +849,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
     liveTranscriptRef.current = "";
     setRecordedVideo(null);
     setLiveVision(null);
-    setLiveVisionState("sampling");
+    setLiveVisionState(liveFieldAiEnabled ? "sampling" : "idle");
     captureLocation(true);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setMicError(t("fieldIntel.videoUnsupported"));
@@ -858,10 +886,10 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       setVideoRecording(true);
       setVideoPreparing(false);
       startRecognition(String(language || "en"));
-      startLiveSpeechSampling(stream);
+      if (liveFieldAiEnabled) startLiveSpeechSampling(stream);
       videoElapsedRef.current = 0;
       setVideoElapsed(0);
-      startLiveVisionSampling();
+      if (liveFieldAiEnabled) startLiveVisionSampling();
       videoTimerRef.current = window.setInterval(() => {
         videoElapsedRef.current += 1;
         setVideoElapsed(videoElapsedRef.current);
@@ -873,7 +901,7 @@ function SmartComposer({ t, workspaceId, language, selectedObservation, onSaved 
       setVideoPreviewReady(false);
       setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.videoDenied") : t("fieldIntel.videoUnsupported"));
     }
-  }, [captureLocation, clearLiveVisionSampling, clearVideoTimer, language, releaseVideoStream, setRecordedVideo, startLiveSpeechSampling, startLiveVisionSampling, startRecognition, stopRecognition, stopWalkVideo, t]);
+  }, [captureLocation, clearLiveVisionSampling, clearVideoTimer, language, liveFieldAiEnabled, releaseVideoStream, setRecordedVideo, startLiveSpeechSampling, startLiveVisionSampling, startRecognition, stopRecognition, stopWalkVideo, t]);
 
   const addFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
