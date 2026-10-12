@@ -254,3 +254,27 @@ def test_future_dated_records_cannot_fill_the_crop_condition_window(client, db):
     assert summary["future_dated_excluded"] == 2
     assert {row["observation_id"] for row in summary["excluded"]} == set(ids[1:])
     assert summary["total_observations"] == 3
+
+
+def test_non_crop_records_cannot_push_the_latest_assessment_out_of_the_window(client, db):
+    """Round-5 review: irrigation or meter records filled the newest-N window and hid the crop assessment."""
+    from datetime import datetime
+
+    from app.models.field_intelligence import FieldObservation
+
+    _, _, headers = _auth(db)
+    ids = []
+    for index in range(3):
+        cap = _initiate(client, headers, client_capture_id=f"cap-window-{index}", idempotency_key=f"idem-window-{index}",
+                        field_id="field-window", note_text="Leaves look spotted on the west rows of Block A.").json()["capture"]
+        ids.append(_complete(client, headers, cap["id"]).json()["observation"]["id"])
+    _process(db)
+    now = datetime.utcnow()
+    for index, observation_id in enumerate(ids):
+        row = db.query(FieldObservation).filter(FieldObservation.id == observation_id).one()
+        row.event_type = "observation" if index == 0 else "meter_reading"
+        row.occurred_at = now - timedelta(hours=30 - index * 10)  # the crop assessment is the oldest
+    db.commit()
+    summary = client.get(f"{BASE}/fields/field-window/crop-condition?limit=1", headers=headers).json()
+    assert summary["latest"]["observation_id"] == ids[0]
+    assert summary["comparison"].get("reason") != "no_completed_crop_assessment"
