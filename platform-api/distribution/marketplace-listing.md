@@ -58,14 +58,15 @@ Direct Developer and Scale billing is implemented through AGRO-AI's production S
 - API base: https://api.agroai-pilot.com/v1
 - API reference: https://agroai-pilot.com/platform-api/reference.html
 - Documentation: https://agroai-pilot.com/platform-api/docs/
-- OpenAPI import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/marketplace_openapi.json\n- RapidAPI OpenAPI 3.0.2 artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/rapidapi_openapi_3_0_2.json
+- OpenAPI import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/marketplace_openapi.json
+- RapidAPI OpenAPI 3.0.2 artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/rapidapi_openapi_3_0_2.json
 - Postman import artifact: https://github.com/Lamine-art-png/lamine.github.io/blob/main/platform-api/distribution/AGRO-AI-Platform-API.postman_collection.json
 
 ## Search keywords
 agriculture API, agtech API, agricultural intelligence, farm API, field intelligence, irrigation intelligence, crop intelligence, agronomy API, agricultural data, farm management integration, geospatial agriculture, agricultural AI, water management API, agricultural recommendations, enterprise agriculture
 
 ## Recommended categories
-Primary: Developer Tools / Data / Artificial Intelligence\
+Primary: Developer Tools / Data / Artificial Intelligence
 Secondary: Agriculture / Analytics / Enterprise Integration
 
 ## Channel-specific positioning
