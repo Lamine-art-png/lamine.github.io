@@ -272,7 +272,7 @@ def test_non_crop_records_cannot_push_the_latest_assessment_out_of_the_window(cl
     now = datetime.utcnow()
     for index, observation_id in enumerate(ids):
         row = db.query(FieldObservation).filter(FieldObservation.id == observation_id).one()
-        row.event_type = "observation" if index == 0 else "meter_reading"
+        row.event_type = "" if index == 0 else "meter_reading"  # a PATCH can store an empty event type
         row.occurred_at = now - timedelta(hours=30 - index * 10)  # the crop assessment is the oldest
     db.commit()
     summary = client.get(f"{BASE}/fields/field-window/crop-condition?limit=1", headers=headers).json()

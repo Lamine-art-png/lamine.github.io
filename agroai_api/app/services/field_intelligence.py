@@ -1991,12 +1991,12 @@ def list_observations(db: Session, ctx: AuthContext, filters: dict) -> tuple[lis
     not_after = _parse_dt(filters.get("not_after"))
     if not_after:
         query = query.filter((FieldObservation.occurred_at <= not_after) | FieldObservation.occurred_at.is_(None))
-    # Opt-in set filters (an undated event type counts as an observation).
+    # Opt-in set filters (a missing or empty event type counts as an observation).
     event_types = [str(value) for value in filters.get("event_types") or []]
     if event_types:
         clause = FieldObservation.event_type.in_(event_types)
         if "observation" in event_types:
-            clause = clause | FieldObservation.event_type.is_(None)
+            clause = clause | FieldObservation.event_type.is_(None) | (FieldObservation.event_type == "")
         query = query.filter(clause)
     exclude_statuses = [str(value) for value in filters.get("exclude_statuses") or []]
     if exclude_statuses:
