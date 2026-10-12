@@ -738,6 +738,7 @@ function BillingPage() {
           <p className="text-[13px] leading-6 text-[#65736A]">
             No self-service charges are active. This developer program is not yet eligible for paid Platform API billing. No charge will be initiated until AGRO-AI approves the appropriate enrollment.
           </p>
+          <p className="mt-3 text-[12px] text-[#65736A]">Enrollment: {state.overview?.enrollment_status || "pending"}</p>
         </Surface>
       )}
       <PlatformApiSubscriptions canPurchase={enabled} />
