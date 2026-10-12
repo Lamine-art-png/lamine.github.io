@@ -209,9 +209,11 @@ def install_field_intelligence_operating_loop() -> None:
         structured = dict(observation.structured_json) if isinstance(observation.structured_json, dict) else {}
         vision = dict(structured.get("vision") or {}) if isinstance(structured.get("vision"), dict) else {}
         correlation = dict(observation.correlation_json) if isinstance(observation.correlation_json, dict) else {}
+        # A degraded or unchecked analysis never writes a task's instructions (same rule as the serializer).
+        analysed = vision.get("analysis_state") == "structured"
         recommendation = (
             _safe_text(observation.recommended_action, limit=2000)
-            or _safe_text(vision.get("recommended_follow_up"), limit=2000)
+            or (_safe_text(vision.get("recommended_follow_up"), limit=2000) if analysed else "")
             or _safe_text(correlation.get("recommended_next_action"), limit=2000)
         )
         summary = (
@@ -224,7 +226,7 @@ def install_field_intelligence_operating_loop() -> None:
         instructions = _text_items(payload.get("instructions") or [])
         if not instructions:
             candidates: list[Any] = [recommendation]
-            for hypothesis in vision.get("hypotheses") or []:
+            for hypothesis in (vision.get("hypotheses") or []) if analysed else []:
                 if isinstance(hypothesis, dict):
                     candidates.append(hypothesis.get("verification"))
             instructions = _text_items(candidates)

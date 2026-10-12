@@ -83,3 +83,30 @@ def test_degraded_visual_advice_is_never_promoted_to_the_recommended_action():
         "structured": {"vision": {"analysis_state": "structured", "recommended_follow_up": "Capture a close follow-up image."}},
     })
     assert structured["recommended_action"] == "Capture a close follow-up image."
+
+
+def test_tasks_never_take_instructions_from_degraded_or_unchecked_visual_analysis(client, db):
+    """Round-3 review: task creation must apply the same rule as the serializer."""
+    import json
+
+    from app.models.field_intelligence import FieldObservation
+    from tests.unit.test_field_intelligence import _auth, _complete, _initiate, _process
+
+    _, _, headers = _auth(db)
+    for index, state in enumerate(("degraded", None)):
+        capture = _initiate(client, headers, client_capture_id=f"cap-advice-{index}", idempotency_key=f"idem-advice-{index}",
+                            note_text="Leaves look spotted on the west rows.").json()["capture"]
+        observation_id = _complete(client, headers, capture["id"]).json()["observation"]["id"]
+        _process(db)
+        row = db.query(FieldObservation).filter(FieldObservation.id == observation_id).one()
+        vision = {"recommended_follow_up": "Spray fungicide today.",
+                  "hypotheses": [{"label": "fungal", "verification": "Spray fungicide today."}]}
+        if state:
+            vision["analysis_state"] = state
+        row.structured_json = {**(row.structured_json or {}), "vision": vision}
+        row.recommended_action = None
+        row.correlation_json = {}
+        db.commit()
+        task = client.post(f"/v1/field-intelligence/observations/{observation_id}/tasks", json={}, headers=headers)
+        assert task.status_code == 200, task.text
+        assert "Spray fungicide" not in json.dumps(task.json()["task"]), state

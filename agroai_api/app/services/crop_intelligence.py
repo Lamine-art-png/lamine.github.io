@@ -305,6 +305,8 @@ def _comparison(latest_row: dict[str, Any], previous_row: dict[str, Any] | None,
         return {"basis": "no_comparable_prior", "reason": "no_completed_crop_assessment"}
     if block_key(latest_row) == UNSCOPED_BLOCK:
         return {"basis": "no_comparable_prior", "reason": "observation_has_no_block"}
+    if method_key(latest_row) == "visual_unassessed":
+        return {"basis": "no_comparable_prior", "reason": "visual_evidence_not_analysed"}
     if previous_row is None:
         # Only the records read are searched; an older prior may exist outside them.
         return {"basis": "no_comparable_prior", "reason": "no_prior_assessment_of_this_block_by_this_method_in_window",
@@ -339,7 +341,7 @@ def field_condition_summary(
                 "observations_considered": 0, "latest": None,
                 "comparison": {"basis": "no_comparable_prior", "reason": "no_observations"},
                 "changes": [], "field_snapshot": {"note": _SNAPSHOT_NOTE, "blocks": []}, "timeline": [],
-                "open_reviews": 0, "pending_processing": 0, "excluded": excluded,
+                "open_reviews": 0, "pending_processing": 0, "records_without_evidence": 0, "excluded": excluded,
                 "future_dated_excluded": future_count}
 
     assessments = [row for row in rows if is_assessment(row)]
@@ -347,7 +349,9 @@ def field_condition_summary(
     latest_row = assessments[0] if assessments else rows[0]
     latest = _snapshot(latest_row, now)
     previous_row = None
-    if is_assessment(latest_row) and latest["block_key"] != UNSCOPED_BLOCK:
+    # Unanalysed visual evidence (missing, degraded or pre-contract analysis) is never paired:
+    # its issues and condition are unverified provider output.
+    if is_assessment(latest_row) and latest["block_key"] != UNSCOPED_BLOCK and latest["method"] != "visual_unassessed":
         previous_row = next(
             (row for row in assessments[1:] if block_key(row) == latest["block_key"] and method_key(row) == latest["method"]),
             None,
@@ -386,7 +390,8 @@ def field_condition_summary(
         "field_snapshot": {"note": _SNAPSHOT_NOTE, "blocks": list(snapshot.values())},
         "open_reviews": sum(1 for row in rows if row.get("status") == "needs_review"),
         "pending_processing": sum(1 for row in rows if row.get("status") in PENDING_STATUSES),
-        "records_without_evidence": sum(1 for row in rows if not has_evidence(row)),
+        # Finished records only: a capture still processing has no transcript or analysis yet.
+        "records_without_evidence": sum(1 for row in rows if row.get("status") not in PENDING_STATUSES and not has_evidence(row)),
         "next_action": next_action,
         "timeline": [
             {"observation_id": row.get("id"), "observed_at": (_observed_at(row) or now).isoformat(),

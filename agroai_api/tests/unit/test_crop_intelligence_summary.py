@@ -341,3 +341,21 @@ def test_a_record_with_nothing_to_assess_does_not_replace_the_latest_assessment(
     assert summary["records_without_evidence"] == 1
     assert [block["observation_id"] for block in summary["field_snapshot"]["blocks"]] == ["pest"]
     assert summary["timeline"][0]["observation_id"] == "empty-voice"
+
+
+def test_unanalysed_visual_records_are_never_paired():
+    """Pre-contract vision may be provider prose: no issue or condition change is read from it."""
+    before = _obs("legacy-old", 30, severity="medium", issues=["powdery mildew"])
+    after = _obs("legacy-new", 2, severity="info", condition="unknown")  # main's fallback for unparsed prose
+    for row in (before, after):
+        del row["structured"]["vision"]["analysis_state"]
+    summary = field_condition_summary([before, after], now=NOW)
+    assert summary["comparison"] == {"basis": "no_comparable_prior", "reason": "visual_evidence_not_analysed"}
+    assert summary["changes"] == []
+
+
+def test_records_still_processing_are_not_counted_as_without_evidence():
+    staged = {**_obs("staged", 1, status="staged"), "summary": None, "structured": None}
+    summary = field_condition_summary([_obs("done", 5, issues=["x"]), staged], now=NOW)
+    assert summary["pending_processing"] == 1 and summary["records_without_evidence"] == 0
+    assert field_condition_summary([], now=NOW)["records_without_evidence"] == 0
