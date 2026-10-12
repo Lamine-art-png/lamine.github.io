@@ -2022,6 +2022,8 @@ def get_observation(db: Session, ctx: AuthContext, observation_id: str) -> Field
 # internal-processing states are intentionally excluded — DELETE is the only
 # destructive path, and processing state is owned by the worker.
 USER_SETTABLE_STATUSES = {"needs_review", "acknowledged", "completed"}
+# Structured keys derived from the media rather than the transcript.
+MEDIA_EVIDENCE_KEYS = ("vision", "detections")
 
 
 def patch_observation(db: Session, ctx: AuthContext, observation_id: str, changes: dict) -> FieldObservation:
@@ -2063,7 +2065,14 @@ def patch_observation(db: Session, ctx: AuthContext, observation_id: str, change
                 occurred_at=observation.occurred_at,
                 allow_model=False,
             )
-            observation.structured_json = extraction.model_dump(mode="json")
+            structured = extraction.model_dump(mode="json")
+            # The photos and video did not change: keep their analysis and
+            # detections, which a correction without provider AI cannot re-run.
+            previous = observation.structured_json if isinstance(observation.structured_json, dict) else {}
+            for key in MEDIA_EVIDENCE_KEYS:
+                if key in previous:
+                    structured[key] = previous[key]
+            observation.structured_json = structured
             observation.summary = extraction.summary or corrected[:280]
             observation.recommended_action = extraction.recommended_follow_up
             observation.confidence = extraction.confidence
