@@ -57,6 +57,19 @@ def _safe_text(value: Any, *, limit: int = 8000) -> str:
     return "" if text.casefold() in _BAD_TEXT else text[:limit]
 
 
+def _list(value: Any) -> list[Any]:
+    """PATCH can store any JSON in structured; only a list is a list of items."""
+    return value if isinstance(value, list) else []
+
+
+def _visual_summary(vision: dict[str, Any]) -> str:
+    """A vision summary for use as a fallback; degraded provider prose stays labelled unverified."""
+    summary = _safe_text(vision.get("summary"), limit=2000)
+    if summary and vision.get("analysis_state") == "degraded":
+        return f"Unverified visual note: {summary}"[:2000]
+    return summary
+
+
 def _text_items(values: Iterable[Any], *, limit: int = 12) -> list[str]:
     output: list[str] = []
     seen: set[str] = set()
@@ -91,7 +104,7 @@ def _clean_observation_payload(payload: dict[str, Any]) -> dict[str, Any]:
     transcript = _safe_text(cleaned.get("corrected_transcript") or cleaned.get("transcript"), limit=8000)
     summary = (
         _safe_text(cleaned.get("summary"), limit=2000)
-        or _safe_text(vision.get("summary"), limit=2000)
+        or _visual_summary(vision)
         or transcript[:280]
     )
     recommendation = (
@@ -218,7 +231,7 @@ def install_field_intelligence_operating_loop() -> None:
         )
         summary = (
             _safe_text(observation.summary, limit=2000)
-            or _safe_text(vision.get("summary"), limit=2000)
+            or _visual_summary(vision)
             or _safe_text(observation.corrected_transcript or observation.transcript, limit=2000)
             or "Field observation"
         )
@@ -226,7 +239,7 @@ def install_field_intelligence_operating_loop() -> None:
         instructions = _text_items(payload.get("instructions") or [])
         if not instructions:
             candidates: list[Any] = [recommendation]
-            for hypothesis in (vision.get("hypotheses") or []) if analysed else []:
+            for hypothesis in _list(vision.get("hypotheses")) if analysed else []:
                 if isinstance(hypothesis, dict):
                     candidates.append(hypothesis.get("verification"))
             instructions = _text_items(candidates)
@@ -235,10 +248,10 @@ def install_field_intelligence_operating_loop() -> None:
 
         evidence_required = _text_items(payload.get("evidence_required") or [])
         if not evidence_required:
-            candidates = list(structured.get("evidence_requirements") or [])
-            candidates.extend(observation.uncertain_fields_json or [])
-            candidates.extend(vision.get("uncertainties") or [])
-            for hypothesis in (vision.get("hypotheses") or []) if analysed else []:
+            candidates = list(_list(structured.get("evidence_requirements")))
+            candidates.extend(_list(observation.uncertain_fields_json))
+            candidates.extend(_list(vision.get("uncertainties")))
+            for hypothesis in _list(vision.get("hypotheses")) if analysed else []:
                 if isinstance(hypothesis, dict):
                     candidates.append(hypothesis.get("verification"))
             evidence_required = _text_items(candidates)

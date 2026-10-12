@@ -110,3 +110,30 @@ def test_tasks_never_take_instructions_from_degraded_or_unchecked_visual_analysi
         task = client.post(f"/v1/field-intelligence/observations/{observation_id}/tasks", json={}, headers=headers)
         assert task.status_code == 200, task.text
         assert "Spray fungicide" not in json.dumps(task.json()["task"]), state
+
+
+def test_degraded_visual_summary_stays_labelled_when_used_as_a_fallback():
+    cleaned = _clean_observation_payload({
+        "summary": "", "transcript": "Leaves look scorched on the west rows.",
+        "structured": {"vision": {"analysis_state": "degraded", "summary": "Brown lesions; spray copper today."}},
+    })
+    assert cleaned["summary"] == "Unverified visual note: Brown lesions; spray copper today."
+
+
+def test_task_creation_tolerates_any_json_written_through_patch(client, db):
+    """Round-5 review: a string became one-character requirements and a number raised a 500."""
+    from tests.unit.test_field_intelligence import _auth, _complete, _initiate, _process
+
+    _, _, headers = _auth(db)
+    for index, value in enumerate(("Photograph the lower canopy", 7)):
+        capture = _initiate(client, headers, client_capture_id=f"cap-json-{index}", idempotency_key=f"idem-json-{index}").json()["capture"]
+        observation_id = _complete(client, headers, capture["id"]).json()["observation"]["id"]
+        _process(db)
+        patched = client.patch(f"/v1/field-intelligence/observations/{observation_id}", headers=headers,
+                               json={"structured": {"evidence_requirements": value,
+                                                    "vision": {"analysis_state": "structured", "uncertainties": value,
+                                                               "hypotheses": value}}})
+        assert patched.status_code == 200, patched.text
+        task = client.post(f"/v1/field-intelligence/observations/{observation_id}/tasks", json={}, headers=headers)
+        assert task.status_code == 200, task.text
+        assert all(len(item) > 1 for item in task.json()["task"]["evidence_required"]), task.json()["task"]["evidence_required"]
