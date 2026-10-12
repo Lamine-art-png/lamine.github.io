@@ -8,13 +8,15 @@ NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 
 
 def _obs(obs_id, hours_ago, *, severity="low", status="completed", issues=(), condition=None, totals=None, action=None,
-         block=None, per_asset=None):
+         block=None, per_asset=None, plan=None):
     structured = {}
     if issues or condition:
         structured["vision"] = {"possible_issues": list(issues), "crop_condition": condition, "analysis_state": "structured",
                                 "confidence": None, "confidence_kind": "model_self_reported_uncalibrated"}
     if totals is not None:
         structured["detections"] = {"counts": {"totals": totals, "per_asset": per_asset or []}}
+        if plan is not None:
+            structured["detections"]["sampling_plan"] = plan
     return {
         "block_name": block,
         "id": obs_id, "occurred_at": (NOW - timedelta(hours=hours_ago)).isoformat(), "severity": severity,
@@ -59,13 +61,15 @@ def test_detection_change_requires_non_overlapping_bounds():
         _obs("a", 50, totals=[{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 40}]),
         _obs("b", 1, totals=[{"label": "cluster", "observed_lower_bound": 30, "sum_upper_bound": 60}]),
     ], now=NOW)
-    assert not [change for change in overlapping["changes"] if change["kind"] == "detection_count_changed"]
+    assert not [change for change in overlapping["changes"] if change["kind"] in {"detection_count_changed", "different_observation_count"}]
+    plan = {"plan_id": "plan-1", "unit_ids": ["tree-4", "tree-9"]}
     separated = field_condition_summary([
-        _obs("a", 50, totals=[{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 20}]),
-        _obs("b", 1, totals=[{"label": "cluster", "observed_lower_bound": 30, "sum_upper_bound": 60}]),
+        _obs("a", 50, totals=[{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 20}], plan=plan),
+        _obs("b", 1, totals=[{"label": "cluster", "observed_lower_bound": 30, "sum_upper_bound": 60}], plan=plan),
     ], now=NOW)
     change = next(change for change in separated["changes"] if change["kind"] == "detection_count_changed")
     assert change["previous_bounds"] == [10, 20] and change["latest_bounds"] == [30, 60]
+    assert change["trend"] is True and change["basis"] == "same_sampling_units"
 
 
 def test_conflicting_recent_assessments_are_flagged_not_replaced():
@@ -136,10 +140,47 @@ def test_count_change_requires_matching_coverage():
         _obs("a", 50, totals=before, per_asset=asset(3)), _obs("b", 1, totals=after, per_asset=asset(6)),
     ], now=NOW)
     assert not [c for c in different["changes"] if c["kind"] == "detection_count_changed"]
+    assert [(c["kind"], c["reason"]) for c in different["changes"]] == [("different_observation_count", "count_method_or_frames_differ")]
+    plan = {"plan_id": "plan-1", "unit_ids": ["tree-4", "tree-9"]}
     same = field_condition_summary([
-        _obs("a", 50, totals=before, per_asset=asset(3)), _obs("b", 1, totals=after, per_asset=asset(3)),
+        _obs("a", 50, totals=before, per_asset=asset(3), plan=plan), _obs("b", 1, totals=after, per_asset=asset(3), plan=plan),
     ], now=NOW)
     assert [c["kind"] for c in same["changes"]] == ["detection_count_changed"]
+
+
+def test_same_frames_in_different_places_are_not_a_trend():
+    """Second review: two walks through different rows can have identical frame counts."""
+    def asset(frames=3):
+        return [{"counts": {"cluster": {"count_method": "max_single_frame_lower_bound", "frames_considered": frames}}}]
+
+    before = [{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 20}]
+    after = [{"label": "cluster", "observed_lower_bound": 30, "sum_upper_bound": 60}]
+    cases = {
+        "no_plan": (None, None),
+        "different_units": ({"plan_id": "plan-1", "unit_ids": ["row-2"]}, {"plan_id": "plan-1", "unit_ids": ["row-7"]}),
+        "different_plan": ({"plan_id": "plan-1", "unit_ids": ["row-2"]}, {"plan_id": "plan-2", "unit_ids": ["row-2"]}),
+        "one_side_only": ({"plan_id": "plan-1", "unit_ids": ["row-2"]}, None),
+    }
+    for name, (plan_before, plan_after) in cases.items():
+        summary = field_condition_summary([
+            _obs("a", 50, totals=before, per_asset=asset(), plan=plan_before),
+            _obs("b", 1, totals=after, per_asset=asset(), plan=plan_after),
+        ], now=NOW)
+        kinds = [(c["kind"], c.get("reason"), c.get("trend")) for c in summary["changes"]]
+        assert kinds == [("different_observation_count", "spatial_coverage_not_established", False)], name
+
+
+def test_unit_order_does_not_matter_for_the_same_sampling_units():
+    def asset():
+        return [{"counts": {"cluster": {"count_method": "tracked_unique", "frames_considered": 12}}}]
+
+    summary = field_condition_summary([
+        _obs("a", 50, totals=[{"label": "cluster", "observed_lower_bound": 10, "sum_upper_bound": 12}], per_asset=asset(),
+             plan={"plan_id": "p", "unit_ids": ["t2", "t1"]}),
+        _obs("b", 1, totals=[{"label": "cluster", "observed_lower_bound": 20, "sum_upper_bound": 22}], per_asset=asset(),
+             plan={"plan_id": "p", "unit_ids": ["t1", "t2", "t1"]}),
+    ], now=NOW)
+    assert [c["kind"] for c in summary["changes"]] == ["detection_count_changed"]
 
 
 def test_future_dated_records_are_excluded_not_fresh():

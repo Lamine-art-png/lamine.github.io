@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
-SUMMARY_VERSION = "crop-condition-summary/2"
+SUMMARY_VERSION = "crop-condition-summary/3"
 SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 FRESH_HOURS = 72
 STALE_HOURS = 14 * 24
@@ -104,6 +104,23 @@ def _detection_counts(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def sampling_units(observation: dict[str, Any]) -> tuple[str, tuple[str, ...]] | None:
+    """The sampling plan and unit ids (trees, vines, row segments) a count covered, if recorded.
+
+    Equal frame counts do not establish equal spatial coverage: two walks
+    through different rows can produce the same number of frames. A count is
+    only comparable over time when both observations revisited the same
+    planned sample units.
+    """
+    detections = _structured(observation).get("detections")
+    plan = detections.get("sampling_plan") if isinstance(detections, dict) else None
+    if not isinstance(plan, dict):
+        return None
+    plan_id = str(plan.get("plan_id") or "").strip()
+    units = tuple(sorted({str(unit).strip() for unit in plan.get("unit_ids") or [] if str(unit).strip()}))
+    return (plan_id, units) if plan_id and units else None
+
+
 def _issues(observation: dict[str, Any]) -> set[str]:
     return {str(item).strip().lower() for item in _vision(observation).get("possible_issues") or [] if str(item).strip()}
 
@@ -160,14 +177,23 @@ def _changes(latest: dict[str, Any], previous: dict[str, Any]) -> list[dict[str,
         changes.append({"kind": "issue_not_seen_again", "issues": no_longer[:10],
                         "note": "Not seen in the latest evidence; confirm in the field before closing."})
     latest_counts, previous_counts = _detection_counts(latest), _detection_counts(previous)
+    latest_units = sampling_units(latest)
+    same_units = latest_units is not None and latest_units == sampling_units(previous)
     for label in sorted(set(latest_counts) & set(previous_counts)):
         now_row, before_row = latest_counts[label], previous_counts[label]
-        if now_row["coverage"] != before_row["coverage"]:
-            continue  # different counting method or coverage: not comparable
         (low_now, high_now), (low_before, high_before) = now_row["bounds"], before_row["bounds"]
-        if low_now > high_before or high_now < low_before:
-            changes.append({"kind": "detection_count_changed", "label": label,
-                            "previous_bounds": [low_before, high_before], "latest_bounds": [low_now, high_now]})
+        if not (low_now > high_before or high_now < low_before):
+            continue  # overlapping bounds: no supported difference
+        entry = {"label": label, "previous_bounds": [low_before, high_before], "latest_bounds": [low_now, high_now]}
+        if now_row["coverage"] == before_row["coverage"] and same_units:
+            changes.append({"kind": "detection_count_changed", **entry, "trend": True, "basis": "same_sampling_units"})
+        else:
+            changes.append({
+                "kind": "different_observation_count", **entry, "trend": False,
+                "reason": ("count_method_or_frames_differ" if now_row["coverage"] != before_row["coverage"]
+                           else "spatial_coverage_not_established"),
+                "note": "The observations did not count the same sample units the same way; this is not a trend.",
+            })
     latest_time, previous_time = _observed_at(latest), _observed_at(previous)
     latest_condition = _vision(latest).get("crop_condition")
     previous_condition = _vision(previous).get("crop_condition")
