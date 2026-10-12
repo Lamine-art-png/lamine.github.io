@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require_platform_admin
@@ -20,6 +20,7 @@ from app.models.platform_product import (
     PlatformApiOperationCost,
     PlatformApiPlan,
     PlatformApiSubscription,
+    PlatformLiveAccessRequest,
     PlatformCreditReservation,
     PlatformStripeEvent,
     PlatformStripeMeterOutbox,
@@ -157,6 +158,40 @@ def _subscription_public(row: PlatformApiSubscription | None, plan: PlatformApiP
         "grace_ends_at": row.grace_ends_at.isoformat() if row.grace_ends_at else None,
         "cancel_at_period_end": bool(row.cancel_at_period_end),
     }
+
+
+def _require_live_billing_eligibility(db: Session, ctx: AuthContext) -> None:
+    """Avoid charging a customer for a Platform API plan they cannot use LIVE.
+
+    This is separate from paid advisory wallet access, which remains open to
+    verified customers. A test-only enrollment is not an authorization to sell
+    an unusable production Developer/Scale subscription.
+    """
+    if str(getattr(settings, "APP_ENV", "")).lower() not in {"prod", "production"}:
+        return
+    enrollment = getattr(ctx, "platform_enrollment", None)
+    if enrollment is None or "live" not in set(enrollment.allowed_environments_json or []):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "platform_live_enrollment_required",
+                    "message": "Production Platform API enrollment is required before checkout. No charge was made."},
+        )
+    now = datetime.utcnow()
+    approval = (
+        db.query(PlatformLiveAccessRequest.id)
+        .filter(
+            PlatformLiveAccessRequest.organization_id == ctx.organization.id,
+            PlatformLiveAccessRequest.status == "approved",
+            or_(PlatformLiveAccessRequest.expires_at.is_(None), PlatformLiveAccessRequest.expires_at > now),
+        )
+        .first()
+    )
+    if approval is None:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "platform_live_access_approval_required",
+                    "message": "Live API access approval is required before checkout. No charge was made."},
+        )
 
 
 def _checkout_subscription_reusable(row: PlatformApiSubscription | None) -> bool:
@@ -310,6 +345,7 @@ def create_api_checkout(
     if payload.plan not in {"developer", "scale"}:
         raise HTTPException(status_code=422, detail={"code": "checkout_plan_not_supported"})
     _require_no_aws_billing(db, ctx.organization.id)
+    _require_live_billing_eligibility(db, ctx)
     canonical_payload = payload.model_dump(mode="json")
     claim, replay = claim_checkout(
         db,
