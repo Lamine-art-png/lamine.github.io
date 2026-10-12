@@ -436,23 +436,31 @@ def test_hull_split_share_and_cluster_interval():
     result = est.estimate_stage_proportions(_stages())
     assert result["status"] == "estimated" and result["scope"] == "block_estimate"
     split = result["stage_shares"]["hull_split"]
-    # p = 20/50; residuals (-2, 0, 2, -1, 1) -> var = 2.5 / (5 * 10^2) -> se 0.0707; t(4) = 2.776
+    # p = 20/50; residuals (-2, 0, 2, -1, 1) -> var = 2.5 / (5 * 10^2) -> se 0.0707; t(4) = 2.776 -> design [0.2037, 0.5963].
+    # Five trees cannot rule out a wide spread of tree-level shares: the worst-case Wilson bound
+    # (variance p(1 - p) over 5 trees, z = 2.776) is [0.0743, 0.8470], and the union is reported.
     assert split["share"] == 0.4
-    assert split["interval_95"] == pytest.approx([0.2037, 0.5963], abs=1e-4)
+    assert split["interval_95"] == pytest.approx([0.0743, 0.8470], abs=1e-4)
+    assert split["interval_basis"] == "worst_case_between_unit_variance"
     assert result["stage_shares"]["hull_open_dry"]["share"] == 0.0
     assert result["objects_observed"] == 50 and result["sampled_units"] == 5
 
 
 def test_finite_population_correction_narrows_interval():
+    y, m = [2.0, 4.0, 6.0, 3.0, 5.0], [10.0] * 5
+    _, wide_se = est._ratio_estimate(y, m, None)
+    _, narrow_se = est._ratio_estimate(y, m, 50)
+    assert narrow_se == pytest.approx(wide_se * math.sqrt(0.9))
     wide = est.estimate_stage_proportions(_stages())["stage_shares"]["hull_split"]["interval_95"]
     narrow = est.estimate_stage_proportions(_stages(population_units=50))["stage_shares"]["hull_split"]["interval_95"]
-    assert narrow[1] - narrow[0] == pytest.approx((wide[1] - wide[0]) * math.sqrt(0.9), abs=1e-3)
+    assert narrow[1] - narrow[0] < wide[1] - wide[0]
 
 
 @pytest.mark.parametrize(("threshold", "status"), [(0.2, "ready"), (0.5, "uncertain"), (0.6, "not_ready")])
 def test_readiness_uses_the_interval_not_the_point(threshold, status):
+    # 40 trees (the five-tree pattern eight times): interval [0.2598, 0.5588] around 0.4.
     rule = est.ReadinessRule(("hull_split", "hull_open_dry"), threshold, "Grower harvest plan (test)")
-    readiness = est.estimate_stage_proportions(_stages(readiness=rule))["readiness"]
+    readiness = est.estimate_stage_proportions(_stages(samples=_trees((2, 4, 6, 3, 5) * 8), readiness=rule))["readiness"]
     assert readiness["status"] == status
     assert readiness["observed_share"] == 0.4 and readiness["threshold_source"] == "Grower harvest plan (test)"
 
@@ -664,7 +672,6 @@ def test_identical_stage_shares_use_a_conservative_bound(count, population, spli
     assert result["status"] == "estimated"
     assert result["readiness"]["status"] == status
     assert result["readiness"]["interval_basis"] == "worst_case_between_unit_variance"
-    assert "zero_sample_variance:hull_split" in result["interval_warnings"]
     low, high = result["readiness"]["interval_95"]
     assert low <= split / (split + intact) <= high and high - low > 0
 
@@ -696,13 +703,41 @@ def test_proportional_fractional_counts_are_recognised_as_identical_shares():
     assert result["readiness"]["status"] == "uncertain"
 
 
-def test_ordinary_samples_keep_the_design_based_interval():
-    result = est.estimate_stage_proportions(_stages())
-    assert "interval_basis" not in result["stage_shares"]["hull_split"]
-    assert result["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2037, 0.5963], abs=1e-4)
-    # A stage seen on no sampled tree is not shown as certainly absent.
-    assert result["stage_shares"]["hull_open_dry"]["interval_basis"] == "worst_case_between_unit_variance"
-    assert result["stage_shares"]["hull_open_dry"]["interval_95"][1] > 0
+def test_widely_spread_samples_keep_the_design_based_interval():
+    # 40 trees alternating 0/10 and 10/10: the observed spread already exceeds the worst case
+    # over 40 units, so the design-based interval (p +/- t * se) binds.
+    result = est.estimate_stage_proportions(_stages(samples=_trees((0, 10) * 20)))
+    split = result["stage_shares"]["hull_split"]
+    assert split["interval_basis"] == "design_based"
+    se = math.sqrt(sum((y - 0.5 * 10) ** 2 for y in (0, 10) * 20) / 39 / (40 * 10 * 10))
+    assert split["interval_95"] == pytest.approx([0.5 - est.t_critical_95(39) * se, 0.5 + est.t_critical_95(39) * se], abs=1e-4)
+
+
+def test_monotone_readiness_more_split_never_gives_a_better_call_from_less():
+    """Round-4 review: near-identical shares must not get a narrower interval than identical ones."""
+    rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
+    all_split = est.estimate_stage_proportions(_stages(samples=_uniform_trees(30, 20, 0), population_units=10_000, readiness=rule))
+    one_short = _uniform_trees(29, 20, 0) + [est.StageSample("tree-x", {"hull_split": 18, "hull_intact": 2})]
+    less_split = est.estimate_stage_proportions(_stages(samples=one_short, population_units=10_000, readiness=rule))
+    order = {"not_ready": 0, "uncertain": 1, "ready": 2}
+    assert order[less_split["readiness"]["status"]] <= order[all_split["readiness"]["status"]]
+    assert less_split["readiness"]["interval_95"][0] <= all_split["readiness"]["interval_95"][0]
+    # And the mirror case for "not ready".
+    rule = est.ReadinessRule(("hull_split",), 0.5, "Grower harvest plan (test)")
+    none_split = est.estimate_stage_proportions(_stages(samples=_uniform_trees(5, 0, 10), readiness=rule))
+    one_seen = est.estimate_stage_proportions(_stages(
+        samples=[est.StageSample("tree-x", {"hull_split": 1, "hull_intact": 9})] + _uniform_trees(4, 0, 10), readiness=rule))
+    assert none_split["readiness"]["interval_95"][1] <= one_seen["readiness"]["interval_95"][1]
+    assert order[one_seen["readiness"]["status"]] >= order[none_split["readiness"]["status"]]
+
+
+def test_a_census_listing_an_empty_tree_is_still_a_census():
+    rule = est.ReadinessRule(("hull_split",), 0.95, "Grower harvest plan (test)")
+    trees = [est.StageSample(f"t{i}", {"hull_split": s, "hull_intact": 20 - s}) for i, s in enumerate((20, 19, 18, 19, 20))]
+    without_empty = est.estimate_stage_proportions(_stages(samples=trees, population_units=5, readiness=rule))
+    with_empty = est.estimate_stage_proportions(_stages(samples=[*trees, est.StageSample("empty", {})], population_units=6, readiness=rule))
+    assert without_empty["readiness"]["interval_95"] == with_empty["readiness"]["interval_95"] == [0.96, 0.96]
+    assert with_empty["readiness"]["status"] == "ready"
 
 
 def test_market_proposal_uses_marketable_yield_when_supplied():

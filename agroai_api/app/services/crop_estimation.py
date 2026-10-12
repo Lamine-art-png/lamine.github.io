@@ -733,16 +733,19 @@ class StageProportionRequest:
     readiness: ReadinessRule | None = None
 
 
-def _ratio_estimate(y: list[float], m: list[float], population_units: int | None) -> tuple[float, float]:
+def _ratio_estimate(y: list[float], m: list[float], population_units: int | None,
+                    sampled_units: int | None = None) -> tuple[float, float]:
     """Ratio estimator for a proportion when objects are clustered in sample units.
 
     p = sum(y) / sum(m); Var(p) = (1 - f) / (n * mbar^2) * sum((y_i - p m_i)^2) / (n - 1).
+    The sampling fraction f counts every sampled unit, including units with no objects.
     """
     n = len(m)
     total = sum(m)
     p = sum(y) / total
     mbar = total / n
-    fpc = 1 - n / population_units if population_units and population_units >= n else 1.0
+    sampled = n if sampled_units is None else sampled_units
+    fpc = 1 - sampled / population_units if population_units and population_units >= sampled else 1.0
     residual = sum((yi - p * mi) ** 2 for yi, mi in zip(y, m)) / (n - 1)
     return p, math.sqrt(max(fpc, 0.0) * residual / (n * mbar * mbar))
 
@@ -835,51 +838,55 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
     probability = request.design in PROBABILITY_DESIGNS and request.design != STRATIFIED_DESIGN
     m = [sum(row.values()) for row in units]
     critical = t_critical_95(len(units) - 1)
-    # Every sampled unit counted (units with no objects included): no sampling variance.
-    census = request.population_units is not None and request.population_units == len(request.samples)
-
-    def zero_variance(y: list[float]) -> bool:
-        # Every sampled unit has the same share (within float error), so the residual
-        # variance is zero although most units were not observed.
-        unit_shares = [yi / mi for yi, mi in zip(y, m)]
-        return not census and math.isclose(max(unit_shares), min(unit_shares), rel_tol=1e-9, abs_tol=1e-12)
+    sampled = len(request.samples)
+    # Every unit in the population sampled (units with no objects included): no sampling variance.
+    census = request.population_units is not None and request.population_units == sampled
+    fpc = 1 - sampled / request.population_units if request.population_units else 1.0
+    # Units differ in size, so the worst case uses fewer effective units.
+    n_eff = len(units) * (sum(m) / len(m)) / max(m)
 
     def interval(y: list[float]) -> tuple[float, float, str | None]:
-        p, se = _ratio_estimate(y, m, request.population_units)
-        if not zero_variance(y):
-            return max(0.0, p - critical * se), min(1.0, p + critical * se), None
-        # Conservative bound: unit shares lie in [0, 1], so their variance is at most
-        # p(1 - p) (more when units differ in size, hence n_eff = n * mean(m) / max(m)).
-        # Wilson score interval on that effective number of units.
-        n_eff = len(units) * (sum(m) / len(m)) / max(m)
+        """Never narrower than a bound that holds whatever the spread of unit shares.
+
+        The design-based interval (p +/- t * se) is anti-conservative when few
+        units happen to agree: near-identical shares give se close to 0 although
+        unsampled units may differ a lot. Unit shares lie in [0, 1], so their
+        variance is at most p(1 - p); the reported interval is the union of the
+        design-based interval and a Wilson score interval under that worst case,
+        so more favourable data can never give a less favourable call.
+        """
+        p, se = _ratio_estimate(y, m, request.population_units, sampled)
+        if census:
+            return p, p, None
+        design_low, design_high = max(0.0, p - critical * se), min(1.0, p + critical * se)
+        n_w = n_eff / fpc  # the finite population correction applies to the worst case too
         z2 = critical * critical
-        centre = (p + z2 / (2 * n_eff)) / (1 + z2 / n_eff)
-        half = critical * math.sqrt(p * (1 - p) / n_eff + z2 / (4 * n_eff * n_eff)) / (1 + z2 / n_eff)
-        return max(0.0, centre - half), min(1.0, centre + half), "worst_case_between_unit_variance"
+        centre = (p + z2 / (2 * n_w)) / (1 + z2 / n_w)
+        half = critical * math.sqrt(p * (1 - p) / n_w + z2 / (4 * n_w * n_w)) / (1 + z2 / n_w)
+        worst_low, worst_high = max(0.0, centre - half), min(1.0, centre + half)
+        binding = worst_low < design_low or worst_high > design_high
+        return (min(design_low, worst_low), max(design_high, worst_high),
+                "worst_case_between_unit_variance" if binding else "design_based")
 
     shares: dict[str, dict[str, Any]] = {}
-    warnings: list[str] = []
     for stage in stages:
         y = [row.get(stage, 0.0) for row in units]
-        p, _ = _ratio_estimate(y, m, request.population_units)
+        p, _ = _ratio_estimate(y, m, request.population_units, sampled)
         entry: dict[str, Any] = {"share": round(p, 4)}
         if probability:
             low, high, basis = interval(y)
             entry["interval_95"] = [round(low, 4), round(high, 4)]
             if basis:
                 entry["interval_basis"] = basis
-                warnings.append(f"zero_sample_variance:{stage}")
         shares[stage] = entry
     result["stage_shares"] = shares
-    if warnings:
-        result["interval_warnings"] = warnings
     result["scope"] = "block_estimate" if probability else "sampled_units_only"
     if request.design == STRATIFIED_DESIGN:
         result["scope_reason"] = "stratified_design_needs_stratum_population_weights"
 
     if rule is not None:
         y = [sum(row.get(stage, 0.0) for stage in rule.ready_stages) for row in units]
-        p, _ = _ratio_estimate(y, m, request.population_units)
+        p, _ = _ratio_estimate(y, m, request.population_units, sampled)
         readiness: dict[str, Any] = {
             "ready_stages": list(rule.ready_stages), "threshold_share": rule.threshold_share,
             "threshold_source": rule.source, "observed_share": round(p, 4),
@@ -898,7 +905,7 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
         result["readiness"] = readiness
     result["status"] = "estimated"
     result["interval_method"] = (
-        "ratio estimator with sample units as clusters; Student t on units; where every sampled unit has the same "
-        "share, a Wilson bound under the worst-case between-unit variance"
+        "ratio estimator with sample units as clusters (Student t on units), widened where needed to a Wilson "
+        "bound under the worst-case between-unit variance p(1 - p)"
     )
     return result

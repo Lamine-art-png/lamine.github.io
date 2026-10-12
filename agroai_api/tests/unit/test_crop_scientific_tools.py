@@ -84,11 +84,12 @@ def test_production_tool_matches_the_estimator():
 
 
 def test_stage_tool_matches_the_estimator():
-    result = get_scientific_tool_registry().run(STAGES, _stages(readiness={"ready_stages": ["hull_split"], "threshold_share": 0.2,
-                                                                           "source": "Grower harvest plan (test)"}))
+    forty = [{"unit_id": f"tree-{i}", "counts": {"hull_split": s, "hull_intact": 10 - s}} for i, s in enumerate((2, 4, 6, 3, 5) * 8)]
+    result = get_scientific_tool_registry().run(STAGES, _stages(samples=forty, readiness={
+        "ready_stages": ["hull_split"], "threshold_share": 0.2, "source": "Grower harvest plan (test)"}))
     assert result.status == "COMPUTED"
     assert result.output["stage_shares"]["hull_split"]["share"] == 0.4
-    assert result.output["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2037, 0.5963], abs=1e-4)
+    assert result.output["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2598, 0.5588], abs=1e-4)
     assert result.output["readiness"]["status"] == "ready"
 
 
