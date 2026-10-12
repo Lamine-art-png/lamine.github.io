@@ -111,7 +111,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
       {error && <p role="alert" className="mt-4 rounded-xl bg-[#FFF1EA] p-3 text-[12px] text-[#823628]">{error}</p>}
       {subscribed && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#C7D9C1] bg-[#F1F8ED] p-4">
-          <span className="text-[13px] font-semibold text-[#244835]">Subscription: {subscription?.plan || "Platform API"} · {subscription?.status}</span>
+          <span className="text-[13px] font-semibold text-[#244835]"><span>Subscription:</span> {subscription?.plan || "Platform API"} · {subscription?.status}</span>
           <button type="button" disabled={Boolean(busy)} onClick={() => void manage()} className="rounded-lg bg-[#102F22] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50">Manage in Stripe</button>
         </div>
       )}
@@ -124,8 +124,8 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
             <div className="text-[16px] font-semibold text-[#10231B]">{offer.name}</div>
             <div className="mt-3 text-[28px] font-semibold text-[#10231B]">{price(amount)}<span className="ml-1 text-[12px] font-medium text-[#748078]">/{period === "annual" ? "year" : "month"}</span></div>
             <div className="mt-3 space-y-1 text-[12px] leading-5 text-[#53665A]">
-              <p>{Number(offer.included_credits || 0).toLocaleString()} included credits</p>
-              <p>{price(offer.overage_price_per_1000_cents)} per 1,000 additional credits</p>
+              <p>{Number(offer.included_credits || 0).toLocaleString()} <span>included credits</span></p>
+              <p>{price(offer.overage_price_per_1000_cents)} <span>per 1,000 additional credits</span></p>
             </div>
             <button type="button" disabled={!allowed} onClick={() => void purchase(offer.identifier as "developer" | "scale")} className="mt-5 min-h-[44px] rounded-xl bg-[#102F22] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               {busy === offer.identifier ? <span>Opening Stripe…</span> : subscribed ? <span>Current subscription managed above</span> : canPurchase ? <span>Continue to Stripe checkout</span> : <span>Production access required</span>}
