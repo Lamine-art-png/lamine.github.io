@@ -24,7 +24,7 @@ function price(cents: number | null | undefined): string {
 function secureStripeUrl(raw: string, permitted: string[]): string {
   const url = new URL(raw);
   if (url.protocol !== "https:" || !permitted.includes(url.hostname)) {
-    throw new Error("Stripe returned an invalid payment destination.");
+    throw new Error("Checkout could not be started. Please try again.");
   }
   return url.href;
 }
@@ -52,7 +52,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
           if (mounted) setSubscription(billing.subscription || null);
         }
       } catch (cause) {
-        if (mounted) setError(cause instanceof Error ? cause.message : "API billing is temporarily unavailable.");
+        if (mounted) setError(cause instanceof Error ? cause.message : "Backend unavailable. Retry.");
       }
     }
     void load();
@@ -74,7 +74,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
       });
       window.location.assign(secureStripeUrl(String(result.checkout_url || ""), ["checkout.stripe.com"]));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Stripe checkout could not be started.");
+      setError(cause instanceof Error ? cause.message : "Could not start checkout. Please try again.");
       setBusy("");
     }
   }
@@ -86,7 +86,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
       const result = await apiClient.post<PortalResult>("/v1/platform/developer/billing/portal", {});
       window.location.assign(secureStripeUrl(String(result.portal_url || ""), ["billing.stripe.com"]));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Stripe billing management is temporarily unavailable.");
+      setError(cause instanceof Error ? cause.message : "Billing portal is not available yet.");
       setBusy("");
     }
   }
@@ -128,7 +128,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
               <p>{price(offer.overage_price_per_1000_cents)} per 1,000 additional credits</p>
             </div>
             <button type="button" disabled={!allowed} onClick={() => void purchase(offer.identifier as "developer" | "scale")} className="mt-5 min-h-[44px] rounded-xl bg-[#102F22] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
-              {busy === offer.identifier ? "Opening Stripe…" : subscribed ? "Current subscription managed above" : canPurchase ? "Continue to Stripe checkout" : "Production access required"}
+              {busy === offer.identifier ? <span>Opening Stripe…</span> : subscribed ? <span>Current subscription managed above</span> : canPurchase ? <span>Continue to Stripe checkout</span> : <span>Production access required</span>}
             </button>
           </div>;
         })}
