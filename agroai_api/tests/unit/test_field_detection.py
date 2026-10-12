@@ -440,11 +440,12 @@ def test_a_trickling_detector_cannot_hold_a_frame_past_its_deadline():
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        with httpx.Client(trust_env=False) as client:
-            provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
-            started = real_time.monotonic()
-            result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
-            elapsed = real_time.monotonic() - started
+        # Not closed here: the abandoned exchange may still be using it on its helper thread.
+        client = httpx.Client(trust_env=False)
+        provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
+        started = real_time.monotonic()
+        result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
+        elapsed = real_time.monotonic() - started
     finally:
         server.shutdown()
         server.server_close()
@@ -461,11 +462,17 @@ def _raw_detector(respond):
         def handle(self):
             data = b""
             while b"\r\n\r\n" not in data:
-                data += self.request.recv(65536)
+                chunk = self.request.recv(65536)
+                if not chunk:
+                    return  # the client went away
+                data += chunk
             head, _, rest = data.partition(b"\r\n\r\n")
             length = int(next(line.split(b":")[1] for line in head.split(b"\r\n") if line.lower().startswith(b"content-length")))
             while len(rest) < length:
-                rest += self.request.recv(65536)
+                chunk = self.request.recv(65536)
+                if not chunk:
+                    return
+                rest += chunk
             try:
                 respond(self.request)
             except OSError:
@@ -502,11 +509,12 @@ def test_no_response_phase_can_hold_a_frame_past_its_deadline(attack):
 
     server = _raw_detector(respond)
     try:
-        with httpx.Client(trust_env=False) as client:
-            provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
-            started = real_time.monotonic()
-            result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
-            elapsed = real_time.monotonic() - started
+        # Not closed here: the abandoned exchange may still be using it on its helper thread.
+        client = httpx.Client(trust_env=False)
+        provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
+        started = real_time.monotonic()
+        result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
+        elapsed = real_time.monotonic() - started
     finally:
         server.shutdown()
         server.server_close()
