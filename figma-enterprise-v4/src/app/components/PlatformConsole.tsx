@@ -46,6 +46,7 @@ import {
 } from "react";
 import { Navigate, NavLink, useLocation, useNavigate } from "react-router";
 import { apiClient } from "../api/client";
+import { PlatformApiSubscriptions } from "./PlatformApiSubscriptions";
 import { useAuth } from "../auth/AuthProvider";
 
 
@@ -729,7 +730,27 @@ function WebhooksPage() {
 function BillingPage() {
   const { state } = usePlatform();
   const enabled = Boolean(state.overview?.sections?.billing);
-  return <div className="space-y-6"><PageHeader eyebrow="Commercial controls" title="Billing" body="Platform API commercial state is independent from the Enterprise Portal subscription." />{!enabled ? <Surface className="overflow-hidden"><div className="grid lg:grid-cols-[1.05fr_.95fr]"><div className="p-7 md:p-9"><div className="inline-flex items-center gap-2 rounded-full border border-[#C7D9C1] bg-[#F3F8F0] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#315D46]"><Sparkles className="h-3.5 w-3.5" /> Private beta</div><h2 className="mt-5 text-[26px] font-semibold tracking-[-0.03em]">No self-service charges are active.</h2><p className="mt-3 max-w-xl text-[13px] leading-7 text-[#65736A]">Your current enrollment is test-only. No checkout, invoice, payment method, overage, or production billing action is available until pricing and live access are explicitly approved.</p></div><div className="border-t border-[#DDE3D9] bg-[#F6F7F3] p-7 lg:border-l lg:border-t-0"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5B7361]">Current program</div><div className="mt-4 text-[20px] font-semibold">{state.overview?.program || "Developer private beta"}</div><div className="mt-2 text-[12px] text-[#6D7A72]">Enrollment: {state.overview?.enrollment_status || "active"}</div><div className="mt-5 rounded-xl border border-[#D7DED2] bg-white p-4 text-[11px] leading-6 text-[#65736A]">Live projects, pricing, and payment collection remain disabled by policy.</div></div></div></Surface> : <Surface className="p-6"><pre className="overflow-auto rounded-xl bg-[#071A12] p-5 font-mono text-[11px] leading-6 text-[#D7E7D4]">{JSON.stringify(state.billing || {}, null, 2)}</pre></Surface>}</div>;
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Commercial controls" title="Billing" body="Platform API commercial state is independent from the Enterprise Portal subscription." />
+      {!enabled && (
+        <Surface className="p-6">
+          <p className="text-[13px] leading-6 text-[#65736A]">
+            This developer program is not yet eligible for paid Platform API billing. No charge will be initiated until AGRO-AI approves the appropriate enrollment.
+          </p>
+        </Surface>
+      )}
+      <PlatformApiSubscriptions canPurchase={enabled} />
+      {enabled && state.billing?.subscription && (
+        <Surface className="p-5">
+          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#58715F]">Server-confirmed subscription</div>
+          <div className="mt-3 text-[12px] font-semibold text-[#10231B]">
+            {String(state.billing.subscription.plan || "None")} · {String(state.billing.subscription.status || "none")}
+          </div>
+        </Surface>
+      )}
+    </div>
+  );
 }
 
 function DocsPage() {
