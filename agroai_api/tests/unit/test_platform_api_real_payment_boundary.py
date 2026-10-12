@@ -89,6 +89,13 @@ def _webhook(client, monkeypatch, *, event_id, event_type, created, obj):
 
 def test_production_rejects_checkout_before_live_approval_and_never_calls_stripe(client, db, monkeypatch):
     _user, _org, headers, created = _checkout_setup(client, db, monkeypatch)
+    eligibility = client.get(
+        "/v1/platform/developer/billing/checkout-readiness", headers=headers
+    )
+    assert eligibility.status_code == 200
+    assert eligibility.json() == {
+        "eligible": False, "code": "platform_live_access_approval_required"
+    }
     response = client.post(
         "/v1/platform/developer/billing/checkout",
         headers=headers,
@@ -103,6 +110,11 @@ def test_production_rejects_checkout_before_live_approval_and_never_calls_stripe
 def test_paid_checkout_activates_live_access_only_after_signed_payment(client, db, monkeypatch):
     user, org, headers, created = _checkout_setup(client, db, monkeypatch)
     _approval(db, org, user)
+    eligible = client.get(
+        "/v1/platform/developer/billing/checkout-readiness", headers=headers
+    )
+    assert eligible.status_code == 200
+    assert eligible.json() == {"eligible": True, "code": "ready"}
     result = client.post(
         "/v1/platform/developer/billing/checkout",
         headers=headers,
@@ -114,6 +126,12 @@ def test_paid_checkout_activates_live_access_only_after_signed_payment(client, d
     assert created[0]["line_items"][0]["quantity"] == 1
     subscription = db.query(PlatformApiSubscription).filter_by(organization_id=org.id).one()
     assert subscription.status == "checkout_pending"
+    after_checkout = client.get(
+        "/v1/platform/developer/billing/checkout-readiness", headers=headers
+    )
+    assert after_checkout.json() == {
+        "eligible": False, "code": "api_subscription_already_exists"
+    }
 
     with pytest.raises(HTTPException) as blocked:
         require_api_entitlement(
