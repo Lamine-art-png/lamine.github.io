@@ -286,6 +286,8 @@ class Settings(BaseSettings):
     # commercial-email footer is configured.
     LIFECYCLE_EMAILS_ENABLED: bool = False
     LIFECYCLE_EMAIL_POSTAL_ADDRESS: str = ""
+    # Optional hidden copy for the first lifecycle welcome email only.
+    LIFECYCLE_EMAIL_AUDIT_BCC: str = ""
     # Resend webhook signing secret (whsec_...) for delivery/open/click/bounce events.
     RESEND_WEBHOOK_SECRET: str = ""
     EMAIL_ADMIN_TOKEN: str = ""

@@ -235,7 +235,26 @@ def _valid_live_frame(payload: bytes, content_type: str) -> bool:
     return False
 
 
-@router.post("/live-analysis")
+def enforce_paid_live_field_ai(
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> None:
+    """Block repeated external live inference before the media is read.
+
+    Free workspaces retain their limited durable Field Intelligence records,
+    but real-time vision and transcription are Professional-or-higher
+    capabilities. This entitlement is enforced by the backend, not the UI,
+    and respects authorized commercial contracts/organization overrides.
+    """
+    from app.services.commercial_control import require_feature
+
+    require_feature(
+        db, ctx.organization, "intelligence.deep_analysis",
+        recommended_plan="professional",
+    )
+
+
+@router.post("/live-analysis", dependencies=[Depends(enforce_paid_live_field_ai)])
 async def live_field_analysis(
     request: Request,
     file: UploadFile = File(...),
@@ -322,7 +341,7 @@ async def live_field_analysis(
     }
 
 
-@router.post("/live-transcription")
+@router.post("/live-transcription", dependencies=[Depends(enforce_paid_live_field_ai)])
 async def live_field_transcription(
     request: Request,
     file: UploadFile = File(...),

@@ -140,3 +140,28 @@ def test_transactional_smtp_message_has_no_list_headers(provider, smtp_capture):
     assert _send()["ok"] is True
     (message,) = smtp_capture
     assert message["List-Unsubscribe"] is None and message["List-Unsubscribe-Post"] is None
+
+
+@pytest.mark.parametrize("name", ["sendgrid", "resend"])
+def test_welcome_audit_bcc_uses_hidden_provider_recipients(provider, http_capture, name):
+    provider(name)
+    result = _send(bcc_email="contact@agroai-pilot.com")
+    assert result["ok"] is True
+    payload = http_capture[0]["json"]
+    assert "Bcc" not in payload.get("headers", {})
+    if name == "resend":
+        assert payload["to"] == ["grower@example.test"]
+        assert payload["bcc"] == ["contact@agroai-pilot.com"]
+    else:
+        recipients = payload["personalizations"][0]
+        assert recipients["to"] == [{"email": "grower@example.test"}]
+        assert recipients["bcc"] == [{"email": "contact@agroai-pilot.com"}]
+
+
+def test_welcome_audit_bcc_smtp(provider, smtp_capture):
+    provider("smtp")
+    result = _send(bcc_email="contact@agroai-pilot.com")
+    assert result["ok"] is True
+    (message,) = smtp_capture
+    assert message["To"] == "grower@example.test"
+    assert message["Bcc"] == "contact@agroai-pilot.com"
