@@ -344,14 +344,14 @@ def api_checkout_readiness(
         _require_no_aws_billing(db, ctx.organization.id)
         _require_live_billing_eligibility(db, ctx)
         existing = (
-            db.query(PlatformApiSubscription.id)
+            db.query(PlatformApiSubscription)
             .filter(
                 PlatformApiSubscription.organization_id == ctx.organization.id,
                 PlatformApiSubscription.status_slot == "active",
             )
             .first()
         )
-        if existing is not None:
+        if existing is not None and not _checkout_subscription_reusable(existing):
             return {"eligible": False, "code": "api_subscription_already_exists"}
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
