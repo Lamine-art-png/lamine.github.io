@@ -67,7 +67,11 @@ def test_weather_validation_reports_every_problem():
 def test_t_critical_values():
     assert est.t_critical_95(4) == 2.776
     assert est.t_critical_95(35) == pytest.approx(2.030, abs=1e-3)
-    assert est.t_critical_95(500) == 1.960
+    # Above 120 df the value keeps falling toward 1.960 (t(121) = 1.980, t(200) = 1.972, t(500) = 1.965).
+    assert est.t_critical_95(121) == pytest.approx(1.980, abs=1e-3)
+    assert est.t_critical_95(200) == pytest.approx(1.972, abs=1e-3)
+    assert est.t_critical_95(500) == pytest.approx(1.965, abs=1e-3)
+    assert est.t_critical_95(10 ** 6) == pytest.approx(1.960, abs=1e-4)
     with pytest.raises(ValueError):
         est.t_critical_95(0)
 
@@ -620,3 +624,56 @@ def test_repeated_unit_ids_are_refused_as_pseudo_replication():
     result = est.estimate_stage_proportions(_stages(samples=[*_trees(), _trees()[0]]))
     assert result["status"] == "not_estimable"
     assert "duplicate_unit_ids:tree-0" in result["reasons"]
+
+
+def test_identical_non_integer_counts_are_flagged_despite_float_rounding():
+    """Adversarial review: [3.3]*6 has a float variance of about 1e-34, not 0."""
+    simple = est.estimate_production(_production(design="simple_random", population_units=2000, sample_counts=[3.3] * 6))
+    assert simple["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert est.market_yield_proposal(simple, estimate_id="x") is None
+    strata = [est.Stratum("a", 1000, [3.3] * 6), est.Stratum("b", 1000, [0.7] * 6)]
+    stratified = est.estimate_production(_stratified(population_units=2000, strata=strata))
+    assert stratified["interval_warnings"] == ["zero_sample_variance:a", "zero_sample_variance:b"]
+
+
+def test_repeated_readiness_stages_are_refused():
+    rule = est.ReadinessRule(("hull_split", "hull_split"), 0.7, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(readiness=rule))
+    assert result["status"] == "not_estimable"
+    assert "readiness_stages_must_be_unique" in result["reasons"]
+
+
+def test_identical_stage_shares_give_no_readiness_call():
+    """Every sampled tree fully split: zero residual variance is not certainty about the block."""
+    all_split = [est.StageSample(f"tree-{i}", {"hull_split": 4}) for i in range(5)]
+    rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(samples=all_split, population_units=10_000, readiness=rule))
+    assert result["status"] == "estimated"
+    assert result["stage_shares"]["hull_split"]["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert "zero_sample_variance:hull_split" in result["interval_warnings"]
+    assert result["readiness"]["status"] == "not_assessed_zero_sample_variance"
+    # A census (every unit sampled) has no sampling variance to worry about.
+    census = est.estimate_stage_proportions(_stages(samples=all_split, population_units=5, readiness=rule))
+    assert census["readiness"]["status"] == "ready" and "interval_warnings" not in census
+    # Ordinary samples are unaffected.
+    assert "interval_reliability" not in est.estimate_stage_proportions(_stages())["stage_shares"]["hull_split"]
+
+
+def test_market_proposal_uses_marketable_yield_when_supplied():
+    estimate = est.estimate_production(_production(design="simple_random", marketable_fraction=est.Estimate(0.6, 0.03)))
+    proposal = est.market_yield_proposal(estimate, estimate_id="est-marketable")
+    assert estimate["expected_marketable_kg_per_hectare"] == "225.00"   # 187.5 kg x 0.6 / 0.5 ha
+    assert proposal["yield_per_area"] == "225.00"
+    assert "yield basis: marketable production" in proposal["note"]
+
+
+def test_harvest_dates_far_outside_a_plausible_season_are_refused():
+    result = est.estimate_harvest_window(_request(biofix=date(9999, 11, 1), as_of=date(9999, 12, 1)))
+    assert result["status"] == "insufficient_evidence"
+    assert "season_dates_outside_1900_to_2200" in result["reasons"]
+
+
+def test_no_harvest_suggestions_for_a_window_that_has_ended():
+    window = {"status": "projected", "window": {"earliest": "2026-07-01", "latest": "2026-07-20"}}
+    assert est.harvest_action_suggestions(window, date(2026, 10, 12)) == []
+    assert est.harvest_action_suggestions(window, date(2026, 6, 20))  # still ahead: suggestions issued

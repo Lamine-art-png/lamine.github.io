@@ -47,13 +47,18 @@ _T_95 = {
 }
 
 
+# Projected windows run up to a year past as_of; dates are kept far from date.max.
+MIN_SEASON_DATE = date(1900, 1, 1)
+MAX_SEASON_DATE = date(2200, 12, 31)
+
+
 def t_critical_95(df: int) -> float:
     if df < 1:
         raise ValueError("degrees of freedom must be >= 1")
     if df in _T_95:
         return _T_95[df]
     if df > 120:
-        return 1.960
+        return 1.960 + (1.980 - 1.960) * 120 / df  # 1/df interpolation toward the normal value
     keys = sorted(_T_95)
     upper = next(key for key in keys if key > df)
     lower = max(key for key in keys if key < df)
@@ -244,6 +249,8 @@ def estimate_harvest_window(request: HarvestWindowRequest) -> dict[str, Any]:
         reasons.extend(request.target.validate())
     if request.as_of < request.biofix:
         reasons.append("as_of_before_biofix")
+    if not (MIN_SEASON_DATE <= request.biofix <= MAX_SEASON_DATE and MIN_SEASON_DATE <= request.as_of <= MAX_SEASON_DATE):
+        reasons.append("season_dates_outside_1900_to_2200")
     observed, weather_problems = validate_weather(request.observed, request.biofix, request.as_of) if request.as_of >= request.biofix else ([], [])
     reasons.extend(weather_problems)
     if not str(request.observed_source or "").strip():
@@ -352,6 +359,8 @@ def harvest_action_suggestions(window_result: dict[str, Any], today: date) -> li
     earliest = date.fromisoformat(window["earliest"])
     if status == "projected" and (earliest - today).days > HARVEST_SUGGESTION_HORIZON_DAYS:
         return []
+    if window.get("latest") and date.fromisoformat(window["latest"]) < today:
+        return []  # the window has already ended: nothing left to prepare for
     due = max(today, earliest - timedelta(days=7))
     return [
         {"action_code": code, "due_by": due.isoformat(), "requires_approval": True, "creates_task": False,
@@ -414,8 +423,10 @@ def _simple_random_mean(counts: Sequence[float], population_units: int) -> tuple
     """Mean per unit, its standard error with finite population correction, degrees of freedom, warnings."""
     n = len(counts)
     mean = sum(counts) / n
-    variance = sum((value - mean) ** 2 for value in counts) / (n - 1)
-    warnings = ["zero_sample_variance:sample"] if variance == 0 and n < population_units else []
+    # Identical counts are detected directly: their float variance can be 1e-34 rather than 0.
+    degenerate = max(counts) == min(counts)
+    variance = 0.0 if degenerate else sum((value - mean) ** 2 for value in counts) / (n - 1)
+    warnings = ["zero_sample_variance:sample"] if degenerate and n < population_units else []
     return mean, math.sqrt(variance / n * (1 - n / population_units)), n - 1, warnings
 
 
@@ -438,7 +449,7 @@ def _stratified_mean(strata: Sequence[Stratum]) -> tuple[float, float, int, list
         counts = [float(value) for value in stratum.sample_counts]
         n_h, big_n = len(counts), stratum.population_units
         mean_h = sum(counts) / n_h
-        s2_h = sum((value - mean_h) ** 2 for value in counts) / (n_h - 1)
+        s2_h = 0.0 if max(counts) == min(counts) else sum((value - mean_h) ** 2 for value in counts) / (n_h - 1)
         a_h = big_n * (big_n - n_h) / n_h
         total += big_n * mean_h
         variance += a_h * s2_h
@@ -658,6 +669,9 @@ def _production_body(request: ProductionRequest, result: dict[str, Any], counts:
     if request.area_hectares and request.area_hectares > 0:
         per_hectare = Decimal(str(round(production.value, 6))) / request.area_hectares
         result["expected_production_kg_per_hectare"] = format(per_hectare.quantize(Decimal("0.01")), "f")
+        if request.marketable_fraction is not None:
+            marketable_per_hectare = Decimal(str(round(production.value * request.marketable_fraction.value, 6))) / request.area_hectares
+            result["expected_marketable_kg_per_hectare"] = format(marketable_per_hectare.quantize(Decimal("0.01")), "f")
     result["status"] = "estimated"
     result["interval_method"] = "Student t on the design's degrees of freedom; relative errors of calibration factors combined in quadrature"
     return result
@@ -672,16 +686,20 @@ def market_yield_proposal(estimate: dict[str, Any], *, estimate_id: str) -> dict
         return None
     if estimate.get("interval_reliability") not in (None, "design_based"):
         return None  # never propose a yield whose interval overstates precision
-    low, high = estimate["expected_production_kg"]["interval_95"]
+    # Expected production drives commercial exposure, so the sellable volume is
+    # proposed when the grower supplied a marketable fraction.
+    marketable = estimate.get("expected_marketable_kg_per_hectare") and estimate.get("expected_marketable_kg")
+    basis = "marketable production" if marketable else "total production"
+    low, high = estimate["expected_marketable_kg" if marketable else "expected_production_kg"]["interval_95"]
     return {
-        "yield_per_area": estimate["expected_production_kg_per_hectare"],
+        "yield_per_area": estimate["expected_marketable_kg_per_hectare" if marketable else "expected_production_kg_per_hectare"],
         "quantity_unit": "kg",
         "area_unit": "hectare",
         "source": "crop_intelligence",
         "apply_to_production": False,
         "note": (
             f"Crop Intelligence estimate {estimate_id} ({estimate.get('design')}, n={estimate.get('sampled_units')}, "
-            f"{estimate.get('count_source')}); 95% interval for block production {low}–{high} kg. "
+            f"{estimate.get('count_source')}); yield basis: {basis}; 95% interval for block {basis} {low}–{high} kg. "
             "Inputs are user-supplied and unverified by AGRO-AI. Review before applying."
         )[:1000],
     }
@@ -774,6 +792,8 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
     if rule is not None:
         if not rule.ready_stages or any(stage not in stages for stage in rule.ready_stages):
             reasons.append("readiness_stages_not_in_scale")
+        if len(set(rule.ready_stages)) != len(rule.ready_stages):
+            reasons.append("readiness_stages_must_be_unique")  # a repeated stage would be counted twice
         if not _finite(rule.threshold_share) or not 0 < rule.threshold_share <= 1:
             reasons.append("readiness_threshold_must_be_a_share_in_(0,1]")
         if not str(rule.source or "").strip():
@@ -811,15 +831,29 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
     probability = request.design in PROBABILITY_DESIGNS and request.design != STRATIFIED_DESIGN
     m = [sum(row.values()) for row in units]
     critical = t_critical_95(len(units) - 1)
+    census = bool(request.population_units) and request.population_units <= len(units)
+
+    def zero_variance(y: list[float]) -> bool:
+        # Every sampled unit has the same share, so the residual variance is zero although
+        # most units were not observed: the interval would claim certainty.
+        unit_shares = [yi / mi for yi, mi in zip(y, m)]
+        return not census and max(unit_shares) == min(unit_shares)
+
     shares: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
     for stage in stages:
         y = [row.get(stage, 0.0) for row in units]
         p, se = _ratio_estimate(y, m, request.population_units)
         entry: dict[str, Any] = {"share": round(p, 4)}
         if probability:
             entry["interval_95"] = [round(max(0.0, p - critical * se), 4), round(min(1.0, p + critical * se), 4)]
+            if zero_variance(y):
+                entry["interval_reliability"] = "unreliable_zero_sample_variance"
+                warnings.append(f"zero_sample_variance:{stage}")
         shares[stage] = entry
     result["stage_shares"] = shares
+    if warnings:
+        result["interval_warnings"] = warnings
     result["scope"] = "block_estimate" if probability else "sampled_units_only"
     if request.design == STRATIFIED_DESIGN:
         result["scope_reason"] = "stratified_design_needs_stratum_population_weights"
@@ -836,6 +870,9 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
                 "not_assessed_stratified_without_stratum_weights" if request.design == STRATIFIED_DESIGN
                 else "not_assessed_non_probability_sample"
             )
+        elif zero_variance(y):
+            # No usable interval: sample more units (or units that differ) before a readiness call.
+            readiness["status"] = "not_assessed_zero_sample_variance"
         else:
             low, high = max(0.0, p - critical * se), min(1.0, p + critical * se)
             readiness["interval_95"] = [round(low, 4), round(high, 4)]
