@@ -91,9 +91,10 @@ async function auditOnce() {
   const health = await healthResponse.json();
   assert.equal(healthResponse.status, 200, "Platform backend health failed");
   assert.equal(health.status, "ok", "Platform backend is not healthy");
-  if (expectedRelease && health.build_sha) {
-    assert.equal(health.build_sha, expectedRelease, `backend SHA mismatch: ${health.build_sha}`);
-  }
+  assert.match(expectedRelease, /^[a-f0-9]{40}$/i, "Expected production release SHA was not supplied");
+  const deployedRelease = String(health.build_sha || "").trim();
+  assert.match(deployedRelease, /^[a-f0-9]{40}$/i, "Backend health did not report an exact 40-character build SHA");
+  assert.equal(deployedRelease.toLowerCase(), expectedRelease.toLowerCase(), `backend SHA mismatch: deployed ${deployedRelease}, expected ${expectedRelease}`);
   result.backend.health = health;
 
   const runtimeResponse = await request(`${API}/v1/platform/health`);
