@@ -34,6 +34,7 @@ import base64
 import json
 import math
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
@@ -267,11 +268,16 @@ def _deadline_chunks(payload: bytes, deadline: float):
 class HttpDetectionProvider:
     """Calls a self-hosted detector over HTTPS.
 
-    The frame's budget is a wall-clock deadline: the request is uploaded and
-    the response read in chunks, and the frame is abandoned as soon as the
-    deadline passes, so a slow uplink or a detector that trickles its
-    response cannot hold the worker. A frame can overrun by at most one
-    socket timeout (a quarter of its budget) plus DNS resolution.
+    The frame's budget is a wall-clock deadline. The HTTP exchange (DNS,
+    connect, upload, headers, body) runs on a helper thread and the caller
+    waits only until the deadline, then records the frame as
+    ``detector_frame_time_budget_exceeded``. httpx timeouts apply to each
+    socket operation, so on their own a slow uplink, trickled headers or
+    body, or a stream of informational (1xx) responses could hold a frame
+    indefinitely. The abandoned exchange stops at its next chunk (upload
+    and body are checked against the deadline) or socket timeout; its
+    socket is never closed from another thread, where a reused descriptor
+    could belong to an unrelated connection.
     """
 
     name = "http_detector"
@@ -302,20 +308,40 @@ class HttpDetectionProvider:
         timeout = bounded_timeout(self.timeout, timeout_seconds)
         budget = self.timeout if timeout_seconds is None else min(self.timeout, float(timeout_seconds))
         deadline = started + max(budget, 0.1)
-        client = self._client or httpx.Client()
-        status_code, raw = 0, bytearray()
-        try:
-            with client.stream("POST", self.endpoint, content=_deadline_chunks(payload_bytes, deadline), headers=headers,
-                               timeout=timeout) as response:
-                status_code = response.status_code
-                if status_code < 400:
-                    for chunk in response.iter_bytes():
-                        if _now() > deadline:
+        outcome: dict[str, Any] = {}
+
+        def exchange() -> None:
+            raw = bytearray()
+            try:
+                # Built inside the guard: a bad proxy environment is a typed failure, not a crashed job.
+                client = self._client or httpx.Client()
+                try:
+                    with client.stream("POST", self.endpoint, content=_deadline_chunks(payload_bytes, deadline),
+                                       headers=headers, timeout=timeout) as response:
+                        if response.status_code < 400:
+                            for chunk in response.iter_bytes():
+                                if _now() > deadline:
+                                    raise _FrameDeadlineExceeded
+                                raw.extend(chunk)
+                                if len(raw) > MAX_DETECTOR_RESPONSE_BYTES:
+                                    raise _ResponseTooLarge
+                        if _now() > deadline:  # e.g. trailers trickled in after the body
                             raise _FrameDeadlineExceeded
-                        raw.extend(chunk)
-                        if len(raw) > MAX_DETECTOR_RESPONSE_BYTES:
-                            raise _ResponseTooLarge
-        except Exception as exc:  # noqa: BLE001 - surfaced as a typed failure
+                        outcome["status_code"] = response.status_code
+                finally:
+                    if self._client is None:
+                        client.close()
+                outcome["raw"] = bytes(raw)
+            except Exception as exc:  # noqa: BLE001 - surfaced as a typed failure below
+                outcome["error"] = exc
+
+        worker = threading.Thread(target=exchange, name="field-detection-frame", daemon=True)
+        worker.start()
+        worker.join(max(0.0, deadline - _now()))
+        # An abandoned helper keeps writing to ``outcome``; the caller reads a separate result.
+        settled = {"error": _FrameDeadlineExceeded()} if worker.is_alive() else dict(outcome)
+        exc = settled.get("error")
+        if exc is not None:
             if isinstance(exc, _ResponseTooLarge):
                 error, retryable = "detector_response_too_large", False
             elif isinstance(exc, _FrameDeadlineExceeded) or _now() > deadline:
@@ -324,9 +350,7 @@ class HttpDetectionProvider:
                 error, retryable = exc.__class__.__name__, True
             return DetectionResult(status="failed", frame=frame, provider=self.name, error=error, retryable=retryable,
                                    latency_ms=int((_now() - started) * 1000))
-        finally:
-            if self._client is None:
-                client.close()
+        status_code, raw = int(settled["status_code"]), settled["raw"]
         latency = int((_now() - started) * 1000)
         if status_code >= 400:
             return DetectionResult(
@@ -334,7 +358,7 @@ class HttpDetectionProvider:
                 error=f"detector_http_{status_code}", retryable=status_code in RETRYABLE_HTTP,
             )
         try:
-            payload = json.loads(bytes(raw))
+            payload = json.loads(raw)
         except ValueError:
             return DetectionResult(status="failed", frame=frame, provider=self.name, latency_ms=latency, error="detector_response_not_json")
         result = parse_detector_response(payload, profile=profile, frame=frame, image=image, content_type=content_type)

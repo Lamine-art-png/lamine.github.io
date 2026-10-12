@@ -449,4 +449,75 @@ def test_a_trickling_detector_cannot_hold_a_frame_past_its_deadline():
         server.shutdown()
         server.server_close()
     assert result.status == "failed" and result.error == "detector_frame_time_budget_exceeded"
-    assert elapsed < 1.6  # 1 s budget plus at most one 0.25 s read timeout, with scheduling slack
+    assert elapsed < 1.5  # the caller gets the frame back at its 1 s deadline (with scheduling slack)
+
+
+def _raw_detector(respond):
+    """A local TCP detector whose response bytes and pacing the test controls."""
+    import socketserver
+    import threading
+
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            data = b""
+            while b"\r\n\r\n" not in data:
+                data += self.request.recv(65536)
+            head, _, rest = data.partition(b"\r\n\r\n")
+            length = int(next(line.split(b":")[1] for line in head.split(b"\r\n") if line.lower().startswith(b"content-length")))
+            while len(rest) < length:
+                rest += self.request.recv(65536)
+            try:
+                respond(self.request)
+            except OSError:
+                pass
+
+    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+@pytest.mark.parametrize("attack", ["informational_flood", "trickled_headers", "trickled_trailers"])
+def test_no_response_phase_can_hold_a_frame_past_its_deadline(attack):
+    """Round-3 review: the deadline must also cover headers, 1xx responses and trailers."""
+    import time as real_time
+
+    body = json.dumps(_payload(detections=[{"label": "cluster", "score": 0.5, "box": [0.1, 0.1, 0.2, 0.2]}])).encode()
+
+    def respond(sock):
+        if attack == "informational_flood":
+            for _ in range(40):
+                sock.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
+                real_time.sleep(0.15)
+        elif attack == "trickled_headers":
+            for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"a" * 40:
+                sock.sendall(bytes([byte]))
+                real_time.sleep(0.15)
+        else:  # the whole body at once, then trailers one byte at a time
+            sock.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n"
+                         + f"{len(body):x}\r\n".encode() + body + b"\r\n0\r\n")
+            for byte in b"X-Trailer: " + b"a" * 40:
+                sock.sendall(bytes([byte]))
+                real_time.sleep(0.15)
+
+    server = _raw_detector(respond)
+    try:
+        with httpx.Client(trust_env=False) as client:
+            provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
+            started = real_time.monotonic()
+            result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
+            elapsed = real_time.monotonic() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.status == "failed" and result.error == "detector_frame_time_budget_exceeded", (attack, result)
+    assert elapsed < 1.5, (attack, elapsed)
+
+
+def test_an_invalid_proxy_environment_is_a_typed_failure_not_a_crash(monkeypatch):
+    """Building the client must stay inside the failure guard (round-3 review)."""
+    monkeypatch.setenv("HTTPS_PROXY", "ftp://proxy.invalid:21")
+    monkeypatch.setenv("HTTP_PROXY", "ftp://proxy.invalid:21")
+    result = detection.HttpDetectionProvider("https://detector.internal/infer", "k").detect(
+        b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=2.0)
+    assert result.status == "failed" and result.retryable
