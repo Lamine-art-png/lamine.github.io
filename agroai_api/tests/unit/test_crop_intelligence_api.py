@@ -189,3 +189,43 @@ def test_stratified_production_route_uses_stratum_weights(client, db):
     refused = client.post(f"{BASE}/crop-intelligence/production-estimate", json=pooled, headers=headers).json()
     assert refused["status"] == "not_estimable"
     assert "stratified_random_requires_at_least_2_strata_with_population_and_samples" in refused["reasons"]
+
+
+def test_out_of_range_estimate_inputs_are_rejected_at_the_route(client, db):
+    """Products and squares of unbounded inputs overflowed into a 500."""
+    _, _, headers = _auth(db)
+    base = {
+        "unit": "vine", "object_label": "cluster", "design": "simple_random", "population_units": 100,
+        "sample_counts": [10, 12, 8, 11, 9], "count_source": "manual_count",
+        "detection_rate": {"value": 0.8, "standard_error": 0.04}, "unit_weight_kg": {"value": 0.15, "standard_error": 0.0075},
+    }
+    for body in (
+        {**base, "sample_counts": [10, 1e200, 8, 11, 9]},
+        {**base, "sample_counts": [10, -1, 8, 11, 9]},
+        {**base, "unit_weight_kg": {"value": 1e300, "standard_error": 1e300}},
+        {**base, "design": "stratified_random", "sample_counts": [],
+         "strata": [{"stratum_id": "a", "population_units": 50, "sample_counts": [1e200, 1]},
+                    {"stratum_id": "b", "population_units": 50, "sample_counts": [1, 2]}]},
+    ):
+        response = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers)
+        assert response.status_code == 422, body
+    stages = {
+        "crop": "almond", "design": "simple_random", "count_source": "manual_count",
+        "samples": [{"unit_id": f"tree-{i}", "counts": {"hull_split": 1e200, "hull_intact": 1}} for i in range(5)],
+    }
+    assert client.post(f"{BASE}/crop-intelligence/maturity-stages", json=stages, headers=headers).status_code == 422
+
+
+def test_zero_variance_stratified_route_is_flagged_and_gets_no_market_proposal(client, db):
+    _, _, headers = _auth(db)
+    body = {
+        "unit": "tree", "object_label": "fruit", "design": "stratified_random", "population_units": 100,
+        "count_source": "manual_count", "area_hectares": "1", "include_market_proposal": True,
+        "detection_rate": {"value": 0.8, "standard_error": 0.04}, "unit_weight_kg": {"value": 0.15, "standard_error": 0.0075},
+        "strata": [{"stratum_id": "high-load", "population_units": 10, "sample_counts": [10, 10, 10, 10, 10]},
+                   {"stratum_id": "low-load", "population_units": 90, "sample_counts": [1, 1, 1, 1, 1]}],
+    }
+    result = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers).json()
+    assert result["status"] == "estimated"
+    assert result["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert result["market_yield_proposal"] is None

@@ -13,7 +13,7 @@ import tempfile
 from datetime import date, datetime, timezone
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
 import json
 import re
@@ -791,12 +791,20 @@ class HarvestWindowIn(BaseModel):
         return value
 
 
+_MAX_ESTIMATE_INPUT = 1_000_000.0
+
+
 class EstimateIn(BaseModel):
     # NaN and Infinity are rejected at the boundary (pydantic accepts them by default).
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    value: float
-    standard_error: float = Field(ge=0)
+    # Bounded so the estimator's products and squares stay far inside float range.
+    value: float = Field(ge=-_MAX_ESTIMATE_INPUT, le=_MAX_ESTIMATE_INPUT)
+    standard_error: float = Field(ge=0, le=_MAX_ESTIMATE_INPUT)
+
+
+# Per-unit object counts; no tree, vine or row meter carries ten million objects.
+_SampleCount = Annotated[float, Field(ge=0, le=10_000_000)]
 
 
 class StratumIn(BaseModel):
@@ -804,7 +812,7 @@ class StratumIn(BaseModel):
 
     stratum_id: str = Field(min_length=1, max_length=_MAX_NAME)
     population_units: int = Field(ge=1, le=100_000_000)
-    sample_counts: list[float] = Field(min_length=1, max_length=5000)
+    sample_counts: list[_SampleCount] = Field(min_length=1, max_length=5000)
 
 
 class ProductionEstimateIn(BaseModel):
@@ -816,7 +824,7 @@ class ProductionEstimateIn(BaseModel):
     design: str = Field(min_length=1, max_length=60)
     population_units: int = Field(ge=1, le=100_000_000)
     # Unstratified designs use sample_counts; stratified_random uses strata instead.
-    sample_counts: list[float] = Field(default_factory=list, max_length=5000)
+    sample_counts: list[_SampleCount] = Field(default_factory=list, max_length=5000)
     strata: list[StratumIn] | None = Field(default=None, max_length=50)
     count_source: str = Field(min_length=1, max_length=60)
     detector_validation_id: str | None = Field(default=None, max_length=_MAX_NAME)
@@ -831,7 +839,7 @@ class StageSampleIn(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     unit_id: str = Field(min_length=1, max_length=_MAX_NAME)
-    counts: dict[str, float] = Field(max_length=20)
+    counts: dict[str, _SampleCount] = Field(max_length=20)
 
 
 class ReadinessRuleIn(BaseModel):

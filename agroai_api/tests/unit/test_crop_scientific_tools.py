@@ -169,3 +169,22 @@ def test_stratified_production_through_the_registry_is_population_weighted():
     refused = registry.run(PRODUCTION, _production(design="stratified_random"))
     assert refused.status == "INVALID_INPUT"
     assert "stratified_random_requires_at_least_2_strata_with_population_and_samples" in refused.invalid_inputs[0].split(";")
+
+
+@pytest.mark.parametrize(
+    ("tool_id", "inputs", "reason"),
+    [
+        (PRODUCTION, _production(sample_counts=[10, 1e8, 8, 11, 9]), "sample_counts_out_of_range"),
+        (PRODUCTION, _production(population_units=10 ** 9), "population_units_out_of_range"),
+        (PRODUCTION, _production(unit_weight_kg={"value": 1e300, "standard_error": 1e300}), "unit_weight_kg.value_out_of_range"),
+        (PRODUCTION, _production(design="stratified_random", sample_counts=None,
+                                 strata=[{"stratum_id": "a", "population_units": 10 ** 9, "sample_counts": [1, 2]},
+                                         {"stratum_id": "b", "population_units": 10, "sample_counts": [1, 2]}]),
+         "stratum_population_units_out_of_range"),
+        (STAGES, _stages(samples=[{"unit_id": "t", "counts": {"hull_split": 1e200}}]), "samples.hull_split_out_of_range"),
+    ],
+)
+def test_out_of_range_numbers_are_rejected_before_computation(tool_id, inputs, reason):
+    result = get_scientific_tool_registry().run(tool_id, inputs)
+    assert result.status == "INVALID_INPUT"
+    assert reason in result.invalid_inputs[0].split(";")

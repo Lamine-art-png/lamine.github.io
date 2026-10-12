@@ -21,6 +21,7 @@ answer, and says why. Nothing in this module invents a crop parameter:
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -409,23 +410,30 @@ STRATIFIED_DESIGN = "stratified_random"
 MAX_SAMPLED_UNITS = 5000
 
 
-def _simple_random_mean(counts: Sequence[float], population_units: int) -> tuple[float, float, int]:
-    """Mean per unit, its standard error with finite population correction, and degrees of freedom."""
+def _simple_random_mean(counts: Sequence[float], population_units: int) -> tuple[float, float, int, list[str]]:
+    """Mean per unit, its standard error with finite population correction, degrees of freedom, warnings."""
     n = len(counts)
     mean = sum(counts) / n
     variance = sum((value - mean) ** 2 for value in counts) / (n - 1)
-    return mean, math.sqrt(variance / n * (1 - n / population_units)), n - 1
+    warnings = ["zero_sample_variance:sample"] if variance == 0 and n < population_units else []
+    return mean, math.sqrt(variance / n * (1 - n / population_units)), n - 1, warnings
 
 
-def _stratified_mean(strata: Sequence[Stratum]) -> tuple[float, float, int]:
+def _stratified_mean(strata: Sequence[Stratum]) -> tuple[float, float, int, list[str]]:
     """Stratified expansion estimator (Cochran, Sampling Techniques, ch. 5).
 
     Total = sum N_h * ybar_h; Var(total) = sum N_h^2 (1 - n_h/N_h) s_h^2 / n_h.
-    Degrees of freedom by Satterthwaite, floored to an integer (conservative)
-    and kept between min(n_h - 1) and sum(n_h - 1).
+    Degrees of freedom by Satterthwaite over the strata that contribute
+    variance, floored to an integer (conservative, with a tolerance for
+    floating-point error) and kept between their min(n_h - 1) and
+    sum(n_h - 1). A sampled stratum whose counts happen to be identical adds
+    no variance although most of it was not observed, so it is reported as a
+    warning rather than as certainty.
     """
     population = sum(stratum.population_units for stratum in strata)
-    total = variance = numerator = denominator = 0.0
+    total = variance = denominator = 0.0
+    contributing: list[int] = []
+    warnings: list[str] = []
     for stratum in strata:
         counts = [float(value) for value in stratum.sample_counts]
         n_h, big_n = len(counts), stratum.population_units
@@ -434,12 +442,16 @@ def _stratified_mean(strata: Sequence[Stratum]) -> tuple[float, float, int]:
         a_h = big_n * (big_n - n_h) / n_h
         total += big_n * mean_h
         variance += a_h * s2_h
-        denominator += (a_h * s2_h) ** 2 / (n_h - 1)
-    numerator = variance ** 2
-    df_max = sum(len(stratum.sample_counts) - 1 for stratum in strata)
-    df_min = min(len(stratum.sample_counts) - 1 for stratum in strata)
-    df = df_max if denominator == 0 else max(df_min, min(df_max, int(numerator / denominator)))
-    return total / population, math.sqrt(variance) / population, max(1, df)
+        if a_h * s2_h > 0:
+            contributing.append(n_h - 1)
+            denominator += (a_h * s2_h) ** 2 / (n_h - 1)
+        elif n_h < big_n:
+            warnings.append(f"zero_sample_variance:{stratum.stratum_id}"[:200])
+    if contributing and denominator > 0:
+        df = max(min(contributing), min(sum(contributing), int(variance ** 2 / denominator + 1e-9)))
+    else:
+        df = sum(len(stratum.sample_counts) - 1 for stratum in strata)
+    return total / population, math.sqrt(variance) / population, max(1, df), warnings
 
 
 def _strata_problems(request: ProductionRequest) -> list[str]:
@@ -552,9 +564,29 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
         }
     if reasons:
         return {**result, "status": "not_estimable", "reasons": list(dict.fromkeys(reasons))}
+    try:
+        computed = _production_body(request, result, counts, stratified)
+    except ArithmeticError:  # OverflowError, decimal.InvalidOperation: inputs too large to estimate safely
+        computed = None
+    if computed is None or not _all_finite(computed):
+        return {**result, "status": "not_estimable", "reasons": ["inputs_outside_numeric_range"]}
+    return computed
 
+
+def _all_finite(value: Any) -> bool:
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, dict):
+        return all(_all_finite(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_all_finite(item) for item in value)
+    return True
+
+
+def _production_body(request: ProductionRequest, result: dict[str, Any], counts: list[float], stratified: bool) -> dict[str, Any]:
+    result = dict(result)
     if stratified:
-        mean, mean_se, df = _stratified_mean(list(request.strata or []))
+        mean, mean_se, df, warnings = _stratified_mean(list(request.strata or []))
         result["variance_method"] = "stratified_expansion_satterthwaite_df"
         result["strata"] = [
             {"stratum_id": stratum.stratum_id, "population_units": stratum.population_units,
@@ -563,21 +595,29 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
             for stratum in request.strata or []
         ]
     else:
-        mean, mean_se, df = _simple_random_mean(counts, request.population_units)
+        mean, mean_se, df, warnings = _simple_random_mean(counts, request.population_units)
         result["variance_method"] = (
             "simple_random_fpc_approximation_for_systematic_sample" if request.design == "systematic_random_start"
             else "simple_random_fpc"
         )
     result["degrees_of_freedom"] = df
+    # Identical counts in a partly observed sample add no variance; the interval
+    # would claim certainty the data cannot support.
+    result["interval_reliability"] = "unreliable_zero_sample_variance" if warnings else "design_based"
+    if warnings:
+        result["interval_warnings"] = warnings
     critical = t_critical_95(df)
+    counted = float(sum(counts))
     density = Estimate(mean, mean_se)
     result["visible_density_per_unit"] = {
         "value": round(mean, 4), "standard_error": round(mean_se, 4),
         "interval_95": [round(bound, 4) for bound in density.interval(critical)],
     }
     visible_total = Estimate(request.population_units * mean, request.population_units * mean_se)
+    # A population total can never be below the objects actually counted in it.
+    visible_low, visible_high = visible_total.interval(critical)
     result["extrapolated_visible_objects"] = {
-        "value": round(visible_total.value, 1), "interval_95": [round(bound, 1) for bound in visible_total.interval(critical)],
+        "value": round(visible_total.value, 1), "interval_95": [round(max(visible_low, counted), 1), round(visible_high, 1)],
     }
     missing: list[str] = []
     if request.detection_rate is None:
@@ -590,8 +630,10 @@ def estimate_production(request: ProductionRequest) -> dict[str, Any]:
     total_objects_value = visible_total.value / request.detection_rate.value
     cv_total = math.sqrt(cv_sample ** 2 + _ratio_cv(request.detection_rate) ** 2)
     total_objects = Estimate(total_objects_value, total_objects_value * cv_total)
+    total_low, total_high = total_objects.interval(critical)
     result["estimated_total_objects"] = {
-        "value": round(total_objects.value, 1), "interval_95": [round(bound, 1) for bound in total_objects.interval(critical)],
+        # Visibility is at most 1, so total objects are at least the objects counted.
+        "value": round(total_objects.value, 1), "interval_95": [round(max(total_low, counted), 1), round(total_high, 1)],
     }
     if request.unit_weight_kg is None:
         missing.append("unit_weight_kg")
@@ -628,6 +670,8 @@ def market_yield_proposal(estimate: dict[str, Any], *, estimate_id: str) -> dict
     force until a person with write access reviews and applies it."""
     if estimate.get("status") != "estimated" or not estimate.get("expected_production_kg_per_hectare"):
         return None
+    if estimate.get("interval_reliability") not in (None, "design_based"):
+        return None  # never propose a yield whose interval overstates precision
     low, high = estimate["expected_production_kg"]["interval_95"]
     return {
         "yield_per_area": estimate["expected_production_kg_per_hectare"],
@@ -708,6 +752,10 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
         evaluation = crop_model_registry.verified_evaluation(request.detector_validation_id)
         if evaluation is None:
             reasons.append("detector_evaluation_not_in_server_registry")
+    duplicates = sorted(unit for unit, seen in Counter(str(sample.unit_id) for sample in request.samples).items() if seen > 1)
+    if duplicates:
+        # Each sampled tree, vine or plant is one cluster; repeated rows would be pseudo-replication.
+        reasons.append(f"duplicate_unit_ids:{','.join(duplicates[:5])}"[:200])
     rows: list[dict[str, float]] = []
     for sample in request.samples:
         counts = dict(sample.counts or {})
@@ -745,7 +793,18 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
     }
     if reasons:
         return {**result, "status": "not_estimable", "reasons": reasons}
+    try:
+        computed = _stage_body(request, result, units, stages, rule)
+    except ArithmeticError:  # counts too large to square safely
+        computed = None
+    if computed is None or not _all_finite(computed):
+        return {**result, "status": "not_estimable", "reasons": ["inputs_outside_numeric_range"]}
+    return computed
 
+
+def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: list[dict[str, float]],
+                stages: tuple[str, ...], rule: ReadinessRule | None) -> dict[str, Any]:
+    result = dict(result)
     # Pooled cluster ratios are only a block estimate for unstratified probability
     # designs; a stratified sample needs stratum population weights, which this
     # contract does not carry, so it describes the sampled units only.

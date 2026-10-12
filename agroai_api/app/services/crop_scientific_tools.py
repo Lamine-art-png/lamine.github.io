@@ -20,9 +20,13 @@ MAX_WEATHER_DAYS = 400
 MAX_ANALOG_YEARS = 30
 MAX_SAMPLE_UNITS = 2000
 MAX_STRATA = 50
+# Same bounds as the HTTP routes, so squares and products stay far inside float range.
+MAX_COUNT_PER_UNIT = 10_000_000.0
+MAX_ESTIMATE_INPUT = 1_000_000.0
+MAX_POPULATION_UNITS = 100_000_000
 
 
-def _number(value: Any, name: str) -> float:
+def _number(value: Any, name: str, limit: float | None = None) -> float:
     # JSON numbers only, as in the rest of the registry: no strings, booleans or non-finite values.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name}_must_be_a_finite_number")
@@ -32,7 +36,17 @@ def _number(value: Any, name: str) -> float:
         raise ValueError(f"{name}_must_be_a_finite_number") from None
     if not math.isfinite(number):
         raise ValueError(f"{name}_must_be_a_finite_number")
+    if limit is not None and abs(number) > limit:
+        raise ValueError(f"{name}_out_of_range")
     return number
+
+
+def _population(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name}_must_be_an_integer")
+    if value > MAX_POPULATION_UNITS:
+        raise ValueError(f"{name}_out_of_range")
+    return value
 
 
 def _day(value: Any, name: str) -> date:
@@ -59,7 +73,8 @@ def _estimate(value: Any, name: str) -> est.Estimate | None:
         return None
     if not isinstance(value, dict):
         raise ValueError(f"{name}_must_be_an_object_with_value_and_standard_error")
-    return est.Estimate(_number(value.get("value"), f"{name}.value"), _number(value.get("standard_error"), f"{name}.standard_error"))
+    return est.Estimate(_number(value.get("value"), f"{name}.value", MAX_ESTIMATE_INPUT),
+                        _number(value.get("standard_error"), f"{name}.standard_error", MAX_ESTIMATE_INPUT))
 
 
 def _harvest_window(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -96,13 +111,11 @@ def _strata(value: Any) -> list[est.Stratum] | None:
     for item in value:
         if not isinstance(item, dict) or not isinstance(item.get("sample_counts"), list):
             raise ValueError("strata_need_stratum_id_population_units_and_sample_counts")
-        population = item.get("population_units")
-        if isinstance(population, bool) or not isinstance(population, int):
-            raise ValueError("stratum_population_units_must_be_an_integer")
+        population = _population(item.get("population_units"), "stratum_population_units")
         if len(item["sample_counts"]) > MAX_SAMPLE_UNITS:
             raise ValueError(f"stratum_sample_counts_must_have_at_most_{MAX_SAMPLE_UNITS}_counts")
         strata.append(est.Stratum(str(item.get("stratum_id") or "")[:200], population,
-                                  [_number(count, "strata.sample_counts") for count in item["sample_counts"]]))
+                                  [_number(count, "strata.sample_counts", MAX_COUNT_PER_UNIT) for count in item["sample_counts"]]))
     return strata
 
 
@@ -113,12 +126,10 @@ def _production(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
     strata = _strata(inputs.get("strata"))
     area = inputs.get("area_hectares")
     area_value = None if area is None else Decimal(str(_number(area, "area_hectares")))
-    population = inputs["population_units"]
-    if isinstance(population, bool) or not isinstance(population, int):
-        raise ValueError("population_units_must_be_an_integer")
+    population = _population(inputs["population_units"], "population_units")
     result = est.estimate_production(est.ProductionRequest(
         unit=str(inputs["unit"])[:40], object_label=str(inputs["object_label"])[:60], design=str(inputs["design"])[:60],
-        population_units=population, sample_counts=[_number(value, "sample_counts") for value in counts],
+        population_units=population, sample_counts=[_number(value, "sample_counts", MAX_COUNT_PER_UNIT) for value in counts],
         count_source=str(inputs["count_source"])[:60],
         detection_rate=_estimate(inputs.get("detection_rate"), "detection_rate"),
         unit_weight_kg=_estimate(inputs.get("unit_weight_kg"), "unit_weight_kg"),
@@ -143,7 +154,8 @@ def _stage_proportions(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         if not isinstance(sample, dict) or not isinstance(sample.get("counts"), dict):
             raise ValueError("samples_need_unit_id_and_counts")
         parsed.append(est.StageSample(str(sample.get("unit_id") or index)[:200],
-                                      {str(stage): _number(value, f"samples.{stage}") for stage, value in sample["counts"].items()}))
+                                      {str(stage): _number(value, f"samples.{stage}", MAX_COUNT_PER_UNIT)
+                                       for stage, value in sample["counts"].items()}))
     rule = None
     readiness = inputs.get("readiness")
     if readiness is not None:
@@ -152,8 +164,8 @@ def _stage_proportions(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         rule = est.ReadinessRule(tuple(str(stage) for stage in readiness["ready_stages"]),
                                  _number(readiness.get("threshold_share"), "readiness.threshold_share"), str(readiness.get("source") or ""))
     population = inputs.get("population_units")
-    if population is not None and (isinstance(population, bool) or not isinstance(population, int)):
-        raise ValueError("population_units_must_be_an_integer")
+    if population is not None:
+        population = _population(population, "population_units")
     result = est.estimate_stage_proportions(est.StageProportionRequest(
         crop_id=profile.crop_id, design=str(inputs["design"])[:60], samples=parsed, count_source=str(inputs["count_source"])[:60],
         detector_validation_id=inputs.get("detector_validation_id"), population_units=population, readiness=rule,

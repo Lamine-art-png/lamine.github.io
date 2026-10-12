@@ -562,3 +562,61 @@ def test_stratified_stage_shares_describe_sampled_units_only():
     assert result["scope_reason"] == "stratified_design_needs_stratum_population_weights"
     assert "interval_95" not in result["stage_shares"]["hull_split"]
     assert result["readiness"]["status"] == "not_assessed_stratified_without_stratum_weights"
+
+
+# ---------------------------------------------------------------------------
+# Review hardening: degenerate variance, float error, bounds, pseudo-replication
+# ---------------------------------------------------------------------------
+
+def test_identical_counts_in_a_partly_observed_stratum_are_flagged_not_trusted():
+    result = est.estimate_production(_stratified(detection_rate=est.Estimate(0.8, 0.04),
+                                                 unit_weight_kg=est.Estimate(0.15, 0.0075)))
+    assert result["status"] == "estimated"
+    assert result["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert result["interval_warnings"] == ["zero_sample_variance:high-load", "zero_sample_variance:low-load"]
+    # A yield proposal would carry an interval that overstates precision.
+    assert est.market_yield_proposal(result, estimate_id="est-zero-variance") is None
+
+
+def test_identical_simple_random_counts_are_flagged():
+    result = est.estimate_production(_production(design="simple_random", sample_counts=[10] * 5))
+    assert result["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert result["interval_warnings"] == ["zero_sample_variance:sample"]
+    assert est.market_yield_proposal(result, estimate_id="x") is None
+
+
+def test_fully_enumerated_stratum_has_no_variance_and_no_warning():
+    strata = [est.Stratum("census", 5, [3, 3, 3, 3, 3]), est.Stratum("sampled", 95, [0, 1, 2, 1, 1])]
+    result = est.estimate_production(_stratified(strata=strata))
+    assert result["interval_reliability"] == "design_based"
+    assert "interval_warnings" not in result
+    # Only the sampled stratum contributes variance, so df comes from it alone.
+    assert result["degrees_of_freedom"] == 4
+
+
+def test_satterthwaite_floor_tolerates_floating_point_error():
+    # Exact df = (x1 + x2)^2 / (x1^2/2 + x2^2/2) = 4; in floating point it is 3.999999999999999.
+    strata = [est.Stratum("a", 50, [2, 2, 4]), est.Stratum("b", 50, [1, 1, 3])]
+    assert est.estimate_production(_stratified(strata=strata))["degrees_of_freedom"] == 4
+
+
+def test_population_interval_never_falls_below_the_objects_counted():
+    result = est.estimate_production(_production(design="simple_random", population_units=6, sample_counts=[0, 0, 0, 0, 100],
+                                                 area_hectares=None, unit_weight_kg=None))
+    assert result["directly_counted_objects"] == 100
+    assert result["extrapolated_visible_objects"]["interval_95"][0] == 100.0
+    assert result["estimated_total_objects"]["interval_95"][0] == 100.0
+
+
+def test_inputs_too_large_to_compute_are_refused_not_crashed():
+    huge = est.estimate_production(_production(sample_counts=[1e200, 3e200, 2e200, 1.0, 5.0]))
+    assert huge["status"] == "not_estimable" and huge["reasons"] == ["inputs_outside_numeric_range"]
+    samples = [est.StageSample("t0", {"hull_split": 1e200})] + [est.StageSample(f"t{i}", {"hull_intact": 1e200}) for i in range(1, 5)]
+    stages = est.estimate_stage_proportions(_stages(samples=samples))
+    assert stages["status"] == "not_estimable" and stages["reasons"] == ["inputs_outside_numeric_range"]
+
+
+def test_repeated_unit_ids_are_refused_as_pseudo_replication():
+    result = est.estimate_stage_proportions(_stages(samples=[*_trees(), _trees()[0]]))
+    assert result["status"] == "not_estimable"
+    assert "duplicate_unit_ids:tree-0" in result["reasons"]
