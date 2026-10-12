@@ -229,3 +229,28 @@ def test_zero_variance_stratified_route_is_flagged_and_gets_no_market_proposal(c
     assert result["status"] == "estimated"
     assert result["interval_reliability"] == "unreliable_zero_sample_variance"
     assert result["market_yield_proposal"] is None
+
+
+def test_future_dated_records_cannot_fill_the_crop_condition_window(client, db):
+    """A device with a wrong clock must not push real evidence out of the newest-N window."""
+    from datetime import datetime
+
+    from app.models.field_intelligence import FieldObservation
+
+    _, _, headers = _auth(db)
+    ids = []
+    for index in range(3):
+        cap = _initiate(client, headers, client_capture_id=f"cap-future-{index}", idempotency_key=f"idem-future-{index}",
+                        field_id="field-clock").json()["capture"]
+        ids.append(_complete(client, headers, cap["id"]).json()["observation"]["id"])
+    _process(db)
+    for observation_id in ids[1:]:
+        row = db.query(FieldObservation).filter(FieldObservation.id == observation_id).one()
+        row.occurred_at = datetime.utcnow() + timedelta(days=3)
+    db.commit()
+    summary = client.get(f"{BASE}/fields/field-clock/crop-condition?limit=1", headers=headers).json()
+    assert summary["latest"]["observation_id"] == ids[0]
+    assert summary["observations_considered"] == 1
+    assert summary["future_dated_excluded"] == 2
+    assert {row["observation_id"] for row in summary["excluded"]} == set(ids[1:])
+    assert summary["total_observations"] == 3

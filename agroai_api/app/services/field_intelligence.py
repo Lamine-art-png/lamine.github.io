@@ -1987,6 +1987,10 @@ def list_observations(db: Session, ctx: AuthContext, filters: dict) -> tuple[lis
         query = query.filter(FieldObservation.occurred_at >= start)
     if end:
         query = query.filter(FieldObservation.occurred_at <= end)
+    # Like ``end`` but keeps undated rows, for windows that must not be filled by future-dated records.
+    not_after = _parse_dt(filters.get("not_after"))
+    if not_after:
+        query = query.filter((FieldObservation.occurred_at <= not_after) | FieldObservation.occurred_at.is_(None))
     total = query.count()
     limit = min(int(filters.get("limit") or 100), 500)
     offset = max(int(filters.get("offset") or 0), 0)

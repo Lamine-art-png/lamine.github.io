@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from datetime import date as date_type
 from decimal import Decimal
 from typing import Annotated, Literal
@@ -31,7 +31,7 @@ from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import crop_estimation
 from app.services import field_intelligence as svc
-from app.services.crop_intelligence import field_condition_summary
+from app.services.crop_intelligence import FUTURE_TOLERANCE, field_condition_summary
 from app.services.crop_profiles import all_profiles, resolve_profile
 from app.services.field_live_rate_limit import check_field_live_analysis_limit
 from app.services.field_transcription import transcribe_audio
@@ -905,12 +905,17 @@ def field_crop_condition(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
-    rows, total = svc.list_observations(db, ctx, {
-        "workspace_id": workspace_id, "field_id": field_id, "block_id": block_id, "limit": limit, "offset": 0,
-    })
-    summary = field_condition_summary([svc.serialize_observation(db, obs) for obs in rows], field_id=field_id)
-    return {"status": "ok", "total_observations": total, **{k: v for k, v in summary.items() if k != "status"},
-            "summary_status": summary["status"]}
+    now = datetime.now(timezone.utc)
+    cutoff = (now + FUTURE_TOLERANCE).replace(tzinfo=None)  # occurred_at is stored as naive UTC
+    scope = {"workspace_id": workspace_id, "field_id": field_id, "block_id": block_id, "offset": 0}
+    # Future-dated records (a wrong device clock) must not fill the newest-N window and hide real evidence.
+    rows, total = svc.list_observations(db, ctx, {**scope, "limit": limit, "not_after": cutoff})
+    future, future_total = svc.list_observations(db, ctx, {**scope, "limit": 20,
+                                                           "start": cutoff + timedelta(microseconds=1)})
+    summary = field_condition_summary([svc.serialize_observation(db, obs) for obs in [*rows, *future]], field_id=field_id,
+                                      now=now, future_dated_total=future_total)
+    return {"status": "ok", "total_observations": total + future_total,
+            **{k: v for k, v in summary.items() if k != "status"}, "summary_status": summary["status"]}
 
 
 @router.post("/crop-intelligence/harvest-window", dependencies=[Depends(enforce_json_body_limit)])
