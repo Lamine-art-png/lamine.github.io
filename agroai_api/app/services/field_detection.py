@@ -31,6 +31,7 @@ reviewed held-out data; they are labelled ``detector_score_uncalibrated``.
 from __future__ import annotations
 
 import base64
+import json
 import math
 import os
 import time
@@ -50,6 +51,9 @@ MAX_DETECTIONS = 300
 MAX_MASK_POINTS = 256
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
+# 300 detections with 256-point masks fit well inside this; anything larger is refused.
+MAX_DETECTOR_RESPONSE_BYTES = 4 * 1024 * 1024
+_STREAM_CHUNK_BYTES = 64 * 1024
 
 
 @dataclass
@@ -128,13 +132,13 @@ _SETUP_PHASE_CAP_SECONDS = 5.0
 
 
 def bounded_timeout(configured_seconds: float, remaining_seconds: float | None = None) -> httpx.Timeout:
-    """An httpx timeout whose phases together cannot exceed the frame's budget.
+    """Per-operation httpx timeouts sized from the frame's budget.
 
-    httpx applies a timeout to each phase (pool, connect, write, read)
-    separately, so a single number would allow up to four times that long.
-    The budget is min(configured, remaining); pool, connect and write get at
-    most a quarter of it (capped at 5 s) and read gets the rest, so the
-    phases sum to the budget.
+    httpx applies these to each socket operation, not to the whole request,
+    so they only stop a stalled connection; ``HttpDetectionProvider`` also
+    enforces the frame's wall-clock deadline between chunks. The budget is
+    min(configured, remaining); pool, connect and write get at most a
+    quarter of it (capped at 5 s) and read gets the rest.
     """
     total = float(configured_seconds)
     if remaining_seconds is not None:
@@ -241,7 +245,35 @@ def parse_detector_response(
     )
 
 
+class _FrameDeadlineExceeded(Exception):
+    pass
+
+
+class _ResponseTooLarge(Exception):
+    pass
+
+
+_now = time.monotonic  # test seam
+
+
+def _deadline_chunks(payload: bytes, deadline: float):
+    """Request body in chunks, stopping once the frame's deadline passes."""
+    for offset in range(0, len(payload), _STREAM_CHUNK_BYTES):
+        if _now() > deadline:
+            raise _FrameDeadlineExceeded
+        yield payload[offset:offset + _STREAM_CHUNK_BYTES]
+
+
 class HttpDetectionProvider:
+    """Calls a self-hosted detector over HTTPS.
+
+    The frame's budget is a wall-clock deadline: the request is uploaded and
+    the response read in chunks, and the frame is abandoned as soon as the
+    deadline passes, so a slow uplink or a detector that trickles its
+    response cannot hold the worker. A frame can overrun by at most one
+    socket timeout (a quarter of its budget) plus DNS resolution.
+    """
+
     name = "http_detector"
 
     def __init__(self, endpoint: str, api_key: str, *, timeout_seconds: float = 30.0, client: httpx.Client | None = None) -> None:
@@ -255,7 +287,7 @@ class HttpDetectionProvider:
     ) -> DetectionResult:
         if not image or len(image) > MAX_IMAGE_BYTES:
             return DetectionResult(status="failed", frame=frame, provider=self.name, error="image_outside_detector_bound")
-        started = time.monotonic()
+        started = _now()
         body = {
             "image": base64.b64encode(image).decode("ascii"),
             "content_type": content_type or "application/octet-stream",
@@ -263,26 +295,46 @@ class HttpDetectionProvider:
             "labels": list(profile.detection_labels),
             "max_detections": MAX_DETECTIONS,
         }
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        payload_bytes = json.dumps(body).encode("utf-8")
+        # An explicit length keeps the streamed upload a plain (not chunked) request body.
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
+                   "Content-Length": str(len(payload_bytes))}
         timeout = bounded_timeout(self.timeout, timeout_seconds)
+        budget = self.timeout if timeout_seconds is None else min(self.timeout, float(timeout_seconds))
+        deadline = started + max(budget, 0.1)
+        client = self._client or httpx.Client()
+        status_code, raw = 0, bytearray()
         try:
-            if self._client is not None:
-                response = self._client.post(self.endpoint, json=body, headers=headers, timeout=timeout)
-            else:
-                response = httpx.post(self.endpoint, json=body, headers=headers, timeout=timeout)
+            with client.stream("POST", self.endpoint, content=_deadline_chunks(payload_bytes, deadline), headers=headers,
+                               timeout=timeout) as response:
+                status_code = response.status_code
+                if status_code < 400:
+                    for chunk in response.iter_bytes():
+                        if _now() > deadline:
+                            raise _FrameDeadlineExceeded
+                        raw.extend(chunk)
+                        if len(raw) > MAX_DETECTOR_RESPONSE_BYTES:
+                            raise _ResponseTooLarge
         except Exception as exc:  # noqa: BLE001 - surfaced as a typed failure
-            return DetectionResult(
-                status="failed", frame=frame, provider=self.name, error=exc.__class__.__name__, retryable=True,
-                latency_ms=int((time.monotonic() - started) * 1000),
-            )
-        latency = int((time.monotonic() - started) * 1000)
-        if response.status_code >= 400:
+            if isinstance(exc, _ResponseTooLarge):
+                error, retryable = "detector_response_too_large", False
+            elif isinstance(exc, _FrameDeadlineExceeded) or _now() > deadline:
+                error, retryable = "detector_frame_time_budget_exceeded", True
+            else:
+                error, retryable = exc.__class__.__name__, True
+            return DetectionResult(status="failed", frame=frame, provider=self.name, error=error, retryable=retryable,
+                                   latency_ms=int((_now() - started) * 1000))
+        finally:
+            if self._client is None:
+                client.close()
+        latency = int((_now() - started) * 1000)
+        if status_code >= 400:
             return DetectionResult(
                 status="failed", frame=frame, provider=self.name, latency_ms=latency,
-                error=f"detector_http_{response.status_code}", retryable=response.status_code in RETRYABLE_HTTP,
+                error=f"detector_http_{status_code}", retryable=status_code in RETRYABLE_HTTP,
             )
         try:
-            payload = response.json()
+            payload = json.loads(bytes(raw))
         except ValueError:
             return DetectionResult(status="failed", frame=frame, provider=self.name, latency_ms=latency, error="detector_response_not_json")
         result = parse_detector_response(payload, profile=profile, frame=frame, image=image, content_type=content_type)

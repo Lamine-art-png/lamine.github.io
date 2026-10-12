@@ -1,6 +1,7 @@
 """Detection lane: profiles, geometry, strict provider validation, counting."""
 from __future__ import annotations
 
+import json
 import struct
 
 import httpx
@@ -375,3 +376,77 @@ def test_http_provider_passes_the_bounded_timeout_per_frame():
 def test_disabled_provider_accepts_a_frame_timeout():
     result = detection.DisabledDetectionProvider().detect(b"x", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=3.0)
     assert result.status == "disabled"
+
+
+def test_http_provider_streams_a_plain_body_with_its_length():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.headers.get("content-length"), request.headers.get("transfer-encoding"), request.content))
+        return httpx.Response(200, json=_payload())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = detection.HttpDetectionProvider("https://detector.internal/infer", "k", client=client).detect(
+            b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef())
+    length, transfer_encoding, content = seen[0]
+    assert result.status == "ok"
+    assert int(length) == len(content) and transfer_encoding is None
+    assert json.loads(content)["crop_profile"] == GRAPE.crop_id
+
+
+def test_http_provider_refuses_an_oversized_response():
+    big = b"[" + b"0," * (detection.MAX_DETECTOR_RESPONSE_BYTES // 2) + b"0]"
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, content=big))) as client:
+        result = detection.HttpDetectionProvider("https://detector.internal/infer", "k", client=client).detect(
+            b"x", "image/png", GRAPE, detection.FrameRef())
+    assert result.status == "failed" and result.error == "detector_response_too_large" and not result.retryable
+
+
+def test_http_provider_stops_uploading_once_the_frame_deadline_passes(monkeypatch):
+    ticks = iter(range(0, 1000, 5))  # every clock read advances 5 s
+    monkeypatch.setattr(detection, "_now", lambda: float(next(ticks)))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=_payload()))) as client:
+        result = detection.HttpDetectionProvider("https://detector.internal/infer", "k", client=client).detect(
+            b"x" * 1024, "image/png", GRAPE, detection.FrameRef(), timeout_seconds=3.0)
+    assert result.status == "failed" and result.error == "detector_frame_time_budget_exceeded" and result.retryable
+
+
+def test_a_trickling_detector_cannot_hold_a_frame_past_its_deadline():
+    """Adversarial review: per-read timeouts never fire when bytes keep arriving."""
+    import socketserver
+    import threading
+    import time as real_time
+    from http.server import BaseHTTPRequestHandler
+
+    class Trickle(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 - http.server API
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "100000")
+            self.end_headers()
+            try:
+                for _ in range(40):  # 8 bytes every 0.15 s: each read finishes well inside its timeout
+                    self.wfile.write(b"        ")
+                    self.wfile.flush()
+                    real_time.sleep(0.15)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+        def log_message(self, *args):
+            pass
+
+    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Trickle)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        with httpx.Client(trust_env=False) as client:
+            provider = detection.HttpDetectionProvider(f"http://127.0.0.1:{server.server_address[1]}/infer", "k", client=client)
+            started = real_time.monotonic()
+            result = provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=1.0)
+            elapsed = real_time.monotonic() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.status == "failed" and result.error == "detector_frame_time_budget_exceeded"
+    assert elapsed < 1.6  # 1 s budget plus at most one 0.25 s read timeout, with scheduling slack
