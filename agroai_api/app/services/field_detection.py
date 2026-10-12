@@ -118,7 +118,30 @@ class DetectionResult:
 class DetectionProvider(Protocol):
     name: str
 
-    def detect(self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef) -> DetectionResult: ...
+    def detect(
+        self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef, *, timeout_seconds: float | None = None,
+    ) -> DetectionResult: ...
+
+
+MIN_FRAME_SECONDS = 2.0
+_SETUP_PHASE_CAP_SECONDS = 5.0
+
+
+def bounded_timeout(configured_seconds: float, remaining_seconds: float | None = None) -> httpx.Timeout:
+    """An httpx timeout whose phases together cannot exceed the frame's budget.
+
+    httpx applies a timeout to each phase (pool, connect, write, read)
+    separately, so a single number would allow up to four times that long.
+    The budget is min(configured, remaining); pool, connect and write get at
+    most a quarter of it (capped at 5 s) and read gets the rest, so the
+    phases sum to the budget.
+    """
+    total = float(configured_seconds)
+    if remaining_seconds is not None:
+        total = min(total, float(remaining_seconds))
+    total = max(total, 0.1)
+    setup = min(_SETUP_PHASE_CAP_SECONDS, total / 4)
+    return httpx.Timeout(connect=setup, write=setup, pool=setup, read=total - 3 * setup)
 
 
 class DisabledDetectionProvider:
@@ -129,7 +152,9 @@ class DisabledDetectionProvider:
     def __init__(self, reason: str = "no_validated_detector_weights") -> None:
         self.reason = reason
 
-    def detect(self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef) -> DetectionResult:
+    def detect(
+        self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef, *, timeout_seconds: float | None = None,
+    ) -> DetectionResult:
         return DetectionResult(status="disabled", frame=frame, provider=self.name, error=self.reason)
 
 
@@ -225,7 +250,9 @@ class HttpDetectionProvider:
         self.timeout = max(2.0, float(timeout_seconds))
         self._client = client
 
-    def detect(self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef) -> DetectionResult:
+    def detect(
+        self, image: bytes, content_type: str | None, profile: CropProfile, frame: FrameRef, *, timeout_seconds: float | None = None,
+    ) -> DetectionResult:
         if not image or len(image) > MAX_IMAGE_BYTES:
             return DetectionResult(status="failed", frame=frame, provider=self.name, error="image_outside_detector_bound")
         started = time.monotonic()
@@ -237,11 +264,12 @@ class HttpDetectionProvider:
             "max_detections": MAX_DETECTIONS,
         }
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        timeout = bounded_timeout(self.timeout, timeout_seconds)
         try:
             if self._client is not None:
-                response = self._client.post(self.endpoint, json=body, headers=headers, timeout=self.timeout)
+                response = self._client.post(self.endpoint, json=body, headers=headers, timeout=timeout)
             else:
-                response = httpx.post(self.endpoint, json=body, headers=headers, timeout=self.timeout)
+                response = httpx.post(self.endpoint, json=body, headers=headers, timeout=timeout)
         except Exception as exc:  # noqa: BLE001 - surfaced as a typed failure
             return DetectionResult(
                 status="failed", frame=frame, provider=self.name, error=exc.__class__.__name__, retryable=True,

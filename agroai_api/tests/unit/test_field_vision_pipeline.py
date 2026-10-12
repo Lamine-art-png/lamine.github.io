@@ -196,10 +196,13 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
     from app.services import field_detection as detection
     from app.services import field_intelligence_vision_extension as extension
 
+    timeouts = []
+
     class FakeDetector:
         name = "fake_detector"
 
-        def detect(self, image, content_type, profile, frame):
+        def detect(self, image, content_type, profile, frame, *, timeout_seconds=None):
+            timeouts.append(timeout_seconds)
             return detection.DetectionResult(
                 status="ok", frame=frame, model_id="fake-almond-detector", model_version="test",
                 detections=[detection.Detection(label="nut", score=0.7, box=[0.1 * i, 0.1, 0.05, 0.05]) for i in range(1, 6)],
@@ -228,8 +231,9 @@ def test_detection_flag_on_adds_reviewable_counts_without_escalating(client, db,
         .first()
     )
     assert run is not None and run.status == "completed" and run.model == "fake-almond-detector@test"
-    assert run.output_json["frames_sent"] == 1
+    assert run.output_json["frames_sent"] == 1 and run.output_json["frames_reserved"] == 1
     assert detections["limits"]["max_frames_per_observation"] == 8
+    assert len(timeouts) == 1 and 0 < timeouts[0] <= 60  # bounded by the observation budget
 
 
 def test_detection_enabled_but_unconfigured_is_reported(client, db, fake_store, monkeypatch):
@@ -266,7 +270,7 @@ def test_detection_daily_frame_budget_is_enforced(client, db, fake_store, monkey
     class CountingDetector:
         name = "counting_detector"
 
-        def detect(self, image, content_type, profile, frame):
+        def detect(self, image, content_type, profile, frame, *, timeout_seconds=None):
             calls.append(frame)
             return detection.DetectionResult(status="ok", frame=frame, model_id="fake-almond-detector", model_version="test",
                                              detections=[detection.Detection(label="nut", score=0.7, box=[0.1, 0.1, 0.05, 0.05])])
@@ -285,3 +289,74 @@ def test_detection_daily_frame_budget_is_enforced(client, db, fake_store, monkey
     assert "detections" not in second["structured"]
     assert second["provenance"]["detection_reason"] == "detection_daily_frame_budget_exhausted"
     assert len(calls) == 1  # no frame sent once the budget is used
+
+
+def test_detection_frames_are_reserved_before_any_frame_is_sent(client, db, fake_store, monkeypatch):
+    """Second review: the budget is reserved first, not read and then spent."""
+    from app.services import field_detection as detection
+    from app.services import field_intelligence_vision_extension as extension
+
+    seen = []
+
+    class InspectingDetector:
+        name = "inspecting_detector"
+
+        def detect(self, image, content_type, profile, frame, *, timeout_seconds=None):
+            reserved = (
+                db.query(FieldObservationProcessingRun)
+                .filter(FieldObservationProcessingRun.stage == "detection", FieldObservationProcessingRun.status == "reserved")
+                .all()
+            )
+            seen.append([run.output_json for run in reserved])
+            return detection.DetectionResult(status="ok", frame=frame, model_id="fake-almond-detector", model_version="test")
+
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
+    monkeypatch.setattr(extension, "get_detection_provider", lambda: InspectingDetector())
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-reserve")
+
+    assert seen == [[{"frames_reserved": 1, "frames_sent": 0}]]
+    run = (
+        db.query(FieldObservationProcessingRun)
+        .filter(FieldObservationProcessingRun.observation_id == obs["id"], FieldObservationProcessingRun.stage == "detection")
+        .one()
+    )
+    assert run.status == "completed" and run.output_json["frames_sent"] == 1
+
+
+def test_detection_stops_before_the_observation_time_budget_is_exceeded(client, db, fake_store, monkeypatch):
+    """Second review: no frame starts without at least the minimum time left."""
+    from app.services import field_intelligence_vision_extension as extension
+
+    calls = []
+
+    class SlowDetector:
+        name = "slow_detector"
+
+        def detect(self, image, content_type, profile, frame, *, timeout_seconds=None):
+            calls.append(timeout_seconds)
+            raise AssertionError("no frame may be sent once the budget is spent")
+
+    clock = iter([100.0, 104.5])  # deadline = 100 + 5; 0.5 s left when the frame would start
+
+    monkeypatch.setenv("FIELD_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("FIELD_DETECTION_ORG_ALLOWLIST", "org-fi")
+    monkeypatch.setenv("FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS", "5")
+    monkeypatch.setattr(extension, "get_detection_provider", lambda: SlowDetector())
+    monkeypatch.setattr(extension, "_clock", lambda: next(clock, 200.0))
+    _, _, headers = _auth(db)
+    _provider_returns(monkeypatch, _contract(summary="Rows", severity="low"))
+    obs = _photo_observation(client, db, headers, capture_id="cap-det-time")
+
+    assert calls == []
+    detections = obs["structured"]["detections"]
+    assert detections["frames_skipped"] == {"time_budget": 1}
+    run = (
+        db.query(FieldObservationProcessingRun)
+        .filter(FieldObservationProcessingRun.observation_id == obs["id"], FieldObservationProcessingRun.stage == "detection")
+        .one()
+    )
+    # Finished runs count what was actually sent, so an unsent reservation does not consume budget.
+    assert run.output_json["frames_sent"] == 0 and run.status == "failed"

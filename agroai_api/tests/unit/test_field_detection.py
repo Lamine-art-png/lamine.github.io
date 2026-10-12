@@ -340,3 +340,38 @@ def test_detection_limits_are_bounded(monkeypatch):
     assert limits.max_frames_per_observation == 8
     assert limits.observation_budget_seconds == 60.0
     assert limits.daily_frame_budget_per_organization == 200
+
+
+@pytest.mark.parametrize(
+    ("configured", "remaining", "expected"),
+    [
+        (30.0, None, {"connect": 5.0, "write": 5.0, "pool": 5.0, "read": 15.0}),   # setup phases capped at 5 s
+        (30.0, 10.0, {"connect": 2.5, "write": 2.5, "pool": 2.5, "read": 2.5}),    # remaining budget wins
+        (30.0, 2.0, {"connect": 0.5, "write": 0.5, "pool": 0.5, "read": 0.5}),
+    ],
+)
+def test_bounded_timeout_phases_sum_to_the_frame_budget(configured, remaining, expected):
+    """Second review: httpx applies timeouts per phase, so a single number allows up to 4x."""
+    timeout = detection.bounded_timeout(configured, remaining)
+    phases = {"connect": timeout.connect, "write": timeout.write, "pool": timeout.pool, "read": timeout.read}
+    assert phases == pytest.approx(expected)
+    assert sum(phases.values()) == pytest.approx(min(configured, remaining if remaining is not None else configured))
+
+
+def test_http_provider_passes_the_bounded_timeout_per_frame():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"])
+        return httpx.Response(200, json=_payload())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = detection.HttpDetectionProvider("https://detector.internal/infer", "k", client=client)
+        provider.detect(b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=8.0)
+    assert sum(seen[0].values()) == pytest.approx(8.0)
+    assert seen[0]["read"] == pytest.approx(2.0)
+
+
+def test_disabled_provider_accepts_a_frame_timeout():
+    result = detection.DisabledDetectionProvider().detect(b"x", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=3.0)
+    assert result.status == "disabled"

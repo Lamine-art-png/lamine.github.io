@@ -11,10 +11,19 @@ customers. This page lists what has to be true first, and how to stop it.
 | `FIELD_DETECTION_ENABLED` | off | Global kill switch. Off means no detector call anywhere. |
 | `FIELD_DETECTION_ORG_ALLOWLIST` | empty | Comma-separated organization ids allowed to run detection. Empty means none (fail closed). |
 | `FIELD_DETECTION_ENDPOINT` / `FIELD_DETECTION_API_KEY` | unset | Self-hosted inference endpoint (https only, no embedded credentials). Missing values keep detection off. |
-| `FIELD_DETECTION_TIMEOUT_SECONDS` | 30 | Per-frame HTTP timeout. |
+| `FIELD_DETECTION_TIMEOUT_SECONDS` | 30 | Per-frame HTTP budget. It is split across the httpx phases (pool, connect and write at most a quarter each, capped at 5 s; read gets the rest), so the phases together cannot exceed it. |
 | `FIELD_DETECTION_MAX_FRAMES_PER_OBSERVATION` | 8 (max 8) | Frames sent per observation. |
-| `FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS` | 60 (5 to 300) | Wall-clock budget per observation; later frames are recorded as skipped. |
-| `FIELD_DETECTION_DAILY_FRAME_BUDGET` | 200 per organization | Frames per organization per UTC day, counted from `detection` processing runs. |
+| `FIELD_DETECTION_OBSERVATION_BUDGET_SECONDS` | 60 (5 to 300) | Hard wall-clock budget for the detection stage of one observation. No frame starts with less than 2 s left, and each frame's HTTP budget is clamped to the time remaining, so the stage cannot run past it (DNS resolution excepted: httpx does not bound it). Unsent frames are recorded as `time_budget` skips. |
+| `FIELD_DETECTION_DAILY_FRAME_BUDGET` | 200 per organization | Frames per organization per UTC day. Reserved atomically before any frame is sent (see below). |
+
+### How the daily budget is enforced (`app/services/field_detection_quota.py`)
+
+1. A transaction-scoped PostgreSQL advisory lock keyed by organization serializes reservations, so concurrent workers take turns.
+2. Frames used today are counted from `detection` processing runs. A run still `reserved` counts its reserved frames; a finished run counts the frames it actually sent.
+3. A `reserved` run for the granted frames is committed in its own short transaction before any frame is sent. If the worker crashes, or its pipeline rolls back or is retried, the reservation stays and keeps counting. The pipeline's own transaction is not committed early.
+4. After sending, the same run records `frames_sent`, the outcome and the latency.
+
+Tests: `test_field_intelligence_postgres.py` proves on real PostgreSQL that 4 concurrent workers requesting 3 frames each against a budget of 5 are granted exactly 5 in total, and that a reservation survives a pipeline rollback. The pipeline tests prove the reservation exists before the first frame is sent and that no frame starts after the time budget.
 
 Detections never change an observation's severity or status. Results are
 stored as unreviewed evidence, and the model is labelled

@@ -103,7 +103,9 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
             tests/unit/test_field_intelligence_postgres.py::test_pg_shared_object_deletion_exactly_one_physical_delete \
             tests/unit/test_field_intelligence_postgres.py::test_pg_concurrent_uploads_cannot_overshoot_quota \
-            tests/unit/test_field_intelligence_postgres.py::test_pg_at_quota_identical_replay_succeeds
+            tests/unit/test_field_intelligence_postgres.py::test_pg_at_quota_identical_replay_succeeds \
+            tests/unit/test_field_intelligence_postgres.py::test_pg_concurrent_detection_reservations_cannot_overshoot_daily_budget \
+            tests/unit/test_field_intelligence_postgres.py::test_pg_detection_reservation_survives_a_pipeline_rollback
 
   backend-field-intelligence:
     name: Backend Field Intelligence, launch, worker, staging, and R2 tests

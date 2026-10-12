@@ -268,3 +268,69 @@ def test_pg_at_quota_identical_replay_succeeds(pg_sessions, fake_store):
         _register(db, ctx, "cap-pg", client_asset_id="extra", body=b"\x89PNG\r\n\x1a\n" + b"X" * 64)
     detail = getattr(excinfo.value, "detail", None)
     assert isinstance(detail, dict) and detail.get("code") == "storage_quota_exceeded"
+
+
+def _detection_target(org_id="org-pg"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(tenant_id=org_id, id=None, workspace_id=None, capture_session_id=None)
+
+
+def test_pg_concurrent_detection_reservations_cannot_overshoot_daily_budget(pg_sessions):
+    """Second review: concurrent workers cannot both spend the same remaining frames."""
+    from app.services.field_detection_quota import frames_used_today, reserve_frames
+
+    db, factory = pg_sessions
+    _seed(db)
+    workers = 4
+    barrier = threading.Barrier(workers)
+    granted: list[int] = []
+    granted_lock = threading.Lock()
+    errors: list[Exception] = []
+
+    def worker() -> None:
+        session = factory()
+        try:
+            barrier.wait(timeout=10)
+            _run_id, frames, _used = reserve_frames(session, _detection_target(), requested=3, daily_budget=5,
+                                                    provider="test_detector")
+            with granted_lock:
+                granted.append(frames)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            session.close()
+
+    threads = [threading.Thread(target=worker) for _ in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert not errors, errors
+    assert sum(granted) == 5, granted  # exactly the budget: e.g. 3 + 2 + 0 + 0
+    assert sorted(granted) == [0, 0, 2, 3]
+    db.expire_all()
+    assert frames_used_today(db, "org-pg") == 5
+
+
+def test_pg_detection_reservation_survives_a_pipeline_rollback(pg_sessions):
+    """A reservation is committed on its own before frames are sent, so a failed
+    or retried pipeline cannot leave paid frames uncounted."""
+    from app.services.field_detection_quota import frames_used_today, reserve_frames
+
+    db, factory = pg_sessions
+    _seed(db)
+    pipeline = factory()
+    try:
+        pipeline.add(Workspace(id="ws-pipeline-only", organization_id="org-pg", name="Uncommitted", crop="Almonds",
+                               region="CA", mode="live"))
+        pipeline.flush()
+        run_id, frames, _used = reserve_frames(pipeline, _detection_target(), requested=2, daily_budget=5,
+                                               provider="test_detector")
+        assert frames == 2 and run_id
+        pipeline.rollback()  # the pipeline fails after the reservation
+    finally:
+        pipeline.close()
+    db.expire_all()
+    assert db.get(Workspace, "ws-pipeline-only") is None  # the pipeline's own work was not committed early
+    assert frames_used_today(db, "org-pg") == 2  # the reserved frames still count
