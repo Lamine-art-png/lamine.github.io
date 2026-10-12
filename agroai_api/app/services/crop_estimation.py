@@ -788,6 +788,10 @@ def estimate_stage_proportions(request: StageProportionRequest) -> dict[str, Any
     units = [row for row in rows if sum(row.values()) > 0]
     if len(units) < MIN_SAMPLE_UNITS:
         reasons.append(f"sample_units_with_objects:{len(units)}<{MIN_SAMPLE_UNITS}")
+    population = request.population_units
+    if population is not None and (isinstance(population, bool) or not isinstance(population, int)
+                                   or population < len(request.samples)):
+        reasons.append("population_units_must_be_an_integer_at_least_the_sample")
     rule = request.readiness
     if rule is not None:
         if not rule.ready_stages or any(stage not in stages for stage in rule.ready_stages):
@@ -831,24 +835,39 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
     probability = request.design in PROBABILITY_DESIGNS and request.design != STRATIFIED_DESIGN
     m = [sum(row.values()) for row in units]
     critical = t_critical_95(len(units) - 1)
-    census = bool(request.population_units) and request.population_units <= len(units)
+    # Every sampled unit counted (units with no objects included): no sampling variance.
+    census = request.population_units is not None and request.population_units == len(request.samples)
 
     def zero_variance(y: list[float]) -> bool:
-        # Every sampled unit has the same share, so the residual variance is zero although
-        # most units were not observed: the interval would claim certainty.
+        # Every sampled unit has the same share (within float error), so the residual
+        # variance is zero although most units were not observed.
         unit_shares = [yi / mi for yi, mi in zip(y, m)]
-        return not census and max(unit_shares) == min(unit_shares)
+        return not census and math.isclose(max(unit_shares), min(unit_shares), rel_tol=1e-9, abs_tol=1e-12)
+
+    def interval(y: list[float]) -> tuple[float, float, str | None]:
+        p, se = _ratio_estimate(y, m, request.population_units)
+        if not zero_variance(y):
+            return max(0.0, p - critical * se), min(1.0, p + critical * se), None
+        # Conservative bound: unit shares lie in [0, 1], so their variance is at most
+        # p(1 - p) (more when units differ in size, hence n_eff = n * mean(m) / max(m)).
+        # Wilson score interval on that effective number of units.
+        n_eff = len(units) * (sum(m) / len(m)) / max(m)
+        z2 = critical * critical
+        centre = (p + z2 / (2 * n_eff)) / (1 + z2 / n_eff)
+        half = critical * math.sqrt(p * (1 - p) / n_eff + z2 / (4 * n_eff * n_eff)) / (1 + z2 / n_eff)
+        return max(0.0, centre - half), min(1.0, centre + half), "worst_case_between_unit_variance"
 
     shares: dict[str, dict[str, Any]] = {}
     warnings: list[str] = []
     for stage in stages:
         y = [row.get(stage, 0.0) for row in units]
-        p, se = _ratio_estimate(y, m, request.population_units)
+        p, _ = _ratio_estimate(y, m, request.population_units)
         entry: dict[str, Any] = {"share": round(p, 4)}
         if probability:
-            entry["interval_95"] = [round(max(0.0, p - critical * se), 4), round(min(1.0, p + critical * se), 4)]
-            if zero_variance(y):
-                entry["interval_reliability"] = "unreliable_zero_sample_variance"
+            low, high, basis = interval(y)
+            entry["interval_95"] = [round(low, 4), round(high, 4)]
+            if basis:
+                entry["interval_basis"] = basis
                 warnings.append(f"zero_sample_variance:{stage}")
         shares[stage] = entry
     result["stage_shares"] = shares
@@ -860,7 +879,7 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
 
     if rule is not None:
         y = [sum(row.get(stage, 0.0) for stage in rule.ready_stages) for row in units]
-        p, se = _ratio_estimate(y, m, request.population_units)
+        p, _ = _ratio_estimate(y, m, request.population_units)
         readiness: dict[str, Any] = {
             "ready_stages": list(rule.ready_stages), "threshold_share": rule.threshold_share,
             "threshold_source": rule.source, "observed_share": round(p, 4),
@@ -870,14 +889,16 @@ def _stage_body(request: StageProportionRequest, result: dict[str, Any], units: 
                 "not_assessed_stratified_without_stratum_weights" if request.design == STRATIFIED_DESIGN
                 else "not_assessed_non_probability_sample"
             )
-        elif zero_variance(y):
-            # No usable interval: sample more units (or units that differ) before a readiness call.
-            readiness["status"] = "not_assessed_zero_sample_variance"
         else:
-            low, high = max(0.0, p - critical * se), min(1.0, p + critical * se)
+            low, high, basis = interval(y)
             readiness["interval_95"] = [round(low, 4), round(high, 4)]
+            if basis:
+                readiness["interval_basis"] = basis
             readiness["status"] = "ready" if low >= rule.threshold_share else "not_ready" if high < rule.threshold_share else "uncertain"
         result["readiness"] = readiness
     result["status"] = "estimated"
-    result["interval_method"] = "ratio estimator with sample units as clusters; Student t on units"
+    result["interval_method"] = (
+        "ratio estimator with sample units as clusters; Student t on units; where every sampled unit has the same "
+        "share, a Wilson bound under the worst-case between-unit variance"
+    )
     return result

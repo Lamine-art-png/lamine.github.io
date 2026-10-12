@@ -643,20 +643,66 @@ def test_repeated_readiness_stages_are_refused():
     assert "readiness_stages_must_be_unique" in result["reasons"]
 
 
-def test_identical_stage_shares_give_no_readiness_call():
-    """Every sampled tree fully split: zero residual variance is not certainty about the block."""
-    all_split = [est.StageSample(f"tree-{i}", {"hull_split": 4}) for i in range(5)]
-    rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
-    result = est.estimate_stage_proportions(_stages(samples=all_split, population_units=10_000, readiness=rule))
+def _uniform_trees(count, split, intact):
+    return [est.StageSample(f"tree-{i}", {"hull_split": split, "hull_intact": intact}) for i in range(count)]
+
+
+@pytest.mark.parametrize(
+    ("count", "population", "split", "intact", "threshold", "status"),
+    [
+        (5, 10_000, 4, 0, 0.9, "uncertain"),       # 5 fully split trees cannot show 90% of 10,000 are ready
+        (2000, 5000, 20, 0, 0.9, "ready"),        # 2,000 fully split trees can
+        (400, 5000, 0, 20, 0.5, "not_ready"),     # 400 trees with no split hulls are clearly not ready
+        (5, None, 8, 2, 0.8, "uncertain"),        # identical 80% shares on 5 trees
+    ],
+)
+def test_identical_stage_shares_use_a_conservative_bound(count, population, split, intact, threshold, status):
+    """Round-3 review: zero residual variance is not certainty, but readiness must stay decidable."""
+    rule = est.ReadinessRule(("hull_split",), threshold, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(samples=_uniform_trees(count, split, intact), population_units=population,
+                                                    readiness=rule))
     assert result["status"] == "estimated"
-    assert result["stage_shares"]["hull_split"]["interval_reliability"] == "unreliable_zero_sample_variance"
+    assert result["readiness"]["status"] == status
+    assert result["readiness"]["interval_basis"] == "worst_case_between_unit_variance"
     assert "zero_sample_variance:hull_split" in result["interval_warnings"]
-    assert result["readiness"]["status"] == "not_assessed_zero_sample_variance"
-    # A census (every unit sampled) has no sampling variance to worry about.
-    census = est.estimate_stage_proportions(_stages(samples=all_split, population_units=5, readiness=rule))
+    low, high = result["readiness"]["interval_95"]
+    assert low <= split / (split + intact) <= high and high - low > 0
+
+
+def test_conservative_bound_numbers():
+    # p = 1 over 5 trees, t(4) = 2.776: Wilson lower bound (1 + z^2/10) / (1 + z^2/5) - z * sqrt(z^2/100) / (1 + z^2/5) = 0.3935
+    rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(samples=_uniform_trees(5, 4, 0), readiness=rule))
+    assert result["readiness"]["interval_95"] == pytest.approx([0.3935, 1.0], abs=1e-4)
+
+
+def test_census_and_population_validation_for_stage_shares():
+    rule = est.ReadinessRule(("hull_split",), 0.9, "Grower harvest plan (test)")
+    census = est.estimate_stage_proportions(_stages(samples=_uniform_trees(5, 4, 0), population_units=5, readiness=rule))
     assert census["readiness"]["status"] == "ready" and "interval_warnings" not in census
-    # Ordinary samples are unaffected.
-    assert "interval_reliability" not in est.estimate_stage_proportions(_stages())["stage_shares"]["hull_split"]
+    for population in (3, 4):
+        refused = est.estimate_stage_proportions(_stages(samples=_uniform_trees(5, 4, 0), population_units=population))
+        assert refused["status"] == "not_estimable"
+        assert "population_units_must_be_an_integer_at_least_the_sample" in refused["reasons"]
+
+
+def test_proportional_fractional_counts_are_recognised_as_identical_shares():
+    """Float shares 0.33333333333333337 and 0.3333333333333333 are the same share."""
+    samples = [est.StageSample(f"t{i}", {"hull_split": a, "hull_intact": b})
+               for i, (a, b) in enumerate([(0.3, 0.6), (0.1, 0.2), (0.7, 1.4), (0.9, 1.8), (1.1, 2.2)])]
+    rule = est.ReadinessRule(("hull_split",), 0.3333, "Grower harvest plan (test)")
+    result = est.estimate_stage_proportions(_stages(samples=samples, readiness=rule))
+    assert result["stage_shares"]["hull_split"]["interval_basis"] == "worst_case_between_unit_variance"
+    assert result["readiness"]["status"] == "uncertain"
+
+
+def test_ordinary_samples_keep_the_design_based_interval():
+    result = est.estimate_stage_proportions(_stages())
+    assert "interval_basis" not in result["stage_shares"]["hull_split"]
+    assert result["stage_shares"]["hull_split"]["interval_95"] == pytest.approx([0.2037, 0.5963], abs=1e-4)
+    # A stage seen on no sampled tree is not shown as certainly absent.
+    assert result["stage_shares"]["hull_open_dry"]["interval_basis"] == "worst_case_between_unit_variance"
+    assert result["stage_shares"]["hull_open_dry"]["interval_95"][1] > 0
 
 
 def test_market_proposal_uses_marketable_yield_when_supplied():
