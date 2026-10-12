@@ -129,9 +129,8 @@ def test_paid_checkout_activates_live_access_only_after_signed_payment(client, d
     after_checkout = client.get(
         "/v1/platform/developer/billing/checkout-readiness", headers=headers
     )
-    assert after_checkout.json() == {
-        "eligible": False, "code": "api_subscription_already_exists"
-    }
+    # An abandoned unpaid session is retryable without granting access.
+    assert after_checkout.json() == {"eligible": True, "code": "ready"}
 
     with pytest.raises(HTTPException) as blocked:
         require_api_entitlement(
