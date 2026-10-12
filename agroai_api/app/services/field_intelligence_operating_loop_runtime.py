@@ -96,7 +96,8 @@ def _clean_observation_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     recommendation = (
         _safe_text(cleaned.get("recommended_action"), limit=2000)
-        or _safe_text(vision.get("recommended_follow_up"), limit=2000)
+        # Advice from a degraded or unchecked analysis is never promoted, as in the vision extension.
+        or (_safe_text(vision.get("recommended_follow_up"), limit=2000) if vision.get("analysis_state") == "structured" else "")
         or _safe_text(correlation.get("recommended_next_action"), limit=2000)
     )
 

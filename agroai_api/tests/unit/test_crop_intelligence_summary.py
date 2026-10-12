@@ -110,7 +110,8 @@ def test_different_blocks_are_not_compared_as_a_trend():
     ]
     summary = field_condition_summary(rows, now=NOW)
     assert summary["comparison"] == {"basis": "no_comparable_prior",
-                                     "reason": "no_prior_assessment_of_this_block_by_this_method"}
+                                     "reason": "no_prior_assessment_of_this_block_by_this_method_in_window",
+                                     "window_records": 2}
     assert summary["changes"] == []
     blocks = {block["block_key"]: block for block in summary["field_snapshot"]["blocks"]}
     assert set(blocks) == {"name:block 1", "name:block 9"}
@@ -317,3 +318,26 @@ def test_future_dated_total_counts_records_the_caller_did_not_fetch():
     excluded = next(change for change in summary["changes"] if change["kind"] == "future_dated_records_excluded")
     assert excluded["count"] == 40 and summary["future_dated_excluded"] == 40
     assert len(summary["excluded"]) == 1
+
+
+def test_vision_without_an_analysis_state_is_not_treated_as_structured():
+    """Records from before the analysis contract include provider prose stored as vision."""
+    structured = _obs("structured", 30, severity="medium", issues=["powdery mildew"])
+    legacy = _obs("legacy", 2, severity="info", issues=["none"])
+    del legacy["structured"]["vision"]["analysis_state"]
+    summary = field_condition_summary([structured, legacy], now=NOW)
+    assert summary["latest"]["method"] == "visual_unassessed"
+    assert summary["latest"]["visual"]["analysis_state"] == "legacy_unverified"
+    assert summary["comparison"]["basis"] == "no_comparable_prior" and summary["changes"] == []
+
+
+def test_a_record_with_nothing_to_assess_does_not_replace_the_latest_assessment():
+    """A voice note whose transcription was unavailable still finishes processing, but says nothing."""
+    pest = _obs("pest", 24, severity="high", issues=["mites"])
+    empty = {**_obs("empty-voice", 1, severity="info", status="needs_review"), "summary": "", "transcript": None,
+             "structured": {}, "assets": [{"kind": "audio", "status": "stored"}]}
+    summary = field_condition_summary([pest, empty], now=NOW)
+    assert summary["latest"]["observation_id"] == "pest"
+    assert summary["records_without_evidence"] == 1
+    assert [block["observation_id"] for block in summary["field_snapshot"]["blocks"]] == ["pest"]
+    assert summary["timeline"][0]["observation_id"] == "empty-voice"

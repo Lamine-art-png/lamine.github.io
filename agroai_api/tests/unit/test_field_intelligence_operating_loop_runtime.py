@@ -68,3 +68,18 @@ def test_customer_observation_payload_never_exposes_object_dump_text():
     assert cleaned["task_ids"] == ["task_123"]
     assert cleaned["evidence_ids"] == ["evidence_1"]
     assert "[object Object]" not in str(cleaned)
+
+
+def test_degraded_visual_advice_is_never_promoted_to_the_recommended_action():
+    """The vision extension does not promote a degraded follow-up; the serializer must not either."""
+    degraded = _clean_observation_payload({
+        "recommended_action": None,
+        "structured": {"vision": {"analysis_state": "degraded", "recommended_follow_up": "Spray fungicide today."}},
+        "correlation": {},
+    })
+    assert degraded["recommended_action"] is None
+    structured = _clean_observation_payload({
+        "recommended_action": None,
+        "structured": {"vision": {"analysis_state": "structured", "recommended_follow_up": "Capture a close follow-up image."}},
+    })
+    assert structured["recommended_action"] == "Capture a close follow-up image."

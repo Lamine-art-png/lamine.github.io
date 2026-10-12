@@ -111,10 +111,23 @@ def severity(observation: dict[str, Any]) -> str | None:
     return value if value in SEVERITY_RANK else None
 
 
+def has_evidence(observation: dict[str, Any]) -> bool:
+    """Words (a transcript, a correction or a summary) or visual media to assess.
+
+    A voice note whose transcription was unavailable or failed, with no media,
+    still finishes processing, but it says nothing about the crop.
+    """
+    return bool(
+        _text(observation.get("corrected_transcript")) or _text(observation.get("transcript"))
+        or _text(observation.get("summary")) or method_key(observation) != "report"
+    )
+
+
 def is_assessment(observation: dict[str, Any]) -> bool:
-    """A finished record that assesses the crop (a missing event type is an observation)."""
+    """A finished record with evidence that assesses the crop (a missing event type is an observation)."""
     event_type = observation.get("event_type") or "observation"
-    return observation.get("status") not in PENDING_STATUSES and event_type in ASSESSMENT_EVENT_TYPES
+    return (observation.get("status") not in PENDING_STATUSES and event_type in ASSESSMENT_EVENT_TYPES
+            and has_evidence(observation))
 
 
 def block_key(observation: dict[str, Any]) -> str:
@@ -129,11 +142,13 @@ def method_key(observation: dict[str, Any]) -> str:
     """How the evidence was captured.
 
     ``visual``: structured analysis of photos or video; ``visual_unassessed``:
-    photos or video whose analysis is missing or degraded; ``report``: a
-    spoken or typed account with no visual media.
+    photos or video whose analysis is missing, degraded, or predates the
+    analysis contract (no ``analysis_state``: older records include prose the
+    provider returned instead of an analysis); ``report``: a spoken or typed
+    account with no visual media.
     """
     vision = _vision(observation)
-    if vision and vision.get("analysis_state", "structured") == "structured":
+    if vision.get("analysis_state") == "structured":
         return "visual"
     media = [asset for asset in _as_list(observation.get("assets")) if isinstance(asset, dict)
              and asset.get("kind") in _VISUAL_ASSET_KINDS and asset.get("status") not in _GONE_ASSET_STATUSES]
@@ -207,7 +222,7 @@ def _snapshot(observation: dict[str, Any], now: datetime) -> dict[str, Any]:
         "recommended_action": observation.get("recommended_action"),
         "review_required": observation.get("status") == "needs_review" or bool(vision),
         "visual": None if not vision else {
-            "analysis_state": vision.get("analysis_state", "structured"),
+            "analysis_state": _text(vision.get("analysis_state")) or "legacy_unverified",
             "crop_condition": _text(vision.get("crop_condition")),
             "confidence": vision.get("confidence"),
             "confidence_kind": vision.get("confidence_kind"),
@@ -291,7 +306,9 @@ def _comparison(latest_row: dict[str, Any], previous_row: dict[str, Any] | None,
     if block_key(latest_row) == UNSCOPED_BLOCK:
         return {"basis": "no_comparable_prior", "reason": "observation_has_no_block"}
     if previous_row is None:
-        return {"basis": "no_comparable_prior", "reason": "no_prior_assessment_of_this_block_by_this_method"}
+        # Only the records read are searched; an older prior may exist outside them.
+        return {"basis": "no_comparable_prior", "reason": "no_prior_assessment_of_this_block_by_this_method_in_window",
+                "window_records": len(rows)}
     latest_time, previous_time = _observed_at(latest_row), _observed_at(previous_row)
     return {
         "basis": "same_block_same_method", "previous_observation_id": previous_row.get("id"),
@@ -369,6 +386,7 @@ def field_condition_summary(
         "field_snapshot": {"note": _SNAPSHOT_NOTE, "blocks": list(snapshot.values())},
         "open_reviews": sum(1 for row in rows if row.get("status") == "needs_review"),
         "pending_processing": sum(1 for row in rows if row.get("status") in PENDING_STATUSES),
+        "records_without_evidence": sum(1 for row in rows if not has_evidence(row)),
         "next_action": next_action,
         "timeline": [
             {"observation_id": row.get("id"), "observed_at": (_observed_at(row) or now).isoformat(),
