@@ -736,7 +736,7 @@ function BillingPage() {
       {!enabled && (
         <Surface className="p-6">
           <p className="text-[13px] leading-6 text-[#65736A]">
-            This developer program is not yet eligible for paid Platform API billing. No charge will be initiated until AGRO-AI approves the appropriate enrollment.
+            No self-service charges are active. This developer program is not yet eligible for paid Platform API billing. No charge will be initiated until AGRO-AI approves the appropriate enrollment.
           </p>
         </Surface>
       )}
