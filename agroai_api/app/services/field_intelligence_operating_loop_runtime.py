@@ -238,7 +238,7 @@ def install_field_intelligence_operating_loop() -> None:
             candidates = list(structured.get("evidence_requirements") or [])
             candidates.extend(observation.uncertain_fields_json or [])
             candidates.extend(vision.get("uncertainties") or [])
-            for hypothesis in vision.get("hypotheses") or []:
+            for hypothesis in (vision.get("hypotheses") or []) if analysed else []:
                 if isinstance(hypothesis, dict):
                     candidates.append(hypothesis.get("verification"))
             evidence_required = _text_items(candidates)
