@@ -92,6 +92,7 @@ class DetectionResult:
     model_version: str | None = None
     reported_model_license: str | None = None   # as stated by the detector; not verified
     model_verification: str = "unregistered_unverified"  # or "registry_verified"
+    verification_failure: str | None = None
     registered_model_license: str | None = None
     provider: str = "none"
     latency_ms: int | None = None
@@ -110,6 +111,7 @@ class DetectionResult:
             "model_version": self.model_version,
             "reported_model_license": self.reported_model_license,
             "model_verification": self.model_verification,
+            "verification_failure": self.verification_failure,
             "registered_model_license": self.registered_model_license,
             "provider": self.provider,
             "latency_ms": self.latency_ms,
@@ -235,12 +237,29 @@ def parse_detector_response(
     version = str(model.get("version") or "").strip()[:100] or None
     # Upstream identity strings are self-attested; only the server registry verifies.
     registered = crop_model_registry.verified_detector(model_id, version)
+    failure = None
     if registered is not None and profile.crop_id not in registered.crop_ids:
         registered = None
+    if registered is not None:
+        # A matching id and version is a claim. The registered weights must also be the ones
+        # the deployment attested (locked manifest, verified at detector startup) and the ones
+        # the service reports loading; otherwise the model is not treated as validated.
+        expected = registered.weights_sha256.lower()
+        reported = str(model.get("weights_sha256") or "").strip().lower()
+        attested = crop_model_registry.attested_weights_sha256()
+        if attested is None:
+            failure = "deployment_weights_not_attested"
+        elif attested != expected:
+            failure = "deployment_weights_digest_mismatch"
+        elif reported != expected:
+            failure = "reported_weights_digest_mismatch"
+        if failure:
+            registered = None
     return DetectionResult(
         status="ok", frame=frame, detections=detections, model_id=model_id, model_version=version,
         reported_model_license=str(model.get("license") or "").strip()[:100] or None,
         model_verification="registry_verified" if registered is not None else "unregistered_unverified",
+        verification_failure=failure,
         registered_model_license=registered.license if registered is not None else None,
         dropped=dropped, image_size=size, orientation_corrected=orientation != 1,
     )

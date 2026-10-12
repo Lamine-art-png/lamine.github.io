@@ -259,6 +259,20 @@ def enforce_paid_live_field_ai(
     )
 
 
+def enforce_paid_crop_intelligence(
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> None:
+    """Crop Intelligence calculators use the same existing paid tier as live AI.
+
+    They are not free conversion features: harvest-window, production and
+    maturity-stage calculations require the Professional-or-higher
+    ``intelligence.deep_analysis`` entitlement (contracts and organization
+    overrides respected). No new plan or price is introduced.
+    """
+    enforce_paid_live_field_ai(ctx=ctx, db=db)
+
+
 @router.post("/live-analysis", dependencies=[Depends(enforce_paid_live_field_ai)])
 async def live_field_analysis(
     request: Request,
@@ -929,7 +943,8 @@ def field_crop_condition(
             **{k: v for k, v in summary.items() if k != "status"}, "summary_status": summary["status"]}
 
 
-@router.post("/crop-intelligence/harvest-window", dependencies=[Depends(enforce_json_body_limit)])
+@router.post("/crop-intelligence/harvest-window",
+             dependencies=[Depends(enforce_paid_crop_intelligence), Depends(enforce_json_body_limit)])
 def harvest_window(payload: HarvestWindowIn) -> dict:
     """Harvest window from supplied, sourced inputs. Nothing is persisted."""
     profile = resolve_profile(payload.crop)
@@ -961,7 +976,8 @@ def harvest_window(payload: HarvestWindowIn) -> dict:
     return result
 
 
-@router.post("/crop-intelligence/production-estimate", dependencies=[Depends(enforce_json_body_limit)])
+@router.post("/crop-intelligence/production-estimate",
+             dependencies=[Depends(enforce_paid_crop_intelligence), Depends(enforce_json_body_limit)])
 def production_estimate(payload: ProductionEstimateIn) -> dict:
     """Production from a sampling design. Nothing is persisted or applied;
     an optional Market Intelligence proposal must be reviewed and submitted
@@ -983,7 +999,8 @@ def production_estimate(payload: ProductionEstimateIn) -> dict:
     return result
 
 
-@router.post("/crop-intelligence/maturity-stages", dependencies=[Depends(enforce_json_body_limit)])
+@router.post("/crop-intelligence/maturity-stages",
+             dependencies=[Depends(enforce_paid_crop_intelligence), Depends(enforce_json_body_limit)])
 def maturity_stages(payload: StageProportionIn) -> dict:
     """Share of sampled objects at each maturity stage (for example almond hull
     split) with an interval and an optional readiness call against a sourced

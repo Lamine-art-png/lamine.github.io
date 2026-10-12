@@ -278,3 +278,28 @@ def test_non_crop_records_cannot_push_the_latest_assessment_out_of_the_window(cl
     summary = client.get(f"{BASE}/fields/field-window/crop-condition?limit=1", headers=headers).json()
     assert summary["latest"]["observation_id"] == ids[0]
     assert summary["comparison"].get("reason") != "no_completed_crop_assessment"
+
+
+def test_crop_calculators_follow_the_existing_paid_tier_and_contract_overrides(client, db, monkeypatch):
+    """Owner audit: free organizations cannot run the calculators; a contract override can enable them."""
+    from app.models.saas import EntitlementOverride
+    from app.services.field_intelligence_rollout import ROLLOUT_FEATURE_KEY
+
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    monkeypatch.setattr("app.core.config.settings.FIELD_INTELLIGENCE_RELEASE_STATE", "general")
+    org, _, headers = _auth(db, email="free-crop@example.com", org_id="org-free-crop", workspace_id="ws-free-crop")
+    org.plan = "free"
+    org.subscription_status = "inactive"
+    db.add(EntitlementOverride(organization_id=org.id, feature_key=ROLLOUT_FEATURE_KEY, value_json={"value": "canary"}))
+    db.commit()
+    body = {
+        "unit": "vine", "object_label": "cluster", "design": "simple_random", "population_units": 100,
+        "sample_counts": [10, 12, 8, 11, 9], "count_source": "manual_count",
+    }
+    denied = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers)
+    assert denied.status_code == 402, denied.text
+    assert denied.json()["detail"]["code"] == "upgrade_required"
+    db.add(EntitlementOverride(organization_id=org.id, feature_key="intelligence.deep_analysis", value_json={"value": "enabled"}))
+    db.commit()
+    allowed = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers)
+    assert allowed.status_code == 200, allowed.text

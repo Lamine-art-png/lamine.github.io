@@ -15,6 +15,9 @@ Both registries are deliberately empty: no detector has such an evaluation.
 """
 from __future__ import annotations
 
+import os
+import re
+
 from dataclasses import dataclass, field
 
 REGISTRY_VERSION = "crop-model-registry/1"
@@ -51,6 +54,18 @@ def verified_evaluation(evaluation_id: str | None) -> VerifiedEvaluation | None:
     if not evaluation_id:
         return None
     return next((item for item in VERIFIED_EVALUATIONS if item.evaluation_id == evaluation_id), None)
+
+
+def attested_weights_sha256() -> str | None:
+    """Digest of the detector weights the deployment verified, from the locked deployment manifest.
+
+    Set out of band (``FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256``) by whoever
+    deploys the detector, after the detector service has checked its loaded
+    weights against that manifest at startup. It is never taken from a
+    detector response, which is self-reported.
+    """
+    value = str(os.getenv("FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256", "") or "").strip().lower()
+    return value if re.fullmatch(r"[0-9a-f]{64}", value) else None
 
 
 def verified_detector(model_id: str | None, version: str | None) -> VerifiedDetector | None:

@@ -27,7 +27,12 @@ Tests: `test_field_intelligence_postgres.py` proves on real PostgreSQL that 4 co
 
 Detections never change an observation's severity or status. Results are
 stored as unreviewed evidence, and the model is labelled
-`unregistered_unverified` unless its id, version and crop are in the registry.
+`unregistered_unverified` unless its id, version and crop are in the registry
+**and** its registered weights digest matches both the digest the deployment
+attested (`FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256`, from the locked deployment
+manifest) and the digest the detector reports loading. Any mismatch is recorded
+as `verification_failure` (`deployment_weights_not_attested`,
+`deployment_weights_digest_mismatch` or `reported_weights_digest_mismatch`).
 
 ## Cost model (not measured)
 
@@ -50,6 +55,11 @@ commitment.
    label used.
 3. Registry entry. The `VerifiedEvaluation` and `VerifiedDetector` records are
    added by code review, cite the committed report, and name the reviewer.
+   Deployed-weight attestation: the detector deployment pins the weights by
+   SHA-256 in a locked manifest, the detector service refuses to start if its
+   loaded weights do not match and reports that digest, and the API's
+   `FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256` is set from the same manifest. A
+   self-reported name and version alone never counts as validated.
 4. Staging. `field-intelligence-staging.yml` passes in `qualify` mode and then
    `deploy` mode for the exact SHA. The staging contract still refuses
    `FIELD_STAGING_DETECTION_ENABLED` until step 3 is done.

@@ -285,12 +285,14 @@ def test_registered_detector_is_verified_only_for_its_crops(monkeypatch):
         model_id="rtdetr-grape-test", version="0.0-test", license="Apache-2.0 (verified)", weights_sha256="0" * 64,
         crop_ids=("wine_grape",), evaluation_id="eval-test",
     ),))
-    grape = detection.parse_detector_response(_payload(), profile=GRAPE, frame=detection.FrameRef(), image=b"x", content_type="image/png")
+    monkeypatch.setenv("FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256", "0" * 64)
+    attested = _payload(model={"id": "rtdetr-grape-test", "version": "0.0-test", "license": "Apache-2.0", "weights_sha256": "0" * 64})
+    grape = detection.parse_detector_response(attested, profile=GRAPE, frame=detection.FrameRef(), image=b"x", content_type="image/png")
     assert grape.model_verification == "registry_verified"
     assert grape.registered_model_license == "Apache-2.0 (verified)"
     almond = crop_profiles.get_profile("almond")
     other = detection.parse_detector_response(
-        _payload(detections=[{"label": "nut", "score": 0.5, "box": [0.1, 0.1, 0.1, 0.1]}]),
+        {**attested, "detections": [{"label": "nut", "score": 0.5, "box": [0.1, 0.1, 0.1, 0.1]}]},
         profile=almond, frame=detection.FrameRef(), image=b"x", content_type="image/png",
     )
     assert other.model_verification == "unregistered_unverified"  # registered for grapes only
@@ -529,3 +531,35 @@ def test_an_invalid_proxy_environment_is_a_typed_failure_not_a_crash(monkeypatch
     result = detection.HttpDetectionProvider("https://detector.internal/infer", "k").detect(
         b"\x89PNG\r\n\x1a\n", "image/png", GRAPE, detection.FrameRef(), timeout_seconds=2.0)
     assert result.status == "failed" and result.retryable
+
+
+
+@pytest.mark.parametrize(
+    ("attested", "reported", "failure"),
+    [
+        (None, "0" * 64, "deployment_weights_not_attested"),
+        ("1" * 64, "0" * 64, "deployment_weights_digest_mismatch"),
+        ("0" * 64, None, "reported_weights_digest_mismatch"),
+        ("0" * 64, "2" * 64, "reported_weights_digest_mismatch"),
+    ],
+)
+def test_a_registered_id_and_version_alone_is_not_verification(monkeypatch, attested, reported, failure):
+    """Owner audit: the registered weights must be the attested, deployed weights, not just a reported name."""
+    from app.services import crop_model_registry as registry
+
+    monkeypatch.setattr(registry, "VERIFIED_DETECTORS", (registry.VerifiedDetector(
+        model_id="rtdetr-grape-test", version="0.0-test", license="Apache-2.0 (verified)", weights_sha256="0" * 64,
+        crop_ids=("wine_grape",), evaluation_id="eval-test",
+    ),))
+    if attested:
+        monkeypatch.setenv("FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256", attested)
+    else:
+        monkeypatch.delenv("FIELD_DETECTION_ATTESTED_WEIGHTS_SHA256", raising=False)
+    model = {"id": "rtdetr-grape-test", "version": "0.0-test", "license": "Apache-2.0"}
+    if reported:
+        model["weights_sha256"] = reported
+    result = detection.parse_detector_response(_payload(model=model), profile=GRAPE, frame=detection.FrameRef(), image=b"x",
+                                               content_type="image/png")
+    assert result.model_verification == "unregistered_unverified"
+    assert result.verification_failure == failure
+    assert result.registered_model_license is None

@@ -65,3 +65,24 @@ def test_both_cost_generating_live_routes_enforce_paid_gate_before_endpoint():
             }
     assert set(discovered) == protected_routes
     assert all(enforce_paid_live_field_ai in dependencies for dependencies in discovered.values())
+
+
+
+def test_crop_intelligence_calculators_use_the_existing_paid_tier():
+    """Owner audit: the calculators are not free conversion features."""
+    from app.api.v1.field_intelligence import enforce_paid_crop_intelligence
+
+    with pytest.raises(HTTPException) as exc_info:
+        enforce_paid_crop_intelligence(ctx=_context("free", "inactive"), db=_NoSchemaDB())
+    assert exc_info.value.status_code == 402 and exc_info.value.detail["recommended_plan"] == "professional"
+    for plan in ("professional", "team", "network", "enterprise"):
+        assert enforce_paid_crop_intelligence(ctx=_context(plan, "active"), db=_NoSchemaDB()) is None
+    protected = {
+        "/v1/field-intelligence/crop-intelligence/harvest-window",
+        "/v1/field-intelligence/crop-intelligence/production-estimate",
+        "/v1/field-intelligence/crop-intelligence/maturity-stages",
+    }
+    found = {route.path: {getattr(dep, "dependency", None) for dep in getattr(route, "dependencies", [])}
+             for route in app.routes if getattr(route, "path", None) in protected}
+    assert set(found) == protected
+    assert all(enforce_paid_crop_intelligence in deps for deps in found.values())
