@@ -332,6 +332,33 @@ def activate_self_service_sandbox(
     return {"status": "activated", "subscription": _subscription_public(row, plan)}
 
 
+@router.get("/developer/billing/checkout-readiness")
+def api_checkout_readiness(
+    ctx: AuthContext = Depends(require_developer_control_plane),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Give approved developers an honest, no-charge purchase preflight."""
+    _flag("PLATFORM_API_BILLING_ENABLED")
+    _flag("PLATFORM_API_STRIPE_CHECKOUT_ENABLED")
+    try:
+        _require_no_aws_billing(db, ctx.organization.id)
+        _require_live_billing_eligibility(db, ctx)
+        existing = (
+            db.query(PlatformApiSubscription.id)
+            .filter(
+                PlatformApiSubscription.organization_id == ctx.organization.id,
+                PlatformApiSubscription.status_slot == "active",
+            )
+            .first()
+        )
+        if existing is not None:
+            return {"eligible": False, "code": "api_subscription_already_exists"}
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        return {"eligible": False, "code": detail.get("code", "api_checkout_not_available")}
+    return {"eligible": True, "code": "ready"}
+
+
 @router.post("/developer/billing/checkout")
 def create_api_checkout(
     payload: CheckoutCreate,
