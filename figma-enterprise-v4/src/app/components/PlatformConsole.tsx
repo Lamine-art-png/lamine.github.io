@@ -730,6 +730,7 @@ function WebhooksPage() {
 function BillingPage() {
   const { state } = usePlatform();
   const enabled = Boolean(state.overview?.sections?.billing);
+  const hasLiveEnrollment = Boolean(state.overview?.allowed_environments?.includes("live"));
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Commercial controls" title="Billing" body="Platform API commercial state is independent from the Enterprise Portal subscription." />
@@ -741,7 +742,7 @@ function BillingPage() {
           <p className="mt-3 text-[12px] text-[#65736A]">Enrollment: {state.overview?.enrollment_status || "pending"}</p>
         </Surface>
       )}
-      <PlatformApiSubscriptions canPurchase={enabled} />
+      <PlatformApiSubscriptions canPurchase={enabled} hasLiveEnrollment={hasLiveEnrollment} />
       {enabled && state.billing?.subscription && (
         <Surface className="p-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#58715F]">Server-confirmed subscription</div>

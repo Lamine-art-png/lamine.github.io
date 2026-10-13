@@ -100,7 +100,7 @@ for (const capability of ["projects()", "serviceAccounts()", "keys()", "usage()"
 }
 assert.ok(clientSource.includes('platformDeveloper: {'));
 assert.ok(consoleSource.includes("No self-service charges are active."), "billing must remain truthful while disabled");
-assert.ok(consoleSource.includes("<PlatformApiSubscriptions canPurchase={enabled} />"), "eligible developers must see live Developer/Scale checkout");
+assert.ok(consoleSource.includes("<PlatformApiSubscriptions canPurchase={enabled} hasLiveEnrollment={hasLiveEnrollment} />"), "eligible developers must see live Developer/Scale checkout");
 assert.ok(subscriptionSource.includes("/v1/platform/pricing"), "server catalog controls public subscription prices");
 assert.ok(subscriptionSource.includes("/v1/platform/developer/billing/checkout"), "checkout must use the protected Platform API backend");
 assert.ok(subscriptionSource.includes("Idempotency-Key"), "checkout creation must be idempotent");

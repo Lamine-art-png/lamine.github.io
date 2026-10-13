@@ -30,7 +30,7 @@ function secureStripeUrl(raw: string, permitted: string[]): string {
   return url.href;
 }
 
-export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean }) {
+export function PlatformApiSubscriptions({ canPurchase, hasLiveEnrollment }: { canPurchase: boolean; hasLiveEnrollment: boolean }) {
   const [plans, setPlans] = useState<ApiOffer[]>([]);
   const [subscription, setSubscription] = useState<ApiSubscription | null>(null);
   const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
@@ -52,7 +52,9 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
         if (canPurchase) {
           const billing = await apiClient.get<ApiBilling>("/v1/platform/developer/billing");
           if (mounted) setSubscription(billing.subscription || null);
-          const eligibility = await apiClient.get<CheckoutReadiness>("/v1/platform/developer/billing/checkout-readiness");
+          const eligibility = hasLiveEnrollment
+            ? await apiClient.get<CheckoutReadiness>("/v1/platform/developer/billing/checkout-readiness")
+            : { eligible: false, code: "platform_live_enrollment_required" };
           if (mounted) setCheckoutEligible(Boolean(eligibility.eligible));
         }
       } catch (cause) {
@@ -61,10 +63,10 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
     }
     void load();
     return () => { mounted = false; };
-  }, [canPurchase, refreshed]);
+  }, [canPurchase, hasLiveEnrollment, refreshed]);
 
   async function purchase(plan: "developer" | "scale") {
-    if (busy || !canPurchase || !checkoutEligible || ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(subscription?.status || "")) return;
+    if (busy || !canPurchase || !hasLiveEnrollment || !checkoutEligible || ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(subscription?.status || "")) return;
     setBusy(plan);
     setError("");
     try {
@@ -120,11 +122,11 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
           <button type="button" disabled={Boolean(busy)} onClick={() => void manage()} className="rounded-lg bg-[#102F22] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50">Manage in Stripe</button>
         </div>
       )}
-      {!canPurchase && <p className="mt-4 rounded-xl border border-[#E4D6A8] bg-[#FFF9E8] p-3 text-[12px] leading-5 text-[#7B5A13]">Subscriptions require an approved Platform API enrollment. Continue using prepaid Intelligence, or request production access before purchasing a Developer or Scale plan.</p>}
+      {(!canPurchase || !hasLiveEnrollment) && <p className="mt-4 rounded-xl border border-[#E4D6A8] bg-[#FFF9E8] p-3 text-[12px] leading-5 text-[#7B5A13]">Subscriptions require an approved Platform API enrollment. Continue using prepaid Intelligence, or request production access before purchasing a Developer or Scale plan.</p>}
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {plans.map((offer) => {
           const amount = period === "annual" ? offer.annual_price_cents : offer.monthly_price_cents;
-          const allowed = canPurchase && checkoutEligible && catalogReady && !subscribed && !busy;
+          const allowed = canPurchase && hasLiveEnrollment && checkoutEligible && catalogReady && !subscribed && !busy;
           return <div key={offer.identifier} className="flex flex-col rounded-xl border border-[#D5DFD4] bg-[#FCFDFB] p-5">
             <div className="text-[16px] font-semibold text-[#10231B]">{offer.name}</div>
             <div className="mt-3 text-[28px] font-semibold text-[#10231B]">{price(amount)}<span className="ml-1 text-[12px] font-medium text-[#748078]">/{period === "annual" ? "year" : "month"}</span></div>
