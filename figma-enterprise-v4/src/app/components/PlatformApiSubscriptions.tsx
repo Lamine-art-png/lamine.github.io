@@ -114,7 +114,7 @@ export function PlatformApiSubscriptions({ canPurchase }: { canPurchase: boolean
       </div>
       {checkoutReturned && <p role="status" className="mt-4 rounded-xl bg-[#F1F8F4] p-3 text-[12px] text-[#315D46]">Returned from Checkout. Subscription access begins only after Stripe confirms payment.</p>}
       {error && <p role="alert" className="mt-4 rounded-xl bg-[#FFF1EA] p-3 text-[12px] text-[#823628]">{error}</p>}
-      {canPurchase && canManageBilling && (
+      {canManageBilling && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#C7D9C1] bg-[#F1F8ED] p-4">
           <span className="text-[13px] font-semibold text-[#244835]"><span>Subscription:</span> {subscription?.plan || "Platform API"} · {subscription?.status}</span>
           <button type="button" disabled={Boolean(busy)} onClick={() => void manage()} className="rounded-lg bg-[#102F22] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50">Manage in Stripe</button>
