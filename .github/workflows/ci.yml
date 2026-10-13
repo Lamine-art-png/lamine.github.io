@@ -30,6 +30,7 @@ jobs:
     defaults:
       run:
         working-directory: agroai_api
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -123,6 +124,7 @@ jobs:
     defaults:
       run:
         working-directory: figma-enterprise-v4
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
