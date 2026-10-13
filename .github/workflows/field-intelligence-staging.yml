@@ -49,6 +49,12 @@ env:
   STAGING_PR: ${{ inputs.pr_number }}
   STAGING_PORTAL_BRANCH: field-intelligence-staging
 
+# An unspecified shell is `bash -e {0}`, which has no pipefail: `checker | tee report`
+# would succeed even when the checker fails. `shell: bash` runs `bash -eo pipefail {0}`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate-source:
     name: Validate exact current PR merge ref and all mandatory CI
@@ -285,11 +291,17 @@ jobs:
 
       - name: Validate immutable staging resource identities
         working-directory: agroai_api
-        run: python scripts/field_intelligence_staging_contract.py | tee ../staging-contract-report.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/field_intelligence_staging_contract.py | tee ../staging-contract-report.json
 
       - name: Preflight the staging database upgrade path (read-only)
         working-directory: agroai_api
-        run: python scripts/field_intelligence_migration.py preflight --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-preflight.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/field_intelligence_migration.py preflight --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-preflight.json
 
       - name: Report the currently deployed staging build (read-only)
         run: |

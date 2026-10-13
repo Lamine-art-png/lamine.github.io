@@ -144,6 +144,7 @@ jobs:
             tests/unit/test_crop_intelligence_summary.py \
             tests/unit/test_crop_intelligence_api.py \
             tests/unit/test_field_intelligence_staging_reuse.py \
+            tests/unit/test_staging_workflow_pipefail.py \
             tests/unit/test_detection_eval.py \
             tests/unit/test_crop_scientific_tools.py \
             tests/unit/test_scientific_tool_registry.py \
