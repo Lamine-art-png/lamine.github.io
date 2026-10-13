@@ -102,7 +102,7 @@ def test_production_rejects_checkout_before_live_approval_and_never_calls_stripe
         json={"plan": "developer", "billing_interval": "monthly"},
     )
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "platform_live_access_approval_required"
+    assert response.json()["code"] == "platform_live_access_approval_required"
     assert created == []
     assert db.query(PlatformCheckoutIdempotency).count() == 0
 
