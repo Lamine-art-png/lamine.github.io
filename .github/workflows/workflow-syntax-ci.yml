@@ -29,6 +29,12 @@ jobs:
             --output "${RUNNER_TEMP}/${archive}"
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  ${RUNNER_TEMP}/${archive}" | sha256sum --check
           tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" actionlint
+      - name: Prove test failures propagate through tee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_ci_tee_pipeline_fail_closed.py
+
       - name: Validate every workflow and GitHub expression
         shell: bash
         run: '"${RUNNER_TEMP}/actionlint" -shellcheck="" -pyflakes=""'
