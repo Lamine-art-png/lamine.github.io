@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - ".github/workflows/**"
+      - "scripts/check_ci_tee_pipeline_fail_closed.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/**"
+      - "scripts/check_ci_tee_pipeline_fail_closed.py"
   workflow_dispatch:
 
 permissions:
