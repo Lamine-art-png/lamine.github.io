@@ -107,6 +107,9 @@ assert.ok(subscriptionSource.includes("Idempotency-Key"), "checkout creation mus
 assert.ok(subscriptionSource.includes("window.location.assign"), "the customer must explicitly continue to hosted Stripe");
 assert.ok(subscriptionSource.includes("secureStripeUrl"), "Stripe return URL must be validated");
 assert.ok(subscriptionSource.includes("Subscription access begins only after Stripe confirms payment."), "a browser return must never claim paid entitlement");
+assert.ok(consoleSource.includes('allowed_environments?.includes("live")'), "TEST-only enrollment must not advertise live checkout");
+assert.ok(subscriptionSource.includes("hasLiveEnrollment && checkoutEligible"), "checkout must require live enrollment and server readiness");
+assert.ok(subscriptionSource.includes("{canManageBilling && ("), "existing unpaid subscriptions must retain a billing recovery action");
 
 assert.ok(consoleSource.includes("Live-access requests are not enabled"), "live access must remain truthful while disabled");
 assert.ok(safetySource.includes("Physical execution disabled"));
