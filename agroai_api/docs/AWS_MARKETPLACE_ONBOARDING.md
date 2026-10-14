@@ -9,8 +9,11 @@ dimensions and fulfillment URL match this integration. This does **not**
 establish customer activation: buyer-facing prices/terms and a real
 purchase-to-access test remain unverified. The production onboarding flag
 is not exposed by the seller screenshots; its configuration default is
-`false`. Do not create duplicate Marketplace entities or enable unrestricted
-customer onboarding before a controlled, owner-approved live test.
+`false`. A safe, deliberately token-free production registration probe on
+2026-10-14 returned HTTP 400 rather than the disabled-gate HTTP 503, consistent
+with the enabled registration handler, **not** a successful buyer purchase.
+Do not create duplicate Marketplace entities or declare customer provisioning
+verified before a controlled, owner-approved live test.
 
 ## Purchase and access lifecycle
 
