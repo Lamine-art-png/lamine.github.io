@@ -71,7 +71,7 @@ const sorted = Object.fromEntries(Object.entries(source).sort(([a],[b])=>a.local
 const fingerprint = createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 const outputs = {
  'source.json': JSON.stringify({schemaVersion:1,sourceFingerprint:fingerprint,catalog:sorted},null,2)+'\n',
- 'literals.json': JSON.stringify(literals,null,2)+'\n',
+ 'literals.json': JSON.stringify(Object.fromEntries(Object.entries(literals).sort(([a],[b])=>a.localeCompare(b,'en'))),null,2)+'\n',
 };
 for (const [file,content] of Object.entries(outputs)) {
  const dest = path.join(root,'shared/localization',file);
