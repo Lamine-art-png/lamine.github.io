@@ -127,7 +127,27 @@ def test_reconciliation_requires_event_agreement_and_known_plan():
     assert reconcile_registration(
         db, Agreements(status="TERMINATED"), confirmed, "prod-test",
         entitlements=Entitlements(), product_code="product-test",
+    ) == "license_confirmed"
+    assert confirmed.reconciled_at is None
+    assert confirmed.plan_identifier is None
+    # AWS eventually restoring an active agreement must not strand a paying
+    # customer after an intermittent agreement visibility delay.
+    assert reconcile_registration(
+        db, Agreements(), confirmed, "prod-test",
+        entitlements=Entitlements(), product_code="product-test",
+    ) == "active"
+    assert confirmed.plan_identifier == "developer"
+    assert confirmed.reconciled_at is not None
+
+
+def test_explicit_license_deprovision_is_not_resurrected_by_stale_aws_response():
+    db = SimpleNamespace(commit=lambda: None)
+    revoked = row("revoked")
+    assert reconcile_registration(
+        db, Agreements(), revoked, "prod-test",
+        entitlements=Entitlements(), product_code="product-test",
     ) == "revoked"
+    assert revoked.reconciled_at is not None
 
 
 def test_unknown_plan_never_becomes_active():
@@ -155,6 +175,15 @@ def test_key_access_fails_when_license_stale_or_unmapped():
     license_row.plan_identifier = None
     with pytest.raises(HTTPException):
         require_marketplace_access(db, "org-test")
+
+    license_row.plan_identifier = "developer"
+    license_row.entitlement_expires_at = datetime.utcnow() - timedelta(seconds=1)
+    with pytest.raises(HTTPException) as exc:
+        require_marketplace_access(db, "org-test")
+    assert exc.value.detail["code"] == "aws_marketplace_license_inactive"
+
+    license_row.entitlement_expires_at = datetime.utcnow() + timedelta(hours=1)
+    assert require_marketplace_access(db, "org-test") is True
 
 
 def test_aws_billing_owner_blocks_stripe_checkout_boundary():

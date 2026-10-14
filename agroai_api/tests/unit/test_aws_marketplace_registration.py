@@ -55,6 +55,9 @@ def test_retries_preserve_one_pending_registration_without_token(registration):
     assert "One-time claim code:" in responses[0].text
     assert responses[0].text != responses[1].text  # a retry rotates the one-time claim
     assert "sensitive-token" not in responses[0].text
+    assert 'href="https://app.agroai-pilot.com"' in responses[0].text
+    assert "Developer Console &gt; Billing &gt; AWS Marketplace" in responses[0].text
+    assert 'rel="noopener noreferrer"' in responses[0].text
     assert responses[0].headers["cache-control"] == "no-store"
     with sessions() as db:
         rows = db.query(AwsMarketplaceRegistration).all()
