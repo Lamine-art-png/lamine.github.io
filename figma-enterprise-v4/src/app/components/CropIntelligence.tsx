@@ -148,6 +148,7 @@ export function CropIntelligence() {
   const [harvest, setHarvest] = useState<Record<string, unknown> | null>(null);
   const [maturity, setMaturity] = useState<Record<string, unknown> | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [production, setProduction] = useState({
     unit: "tree", object: "fruit", design: "simple_random", population: "", counts: "", source: "manual_count",
     detection: "", detectionSe: "", weight: "", weightSe: "", marketable: "", marketableSe: "", area: ""
@@ -188,7 +189,7 @@ export function CropIntelligence() {
     }).catch((cause: ApiError) => { if (active) setError(cause.message || tx("Request failed. Check your inputs and retry.")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [workspaceId, currentOrganization?.id, currentWorkspaceAllowed]);
+  }, [workspaceId, currentOrganization?.id, currentWorkspaceAllowed, revision]);
 
   useEffect(() => {
     if (!fields.some(row => row.id === fieldId)) setFieldId(fields[0]?.id || "");
@@ -211,7 +212,7 @@ export function CropIntelligence() {
     }).catch((cause: ApiError) => { if (active) setError(cause.message || tx("Request failed. Check your inputs and retry.")); })
       .finally(() => { if (active) setLoadingCondition(false); });
     return () => { active = false; };
-  }, [currentWorkspaceAllowed, fieldId, workspaceId]);
+  }, [currentWorkspaceAllowed, fieldId, workspaceId, revision]);
 
   async function runCalculation(action: () => unknown, kind: Pane) {
     setBusy(true); setCalculatorError("");
@@ -311,6 +312,7 @@ export function CropIntelligence() {
                 </Label>
               </div>
               <div className="text-sm text-[#647569]">{currentWorkspace?.name || ""}</div>
+              <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#CEDBD1] bg-white px-3 text-xs font-semibold text-[#28573B] disabled:opacity-50"><RefreshCcw className="h-4 w-4" />{tx("Refresh evidence")}</button>
             </div>
             {loading && <div role="status" className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />{tx("Loading crop evidence…")}</div>}
             {!loading && !fields.length && <p className="mt-3 text-sm text-[#647569]">{tx("Create an observation in Field Intelligence to begin.")}</p>}
@@ -331,7 +333,7 @@ export function CropIntelligence() {
                   {condition.latest?.visual && <p className="mt-2 text-xs text-[#846431]">{tx("Not a verified crop diagnosis")}: {condition.latest.visual.analysis_state || "unverified"}</p>}
                   {condition.latest?.review_required && <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#865D2F]"><ShieldAlert className="h-4 w-4" />{tx("Review required")}</div>}
                   {condition.next_action && <p className="mt-3 rounded-xl bg-[#F6F8F3] px-4 py-3 text-sm">{condition.next_action}</p>}
-                  {condition.latest?.observation_id && <Link to="/field-intelligence" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#246347]">{tx("Open observation")} <ChevronRight className="h-4 w-4" /></Link>}
+                  {condition.latest?.observation_id && <Link to="/field-intelligence" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#246347]">{tx("Open Field Intelligence")} <ChevronRight className="h-4 w-4" /></Link>}
                 </section>}
             {condition?.field_snapshot?.blocks && condition.field_snapshot.blocks.length > 0 && <section className={box}><h2 className="font-semibold">{tx("Field evidence")}</h2><p className="mt-1 text-xs text-[#687A6B]">{tx("A difference between observations is not necessarily a trend.")}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{condition.field_snapshot.blocks.map((row) => <div key={row.block_key} className="rounded-xl bg-[#F5F8F2] p-3"><div className="font-medium">{row.block_name || row.block_key}</div><div className="text-xs text-[#607667]">{row.severity || "unknown"}</div></div>)}</div></section>}
             {condition?.changes && condition.changes.length > 0 && <section className={box}><h2 className="font-semibold">{tx("Changes requiring attention")}</h2><div className="mt-3 space-y-2">{condition.changes.map((change, index) => <p key={index} className="rounded-lg bg-[#F5F7F2] p-3 text-sm">{change.note || change.kind?.replaceAll("_", " ") || tx("Review required")}{change.trend === false && <span className="ms-2 text-xs text-[#836433]">{tx("A difference between observations is not necessarily a trend.")}</span>}</p>)}</div></section>}
