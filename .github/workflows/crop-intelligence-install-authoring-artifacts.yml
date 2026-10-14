@@ -1,0 +1,152 @@
+name: Crop Intelligence - Install Validated Locale Artifacts
+
+# One-time, isolated maintainer utility. Never deploys. Runs on its dedicated
+# operations branch and can only update an exact, unchanged draft PR head.
+on:
+  push:
+    branches:
+      - ops/crop-i18n-catalog-install-20261014
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: crop-i18n-catalog-install-20261014
+  cancel-in-progress: false
+
+jobs:
+  validate-and-install:
+    name: Validate 59 catalog artifacts; install, test and push PR #574
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
+      EXPECTED_SHA: 056c556ff29f8a2db0833fa730450cf5315710b2
+    steps:
+      - name: Check out the exact approved draft PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Verify PR source branch remains unchanged and draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git fetch origin "${TARGET_BRANCH}"
+          test "$(git rev-parse "origin/${TARGET_BRANCH}")" = "$EXPECTED_SHA"
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/574")"
+          PR_JSON="$pr" python3 - <<'PY'
+          import json, os
+          pr=json.loads(os.environ["PR_JSON"])
+          assert pr["state"]=="open" and pr["draft"] is True
+          assert pr["head"]["ref"]==os.environ["TARGET_BRANCH"]
+          assert pr["head"]["sha"]==os.environ["EXPECTED_SHA"]
+          assert pr["base"]["ref"]=="main"
+          print("Verified exact draft source",pr["head"]["sha"])
+          PY
+
+      - name: Download real authorized authoring artifacts from run 38649905327
+        uses: actions/download-artifact@v4
+        with:
+          name: ''
+          pattern: i18n-*
+          merge-multiple: false
+          run-id: 38649905327
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: imported-authoring-artifacts
+
+      - name: Verify complete locale matrix, content hashes, source fingerprints, and translations BEFORE writing
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re, sys
+          sys.path.insert(0,"scripts")
+          from i18n_catalog_identity import catalog_sha256
+          from i18n_quality import quality_errors
+          root=pathlib.Path("imported-authoring-artifacts")
+          source=json.loads(pathlib.Path("shared/localization/source.json").read_text())
+          manifest=json.loads(pathlib.Path("shared/supported-locales.json").read_text())
+          expected=set(manifest["enabledUiLocales"])-{"auto","en"}
+          artifacts={}
+          for folder in root.glob("i18n-*"):
+              files=list((folder/"ui").glob("*.json"))
+              for file in files:
+                  locale=file.stem
+                  if locale not in expected: continue
+                  assert locale not in artifacts, f"duplicate artifact for {locale}"
+                  artifacts[locale]=file
+          assert set(artifacts)==expected, f"missing={sorted(expected-set(artifacts))}; extra={sorted(set(artifacts)-expected)}"
+          print(f"Validating {len(artifacts)} previously advertised languages against {len(source['catalog'])} English strings")
+          placeholder=re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+          for locale,file in sorted(artifacts.items()):
+              env=json.loads(file.read_text())
+              assert env.get("locale")==locale, f"{locale}: locale mismatch"
+              assert env.get("schemaVersion")==2 and env.get("status")=="complete-generated",f"{locale}: incomplete"
+              assert env.get("sourceFingerprint")==source["sourceFingerprint"],f"{locale}: stale source"
+              assert env.get("catalogSha256")==catalog_sha256(env),f"{locale}: tampered digest"
+              cat=env["catalog"]
+              assert set(cat)==set(source["catalog"]),f"{locale}: incomplete key set"
+              for key,original in source["catalog"].items():
+                  value=cat[key]
+                  assert isinstance(value,str) and value.strip() and "�" not in value, f"{locale}: invalid {key}"
+                  assert sorted(placeholder.findall(value))==sorted(placeholder.findall(original)),f"{locale}: placeholder drift {key}"
+              problems=quality_errors(locale,source["catalog"],cat)
+              assert not problems,f"{locale}: quality failure {problems[:5]}"
+              print("Verified",locale)
+          PY
+
+      - name: Install using approved authoring installation and reconcile code
+        run: |
+          set -euo pipefail
+          python3 scripts/i18n-install-authoring-artifacts.py imported-authoring-artifacts
+          python3 scripts/i18n_catalog_identity.py --check
+          python3 scripts/i18n-reconcile-production-locales.py --pending-matrix | tee /tmp/crop-locales.txt
+          grep -F 'any=false' /tmp/crop-locales.txt
+
+      - name: Install portal dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Run full release-gated locale and crop build checks
+        run: |
+          set -euo pipefail
+          cd figma-enterprise-v4
+          npm ci --no-audit --no-fund
+          cd ..
+          node scripts/i18n-build-source.mjs --check
+          cd figma-enterprise-v4
+          node tests/static-locale-catalog-contract.mjs
+          npm run test:i18n
+          npm run test:field-intelligence
+          npm run build
+          cd ..
+          python3 agroai_api/scripts/scan_repository_secrets.py
+
+      - name: Refuse unrelated changes; commit and push only validated catalogs
+        run: |
+          set -euo pipefail
+          git status --short
+          git add shared/localization/catalogs shared/localization/release-matrix.json shared/supported-locales.json
+          files="$(git diff --cached --name-only)"
+          test -n "$files"
+          if printf '%s\n' "$files" | grep -vE '^(shared/localization/catalogs/[^/]+\.json|shared/localization/release-matrix\.json|shared/supported-locales\.json)$'; then
+            echo "Unapproved staged paths found"; exit 1
+          fi
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(i18n): install verified Crop Intelligence locales from authoring run 38649905327"
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_SHA"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "Pushed validated full locale catalog to original PR #574"
