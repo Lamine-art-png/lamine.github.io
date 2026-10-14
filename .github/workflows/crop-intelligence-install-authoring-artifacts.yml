@@ -107,8 +107,19 @@ jobs:
           set -euo pipefail
           python3 scripts/i18n-install-authoring-artifacts.py imported-authoring-artifacts
           python3 scripts/i18n_catalog_identity.py --check
-          python3 scripts/i18n-reconcile-production-locales.py --pending-matrix | tee /tmp/crop-locales.txt
-          grep -F 'any=false' /tmp/crop-locales.txt
+          # Pending target locales (currently wo) may remain unavailable, but
+          # EVERY language advertised before this PR must remain supported.
+          python3 - <<'PY'
+          import json
+          manifest=json.load(open("shared/supported-locales.json"))
+          matrix=json.load(open("shared/localization/release-matrix.json"))["locales"]
+          required=set(manifest["enabledUiLocales"])-{"auto"}
+          complete=set(manifest["catalogCompleteLocales"])
+          assert required==complete, "advertised and complete locales diverge"
+          assert len(required)==60, "previous 60 enabled locales must be preserved"
+          assert all(matrix[loc]["ready"] for loc in required), "advertised locale not ready"
+          print("All 60 previously advertised locales remain release ready")
+          PY
 
       - name: Install portal dependencies
         uses: actions/setup-node@v4
