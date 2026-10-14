@@ -94,7 +94,7 @@ const COPY = [
   "Select crop", "Sampled units", "Freshness", "No observations are eligible for comparison.",
   "Random sample", "Systematic sample with random start", "Manual count", "Not independently verified",
   "A minimum of five sampled units is normally required for the scientific estimator.",
-  "Changes requiring attention", "Readiness", "Not assessed", "No maturity result yet.", "Simple average", "86/50 adjusted",
+  "Changes requiring attention", "Readiness", "Not assessed", "No maturity result yet.", "Simple average", "86/50 adjusted", "YYYY-MM-DD, 25, 10",
   "Results are scoped to the selected field and the signed-in organization.",
   "Weather data must be sourced, and a date window cannot be inferred from missing analog years.",
   "Crop evidence comes from the selected operation.", "Method and evidence provenance"
@@ -213,7 +213,7 @@ export function CropIntelligence() {
     return () => { active = false; };
   }, [currentWorkspaceAllowed, fieldId, workspaceId]);
 
-  async function runCalculation(action: () => Promise<unknown>, kind: Pane) {
+  async function runCalculation(action: () => unknown, kind: Pane) {
     setBusy(true); setCalculatorError("");
     try {
       const value = await action() as Record<string, unknown>;
@@ -230,7 +230,7 @@ export function CropIntelligence() {
 
   function calculateProduction() {
     const counts = production.counts.split(/[\s,;]+/).filter(Boolean).map(Number);
-    if (!production.counts.trim() || counts.some(value => !Number.isFinite(value) || value < 0) ||
+    if (!production.counts.trim() || counts.some(value => (!Number.isFinite(value) || value < 0)) ||
       !Number.isSafeInteger(Number(production.population)) || Number(production.population) < 1) {
       setCalculatorError(tx("Request failed. Check your inputs and retry.")); return;
     }
@@ -375,7 +375,7 @@ export function CropIntelligence() {
                   <Label title={tx("Target source type")}><select className={input} value={harvestForm.targetType} onChange={e => setHarvestForm({ ...harvestForm, targetType: e.target.value })}>{["grower_historical", "supplier_published", "fitted_model"].map(x => <option key={x} value={x}>{x.replaceAll("_", " ")}</option>)}</select></Label>
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-3"><Label title={tx("Observed weather source")}><input className={input} value={harvestForm.weatherSource} onChange={e => setHarvestForm({ ...harvestForm, weatherSource: e.target.value })} /></Label><Label title={tx("Observed weather rows: date, daily high °C, daily low °C")}><textarea rows={6} className={input} placeholder="YYYY-MM-DD, 25, 10" value={harvestForm.weather} onChange={e => setHarvestForm({ ...harvestForm, weather: e.target.value })} /></Label></div>
+                  <div className="space-y-3"><Label title={tx("Observed weather source")}><input className={input} value={harvestForm.weatherSource} onChange={e => setHarvestForm({ ...harvestForm, weatherSource: e.target.value })} /></Label><Label title={tx("Observed weather rows: date, daily high °C, daily low °C")}><textarea rows={6} className={input} placeholder={tx("YYYY-MM-DD, 25, 10")} value={harvestForm.weather} onChange={e => setHarvestForm({ ...harvestForm, weather: e.target.value })} /></Label></div>
                   <div className="space-y-3"><Label title={tx("Historical analog weather source")}><input className={input} value={harvestForm.analogSource} onChange={e => setHarvestForm({ ...harvestForm, analogSource: e.target.value })} /></Label><Label title={tx("Historical analog years JSON")}><textarea rows={6} className={input} placeholder='{"2020":[{"date":"2020-10-01","tmax_c":25,"tmin_c":10}]}' value={harvestForm.analogs} onChange={e => setHarvestForm({ ...harvestForm, analogs: e.target.value })} /></Label></div>
                 </div>
                 <p className="text-xs text-[#80653C]">{tx("At least five complete, valid historical analog seasons are needed for a projected date window.")}</p>
