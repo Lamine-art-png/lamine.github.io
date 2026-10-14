@@ -1,13 +1,16 @@
 # AWS Marketplace onboarding checkpoint
 
-Current evidence and the controlled test procedure are recorded in
+For the latest seller-console evidence and controlled test procedure, see
 [AWS_MARKETPLACE_COMMERCIAL_RELEASE.md](AWS_MARKETPLACE_COMMERCIAL_RELEASE.md).
-That dated report supersedes older infrastructure blockers.
 
-The staged SaaS product is still Draft. Keep onboarding disabled until pricing
-terms are approved, AWS plan dimensions are mapped and verified, and a real test
-purchase is completed. A code release alone does not authorize a public listing
-or charges.
+**Verified 2026-10-14:** SaaS product `prod-rrjrdndw2eptq` is **Public**
+(the October 7 visibility change succeeded). Its `developer` and `scale`
+dimensions and fulfillment URL match this integration. This does **not**
+establish customer activation: buyer-facing prices/terms and a real
+purchase-to-access test remain unverified. The production onboarding flag
+is not exposed by the seller screenshots; its configuration default is
+`false`. Do not create duplicate Marketplace entities or enable unrestricted
+customer onboarding before a controlled, owner-approved live test.
 
 ## Purchase and access lifecycle
 
@@ -59,18 +62,24 @@ provisions access.
 
 ## Remaining release gates
 
-1. Verify the actual offer, approved prices, legal terms, fulfillment configuration
-   and current seller financial eligibility. Offer inventory is not verified:
-   the current diagnostic role lacks `aws-marketplace:ListEntities`.
-2. Verify the deployed plan-mapping migration and actual runtime
-   `aws-marketplace:GetEntitlements` permission. Workload OIDC already works.
+1. Inspect the current public buyer-facing offer: prices, contract term,
+   renewal, quantities, EULA and refund terms. Correct `developer`/`scale`
+   dimension names and fulfillment URL were confirmed on 2026-10-14, but
+   actual buyer charges and terms were not. Do not create a duplicate offer.
+2. Verify current runtime `AWS_MARKETPLACE_ONBOARDING_ENABLED` and
+   installed migration 046. Latest checked production startup (2026-10-12)
+   authenticated to the seller account and called `GetEntitlements`
+   successfully; this is not evidence of a completed purchase.
 3. Initial AWS Developer and Scale contracts are fixed entitlements. The runtime
    resolves the purchased `developer` or `scale` dimension with
    `GetEntitlements`, maps it to the matching AGRO-AI plan, and blocks overage
    instead of sending Stripe meter events. If a future AWS offer adds usage
    charges, add a durable AWS Marketplace metering outbox before enabling them.
-4. Verify a real purchase, organization link, plan mapping, provisioning, usage,
-   changes, cancellation, replay, and failure recovery before AWS review submission.
+4. The listing is already Public. Complete an approved, bounded real
+   purchase-to-access test for organization linking, plan mapping,
+   provisioning, usage, changes, cancellation, replay, and failure recovery
+   **before general customer onboarding activation**. Do not re-submit
+   publication or modify buyer pricing as a substitute for that test.
 
 Official references:
 - https://docs.aws.amazon.com/marketplace/latest/userguide/saas-product-customer-setup.html
