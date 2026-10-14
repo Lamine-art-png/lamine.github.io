@@ -1,0 +1,101 @@
+name: Crop Intelligence - Deploy after isolated qualify
+
+# Only invokes the existing fail-closed staging workflow's deploy mode after
+# one exact-head, read-only qualification run has passed all protected gates.
+# This workflow does not modify secrets, resources, customer production or IAM.
+on:
+  push:
+    branches:
+      - ops/crop-stage-deploy-20261014
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  wait-for-qualified-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
+      EXPECTED_SHA: e94f3c11ff7859e7b2022028172f127a3df60466
+      PR_NUMBER: '574'
+    steps:
+      - name: Wait for exact-commit, approved read-only staging qualify to pass
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 105); do
+            gh api "repos/$REPO/actions/runs?event=workflow_dispatch&head_sha=$EXPECTED_SHA&per_page=100" > /tmp/qualify-runs.json
+            qualifying="$(python3 - <<'PY'
+          import json,os
+          data=json.load(open("/tmp/qualify-runs.json"))
+          runs=[
+            r for r in data["workflow_runs"]
+            if r.get("name")=="Field Intelligence Staging"
+            and r.get("head_branch")==os.environ["TARGET_BRANCH"]
+            and r.get("head_sha")==os.environ["EXPECTED_SHA"]
+            and r.get("created_at","")>="2026-10-14T23:52:00Z"
+            and r.get("status")=="completed" and r.get("conclusion")=="success"
+          ]
+          print(max((str(r["id"]) for r in runs),key=lambda x:int(x),default=""))
+          PY
+          )"
+            if [ -n "$qualifying" ]; then
+              gh api "repos/$REPO/actions/runs/$qualifying/jobs?per_page=100" > /tmp/qualify-jobs.json
+              if python3 - <<'PY'
+          import json,sys
+          data=json.load(open("/tmp/qualify-jobs.json"))
+          jobs=data.get("jobs",[])
+          stage=next((j for j in jobs if "Deploy isolated staging" in j.get("name","")),None)
+          validate=next((j for j in jobs if "Validate exact current PR" in j.get("name","")),None)
+          tests=next((j for j in jobs if "Compile and test exact" in j.get("name","")),None)
+          if not (stage and validate and tests and all(j.get("conclusion")=="success" for j in (stage,validate,tests))):
+            print("Qualifier did not pass all 3 required stages",flush=True);sys.exit(1)
+          steps={s.get("name"):s.get("conclusion") for s in stage.get("steps",[])}
+          assert steps.get("Validate immutable staging resource identities")=="success",steps
+          assert steps.get("Preflight the staging database upgrade path (read-only)")=="success",steps
+          assert steps.get("Migrate staging database to the repository head")=="skipped",steps
+          assert steps.get("Trigger staging API deployment")=="skipped",steps
+          print("Verified protected read-only QUALIFY success and no deploy side effects",flush=True)
+          PY
+              then
+                echo "Exact-head successful read-only qualify run ID: $qualifying"
+                echo "$qualifying" > /tmp/qualified-run-id
+                break
+              fi
+            fi
+            if [ "$attempt" = 105 ]; then
+              echo "No validated protected staging qualify result; no staging deployment requested."
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Reverify unchanged PR and invoke protected staging deploy mode
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/pulls/$PR_NUMBER" > /tmp/pr.json
+          gh api "repos/$REPO/commits/main" > /tmp/main.json
+          MERGE_SHA="$(python3 - <<'PY'
+          import json,os
+          p=json.load(open("/tmp/pr.json"));m=json.load(open("/tmp/main.json"))
+          assert p["state"]=="open" and p["draft"] is True
+          assert p["head"]["ref"]==os.environ["TARGET_BRANCH"]
+          assert p["head"]["sha"]==os.environ["EXPECTED_SHA"]
+          assert p["base"]["ref"]=="main" and p["base"]["sha"]==m["sha"]
+          assert p["merge_commit_sha"],"no synthetic merge"
+          print(p["merge_commit_sha"])
+          PY
+          )"
+          gh workflow run .github/workflows/field-intelligence-staging.yml \
+            -R "$REPO" --ref "$TARGET_BRANCH" \
+            -f confirm=STAGE_FIELD_INTELLIGENCE \
+            -f pr_number="$PR_NUMBER" \
+            -f mode=deploy \
+            -f sha="$EXPECTED_SHA" \
+            -f merge_sha="$MERGE_SHA" \
+            -f run_smoke=true
+          echo "Existing protected staging deploy has been dispatched; it will itself perform full fail-closed validation and enforce environment approvals."
