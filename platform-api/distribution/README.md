@@ -10,15 +10,17 @@ This directory contains the technical package for distributing the AGRO-AI Platf
 - `marketplace-listing.md` — canonical copy, positioning, pricing references, URLs, keywords, and channel rules.
 - `../../docs/platform-api-pricing-catalog.md` — direct pricing and billing evidence; active Stripe prices do not prove marketplace availability.
 
-## Verified channel state — 2026-10-09
+## Verified channel state — 2026-10-14
 
 | Channel | Verified state | Outstanding external gate |
 | --- | --- | --- |
 | AGRO-AI direct | Developer and Scale products and prices are active in production Stripe; direct billing integration is production-verified. Public site/docs correctly say **Private preview**. | Counsel-approved legal catalog and protected activation before public automatic TEST enrollment or indexing. |
 | Postman | Official workspace and collection were reported published and publicly visible from the authorized account on 2026-10-04. | Maintain existing assets and reverify public visibility when needed. **Do not create duplicates.** |
-| AWS Marketplace | Seller-account OIDC, runtime identity, event/reconciliation integration, Developer/Scale entitlement mapping, and diagnostics are implemented. Product reached **Limited** visibility. Production startup verified seller identity and a successful GetEntitlements probe on 2026-10-09. | **Public** visibility, approved seller financial/KYC state, public offer/purchase URL, and controlled paid buyer registration, entitlement, and cancellation are **not independently verified**. |
+| AWS Marketplace | Existing SaaS product `prod-rrjrdndw2eptq` is **Public**; authenticated seller-console screenshots inspected 2026-10-14 show the 2026-10-07 visibility request **Succeeded**, `developer`/`scale` dimensions, and the expected fulfillment URL. Seller OIDC, event/reconciliation integration, and entitlement mapping are implemented; production registration handler responded to a token-free probe with HTTP 400, not a real purchase. | Verify buyer-facing offer prices, duration, EULA, renewal/refund/cancellation terms, current seller financial approval, and actual onboarding flag. A controlled, explicitly authorized paid purchase → registration → entitlement → API access → cancellation test has **not** passed. Do not recreate the product, resubmit Public visibility, or enable unrestricted onboarding. |
 | RapidAPI | Import-ready OpenAPI 3.0.2 and listing copy exist. | Provider identity/approval, proxy/auth/plan mapping, single billing owner, and publication unverified. |
 | Microsoft Marketplace | Listing copy and API contract prepared. | Publisher identity, tax/payout approval, SaaS fulfillment/SSO/webhook integration, entitlement lifecycle, and publication unverified. |
+
+AWS publication evidence and the controlled buyer-test sequence are documented in [`agroai_api/docs/AWS_MARKETPLACE_COMMERCIAL_RELEASE.md`](../../agroai_api/docs/AWS_MARKETPLACE_COMMERCIAL_RELEASE.md). Public listing visibility is **not** proof of successful customer purchase or access. Do not infer seller financial/KYC approval from a product's Public state.
 
 ## Legal and release boundary
 
