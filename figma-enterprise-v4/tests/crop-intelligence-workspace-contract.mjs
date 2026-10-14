@@ -33,5 +33,5 @@ for (const route of ["harvest-window", "production-estimate", "maturity-stages"]
   assert.match(backend, new RegExp('@router.post\\("/crop-intelligence/' + escaped + '"'));
 }
 assert.match(backend, /dependencies=\[Depends\(enforce_paid_crop_intelligence\), Depends\(enforce_json_body_limit\)\]/);
-assert.match(detection, /VERIFIED_EVALUATIONS\s*=/);
+assert.match(detection, /VERIFIED_EVALUATIONS[^\n]*= \(\)/);
 console.log("Crop Intelligence route, API, access, and review-only contracts pass.");
