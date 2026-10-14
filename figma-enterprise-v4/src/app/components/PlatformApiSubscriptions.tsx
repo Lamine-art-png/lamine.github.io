@@ -11,7 +11,7 @@ type ApiOffer = {
   status: string;
 };
 type ApiSubscription = { status: string; plan: string | null; billing_interval?: string };
-type ApiBilling = { subscription?: ApiSubscription };
+type ApiBilling = { subscription?: ApiSubscription; portal_available?: boolean };
 type CheckoutReadiness = { eligible: boolean; code: string };
 type CheckoutResult = { checkout_url?: string };
 type PortalResult = { portal_url?: string };
@@ -38,27 +38,45 @@ export function PlatformApiSubscriptions({ canPurchase, hasLiveEnrollment }: { c
   const [error, setError] = useState("");
   const [catalogReady, setCatalogReady] = useState(false);
   const [checkoutEligible, setCheckoutEligible] = useState(false);
+  const [portalAvailable, setPortalAvailable] = useState(false);
   const [refreshed, setRefreshed] = useState(0);
   const checkoutReturned = new URLSearchParams(window.location.search).get("checkout") === "success";
 
   useEffect(() => {
     let mounted = true;
     async function load() {
+      // A pricing/catalog outage must never hide an existing customer's
+      // Stripe billing-recovery controls.
+      setError("");
+      setCheckoutEligible(false);
+      setPortalAvailable(false);
+      if (canPurchase) {
+        try {
+          const billing = await apiClient.get<ApiBilling>("/v1/platform/developer/billing");
+          if (mounted) {
+            setSubscription(billing.subscription || null);
+            setPortalAvailable(Boolean(billing.portal_available));
+          }
+        } catch (cause) {
+          if (mounted) setError(cause instanceof Error ? cause.message : "Could not load billing status. Retry.");
+        }
+      }
       try {
         const result = await apiClient.get<{ plans: ApiOffer[] }>("/v1/platform/pricing");
-        if (!mounted) return;
-        setPlans((result.plans || []).filter((offer) => ["developer", "scale"].includes(offer.identifier)));
-        setCatalogReady(true);
-        if (canPurchase) {
-          const billing = await apiClient.get<ApiBilling>("/v1/platform/developer/billing");
-          if (mounted) setSubscription(billing.subscription || null);
-          const eligibility = hasLiveEnrollment
-            ? await apiClient.get<CheckoutReadiness>("/v1/platform/developer/billing/checkout-readiness")
-            : { eligible: false, code: "platform_live_enrollment_required" };
-          if (mounted) setCheckoutEligible(Boolean(eligibility.eligible));
+        if (mounted) {
+          setPlans((result.plans || []).filter((offer) => ["developer", "scale"].includes(offer.identifier)));
+          setCatalogReady(true);
         }
       } catch (cause) {
-        if (mounted) setError(cause instanceof Error ? cause.message : "Backend unavailable. Retry.");
+        if (mounted) setError(cause instanceof Error ? cause.message : "Pricing is temporarily unavailable. Retry.");
+      }
+      if (canPurchase && hasLiveEnrollment) {
+        try {
+          const eligibility = await apiClient.get<CheckoutReadiness>("/v1/platform/developer/billing/checkout-readiness");
+          if (mounted) setCheckoutEligible(Boolean(eligibility.eligible));
+        } catch {
+          if (mounted) setCheckoutEligible(false);
+        }
       }
     }
     void load();
@@ -98,7 +116,7 @@ export function PlatformApiSubscriptions({ canPurchase, hasLiveEnrollment }: { c
   }
 
   const subscribed = ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(subscription?.status || "");
-  const canManageBilling = Boolean(subscription?.status) && subscription?.status !== "none";
+  const canManageBilling = portalAvailable;
   return (
     <section className="rounded-2xl border border-[#D8DED3] bg-white p-5 shadow-sm md:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -126,7 +144,7 @@ export function PlatformApiSubscriptions({ canPurchase, hasLiveEnrollment }: { c
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {plans.map((offer) => {
           const amount = period === "annual" ? offer.annual_price_cents : offer.monthly_price_cents;
-          const allowed = canPurchase && hasLiveEnrollment && checkoutEligible && catalogReady && !subscribed && !busy;
+          const allowed = canPurchase && hasLiveEnrollment && checkoutEligible && catalogReady && !subscribed && !busy && !portalAvailable;
           return <div key={offer.identifier} className="flex flex-col rounded-xl border border-[#D5DFD4] bg-[#FCFDFB] p-5">
             <div className="text-[16px] font-semibold text-[#10231B]">{offer.name}</div>
             <div className="mt-3 text-[28px] font-semibold text-[#10231B]">{price(amount)}<span className="ml-1 text-[12px] font-medium text-[#748078]">/{period === "annual" ? "year" : "month"}</span></div>
