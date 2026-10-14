@@ -116,6 +116,10 @@ async def register(request: Request, db: Session = Depends(get_db)):
         '<p>Sign in to your approved AGRO-AI organization, accept the current Platform API terms, '
         'and enter this reference and one-time claim code in the AWS Marketplace linking form. '
         'The claim code expires in one hour.</p>'
+        '<p>Next: <a href="https://app.agroai-pilot.com" target="_blank" '
+        'rel="noopener noreferrer">Open AGRO-AI Enterprise Portal</a>, '
+        'then go to Developer Console &gt; Billing &gt; AWS Marketplace to '
+        'link this purchase. Keep this page open until linking is complete.</p>'
         f'<p>Reference: <strong>{reference}</strong></p>'
         f'<p>One-time claim code: <strong>{escape(claim_code)}</strong></p></main></html>',
         headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'", "X-Content-Type-Options": "nosniff"},
