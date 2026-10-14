@@ -1,0 +1,20 @@
+{
+  "literal.1aa2643fe8a75e82": "Returned from Checkout. Subscription access begins only after Stripe confirms payment.",
+  "literal.1ab3754f7076c83e": "No self-service charges are active. This developer program is not yet eligible for paid Platform API billing. No charge will be initiated until AGRO-AI approves the appropriate enrollment.",
+  "literal.22256be64cc1e611": "Server-confirmed subscription",
+  "literal.27d9edc0179fc4ac": "Manage in Stripe",
+  "literal.2c5e81714652558f": "Annual",
+  "literal.2f42852155074367": "Developer and Scale subscriptions",
+  "literal.3ce2820992420cfa": "Billing interval",
+  "literal.5c17fef578415469": "Production access required",
+  "literal.5e97c11700ba4b99": "included credits",
+  "literal.7d2ad0b1496f1495": "Stripe subscriptions with included API credits and metered overages. Live projects and external integrations still require production access approval.",
+  "literal.8cedbeef1e0a1952": "Current subscription managed above",
+  "literal.943951ca9963e317": "Refresh billing status",
+  "literal.9b11f6b707d2a03e": "Monthly",
+  "literal.b571c92855d0c755": "Subscriptions require an approved Platform API enrollment. Continue using prepaid Intelligence, or request production access before purchasing a Developer or Scale plan.",
+  "literal.e11c4c82a65f3dce": "Opening Stripe…",
+  "literal.e85e75bf2972f5a5": "per 1,000 additional credits",
+  "literal.ea320b358837afdf": "Subscription:",
+  "literal.ee3049a7d4a46d84": "Continue to Stripe checkout"
+}

@@ -6,6 +6,7 @@ const appSource = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "
 const authSource = readFileSync(new URL("../src/app/components/PlatformAuthScreen.tsx", import.meta.url), "utf8");
 const verificationSource = readFileSync(new URL("../src/app/components/VerifyEmail.tsx", import.meta.url), "utf8");
 const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsole.tsx", import.meta.url), "utf8");
+const subscriptionSource = readFileSync(new URL("../src/app/components/PlatformApiSubscriptions.tsx", import.meta.url), "utf8");
 const applicationSource = readFileSync(new URL("../src/app/components/PlatformApplicationGate.tsx", import.meta.url), "utf8");
 const selfServiceSource = readFileSync(new URL("../src/app/components/PlatformSelfServiceGate.tsx", import.meta.url), "utf8");
 const cliApprovalSource = readFileSync(new URL("../src/app/components/PlatformCliDeviceApproval.tsx", import.meta.url), "utf8");
@@ -99,6 +100,17 @@ for (const capability of ["projects()", "serviceAccounts()", "keys()", "usage()"
 }
 assert.ok(clientSource.includes('platformDeveloper: {'));
 assert.ok(consoleSource.includes("No self-service charges are active."), "billing must remain truthful while disabled");
+assert.ok(consoleSource.includes("<PlatformApiSubscriptions canPurchase={enabled} hasLiveEnrollment={hasLiveEnrollment} />"), "eligible developers must see live Developer/Scale checkout");
+assert.ok(subscriptionSource.includes("/v1/platform/pricing"), "server catalog controls public subscription prices");
+assert.ok(subscriptionSource.includes("/v1/platform/developer/billing/checkout"), "checkout must use the protected Platform API backend");
+assert.ok(subscriptionSource.includes("Idempotency-Key"), "checkout creation must be idempotent");
+assert.ok(subscriptionSource.includes("window.location.assign"), "the customer must explicitly continue to hosted Stripe");
+assert.ok(subscriptionSource.includes("secureStripeUrl"), "Stripe return URL must be validated");
+assert.ok(subscriptionSource.includes("Subscription access begins only after Stripe confirms payment."), "a browser return must never claim paid entitlement");
+assert.ok(consoleSource.includes('allowed_environments?.includes("live")'), "TEST-only enrollment must not advertise live checkout");
+assert.ok(subscriptionSource.includes("hasLiveEnrollment && checkoutEligible"), "checkout must require live enrollment and server readiness");
+assert.ok(subscriptionSource.includes("{canManageBilling && ("), "existing unpaid subscriptions must retain a billing recovery action");
+
 assert.ok(consoleSource.includes("Live-access requests are not enabled"), "live access must remain truthful while disabled");
 assert.ok(safetySource.includes("Physical execution disabled"));
 assert.ok(safetySource.includes("Automatic live approval disabled"));
