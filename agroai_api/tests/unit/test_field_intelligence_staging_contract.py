@@ -356,3 +356,20 @@ def test_qualify_mode_never_reaches_a_deploy_hook_migration_or_write():
     for name, body in blocks.items():
         if any(marker in body for marker in ("-X POST", "DEPLOY_HOOK\"", "migration.py upgrade", "CREATE DATABASE", "wrangler")):
             assert name in deploy_only, name
+
+
+def test_required_production_startup_contract_is_triggered_for_staging_changes():
+    """A mandatory staging workflow cannot demand a check that path filters skip.
+
+    Without this PR trigger, the staging qualify job refuses an otherwise
+    green Field Intelligence PR because Production Startup Contract CI never
+    ran at that head SHA. Keep the upstream check instead of bypassing it.
+    """
+    startup = REPO / ".github" / "workflows" / "production-startup-contract-ci.yml"
+    startup_source = startup.read_text(encoding="utf-8")
+    staging_source = WORKFLOW.read_text(encoding="utf-8")
+    assert "name: Production Startup Contract CI" in startup_source
+    assert '"Production Startup Contract CI"' in staging_source
+    trigger = startup_source.split("\njobs:", 1)[0]
+    assert "pull_request:" in trigger
+    assert "' .github/workflows/field-intelligence-staging.yml'".replace("' ", "'") in trigger
