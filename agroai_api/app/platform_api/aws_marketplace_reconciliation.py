@@ -228,9 +228,15 @@ def reconcile_registration(
                 row.status = "active"
                 row.reconciled_at = datetime.utcnow()
     elif row.status == "active":
-        row.status = "revoked"
+        # Missing/inactive agreement data must deny access immediately, but is
+        # not proof of a terminal license deprovision. A later successful AWS
+        # reconciliation can restore an otherwise valid customer. An explicit
+        # deprovision event is still terminal until a newer license update.
+        row.status = "license_confirmed"
+        row.plan_identifier = None
+        row.entitlement_expires_at = None
         sync_marketplace_subscription(db, row, active=False)
-        row.reconciled_at = datetime.utcnow()
+        row.reconciled_at = None
     else:
         row.reconciled_at = None
     db.commit()
@@ -246,6 +252,9 @@ def require_marketplace_access(db, organization_id: str) -> bool:
         or row.plan_identifier not in MARKETPLACE_PLAN_DIMENSIONS
         or not row.reconciled_at
         or row.reconciled_at < datetime.utcnow() - timedelta(hours=25)
+        # Expired entitlements must not remain usable until the hourly
+        # reconciler next runs. Reconciliation will restore valid renewals.
+        or (row.entitlement_expires_at is not None and row.entitlement_expires_at <= datetime.utcnow())
     ):
         raise HTTPException(status_code=403, detail={"code": "aws_marketplace_license_inactive"})
     return True
