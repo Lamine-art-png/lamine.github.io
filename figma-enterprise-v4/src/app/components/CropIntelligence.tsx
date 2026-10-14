@@ -94,7 +94,7 @@ const COPY = [
   "Select crop", "Sampled units", "Freshness", "No observations are eligible for comparison.",
   "Random sample", "Systematic sample with random start", "Manual count", "Not independently verified",
   "A minimum of five sampled units is normally required for the scientific estimator.",
-  "Changes requiring attention", "Readiness", "Not assessed", "No maturity result yet.",
+  "Changes requiring attention", "Readiness", "Not assessed", "No maturity result yet.", "Simple average", "86/50 adjusted",
   "Results are scoped to the selected field and the signed-in organization.",
   "Weather data must be sourced, and a date window cannot be inferred from missing analog years.",
   "Crop evidence comes from the selected operation.", "Method and evidence provenance"
@@ -149,7 +149,7 @@ export function CropIntelligence() {
   const [maturity, setMaturity] = useState<Record<string, unknown> | null>(null);
   const [copied, setCopied] = useState(false);
   const [production, setProduction] = useState({
-    unit: "tree", object: "fruit", design: "simple_random", population: "", counts: "", source: "manual",
+    unit: "tree", object: "fruit", design: "simple_random", population: "", counts: "", source: "manual_count",
     detection: "", detectionSe: "", weight: "", weightSe: "", marketable: "", marketableSe: "", area: ""
   });
   const [harvestForm, setHarvestForm] = useState({
@@ -274,7 +274,7 @@ export function CropIntelligence() {
       setCalculatorError(tx("Request failed. Check your inputs and retry.")); return;
     }
     void runCalculation(() => apiClient.fieldIntelligence.maturityStages({
-      crop: cropId, design: "simple_random", count_source: "manual", samples
+      crop: cropId, design: "simple_random", count_source: "manual_count", samples
     }), "maturity");
   }
   const panes: Array<{ id: Pane; title: string; icon: typeof Leaf }> = [
@@ -289,7 +289,7 @@ export function CropIntelligence() {
       <header className="rounded-[24px] bg-[#102C20] px-5 py-6 text-white sm:px-8 sm:py-8">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.18em] text-[#A8CFAF]"><Leaf className="h-4 w-4" /> AGRO-AI · {tx("Crop Intelligence")}</div>
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.18em] text-[#A8CFAF]"><Leaf className="h-4 w-4" /> {"AGRO-AI · "} {tx("Crop Intelligence")}</div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{tx("Crop Intelligence")}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#D5E3D7]">{tx("Crop and field evidence, production sampling, harvest windows and maturity.")}</p>
           </div>
@@ -369,7 +369,7 @@ export function CropIntelligence() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {([["biofix", "Biofix date"], ["asOf", "As-of date"]] as const).map(([key, label]) => <Label key={key} title={tx(label)}><input type="date" className={input} value={harvestForm[key]} onChange={e => setHarvestForm({ ...harvestForm, [key]: e.target.value })} /></Label>)}
                   <Label title={tx("Biofix type")}><select className={input} value={harvestForm.biofixType} onChange={e => setHarvestForm({ ...harvestForm, biofixType: e.target.value })}>{["planting", "transplant", "emergence", "bud_break", "bloom", "other"].map(x => <option key={x} value={x}>{x.replaceAll("_", " ")}</option>)}</select></Label>
-                  <Label title={tx("Degree-day method")}><select className={input} value={harvestForm.method} onChange={e => setHarvestForm({ ...harvestForm, method: e.target.value })}><option value="simple_average">Simple average</option><option value="modified_average_86_50">86/50 adjusted</option></select></Label>
+                  <Label title={tx("Degree-day method")}><select className={input} value={harvestForm.method} onChange={e => setHarvestForm({ ...harvestForm, method: e.target.value })}><option value="simple_average">{tx("Simple average")}</option><option value="modified_average_86_50">{tx("86/50 adjusted")}</option></select></Label>
                   {([["base", "Base temperature (°C)"], ["upper", "Upper cutoff (°C)"], ["low", "Target lower GDD"], ["high", "Target upper GDD"]] as const).map(([key, label]) => <Label key={key} title={tx(label)}><input className={input} inputMode="decimal" type="number" step="any" value={harvestForm[key]} onChange={e => setHarvestForm({ ...harvestForm, [key]: e.target.value })} /></Label>)}
                   <Label title={tx("Target source")}><input className={input} value={harvestForm.targetSource} onChange={e => setHarvestForm({ ...harvestForm, targetSource: e.target.value })} /></Label>
                   <Label title={tx("Target source type")}><select className={input} value={harvestForm.targetType} onChange={e => setHarvestForm({ ...harvestForm, targetType: e.target.value })}>{["grower_historical", "supplier_published", "fitted_model"].map(x => <option key={x} value={x}>{x.replaceAll("_", " ")}</option>)}</select></Label>
