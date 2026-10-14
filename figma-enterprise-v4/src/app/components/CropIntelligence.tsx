@@ -270,7 +270,7 @@ export function CropIntelligence() {
     const samples = stageRows.filter(row => row.id.trim()).map(row => ({
       unit_id: row.id.trim(), counts: Object.fromEntries(profile.maturity_stages.map(stage => [stage, Number(row.counts[stage] || 0)]))
     }));
-    if (samples.some(row => Object.values(row.counts).some(value => !Number.isFinite(value) || value < 0))) {
+    if (samples.some(row => Object.values(row.counts).some(value => (!Number.isFinite(value) || value < 0)))) {
       setCalculatorError(tx("Request failed. Check your inputs and retry.")); return;
     }
     void runCalculation(() => apiClient.fieldIntelligence.maturityStages({
