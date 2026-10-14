@@ -1,0 +1,46 @@
+name: AWS Marketplace fulfillment gate preflight
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/aws-marketplace-fulfillment-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  public-fulfillment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe registration gate without a purchase or token
+        shell: bash
+        env:
+          FULFILLMENT_URL: https://api.agroai-pilot.com/v1/marketplace/aws/register
+        run: |
+          set -euo pipefail
+          # Intentionally omit x-amzn-marketplace-token. The server must
+          # reject the request without calling AWS or creating a registration.
+          # Log only the status code, never a registration body or buyer data.
+          status="$(curl --silent --show-error --max-time 20 \
+            --output /dev/null --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/x-www-form-urlencoded' \
+            --data 'preflight=missing_token' "$FULFILLMENT_URL")"
+          echo "FULFILLMENT_PREFLIGHT_HTTP_STATUS=$status"
+          case "$status" in
+            400)
+              echo "FULFILLMENT_GATE=registration_handler_reached"
+              echo "NOTE=This only proves invalid tokens are rejected. No real purchase or provisioning was tested."
+              ;;
+            503)
+              echo "FULFILLMENT_GATE=disabled_or_configuration_unavailable"
+              echo "NOTE=The public listing may not onboard new buyers. Verify the deployment flags without enabling general access."
+              ;;
+            *)
+              echo "FULFILLMENT_GATE=unexpected_response"
+              echo "NOTE=Unexpected status; review edge proxy, routing and runtime before buyer testing."
+              exit 1
+              ;;
+          esac
