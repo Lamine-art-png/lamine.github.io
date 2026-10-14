@@ -359,3 +359,64 @@ def test_records_still_processing_are_not_counted_as_without_evidence():
     summary = field_condition_summary([_obs("done", 5, issues=["x"]), staged], now=NOW)
     assert summary["pending_processing"] == 1 and summary["records_without_evidence"] == 0
     assert field_condition_summary([], now=NOW)["records_without_evidence"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Workspace crop overview
+# --------------------------------------------------------------------------- #
+
+def _field(obs_id, field_id, hours_ago, *, crop="Almonds", field_name=None, **kwargs):
+    row = _obs(obs_id, hours_ago, **kwargs)
+    row.update({"field_id": field_id, "field_name": field_name or f"Field {field_id}", "crop": crop})
+    return row
+
+
+def test_overview_empty_workspace():
+    from app.services.crop_intelligence import crop_overview
+
+    overview = crop_overview([], now=NOW, total_observations=0)
+    assert overview["fields"] == [] and overview["totals"]["fields"] == 0
+    assert overview["window_truncated"] is False
+
+
+def test_overview_reports_latest_assessment_and_attention_per_field():
+    from app.services.crop_intelligence import crop_overview
+
+    rows = [
+        _field("a-old", "f-a", 40, severity="low"),
+        _field("a-new", "f-a", 3, severity="critical", status="needs_review"),
+        _field("a-meter", "f-a", 1, event_type="meter_reading"),  # newer, but not a crop assessment
+        _field("b-stale", "f-b", 24 * 20, severity="low", crop="milho"),
+        _field("c-pending", "f-c", 2, status="processing", crop="Okra"),
+        _field("d-future", "f-d", -48, crop=None),
+        {**_obs("loose", 5), "field_id": None},
+    ]
+    overview = crop_overview(rows, now=NOW, total_observations=6)
+    fields = {item["field_id"]: item for item in overview["fields"]}
+    a = fields["f-a"]
+    assert a["latest_assessment"]["observation_id"] == "a-new"
+    assert a["latest_record"]["observation_id"] == "a-meter"
+    assert a["latest_assessment"]["severity"] == "critical"
+    assert {"high_severity", "needs_review"} <= set(a["attention"])
+    assert a["crop_profile"]["crop_id"] == "almond" and a["crop_profile"]["validation_status"] == "unvalidated"
+    assert fields["f-b"]["crop_profile"]["crop_id"] == "corn"
+    assert "stale_evidence" in fields["f-b"]["attention"]
+    c = fields["f-c"]
+    assert c["latest_assessment"] is None and c["pending_processing"] == 1
+    assert {"no_crop_assessment", "crop_not_supported"} <= set(c["attention"]) and c["crop_profile"] is None
+    d = fields["f-d"]
+    assert d["observations"] == 0 and d["future_dated_excluded"] == 1 and "future_dated_records" in d["attention"]
+    assert overview["totals"]["unassigned_observations"] == 1
+    assert overview["totals"]["supported_crops"] == ["almond", "corn"]
+    assert overview["totals"]["observations_considered"] == 5
+    assert overview["window_truncated"] is False
+    # Fields needing a person come first.
+    assert all(item["attention"] for item in overview["fields"][:4])
+
+
+def test_overview_flags_a_truncated_window_and_ignores_malformed_rows():
+    from app.services.crop_intelligence import crop_overview
+
+    overview = crop_overview([_field("x", "f-x", 1), "not-a-row", None], now=NOW, total_observations=900)
+    assert overview["window_truncated"] is True
+    assert overview["totals"]["fields"] == 1

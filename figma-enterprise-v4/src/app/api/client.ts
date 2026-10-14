@@ -522,6 +522,7 @@ export const apiClient = {
     search: (query: string) => get(`/v1/field-intelligence/search?${query}`),
     map: (workspaceId?: string) => get(`/v1/field-intelligence/map${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
     cropProfiles: () => get("/v1/field-intelligence/crop-profiles"),
+    cropOverview: (workspaceId?: string) => get(`/v1/field-intelligence/crop-intelligence/overview${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
     observationDetections: (observationId: string) => get(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}/detections`),
     fieldCropCondition: (fieldId: string, workspaceId?: string) => get(`/v1/field-intelligence/fields/${encodeURIComponent(fieldId)}/crop-condition${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
     harvestWindow: (payload: unknown) => post("/v1/field-intelligence/crop-intelligence/harvest-window", payload),

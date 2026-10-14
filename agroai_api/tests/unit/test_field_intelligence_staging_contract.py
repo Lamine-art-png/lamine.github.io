@@ -349,6 +349,7 @@ def test_qualify_mode_never_reaches_a_deploy_hook_migration_or_write():
         "Verify the live staging portal",
         "Verify staging database revision",
         "Run the 20-step staging smoke",
+        "Authenticated Crop Intelligence browser journey on the deployed staging portal",
     ]
     for name in deploy_only:
         assert "inputs.mode == 'deploy'" in blocks[name].splitlines()[0], name

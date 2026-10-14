@@ -402,3 +402,151 @@ def field_condition_summary(
         "excluded": excluded,
         "future_dated_excluded": future_count,
     }
+
+
+# ---------------------------------------------------------------------------
+# Workspace overview: which fields hold crop evidence and which need attention
+# ---------------------------------------------------------------------------
+
+OVERVIEW_VERSION = "crop-overview/1"
+_ATTENTION_SEVERITIES = {"high", "critical"}
+
+
+def _crop_profile_summary(crop: str | None) -> dict[str, Any] | None:
+    from app.services.crop_profiles import resolve_profile
+
+    profile = resolve_profile(crop)
+    if profile is None:
+        return None
+    return {
+        "crop_id": profile.crop_id,
+        "display_name": profile.display_name,
+        "maturity_scale": profile.maturity_scale,
+        "has_maturity_stages": bool(profile.maturity_stages),
+        "has_degree_day_method": profile.degree_day_method is not None,
+        "benchmark_only": profile.benchmark_only,
+        "validation_status": profile.validation_status,
+    }
+
+
+def crop_overview(
+    observations: Iterable[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    total_observations: int | None = None,
+) -> dict[str, Any]:
+    """Per-field roll-up of already tenant-scoped observations for one workspace.
+
+    It reports what the records show and nothing more: the newest finished
+    crop assessment per field, how old it is, and the reasons a field needs a
+    person's attention (high severity, open reviews, failed processing, stale
+    or missing assessments, future-dated records, a crop without a profile).
+    It never compares fields with each other and never infers a trend; the
+    per-field crop-condition summary does the comparable-scope comparison.
+    """
+    now = now or datetime.now(timezone.utc)
+    fields: dict[str, dict[str, Any]] = {}
+    unassigned = 0
+    considered = 0
+    rows = sorted(
+        (row for row in observations if isinstance(row, dict)),
+        key=lambda row: _observed_at(row) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    for row in rows:
+        field_id = _text(row.get("field_id"))
+        if not field_id:
+            unassigned += 1
+            continue
+        observed = _observed_at(row)
+        age = (now - observed).total_seconds() / 3600 if observed else None
+        entry = fields.setdefault(field_id, {
+            "field_id": field_id, "field_name": None, "crop": None, "observations": 0, "latest_record": None,
+            "latest_assessment": None, "open_reviews": 0, "pending_processing": 0, "failed_processing": 0,
+            "high_severity_assessments": 0, "future_dated_excluded": 0, "blocks": set(),
+        })
+        if freshness(age) == "future_dated":
+            entry["future_dated_excluded"] += 1
+            continue
+        considered += 1
+        entry["observations"] += 1
+        entry["field_name"] = entry["field_name"] or _text(row.get("field_name"))
+        entry["crop"] = entry["crop"] or _text(row.get("crop"))
+        block = block_key(row)
+        if block != UNSCOPED_BLOCK:
+            entry["blocks"].add(block)
+        status = row.get("status")
+        if status == "needs_review":
+            entry["open_reviews"] += 1
+        if status == "failed":
+            entry["failed_processing"] += 1
+        elif status in PENDING_STATUSES:
+            entry["pending_processing"] += 1
+        if entry["latest_record"] is None:
+            entry["latest_record"] = {
+                "observation_id": row.get("id"), "observed_at": observed.isoformat() if observed else None,
+                "age_hours": round(age, 1) if age is not None else None, "freshness": freshness(age),
+                "event_type": row.get("event_type") or "observation", "status": status,
+            }
+        if is_assessment(row):
+            level = severity(row) or "unrecognized"
+            if level in _ATTENTION_SEVERITIES:
+                entry["high_severity_assessments"] += 1
+            if entry["latest_assessment"] is None:
+                vision = _vision(row)
+                entry["latest_assessment"] = {
+                    "observation_id": row.get("id"), "observed_at": observed.isoformat() if observed else None,
+                    "age_hours": round(age, 1) if age is not None else None, "freshness": freshness(age),
+                    "severity": level, "status": status, "block_name": _text(row.get("block_name")),
+                    "method": method_key(row), "summary": _text(row.get("summary")),
+                    "crop_condition": _text(vision.get("crop_condition")) if vision.get("analysis_state") == "structured" else None,
+                    "review_required": status == "needs_review" or bool(vision),
+                }
+
+    output = []
+    for entry in fields.values():
+        profile = _crop_profile_summary(entry["crop"])
+        latest = entry["latest_assessment"]
+        attention: list[str] = []
+        if latest and latest["severity"] in _ATTENTION_SEVERITIES:
+            attention.append("high_severity")
+        if entry["open_reviews"]:
+            attention.append("needs_review")
+        if entry["failed_processing"]:
+            attention.append("processing_failed")
+        if latest is None and entry["observations"]:
+            attention.append("no_crop_assessment")
+        elif latest is not None and latest["freshness"] == "stale":
+            attention.append("stale_evidence")
+        if entry["future_dated_excluded"]:
+            attention.append("future_dated_records")
+        if entry["crop"] and profile is None:
+            attention.append("crop_not_supported")
+        elif not entry["crop"]:
+            attention.append("crop_not_recorded")
+        output.append({
+            **{key: value for key, value in entry.items() if key != "blocks"},
+            "blocks": len(entry["blocks"]),
+            "crop_profile": profile,
+            "attention": attention,
+        })
+    # Fields that need a person first, then the most recently observed.
+    output.sort(key=lambda item: (item["latest_record"] or {}).get("observed_at") or "", reverse=True)
+    output.sort(key=lambda item: len([code for code in item["attention"] if code not in {"crop_not_recorded"}]) == 0)
+    crops = sorted({item["crop_profile"]["crop_id"] for item in output if item["crop_profile"]})
+    return {
+        "overview_version": OVERVIEW_VERSION,
+        "generated_at": now.isoformat(),
+        "fields": output,
+        "totals": {
+            "fields": len(output),
+            "fields_needing_attention": sum(
+                1 for item in output if any(code != "crop_not_recorded" for code in item["attention"])),
+            "supported_crops": crops,
+            "observations_considered": considered,
+            "unassigned_observations": unassigned,
+        },
+        # The route reads a bounded newest-N window; older records are not in this overview.
+        "window_truncated": total_observations is not None and total_observations > considered + unassigned,
+        "note": "Each field shows its newest records only; fields are not compared with each other.",
+    }

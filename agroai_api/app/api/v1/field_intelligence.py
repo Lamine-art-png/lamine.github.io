@@ -35,6 +35,7 @@ from app.services.crop_intelligence import (
     ASSESSMENT_EVENT_TYPES,
     FUTURE_TOLERANCE,
     PENDING_STATUSES,
+    crop_overview,
     field_condition_summary,
 )
 from app.services.crop_profiles import all_profiles, resolve_profile
@@ -941,6 +942,60 @@ def field_crop_condition(
                                       now=now, future_dated_total=future_total)
     return {"status": "ok", "total_observations": total + future_total,
             **{k: v for k, v in summary.items() if k != "status"}, "summary_status": summary["status"]}
+
+
+_OVERVIEW_WINDOW = 500
+
+
+def _overview_row(obs, assets: list[dict]) -> dict:
+    """The fields the crop overview reads, without per-row asset queries."""
+    return {
+        "id": obs.id, "field_id": obs.field_id, "field_name": obs.field_name, "crop": obs.crop,
+        "block_id": obs.block_id, "block_name": obs.block_name, "status": obs.status,
+        "event_type": obs.event_type, "severity": obs.severity, "summary": obs.summary,
+        "transcript": obs.transcript, "corrected_transcript": obs.corrected_transcript,
+        "structured": obs.structured_json,
+        "occurred_at": obs.occurred_at.isoformat() if obs.occurred_at else None,
+        "observed_at": obs.observed_at.isoformat() if obs.observed_at else None,
+        "created_at": obs.created_at.isoformat() if obs.created_at else None,
+        "assets": assets,
+    }
+
+
+@router.get("/crop-intelligence/overview")
+def crop_intelligence_overview(
+    workspace_id: str | None = Query(default=None),
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Fields with crop evidence in one workspace, newest records first.
+
+    Read-only and tenant-scoped through the same observation query as every
+    other Field Intelligence list; the calculators stay behind the paid gate.
+    """
+    from app.models.field_intelligence import FieldObservationAsset
+
+    now = datetime.now(timezone.utc)
+    cutoff = (now + FUTURE_TOLERANCE).replace(tzinfo=None)  # occurred_at is stored as naive UTC
+    scope = {"workspace_id": workspace_id, "offset": 0}
+    rows, total = svc.list_observations(db, ctx, {**scope, "limit": _OVERVIEW_WINDOW, "not_after": cutoff})
+    future, _ = svc.list_observations(db, ctx, {**scope, "limit": 100, "start": cutoff + timedelta(microseconds=1)})
+    merged = list({obs.id: obs for obs in [*rows, *future]}.values())
+    assets: dict[str, list[dict]] = {}
+    ids = [obs.id for obs in merged]
+    if ids:
+        organization_id = svc.require_org(ctx)
+        for asset in (
+            db.query(FieldObservationAsset.observation_id, FieldObservationAsset.kind, FieldObservationAsset.status)
+            .filter(FieldObservationAsset.tenant_id == organization_id)
+            .filter(FieldObservationAsset.observation_id.in_(ids))
+            .filter(FieldObservationAsset.status == "stored")
+            .all()
+        ):
+            assets.setdefault(asset.observation_id, []).append({"kind": asset.kind, "status": asset.status})
+    overview = crop_overview([_overview_row(obs, assets.get(obs.id, [])) for obs in merged], now=now,
+                             total_observations=total)
+    return {"status": "ok", "workspace_id": workspace_id, **overview}
 
 
 @router.post("/crop-intelligence/harvest-window",

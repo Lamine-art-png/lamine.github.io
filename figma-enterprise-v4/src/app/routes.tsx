@@ -74,6 +74,7 @@ const operationRoutes = [
   { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-intelligence", lazy: lazyComponent(() => import("./components/FieldIntelligenceV2"), "FieldIntelligenceV2") },
+  { path: "crop-intelligence", lazy: lazyComponent(() => import("./components/CropIntelligence"), "CropIntelligence") },
   { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
   { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },

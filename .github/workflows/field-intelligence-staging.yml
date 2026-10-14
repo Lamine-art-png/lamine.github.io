@@ -33,6 +33,10 @@ on:
         description: "Only for canary: type CONFIRM_STAGING_CANARY"
         required: false
         default: ""
+      run_browser_e2e:
+        description: "Run the authenticated Crop Intelligence browser journey on the deployed staging portal (true/false)"
+        required: false
+        default: "true"
 
 permissions:
   contents: read
@@ -557,6 +561,24 @@ jobs:
           print(json.dumps({"portal_live": True, "environment": "staging", "sha_match": True, "noindex": True, "staging_cache": True}))
           PY
 
+      - name: Authenticated Crop Intelligence browser journey on the deployed staging portal
+        if: ${{ inputs.mode == 'deploy' && inputs.run_browser_e2e == 'true' }}
+        working-directory: figma-enterprise-v4
+        env:
+          AGROAI_STAGING_PORTAL_URL: ${{ vars.FIELD_STAGING_PORTAL_URL }}
+          AGROAI_STAGING_API_URL: ${{ vars.FIELD_STAGING_API_URL }}
+          AGROAI_STAGING_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
+          AGROAI_STAGING_RESTRICTED_TOKEN: ${{ secrets.FIELD_STAGING_RESTRICTED_SMOKE_TOKEN }}
+          AGROAI_STAGING_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$AGROAI_STAGING_TOKEN" || { echo "Refusing: FIELD_STAGING_SMOKE_TOKEN is required for the authenticated journey"; exit 1; }
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+          # Only the redacted line reporter output is kept as evidence; traces and screenshots stay on the runner.
+          npx playwright test tests/browser/crop-intelligence-staging.spec.mjs --config=playwright.contract.config.ts \
+            --browser=chromium --reporter=line 2>&1 | tee ../staging-browser-e2e.log
+
       - name: Verify staging database revision
         if: ${{ inputs.mode == 'deploy' }}
         working-directory: agroai_api
@@ -594,7 +616,7 @@ jobs:
           mkdir -p staging-evidence
           for file in staging-contract-report.json staging-migration-preflight.json staging-current-build.json \
                       staging-migration-upgrade.json staging-migration-verify.json \
-                      staging-rollback-proof.jsonl staging-smoke.log; do
+                      staging-rollback-proof.jsonl staging-smoke.log staging-browser-e2e.log; do
             [ -f "$file" ] && cp "$file" staging-evidence/ || true
           done
           printf '{"sha":"%s","merge_sha":"%s","portal_project":"%s","release_state":"%s","timestamp":"%s"}\n' \

@@ -148,6 +148,17 @@ export function FieldIntelligenceV2() {
   }, [refreshLocal, loadObservations]);
 
   useEffect(() => { void refreshLocal(); void loadObservations(); }, [refreshLocal, loadObservations]);
+
+  // Deep link from Crop Intelligence: /field-intelligence?observation=<id> opens that record.
+  useEffect(() => {
+    const observationId = new URLSearchParams(window.location.search).get("observation");
+    if (!observationId) return;
+    let active = true;
+    apiClient.fieldIntelligence.observation(observationId)
+      .then((response: any) => { if (active && response?.observation) setSelected(response.observation); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   useEffect(() => subscribe(() => { void refreshLocal(); }), [refreshLocal]);
 
   useEffect(() => {

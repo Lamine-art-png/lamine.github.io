@@ -303,3 +303,27 @@ def test_crop_calculators_follow_the_existing_paid_tier_and_contract_overrides(c
     db.commit()
     allowed = client.post(f"{BASE}/crop-intelligence/production-estimate", json=body, headers=headers)
     assert allowed.status_code == 200, allowed.text
+
+
+def test_crop_overview_route_is_tenant_scoped_and_needs_authentication(client, db):
+    assert client.get(f"{BASE}/crop-intelligence/overview").status_code == 401
+    _, _, headers = _auth(db)
+    for index in range(2):
+        cap = _initiate(client, headers, client_capture_id=f"cap-overview-{index}", idempotency_key=f"idem-overview-{index}",
+                        field_id="field-overview", note_text="Leaves look spotted on the west rows of Block A.").json()["capture"]
+        _complete(client, headers, cap["id"])
+    _process(db)
+    overview = client.get(f"{BASE}/crop-intelligence/overview", headers=headers)
+    assert overview.status_code == 200, overview.text
+    payload = overview.json()
+    fields = {item["field_id"]: item for item in payload["fields"]}
+    assert fields["field-overview"]["observations"] == 2
+    assert fields["field-overview"]["crop_profile"]["crop_id"] == "almond"
+    assert payload["overview_version"] == "crop-overview/1"
+
+    _, _, other_headers = _auth(db, email="overview-other@example.com", org_id="org-overview-other",
+                                workspace_id="ws-overview-other")
+    foreign = client.get(f"{BASE}/crop-intelligence/overview", headers=other_headers).json()
+    assert foreign["fields"] == []
+    # A workspace of another organization is not found, never read.
+    assert client.get(f"{BASE}/crop-intelligence/overview?workspace_id=ws-fi", headers=other_headers).status_code == 404

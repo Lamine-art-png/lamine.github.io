@@ -221,6 +221,7 @@ jobs:
             sleep 1
           done
           npx playwright test tests/browser/field-map-runtime.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
+          npx playwright test tests/browser/crop-intelligence.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
 
   deploy-live-newsroom:
     name: Deploy and verify live newsroom production

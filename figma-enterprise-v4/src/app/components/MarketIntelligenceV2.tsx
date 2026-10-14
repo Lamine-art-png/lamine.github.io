@@ -6,6 +6,7 @@ import { MarketIntelligence } from "./MarketIntelligence";
 import { CommercialIntelligenceHome } from "./CommercialIntelligenceHome";
 import { CommercialOnboarding } from "./CommercialOnboarding";
 import { ACCESS_HINTS, COMMERCIAL_COPY, providerLabel, stateLabel } from "./commercialCopy";
+import { CropYieldProposalReview } from "../cropIntelligence/CropYieldProposalReview";
 
 type PositionSummary = {
   position_id: string;
@@ -242,6 +243,8 @@ export function MarketIntelligenceV2() {
 
         {error ? <div className="mt-3 rounded-xl border border-[#F0C6B8] bg-[#FFF5F1] px-4 py-3 text-sm text-[#8B321B]"><div className="flex items-start justify-between gap-3"><span>{error}</span><button aria-label="Dismiss" onClick={() => setError("")}><X className="h-4 w-4" /></button></div></div> : null}
         {notice ? <div className="mt-3 rounded-xl border border-[#C6DECC] bg-[#F2FAF4] px-4 py-3 text-sm text-[#1F6A45]">{notice}</div> : null}
+
+        <CropYieldProposalReview positions={overview?.positions || []} canWrite={canWrite} onRecorded={(message) => void changed(message)} />
 
         {manageOpen && canWrite ? (
           <section className="mt-4 overflow-hidden rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] shadow-[0_18px_60px_rgba(16,35,27,0.06)]">
