@@ -1,4 +1,67 @@
-# AWS Marketplace commercial release checkpoint — 2026-10-07
+# AWS Marketplace commercial release checkpoint
+
+## 2026-10-14 publication evidence and current release gate
+
+**Seller-console screenshots inspected 2026-10-14 supersede the 2026-10-07
+Draft observation below.** The existing SaaS product `prod-rrjrdndw2eptq`
+is now **Public**, and the 2026-10-07 "Update product visibility" request
+shows **Succeeded**. Do not create another product or resubmit visibility.
+
+The same authenticated seller screenshots verify:
+- Product code `ewfyl87ay09pamgkz3pr05d7r`.
+- Two `Entitled` dimension identifiers, `developer` and `scale`.
+- Fulfillment URL `https://api.agroai-pilot.com/v1/marketplace/aws/register`.
+- The seller-console account summary permits publishing paid and free products.
+- "Architecture details" displays an advisory requiring architecture metadata.
+  Do not interpret this as evidence that the API is hosted entirely on AWS.
+- Quick Launch is an optional CloudFormation buyer-deployment route, **not**
+  evidence that this externally hosted SaaS API needs a new deployment.
+
+The **dollar amounts, duration, renewal terms, existing public offer, buyer
+EULA/refund terms, and production onboarding flag have NOT been verified by
+those screenshots**. Preserve approved Developer/Scale reference prices below;
+do not create or modify an offer without inspecting actual buyer-facing terms.
+
+**Engineering read-back (2026-10-14):** production Render deployment
+`fdaa2de4501529ea8dd4d2af4dc201eb994585a9` was live as of 2026-10-12.
+Its startup logs report successful seller-account identity and
+`GetEntitlements` calls with `entitlements_seen=0`. That zero is a diagnostic
+observation, not proof of no buyers. Runtime
+`AWS_MARKETPLACE_ONBOARDING_ENABLED` remains **unverified** (source default
+is false). A previous registration POST returned 503 while onboarding was off.
+Do not represent purchase-to-access as tested or working until evidenced.
+
+### Action order to finish safely
+
+1. Read the public buyer offer **without changing it** and confirm the actual
+   Developer and Scale prices, contract term/renewal, quantities, EULA and
+   refund/cancellation terms. Report differences from approved prices, but
+   never silently change live buyer pricing.
+2. Confirm the production onboarding gate and deployment/migration status
+   using authorized operational access. Validate SNS/EventBridge/SQS worker
+   telemetry and no unprocessed DLQ backlog. Keep existing OIDC/IAM roles.
+3. Establish a controlled test-buyer account/organization and inspect actual
+   purchase cost. Any charge, legal attestation or offer modification requires
+   explicit owner approval. Since the product is already Public, use an
+   AWS-approved test offer or test arrangement; don't assume a normal purchase
+   is free or a cancellation refunds contract charges.
+4. Only within an approved, bounded test window, enable the onboarding flag
+   with rollback ready, complete AWS purchase -> AWS form POST -> ResolveCustomer
+   -> claim/link -> confirmed event/agreement/entitlement -> scoped API use ->
+   duplicate event/reconciliation -> cancellation/effective revocation. Confirm
+   that no AWS-billed usage is exported to Stripe. If the public offer could
+   drive unrelated buyers to an untested flow, obtain a seller-approved test
+   containment plan rather than enabling unrestricted onboarding.
+5. Re-disable onboarding after the test until release acceptance; leave the
+   separately verified event processing operational. Enable the customer path
+   for general use only after the full test passes and release is approved.
+
+**Current blocker:** the public SaaS listing and correct integration wiring
+do not prove a purchasable, provisionable, usable API. The controlled live
+purchase-to-access test (with known owner-approved cost and buyer identity)
+has not been performed. Do not mislabel this as a publication blocker.
+
+### Historical 2026-10-07 snapshot (superseded for publication status)
 
 This supersedes older infrastructure blockers in AWS_MARKETPLACE_ONBOARDING.md.
 The product is **Draft, not publicly live**. Keep onboarding disabled.
