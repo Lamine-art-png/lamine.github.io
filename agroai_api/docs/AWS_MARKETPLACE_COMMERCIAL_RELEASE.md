@@ -27,9 +27,16 @@ do not create or modify an offer without inspecting actual buyer-facing terms.
 Its startup logs report successful seller-account identity and
 `GetEntitlements` calls with `entitlements_seen=0`. That zero is a diagnostic
 observation, not proof of no buyers. Runtime
-`AWS_MARKETPLACE_ONBOARDING_ENABLED` remains **unverified** (source default
-is false). A previous registration POST returned 503 while onboarding was off.
-Do not represent purchase-to-access as tested or working until evidenced.
+`AWS_MARKETPLACE_ONBOARDING_ENABLED` is not directly readable via
+this connector. However, a new read-only no-purchase-token POST against the
+configured production fulfillment URL on 2026-10-14 15:07 UTC returned
+**HTTP 400** (see the green
+`AWS Marketplace fulfillment gate preflight` workflow run on PR #572).
+For this route, a disabled flag or missing product code returns HTTP 503,
+while an enabled handler with a missing token rejects the form with HTTP 400.
+This is **evidence the registration gate is reachable and probably enabled**,
+not verification of a genuine AWS purchase, organization link or entitlement.
+Do not represent purchase-to-access as tested until a real buyer test succeeds.
 
 ### Action order to finish safely
 
