@@ -87,6 +87,7 @@ const operationRoutes = [
   { path: "reports", lazy: lazyComponent(() => import("./components/MonetizedReportsV2"), "MonetizedReportsV2") },
   { path: "agents", lazy: lazyComponent(() => import("./components/Agents"), "Agents") },
   { path: "intelligence", lazy: lazyComponent(() => import("./components/MonetizedIntelligenceV2"), "MonetizedIntelligenceV2") },
+  { path: "crop-intelligence", lazy: lazyComponent(() => import("./components/CropIntelligence"), "CropIntelligence") },
   { path: "market-intelligence", lazy: lazyComponent(() => import("./components/MarketIntelligenceV2"), "MarketIntelligenceV2") },
   { path: "integrations", lazy: lazyComponent(() => import("./components/IntegrationsV3"), "IntegrationsV3") },
   { path: "sources", lazy: lazyComponent(() => import("./components/Sources"), "Sources") },
