@@ -1,0 +1,119 @@
+name: Crop Intelligence - Qualified Staging Dispatch
+
+# One-time support workflow for user-authorized isolated staging qualification.
+# NO deployment in this workflow. Calls the existing protected, fail-closed
+# Field Intelligence staging workflow in read-only qualify mode only after
+# the entire current exact-head pull-request CI matrix succeeds.
+on:
+  push:
+    branches:
+      - ops/crop-stage-qualify-20261014
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  await-full-ci-and-qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
+      PR_NUMBER: '574'
+      EXPECTED_SHA: e94f3c11ff7859e7b2022028172f127a3df60466
+    steps:
+      - name: Require exact unmodified draft PR and current base
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/pulls/$PR_NUMBER" > /tmp/pr.json
+          gh api "repos/$REPO/commits/main" > /tmp/main.json
+          python3 - <<'PY'
+          import json,os
+          p=json.load(open("/tmp/pr.json"));m=json.load(open("/tmp/main.json"))
+          assert p["state"]=="open" and p["draft"] is True
+          assert p["head"]["ref"]==os.environ["TARGET_BRANCH"]
+          assert p["head"]["sha"]==os.environ["EXPECTED_SHA"]
+          assert p["base"]["ref"]=="main" and p["base"]["sha"]==m["sha"]
+          assert p.get("merge_commit_sha"),"synthetic merge SHA absent"
+          print("Exact, draft, current-base, mergeable PR confirmed")
+          PY
+
+      - name: Wait for 25 current exact-head CI workflows to finish green
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            gh api "repos/$REPO/actions/runs?event=pull_request&head_sha=$EXPECTED_SHA&per_page=100" > /tmp/ci.json
+            if python3 - <<'PY'
+          import json,os,sys
+          expected={
+            "Portal Dependency Audit","Distributed Runtime Integration CI",
+            "Assurance Intelligence V2 CI","Platform API developer-platform gates",
+            "Locale Browser Contract CI","Platform API Experience CI",
+            "Platform API Public Self-Service CI","Field Intelligence CI",
+            "Public Leak Guard","AEP Realtime Voice CI","Alembic Revision Contract CI",
+            "Cloudflare Pages Topology Contract CI","PostgreSQL Adoption Smoke CI",
+            "Market Intelligence GA CI","I18n Inventory CI","Platform API Foundation CI",
+            "Compliance Kernel CI","Production Startup Contract CI","Workflow Syntax CI",
+            "Deployment DB Preflight CI","Market Intelligence Final Gate",
+            "Platform Hardening CI","CI - Cloudflare Release Contract",
+            "Platform Hardening Extended CI","Reconcile production localization readiness",
+          }
+          d=json.load(open("/tmp/ci.json"))
+          sha=os.environ["EXPECTED_SHA"]
+          v={}
+          for item in d["workflow_runs"]:
+            if item.get("head_sha")==sha and item.get("name") in expected:
+              name=item["name"]
+              if name not in v or item["id"]>v[name]["id"]:v[name]=item
+          missing=expected-set(v)
+          failures=[(name,run.get("conclusion")) for name,run in v.items() if run.get("conclusion") in {"failure","timed_out","cancelled","action_required"}]
+          if failures:
+            print("BLOCKED by failing exact-head workflows:",failures,flush=True)
+            sys.exit(2)
+          outstanding=[name for name in expected if name not in v or v[name].get("status")!="completed" or v[name].get("conclusion")!="success"]
+          if outstanding:
+            print("Still waiting for:",sorted(outstanding),flush=True)
+            sys.exit(1)
+          print(f"All {len(expected)} required checks terminal success on {sha}",flush=True)
+          PY
+            then break
+            else
+              status=$?
+              if [ "$status" = 2 ]; then
+                echo "Real CI failures prevent protected staging qualification."
+                exit 1
+              fi
+            fi
+            if [ "$attempt" = 90 ]; then
+              echo "Timed out awaiting all 25 current-head CI workflows."
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Invoke the EXISTING read-only Field Intelligence staging qualify
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/pulls/$PR_NUMBER" > /tmp/pr.json
+          gh api "repos/$REPO/commits/main" > /tmp/main.json
+          export MERGE_SHA="$(python3 - <<'PY'
+          import json,os
+          p=json.load(open("/tmp/pr.json"));m=json.load(open("/tmp/main.json"))
+          assert p["head"]["sha"]==os.environ["EXPECTED_SHA"]
+          assert p["base"]["sha"]==m["sha"]
+          assert p["draft"] and p["state"]=="open"
+          print(p["merge_commit_sha"])
+          PY
+          )"
+          gh workflow run .github/workflows/field-intelligence-staging.yml \
+            -R "$REPO" --ref "$TARGET_BRANCH" \
+            -f confirm=STAGE_FIELD_INTELLIGENCE \
+            -f pr_number="$PR_NUMBER" \
+            -f mode=qualify \
+            -f sha="$EXPECTED_SHA" \
+            -f merge_sha="$MERGE_SHA" \
+            -f run_smoke=false
+          echo "Requested existing protected isolated staging qualify mode; NO deployment authorized by this operations workflow."
