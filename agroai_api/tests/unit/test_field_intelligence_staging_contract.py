@@ -244,6 +244,18 @@ def test_workflow_proves_deploy_identity_before_network_post():
     assert "FIELD_STAGING_WORKER_SERVICE_ID" in text
 
 
+def test_staging_deploy_hooks_pin_the_exact_qualified_commit():
+    text = _workflow_text()
+    # A staging service may still track an old feature branch. Render's hook
+    # must never silently redeploy that branch instead of the verified PR SHA.
+    assert 'api_deploy_url="${FIELD_STAGING_DEPLOY_HOOK}&ref=${STAGE_SHA}"' in text
+    assert 'api_deploy_url="${FIELD_STAGING_DEPLOY_HOOK}?ref=${STAGE_SHA}"' in text
+    assert 'worker_deploy_url="${FIELD_STAGING_WORKER_DEPLOY_HOOK}&ref=${STAGE_SHA}"' in text
+    assert 'worker_deploy_url="${FIELD_STAGING_WORKER_DEPLOY_HOOK}?ref=${STAGE_SHA}"' in text
+    assert 'curl --fail --silent --show-error --max-time 30 -X POST "$api_deploy_url"' in text
+    assert 'curl --fail --silent --show-error --max-time 30 -X POST "$worker_deploy_url"' in text
+
+
 def test_workflow_uses_only_protected_staging_environment_secrets():
     text = _workflow_text()
     assert "environment: field-intelligence-staging" in text
