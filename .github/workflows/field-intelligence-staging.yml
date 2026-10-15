@@ -372,8 +372,17 @@ jobs:
         if: ${{ inputs.mode == 'deploy' }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 30 -X POST "$FIELD_STAGING_DEPLOY_HOOK" >/dev/null
-          echo "Staging API deployment triggered for verified service ${FIELD_STAGING_API_SERVICE_ID}."
+          # The existing isolated Render service tracks an older feature branch.
+          # Render deploy hooks without ?ref= redeploy that old branch, so pin
+          # the exact checked PR commit instead. Keep autodeploy off and never
+          # disclose the secret hook URL in logs.
+          case "$FIELD_STAGING_DEPLOY_HOOK" in
+            *\?*) api_deploy_url="${FIELD_STAGING_DEPLOY_HOOK}&ref=${STAGE_SHA}" ;;
+            *) api_deploy_url="${FIELD_STAGING_DEPLOY_HOOK}?ref=${STAGE_SHA}" ;;
+          esac
+          curl --fail --silent --show-error --max-time 30 -X POST "$api_deploy_url" >/dev/null
+          unset api_deploy_url
+          echo "Staging API deployment triggered at verified exact PR SHA for service ${FIELD_STAGING_API_SERVICE_ID}."
 
       - name: Wait for staging API to report the exact SHA
         if: ${{ inputs.mode == 'deploy' }}
@@ -401,8 +410,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$FIELD_STAGING_WORKER_MODE" = "dedicated" ]; then
-            curl --fail --silent --show-error --max-time 30 -X POST "$FIELD_STAGING_WORKER_DEPLOY_HOOK" >/dev/null
-            echo "Dedicated staging worker deployment triggered for ${FIELD_STAGING_WORKER_SERVICE_ID}."
+            case "$FIELD_STAGING_WORKER_DEPLOY_HOOK" in
+              *\?*) worker_deploy_url="${FIELD_STAGING_WORKER_DEPLOY_HOOK}&ref=${STAGE_SHA}" ;;
+              *) worker_deploy_url="${FIELD_STAGING_WORKER_DEPLOY_HOOK}?ref=${STAGE_SHA}" ;;
+            esac
+            curl --fail --silent --show-error --max-time 30 -X POST "$worker_deploy_url" >/dev/null
+            unset worker_deploy_url
+            echo "Dedicated staging worker deployment triggered at verified exact PR SHA for ${FIELD_STAGING_WORKER_SERVICE_ID}."
           else
             echo "Using the staging API in-process worker."
           fi
