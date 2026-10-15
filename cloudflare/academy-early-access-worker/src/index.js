@@ -2,7 +2,7 @@ const PATH="/academy/early-access";
 const API="https://api.agroai-pilot.com/v1/sales/contact";
 const LANGS=new Set(["en","pt-BR","fr","es","other"]);
 const ROLES=new Set(["grower","operator","manager","developer","student","other"]);
-const PAGE=\`<!doctype html>
+const PAGE=`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AGRO-AI Academy | Free Early Access</title>
 <meta name="description" content="Register for free early access to AGRO-AI Academy courses."/>
@@ -45,7 +45,7 @@ const r=await fetch("/academy/early-access",{method:"POST",headers:{"content-typ
 const out=await r.json();if(!r.ok||!out.ok)throw Error(out.error||"failed");
 f.querySelectorAll("input,select").forEach(x=>x.disabled=true);b.textContent="Registered";msg.textContent="You're registered. We'll email you when the Academy lessons are available.";}
 catch{msg.textContent="Registration is temporarily unavailable. Please try again.";msg.className="message error";b.disabled=false;}});})();
-</script></body></html>\`;
+</script></body></html>`;
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
 const clean=(x,n)=>String(x??"").replace(/\u0000/g,"").trim().slice(0,n);
 async function register(request){
