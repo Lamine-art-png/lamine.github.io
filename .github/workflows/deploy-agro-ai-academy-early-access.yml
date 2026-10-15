@@ -62,3 +62,20 @@ jobs:
             sleep 5
           done
           test "$ready" -eq 1
+      - name: Test full signup persistence and inbox notification once
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[academy-registration-e2e]') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 45 -o signup.json -w '%{http_code}' -X POST 'https://agroai-pilot.com/academy/early-access' -H 'content-type: application/json' --data '{"name":"AGRO-AI Academy Production Test","email":"contact@agroai-pilot.com","role":"other","language":"en","consent":"yes"}')"
+          test "$code" = 201
+          python3 - <<'PY'
+          import json
+          with open("signup.json") as f:
+              row=json.load(f)
+          assert row.get("ok") is True, row
+          assert row.get("registration_id"), row
+          assert row.get("notification_sent") is True, row
+          print("ACADEMY_REGISTRATION_STORED_AND_INBOX_NOTIFICATION_ACCEPTED")
+          print("registration_id="+row["registration_id"])
+          PY
