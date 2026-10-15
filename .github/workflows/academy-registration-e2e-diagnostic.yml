@@ -16,6 +16,8 @@ jobs:
           echo "form_http=$code"
           head -c 450 response.json || true
           echo
+          test "$code" = 201
+          grep -F '"notification_sent":true' response.json
       - name: Inspect underlying API status
         run: |
           set -euo pipefail
