@@ -1,0 +1,59 @@
+name: Deploy AGRO-AI Academy Early Access
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/academy-early-access-worker/**"
+      - ".github/workflows/deploy-agro-ai-academy-early-access.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: academy-early-access-production
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact scope and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          node --check cloudflare/academy-early-access-worker/src/index.js
+          grep -F 'agroai-pilot.com/academy/early-access' cloudflare/academy-early-access-worker/wrangler.toml
+          ! grep -F 'agroai-pilot.com/*' cloudflare/academy-early-access-worker/wrangler.toml
+      - name: Deploy scoped registration Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/academy-early-access-worker/wrangler.toml
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/academy-early-access-worker/wrangler.toml
+      - name: Verify form, invalid submission and unaffected newsroom
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 24); do
+            page_code="$(curl -sSL --max-time 20 -o page.html -w '%{http_code}' https://agroai-pilot.com/academy/early-access || true)"
+            bad_code="$(curl -sS --max-time 20 -X POST -H 'content-type: application/json' --data '{}' -o bad.json -w '%{http_code}' https://agroai-pilot.com/academy/early-access || true)"
+            news_code="$(curl -sSL --max-time 20 -o news.html -w '%{http_code}' https://agroai-pilot.com/news/ || true)"
+            article_code="$(curl -sSL --max-time 20 -o article.html -w '%{http_code}' https://agroai-pilot.com/news/introducing-agro-ai-academy || true)"
+            if [ "$page_code" = 200 ] && [ "$bad_code" = 422 ] && [ "$news_code" = 200 ] && [ "$article_code" = 200 ]; then
+              grep -F 'Register for free early access' page.html
+              grep -F 'invalid_fields' bad.json
+              grep -F 'AGRO-AI launches its Enterprise Portal globally' news.html
+              grep -F 'Closing the AI Knowledge Gap in Agriculture' article.html
+              ready=1
+              echo 'ACADEMY_EARLY_ACCESS_PAGE_LIVE'
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1

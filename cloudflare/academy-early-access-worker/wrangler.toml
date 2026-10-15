@@ -1,0 +1,9 @@
+name = "agroai-academy-early-access"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+workers_dev = false
+
+routes = [
+  { pattern = "agroai-pilot.com/academy/early-access", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/academy/early-access*", zone_name = "agroai-pilot.com" }
+]
