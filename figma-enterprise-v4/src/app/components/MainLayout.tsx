@@ -24,6 +24,7 @@ import {
   Shield,
   SlidersHorizontal,
   TrendingUp,
+  Leaf,
   UserCircle,
   Users,
   X,
@@ -141,6 +142,7 @@ export function MainLayout() {
 
   const intelligenceItems: NavItem[] = [
     { name: t("askAgroAi"), path: "/intelligence", icon: BrainCircuit, locked: !canAskAgroAi, upgradeTo: "professional" },
+    { name: tx("Crop Intelligence"), path: "/crop-intelligence", icon: Leaf },
     { name: tx("Market Intelligence"), path: "/market-intelligence", icon: TrendingUp, locked: !canMarketIntelligence, upgradeTo: "professional" },
     { name: t("readiness"), path: "/readiness", icon: Gauge },
     { name: t("exceptions"), path: "/exceptions", icon: AlertTriangle },

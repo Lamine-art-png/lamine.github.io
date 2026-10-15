@@ -868,6 +868,10 @@ def record_yield_estimate(position_id: str, payload: YieldEstimateRequest, ctx: 
             raise HTTPException(status_code=422, detail={"code": "unit_not_convertible", "message": str(exc)}) from exc
         position.expected_production = production.quantize(Decimal("0.00000001"))
         metadata = dict(position.metadata_json or {})
+        # Keep the value being replaced (usually the customer's own figure) so
+        # an estimate applied in error can be reviewed and reversed.
+        metadata.update({"previous_expected_production": format(previous, "f") if previous is not None else None,
+                         "previous_production_basis": metadata.get("production_basis") or "customer"})
         metadata.update({"production_basis": "linked_fields_x_yield_estimate", "yield_estimate_evidence_id": row.evidence_id,
                          "linked_area_hectares": format(area, "f")})
         position.metadata_json = metadata

@@ -10,6 +10,8 @@ on:
       - 'agroai_api/alembic/**'
       - 'shared/**'
       - '.github/workflows/production-startup-contract-ci.yml'
+      # Staging demands this contract even if no Dockerfile or Alembic file changed.
+      - '.github/workflows/field-intelligence-staging.yml'
   workflow_dispatch:
 
 permissions:

@@ -6,16 +6,30 @@ and keeps every visual conclusion explicitly reviewable.
 """
 from __future__ import annotations
 
+import time
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
 from app.models.field_intelligence import FieldCaptureSession, FieldObservation, FieldObservationAsset
+from app.services.crop_profiles import resolve_profile
 from app.services.decision_fabric import assess_field_observation, field_requires_review, safe_field_follow_up
+from app.services.detection_tracking import summarize_counts
+from app.services.field_detection import (
+    DETECTION_CONTRACT_VERSION, MIN_FRAME_SECONDS, DetectionResult, DisabledDetectionProvider, FrameRef,
+    detection_allowed_for, detection_enabled, detection_limits, get_detection_provider,
+)
+from app.services.field_detection_quota import reserve_frames
 from app.services.field_video import MAX_VIDEO_BYTES, extract_video_audio, extract_video_frames
 from app.services.field_vision import MAX_IMAGE_BYTES, analyze_field_images
 
 _INSTALLED = False
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _clock() -> float:
+    """Monotonic clock for the detection time budget (a seam for tests)."""
+    return time.monotonic()
 
 
 def _source_text(observation: FieldObservation, session: FieldCaptureSession | None) -> str:
@@ -53,6 +67,142 @@ def _repair_text_inference(svc: Any, observation: FieldObservation) -> None:
             "extraction_model": model or None,
         })
         observation.provenance_json = provenance
+
+
+_MAX_STORED_DETECTION_FRAMES = 8
+
+
+def _run_detection(svc: Any, db: Any, observation: FieldObservation, media_inputs: list[tuple], vision_analysis: dict, attempt: int) -> None:
+    """Specialized detection lane; runs only when FIELD_DETECTION_ENABLED is set.
+
+    Results are added as reviewable evidence (``structured["detections"]``)
+    and never change severity or status on their own. Frames the general
+    vision layer judged poor are excluded from counts.
+    """
+    provenance = dict(observation.provenance_json or {})
+
+    def not_run(reason: str) -> None:
+        provenance["detection_status"] = "not_run"
+        provenance["detection_reason"] = reason
+        observation.provenance_json = provenance
+
+    allowed, reason = detection_allowed_for(observation.tenant_id)
+    if not allowed:
+        not_run(reason)
+        return
+    profile = resolve_profile(observation.crop)
+    provider = get_detection_provider()
+    if isinstance(provider, DisabledDetectionProvider) or profile is None:
+        not_run(provider.reason if isinstance(provider, DisabledDetectionProvider) else "crop_profile_not_supported")
+        return
+    limits = detection_limits()
+    requested = min(len(media_inputs), limits.max_frames_per_observation)
+    if requested == 0:
+        not_run("no_frames_to_detect")
+        return
+    # Atomic reservation before any paid frame is sent (see field_detection_quota).
+    reservation_id, granted, _used = reserve_frames(
+        db, observation, requested=requested, daily_budget=limits.daily_frame_budget_per_organization,
+        provider=provider.name, attempt=attempt,
+    )
+    if granted == 0:
+        not_run("detection_daily_frame_budget_exhausted")
+        return
+
+    frame_indexes: dict[str | None, int] = {}
+    results = []
+    skipped: dict[str, int] = {}
+    frames_sent = 0
+    deadline = _clock() + limits.observation_budget_seconds
+    for position, (payload, content_type, context) in enumerate(media_inputs):
+        asset_id = context.get("asset_id")
+        index = frame_indexes.get(asset_id, 0)
+        frame_indexes[asset_id] = index + 1
+        frame = FrameRef(
+            asset_id=asset_id, media_kind=context.get("media_kind"),
+            frame_timestamp_seconds=context.get("frame_timestamp_seconds"), frame_index=index,
+        )
+        if position >= limits.max_frames_per_observation:
+            skipped["frame_limit"] = skipped.get("frame_limit", 0) + 1
+            continue
+        if position >= granted:
+            skipped["daily_budget"] = skipped.get("daily_budget", 0) + 1
+            continue
+        remaining_seconds = deadline - _clock()
+        if remaining_seconds < MIN_FRAME_SECONDS:
+            skipped["time_budget"] = skipped.get("time_budget", 0) + 1
+            results.append(DetectionResult(status="failed", frame=frame, provider=provider.name, error="observation_time_budget_exhausted"))
+            continue
+        # The frame's HTTP phases are bounded by what is left of the observation budget.
+        frames_sent += 1
+        results.append(provider.detect(payload, content_type, profile, frame, timeout_seconds=remaining_seconds))
+
+    poor = {
+        (moment.get("asset_id"), moment.get("frame_timestamp_seconds"))
+        for moment in vision_analysis.get("media_moments") or []
+        if moment.get("image_quality") == "poor"
+    }
+    counts = summarize_counts(results, excluded_frames=poor)
+    statuses = sorted({result.status for result in results})
+    ok = [result for result in results if result.status == "ok"]
+    models = sorted({f"{result.model_id}@{result.model_version or 'unversioned'}" for result in ok if result.model_id})
+    structured = dict(observation.structured_json or {})
+    structured["detections"] = {
+        "contract_version": DETECTION_CONTRACT_VERSION,
+        "crop_profile": profile.to_dict(),
+        "provider": provider.name,
+        "models": models,
+        "model_verification": (
+            "registry_verified" if ok and all(result.model_verification == "registry_verified" for result in ok)
+            else "unregistered_unverified"
+        ),
+        "statuses": statuses,
+        "frames": [result.to_dict() for result in results[:_MAX_STORED_DETECTION_FRAMES]],
+        "counts": counts,
+        "frames_skipped": skipped,
+        "limits": {
+            "max_frames_per_observation": limits.max_frames_per_observation,
+            "observation_budget_seconds": limits.observation_budget_seconds,
+            "daily_frame_budget_per_organization": limits.daily_frame_budget_per_organization,
+        },
+        "review_status": "unreviewed",
+        "validation_status": profile.validation_status,
+        "human_review_required": True,
+    }
+    observation.structured_json = structured
+    provenance.update({"detection_status": "completed" if ok else "failed", "detection_models": models})
+    observation.provenance_json = provenance
+    _complete_reservation(
+        db, reservation_id, status="completed" if ok else "failed", model=models[0] if models else None,
+        latency_ms=sum(result.latency_ms or 0 for result in results) or None,
+        error=";".join(sorted({result.error for result in results if result.error}))[:500] or None,
+        output={"frames": len(results), "frames_ok": len(ok), "frames_reserved": granted, "frames_sent": frames_sent,
+                "frames_skipped": skipped, "labels": counts.get("labels", []), "totals": counts.get("totals", [])},
+    )
+
+
+def _complete_reservation(db: Any, run_id: str | None, *, status: str, model: str | None, latency_ms: int | None,
+                          error: str | None, output: dict) -> None:
+    """Record what was sent on the reservation run (committed with the pipeline).
+
+    If the pipeline later rolls back, the committed reservation still counts
+    its reserved frames against the daily budget.
+    """
+    from app.models.field_intelligence import FieldObservationProcessingRun
+    from app.services.field_intelligence_metrics import processing_outcomes, stage_latency
+
+    run = db.get(FieldObservationProcessingRun, run_id) if run_id else None
+    if run is None:
+        return
+    run.status = status
+    run.model = model
+    run.latency_ms = latency_ms
+    run.error = error
+    run.output_json = output
+    run.completed_at = datetime.utcnow()
+    processing_outcomes.labels(stage="detection", outcome=status).inc()
+    if latency_ms is not None:
+        stage_latency.labels(stage="detection").observe(max(latency_ms, 0) / 1000.0)
 
 
 def install_field_vision_extension(svc: Any) -> None:
@@ -222,8 +372,15 @@ def install_field_vision_extension(svc: Any) -> None:
             output={
                 "asset_ids": asset_ids,
                 "media_items_analyzed": int(result.analysis.get("images_analyzed") or 0),
+                "media_items_degraded": int(result.analysis.get("images_degraded") or 0),
                 "video_frames_analyzed": video_frame_count,
+                "analysis_state": result.analysis.get("analysis_state"),
                 "confidence": result.analysis.get("confidence"),
+                "confidence_kind": result.analysis.get("confidence_kind"),
+                "severity": result.analysis.get("severity"),
+                "peak_severity": result.analysis.get("peak_severity"),
+                "contract_violations": list(result.analysis.get("contract_violations") or []),
+                "safety_flags": list(result.analysis.get("safety_flags") or []),
                 "read_errors": read_errors,
                 "frame_errors": frame_errors,
                 "human_review_required": True,
@@ -239,6 +396,9 @@ def install_field_vision_extension(svc: Any) -> None:
             "vision_video_frames_analyzed": video_frame_count,
             "vision_human_review_required": True,
             "vision_language": output_language,
+            "vision_analysis_state": result.analysis.get("analysis_state") if result.succeeded else None,
+            "vision_confidence_kind": result.analysis.get("confidence_kind") if result.succeeded else None,
+            "vision_contract_version": result.analysis.get("contract_version") if result.succeeded else None,
         })
         observation.provenance_json = provenance
 
@@ -246,32 +406,48 @@ def install_field_vision_extension(svc: Any) -> None:
             structured = dict(observation.structured_json or {})
             structured["vision"] = result.analysis
             observation.structured_json = structured
+            degraded = result.analysis.get("analysis_state") == "degraded"
 
             summary = str(result.analysis.get("summary") or "").strip()
             if summary:
-                if not (observation.summary or "").strip():
+                # Unstructured provider prose is kept for the reviewer but is
+                # labelled as unverified and never replaces the operator's words.
+                label = "Unverified visual note" if degraded else "Visual evidence"
+                if not (observation.summary or "").strip() and not degraded:
                     observation.summary = summary
-                elif summary.lower() not in str(observation.summary).lower():
-                    observation.summary = f"{observation.summary} Visual evidence: {summary}"[:4000]
+                elif summary.lower() not in str(observation.summary or "").lower():
+                    observation.summary = f"{observation.summary or ''} {label}: {summary}".strip()[:4000]
 
             follow_up = str(result.analysis.get("recommended_follow_up") or "").strip()
-            if follow_up and not (observation.recommended_action or "").strip():
+            if follow_up and not degraded and not (observation.recommended_action or "").strip():
                 observation.recommended_action = follow_up
 
-            visual_severity = str(result.analysis.get("severity") or "info").lower()
+            # ``severity`` is corroborated across frames; an isolated spike is
+            # reported as ``peak_severity`` and routed to review, not escalated.
+            visual_severity = "info" if degraded else str(result.analysis.get("severity") or "info").lower()
             current_severity = str(observation.severity or "info").lower()
             if _SEVERITY_ORDER.get(visual_severity, 0) > _SEVERITY_ORDER.get(current_severity, 0):
                 observation.severity = visual_severity
+            peak_severity = str(result.analysis.get("peak_severity") or visual_severity).lower()
+            uncorroborated_peak = _SEVERITY_ORDER.get(peak_severity, 0) > _SEVERITY_ORDER.get(visual_severity, 0)
 
-            try:
-                visual_confidence = float(result.analysis.get("confidence") or 0.0)
-            except (TypeError, ValueError):
-                visual_confidence = 0.0
-            observation.confidence = max(float(observation.confidence or 0.0), min(visual_confidence * 0.85, 0.85))
+            # Self-reported model confidence is uncalibrated: unknown stays
+            # unknown and never raises the observation's confidence.
+            visual_confidence = result.analysis.get("confidence")
+            if not degraded and isinstance(visual_confidence, (int, float)) and not isinstance(visual_confidence, bool):
+                bounded = max(0.0, min(float(visual_confidence), 1.0))
+                observation.confidence = max(float(observation.confidence or 0.0), min(bounded * 0.85, 0.85))
 
             uncertainties = list(observation.uncertain_fields_json or [])
+            review_markers = ["visual_analysis_requires_human_confirmation"]
+            if degraded:
+                review_markers.append("visual_analysis_unstructured_unverified")
+            if uncorroborated_peak:
+                review_markers.append("visual_severity_uncorroborated_single_frame")
+            if result.analysis.get("safety_flags"):
+                review_markers.append("visual_unsupported_measurement_removed")
             for item in (
-                "visual_analysis_requires_human_confirmation",
+                *review_markers,
                 *list(result.analysis.get("uncertainties") or []),
             ):
                 text = str(item).strip()[:300]
@@ -284,6 +460,8 @@ def install_field_vision_extension(svc: Any) -> None:
             if issues or hypotheses or _SEVERITY_ORDER.get(visual_severity, 0) >= _SEVERITY_ORDER["medium"]:
                 if not observation.event_type or observation.event_type == "observation":
                     observation.event_type = "issue"
+                observation.status = "needs_review"
+            if degraded or uncorroborated_peak:
                 observation.status = "needs_review"
 
             visual_search = " ".join([
@@ -305,7 +483,12 @@ def install_field_vision_extension(svc: Any) -> None:
                     "model": result.model,
                     "asset_ids": asset_ids,
                     "media_analyzed": int(result.analysis.get("images_analyzed") or 0),
+                    "media_degraded": int(result.analysis.get("images_degraded") or 0),
                     "video_frames_analyzed": video_frame_count,
+                    "analysis_state": result.analysis.get("analysis_state"),
+                    "severity": visual_severity,
+                    "peak_severity": peak_severity,
+                    "safety_flags": list(result.analysis.get("safety_flags") or []),
                     "human_review_required": True,
                 },
             )
@@ -326,6 +509,12 @@ def install_field_vision_extension(svc: Any) -> None:
                     "read_errors": read_errors,
                     "frame_errors": frame_errors,
                 },
+            )
+
+        if detection_enabled():
+            _run_detection(
+                svc, db, observation, media_inputs,
+                result.analysis if result.succeeded else {}, int(job.attempt_count or 1),
             )
 
         correlation = svc.correlate_observation(db, observation)

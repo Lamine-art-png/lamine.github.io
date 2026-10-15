@@ -618,6 +618,35 @@ def test_manual_price_is_never_overwritten_by_automation(client, db):
 # ---------------------------------------------------------------------------
 
 
+def test_applied_yield_estimate_keeps_replaced_value_and_review_proposals_do_not_apply(client, db):
+    created = _brazil_position(client, db, "fields-preserve")
+    position_id = created["id"]
+    position = db.get(MarketPosition, position_id)
+    original = position.expected_production
+    assert original == Decimal("10000")
+    field = ManagedEntity(organization_id=position.organization_id, entity_type="platform_field", display_name="Talhão 9",
+                          status="active", metadata_json={"crop": "soja", "area_hectares": 100})
+    db.add(field)
+    db.commit()
+    assert client.put(f"/v1/market-intelligence/positions/{position_id}/fields", json={"field_ids": [field.id]}).status_code == 200
+
+    # A Crop Intelligence proposal is recorded as evidence but never replaces the customer's figure.
+    proposal = client.post(f"/v1/market-intelligence/positions/{position_id}/yield-estimates",
+                           json={"yield_per_area": "40", "quantity_unit": "saca", "source": "crop_intelligence",
+                                 "apply_to_production": False}).json()
+    assert proposal["applied_to_expected_production"] is False and proposal["reason"] == "not_requested"
+    db.refresh(position)
+    assert position.expected_production == original
+
+    applied = client.post(f"/v1/market-intelligence/positions/{position_id}/yield-estimates",
+                          json={"yield_per_area": "55", "quantity_unit": "saca"}).json()
+    assert applied["applied_to_expected_production"] is True
+    db.refresh(position)
+    assert Decimal(position.metadata_json["previous_expected_production"]) == original
+    assert position.metadata_json["previous_production_basis"] == "customer"
+    assert position.metadata_json["production_basis"] == "linked_fields_x_yield_estimate"
+
+
 def test_yield_estimate_on_linked_fields_recalculates_production_and_exposure(client, db):
     created = _brazil_position(client, db, "fields")
     position_id = created["id"]

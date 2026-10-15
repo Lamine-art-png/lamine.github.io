@@ -152,6 +152,26 @@ def _repository_head() -> str:
     return heads[0]
 
 
+def _supported_baselines(head: str) -> set[str | None]:
+    """Revisions a staging or production database may be upgraded from.
+
+    Any revision on the linear history between the rollback floor and the
+    repository head is a supported baseline (for example a staging database
+    left at an earlier launch revision), plus the legacy Field Intelligence
+    foundation revision and an empty database. Anything else, including an
+    unknown or branched revision, is refused.
+    """
+    config = _alembic_config(os.environ.get("DATABASE_URL", "sqlite://"))
+    script = ScriptDirectory.from_config(config)
+    allowed: set[str | None] = {"023_field_intelligence", None}
+    try:
+        for revision in script.walk_revisions(base=ROLLBACK_FLOOR, head=head):
+            allowed.add(revision.revision)
+    except Exception:  # noqa: BLE001 - an unreachable floor leaves only the explicit set
+        allowed.update({ROLLBACK_FLOOR, head})
+    return allowed
+
+
 def _database_revisions(engine: sa.Engine) -> list[str]:
     inspector = sa.inspect(engine)
     if "alembic_version" not in inspector.get_table_names():
@@ -181,9 +201,9 @@ def cmd_preflight(engine: sa.Engine) -> int:
     if len(revisions) > 1:
         _fail(report, f"database reports multiple revisions: {revisions}")
     current = revisions[0] if revisions else None
-    allowed = {ROLLBACK_FLOOR, "023_field_intelligence", head, None}
+    allowed = _supported_baselines(head)
     if current not in allowed:
-        _fail(report, f"database revision {current!r} is not a supported upgrade baseline {sorted(str(a) for a in allowed)}")
+        _fail(report, f"database revision {current!r} is not on the supported upgrade path from {ROLLBACK_FLOOR} to {head}")
     inspector = sa.inspect(engine)
     tables = set(inspector.get_table_names())
     if current is not None:

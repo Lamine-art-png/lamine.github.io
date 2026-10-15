@@ -1987,6 +1987,20 @@ def list_observations(db: Session, ctx: AuthContext, filters: dict) -> tuple[lis
         query = query.filter(FieldObservation.occurred_at >= start)
     if end:
         query = query.filter(FieldObservation.occurred_at <= end)
+    # Like ``end`` but keeps undated rows, for windows that must not be filled by future-dated records.
+    not_after = _parse_dt(filters.get("not_after"))
+    if not_after:
+        query = query.filter((FieldObservation.occurred_at <= not_after) | FieldObservation.occurred_at.is_(None))
+    # Opt-in set filters (a missing or empty event type counts as an observation).
+    event_types = [str(value) for value in filters.get("event_types") or []]
+    if event_types:
+        clause = FieldObservation.event_type.in_(event_types)
+        if "observation" in event_types:
+            clause = clause | FieldObservation.event_type.is_(None) | (FieldObservation.event_type == "")
+        query = query.filter(clause)
+    exclude_statuses = [str(value) for value in filters.get("exclude_statuses") or []]
+    if exclude_statuses:
+        query = query.filter(FieldObservation.status.notin_(exclude_statuses))
     total = query.count()
     limit = min(int(filters.get("limit") or 100), 500)
     offset = max(int(filters.get("offset") or 0), 0)
@@ -2018,6 +2032,8 @@ def get_observation(db: Session, ctx: AuthContext, observation_id: str) -> Field
 # internal-processing states are intentionally excluded — DELETE is the only
 # destructive path, and processing state is owned by the worker.
 USER_SETTABLE_STATUSES = {"needs_review", "acknowledged", "completed"}
+# Structured keys derived from the media rather than the transcript.
+MEDIA_EVIDENCE_KEYS = ("vision", "detections")
 
 
 def patch_observation(db: Session, ctx: AuthContext, observation_id: str, changes: dict) -> FieldObservation:
@@ -2059,7 +2075,14 @@ def patch_observation(db: Session, ctx: AuthContext, observation_id: str, change
                 occurred_at=observation.occurred_at,
                 allow_model=False,
             )
-            observation.structured_json = extraction.model_dump(mode="json")
+            structured = extraction.model_dump(mode="json")
+            # The photos and video did not change: keep their analysis and
+            # detections, which a correction without provider AI cannot re-run.
+            previous = observation.structured_json if isinstance(observation.structured_json, dict) else {}
+            for key in MEDIA_EVIDENCE_KEYS:
+                if key in previous:
+                    structured[key] = previous[key]
+            observation.structured_json = structured
             observation.summary = extraction.summary or corrected[:280]
             observation.recommended_action = extraction.recommended_follow_up
             observation.confidence = extraction.confidence

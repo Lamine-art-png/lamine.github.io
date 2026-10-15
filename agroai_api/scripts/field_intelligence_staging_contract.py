@@ -66,6 +66,9 @@ OPTIONAL = [
     "FIELD_STAGING_RESTRICTED_SMOKE_TOKEN",
     "FIELD_STAGING_RELEASE_STATE",
     "FIELD_STAGING_CONFIRM_CANARY",
+    "FIELD_STAGING_VISION_ENDPOINT",
+    "FIELD_STAGING_DETECTION_ENABLED",
+    "FIELD_STAGING_DETECTION_ENDPOINT",
 ]
 
 
@@ -146,7 +149,7 @@ def main() -> int:
         failures.append(f"missing required staging configuration: {sorted(missing)}")
 
     report: dict = {
-        "contract": "field-intelligence-staging-v2",
+        "contract": "field-intelligence-staging-v3",
         "checks": {
             "present": {name: bool(values[name]) for name in REQUIRED + OPTIONAL},
         },
@@ -160,6 +163,8 @@ def main() -> int:
         "FIELD_STAGING_WORKER_DEPLOY_HOOK",
         "FIELD_STAGING_OBJECT_ENDPOINT_URL",
         "FIELD_STAGING_TRANSCRIPTION_ENDPOINT",
+        "FIELD_STAGING_VISION_ENDPOINT",
+        "FIELD_STAGING_DETECTION_ENDPOINT",
     ):
         value = values.get(name) or ""
         if value and _host(value) in PRODUCTION_HOSTNAMES:
@@ -257,6 +262,20 @@ def main() -> int:
         ):
             failures.append("Cloudflare Workers AI transcription endpoint must be the official account-scoped ai/run URL matching the model")
     report["checks"]["transcription_provider"] = transcription_provider or None
+
+    # Vision and detection providers follow the same segregation rules.
+    for name in ("FIELD_STAGING_VISION_ENDPOINT", "FIELD_STAGING_DETECTION_ENDPOINT"):
+        value = values[name]
+        if value:
+            parsed = urlparse(value)
+            if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
+                failures.append(f"{name} must be https without embedded credentials")
+    report["checks"]["vision_endpoint_host"] = _host(values["FIELD_STAGING_VISION_ENDPOINT"]) or None
+    # Specialized detection stays disabled until a registry-verified detector
+    # (app/services/crop_model_registry.py) is approved for release.
+    if values["FIELD_STAGING_DETECTION_ENABLED"].lower() in {"1", "true", "yes", "on"}:
+        failures.append("specialized detection must stay disabled in staging until a registry-verified detector is approved")
+    report["checks"]["detection_enabled"] = False
 
     release_state = (values["FIELD_STAGING_RELEASE_STATE"] or "internal").lower()
     canary_confirmed = values["FIELD_STAGING_CONFIRM_CANARY"] == "CONFIRM_STAGING_CANARY"

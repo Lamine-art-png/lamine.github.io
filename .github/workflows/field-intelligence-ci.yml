@@ -103,7 +103,9 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
             tests/unit/test_field_intelligence_postgres.py::test_pg_shared_object_deletion_exactly_one_physical_delete \
             tests/unit/test_field_intelligence_postgres.py::test_pg_concurrent_uploads_cannot_overshoot_quota \
-            tests/unit/test_field_intelligence_postgres.py::test_pg_at_quota_identical_replay_succeeds
+            tests/unit/test_field_intelligence_postgres.py::test_pg_at_quota_identical_replay_succeeds \
+            tests/unit/test_field_intelligence_postgres.py::test_pg_concurrent_detection_reservations_cannot_overshoot_daily_budget \
+            tests/unit/test_field_intelligence_postgres.py::test_pg_detection_reservation_survives_a_pipeline_rollback
 
   backend-field-intelligence:
     name: Backend Field Intelligence, launch, worker, staging, and R2 tests
@@ -132,6 +134,21 @@ jobs:
             tests/unit/test_field_intelligence_launch.py \
             tests/unit/test_field_intelligence_plan_access.py \
             tests/unit/test_field_intelligence_staging_contract.py \
+            tests/unit/test_field_vision.py \
+            tests/unit/test_field_vision_contract.py \
+            tests/unit/test_field_vision_pipeline.py \
+            tests/unit/test_field_vision_eval_harness.py \
+            tests/unit/test_field_vision_staging_smoke.py \
+            tests/unit/test_field_detection.py \
+            tests/unit/test_crop_estimation.py \
+            tests/unit/test_crop_intelligence_summary.py \
+            tests/unit/test_crop_intelligence_api.py \
+            tests/unit/test_field_intelligence_staging_reuse.py \
+            tests/unit/test_staging_workflow_pipefail.py \
+            tests/unit/test_detection_eval.py \
+            tests/unit/test_crop_scientific_tools.py \
+            tests/unit/test_scientific_tool_registry.py \
+            tests/unit/test_scientific_tool_registry_extended.py \
             tests/unit/test_field_operating_loop.py \
             tests/unit/test_live_field_context.py \
             tests/unit/test_object_storage.py \
