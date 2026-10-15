@@ -68,6 +68,9 @@ jobs:
         run: |
           set -euo pipefail
           code="$(curl -sS --max-time 45 -o signup.json -w '%{http_code}' -X POST 'https://agroai-pilot.com/academy/early-access' -H 'content-type: application/json' --data '{"name":"AGRO-AI Academy Production Test","email":"contact@agroai-pilot.com","role":"other","language":"en","consent":"yes"}')"
+          echo "ACADEMY_SIGNUP_HTTP=$code"
+          head -c 400 signup.json || true
+          echo
           test "$code" = 201
           python3 - <<'PY'
           import json
