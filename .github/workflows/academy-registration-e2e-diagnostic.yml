@@ -1,0 +1,23 @@
+name: Academy Registration Diagnostic
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/academy-registration-e2e-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test internal Academy form submission
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 45 -o response.json -w '%{http_code}' -X POST 'https://agroai-pilot.com/academy/early-access' -H 'content-type: application/json' --data '{"name":"AGRO-AI Academy Diagnostic","email":"contact@agroai-pilot.com","role":"other","language":"en","consent":"yes"}' || true)"
+          echo "form_http=$code"
+          head -c 450 response.json || true
+          echo
+      - name: Inspect underlying API status
+        run: |
+          set -euo pipefail
+          curl -sSL --max-time 30 'https://api.agroai-pilot.com/v1/auth/email-delivery/status' | head -c 500
+          echo
