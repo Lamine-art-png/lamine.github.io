@@ -21,3 +21,11 @@ jobs:
           set -euo pipefail
           curl -sSL --max-time 30 'https://api.agroai-pilot.com/v1/auth/email-delivery/status' | head -c 500
           echo
+      - name: Test canonical Academy registration backend with internal account
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 45 -o upstream.json -w '%{http_code}' -X POST 'https://api.agroai-pilot.com/v1/sales/contact' -H 'content-type: application/json' --data '{"type":"sales","priority":"low","name":"AGRO-AI Academy Diagnostic","email":"contact@agroai-pilot.com","role":"other","subject":"AGRO-AI Academy registration internal diagnostic","message":"Internal verification only, not a customer.","source_page":"academy/early-access","metadata":{"campaign":"agro_ai_academy","kind":"internal_test","email_opt_in":true,"language":"en"}}' || true)"
+          echo "backend_http=$code"
+          head -c 650 upstream.json || true
+          echo
