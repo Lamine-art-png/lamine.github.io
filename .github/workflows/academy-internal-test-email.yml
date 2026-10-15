@@ -1,0 +1,84 @@
+name: Send AGRO-AI Academy Internal Test Email
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/academy-internal-test-email.yml"
+      - "docs/campaigns/academy-2026-10-15/test-email.html"
+      - "docs/campaigns/academy-2026-10-15/test-email.txt"
+permissions:
+  contents: read
+jobs:
+  one-recipient-test:
+    if: ${{ contains(github.event.head_commit.message, '[academy-test-send]') }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deliver one Academy preview only to verified internal inbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re,urllib.request,urllib.error
+          from pathlib import Path
+
+          to='contact@agroai-pilot.com'
+          key=(os.getenv('RESEND_API_KEY') or '').strip()
+          if not key or not key.startswith('re_'):
+              raise SystemExit('NOT_SENT: production GitHub environment does not provide the Resend email credential')
+          signup='https://agroai-pilot.com/academy/early-access'
+          try:
+              with urllib.request.urlopen(urllib.request.Request(signup,headers={'User-Agent':'AGRO-AI-Academy-Test'}),timeout=20) as r:
+                  page=r.read().decode('utf-8','replace')
+                  if r.status!=200 or 'Register for free early access' not in page:
+                      raise RuntimeError('Registration form not yet live')
+          except Exception as e:
+              raise SystemExit('NOT_SENT: early-access registration must be live and verified first: '+str(e))
+
+          status_url='https://api.agroai-pilot.com/v1/auth/email-delivery/status'
+          try:
+              with urllib.request.urlopen(status_url,timeout=20) as r:
+                  status=json.loads(r.read())
+          except Exception as e:
+              raise SystemExit('NOT_SENT: cannot verify transactional sender domain: '+str(e))
+          domain=str(status.get('from_email_domain') or '').strip().lower()
+          if not status.get('configured') or not (domain=='agroai-pilot.com' or domain.endswith('.agroai-pilot.com')):
+              raise SystemExit('NOT_SENT: company transactional sender configuration could not be verified')
+          override=(os.getenv('FROM_EMAIL') or '').strip()
+          address=re.search(r'[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)*agroai-pilot\.com',override)
+          sender=address.group(0) if address else ('academy@'+domain)
+          html=Path('docs/campaigns/academy-2026-10-15/test-email.html').read_text()
+          plain=Path('docs/campaigns/academy-2026-10-15/test-email.txt').read_text()
+          if to!='contact@agroai-pilot.com' or signup not in html or 'INTERNAL TEST PREVIEW' not in html:
+              raise SystemExit('NOT_SENT: content or recipient guard failed')
+          message={
+             'from':'AGRO-AI Academy <'+sender+'>',
+             'to':[to],
+             'subject':'[TEST] Introducing AGRO-AI Academy — Free Early Access',
+             'html':html,'text':plain,'reply_to':to
+          }
+          req=urllib.request.Request('https://api.resend.com/emails',method='POST',headers={
+             'Authorization':'Bearer '+key,'Content-Type':'application/json',
+             'Idempotency-Key':'academy-preview-contact-2026-10-15-v1'
+          },data=json.dumps(message).encode())
+          try:
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  result=json.loads(r.read())
+                  if not (200<=r.status<300 and result.get('id')):
+                      raise RuntimeError('No provider acceptance id')
+                  print('ACADEMY_TEST_ACCEPTED_BY_PROVIDER')
+                  print('recipient='+to)
+                  print('sender='+sender)
+                  print('provider_message_id='+result['id'])
+          except urllib.error.HTTPError as e:
+              try:
+                  response=json.loads(e.read())
+                  error_type=response.get('name') or response.get('error') or 'provider_rejected'
+              except Exception:
+                  error_type='provider_rejected'
+              raise SystemExit('NOT_SENT: Resend API rejected request: HTTP '+str(e.code)+' ('+str(error_type)+')')
+          PY
