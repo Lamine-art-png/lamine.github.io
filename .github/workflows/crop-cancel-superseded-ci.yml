@@ -1,0 +1,68 @@
+name: Crop Intelligence - Cancel Superseded PR CI
+
+# One-time cleanup of nonproduction CI runs superseded by PR #574 corrections.
+# Cancels only old same-branch pull_request runs / pinned outdated operations
+# workflows and does not touch any live or production deployment.
+on:
+  push:
+    branches:
+      - ops/crop-cancel-superseded-ci-20261014
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      CURRENT_SHA: 1d1c684a2e3edce18c8b668366242c2acf1d480a
+      TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
+    steps:
+      - name: Ensure current PR is unchanged
+        run: |
+          set -euo pipefail
+          live="$(gh api "repos/$REPO/pulls/574" --jq '.head.sha')"
+          test "$live" = "$CURRENT_SHA"
+
+      - name: Cancel only superseded, same-branch pull-request checks
+        run: |
+          set -euo pipefail
+          for sha in e94f3c11ff7859e7b2022028172f127a3df60466 e38d9f155ef8e03b78714dcdd981a636a2c8a333; do
+            gh api "repos/$REPO/actions/runs?event=pull_request&head_sha=$sha&per_page=100" > /tmp/old-runs.json
+            run_ids="$(OLD_SHA="$sha" python3 - <<'PY'
+          import json,os
+          data=json.load(open("/tmp/old-runs.json"))
+          for r in data.get("workflow_runs",[]):
+            if r.get("head_sha")==os.environ["OLD_SHA"] and r.get("head_branch")==os.environ["TARGET_BRANCH"] and r.get("status")!="completed":
+              print(r["id"])
+          PY
+          )"
+            for run_id in $run_ids; do
+              echo "Cancel only stale PR CI run $run_id ($sha)"
+              gh api -X POST "repos/$REPO/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
+            done
+          done
+
+      - name: Cancel only the four outdated staging dispatch watchers
+        run: |
+          set -euo pipefail
+          for run_id in 38656717044 38657079583 38657661594 38657665444; do
+            details="$(gh api "repos/$REPO/actions/runs/$run_id")"
+            name="$(DETAILS="$details" python3 - <<'PY'
+          import json,os
+          d=json.loads(os.environ["DETAILS"])
+          assert d["name"] in {"Crop Intelligence - Qualified Staging Dispatch","Crop Intelligence - Deploy after isolated qualify"}
+          assert d["head_branch"] in {"ops/crop-stage-qualify-20261014","ops/crop-stage-deploy-20261014"}
+          print(d["status"])
+          PY
+          )"
+            if [ "$name" != completed ]; then
+              echo "Cancel superseded watcher $run_id"
+              gh api -X POST "repos/$REPO/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
+            fi
+          done
