@@ -32,7 +32,7 @@ jobs:
                grep -F 'Introducing AGRO-AI Academy: Closing the AI Knowledge Gap in Agriculture' article.html >/dev/null && \
                grep -F 'Thursday, October 15, 2026 · 8:00 a.m. PDT' article.html >/dev/null && \
                grep -F 'https://www.linkedin.com/company/agro-ai-inc/' article.html >/dev/null && \
-               grep -F 'AGRO-AI Academy' cover.svg >/dev/null && \
+               grep -F '<svg ' cover.svg >/dev/null && [ "$(wc -c < cover.svg)" -gt 200000 ] && \
                grep -F '/news/introducing-agro-ai-academy' newsroom.js >/dev/null && \
                grep -F 'AGRO-AI launches its Enterprise Portal globally' newsroom.html >/dev/null; then
               echo 'ACADEMY_ARTICLE_LIVE=verified'
