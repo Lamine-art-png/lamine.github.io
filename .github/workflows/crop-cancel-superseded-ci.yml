@@ -20,7 +20,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
-      CURRENT_SHA: 1d1c684a2e3edce18c8b668366242c2acf1d480a
+      CURRENT_SHA: ffdb167378139331fa65b49badb01834f4ba945f
       TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
     steps:
       - name: Ensure current PR is unchanged
@@ -32,7 +32,7 @@ jobs:
       - name: Cancel only superseded, same-branch pull-request checks
         run: |
           set -euo pipefail
-          for sha in e94f3c11ff7859e7b2022028172f127a3df60466 e38d9f155ef8e03b78714dcdd981a636a2c8a333; do
+          for sha in 056c556ff29f8a2db0833fa730450cf5315710b2 de61456da8559714d61fa8d238b11ebd64a41f65 e94f3c11ff7859e7b2022028172f127a3df60466 e38d9f155ef8e03b78714dcdd981a636a2c8a333 36d14c191f541c863c555ef1c96f2d21a8f5c5f1 1d1c684a2e3edce18c8b668366242c2acf1d480a; do
             gh api "repos/$REPO/actions/runs?event=pull_request&head_sha=$sha&per_page=100" > /tmp/old-runs.json
             run_ids="$(OLD_SHA="$sha" python3 - <<'PY'
           import json,os
@@ -51,7 +51,7 @@ jobs:
       - name: Cancel only the four outdated staging dispatch watchers
         run: |
           set -euo pipefail
-          for run_id in 38656717044 38657079583 38657661594 38657665444; do
+          for run_id in 38656717044 38657079583 38657661594 38657665444 38658200560 38658204826; do
             details="$(gh api "repos/$REPO/actions/runs/$run_id")"
             name="$(DETAILS="$details" python3 - <<'PY'
           import json,os
