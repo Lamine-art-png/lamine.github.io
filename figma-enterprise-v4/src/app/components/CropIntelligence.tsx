@@ -253,8 +253,8 @@ export function CropIntelligence() {
       !raw.trim() || (Number.isFinite(Number(raw)) && Number(raw) >= minimum && Number(raw) <= maximum);
     const validPair = (value: string, se: string) => (!se.trim() || !!value.trim()) && validNumber(se, 0);
     if (!production.counts.trim() ||
-      counts.some(value => !Number.isSafeInteger(value) || value < 0) ||
-      !Number.isSafeInteger(population) || population < counts.length ||
+      counts.some(value => !(Number.isSafeInteger(value) && value >= 0)) ||
+      !Number.isSafeInteger(population) || !(population >= counts.length) ||
       !validNumber(production.detection, Number.EPSILON, 1) ||
       !validNumber(production.marketable, 0, 1) ||
       !validNumber(production.weight, Number.EPSILON) ||
