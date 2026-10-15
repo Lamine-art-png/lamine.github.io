@@ -29,3 +29,15 @@ jobs:
           echo "backend_http=$code"
           head -c 650 upstream.json || true
           echo
+      - name: Compare public API and direct Render origin without storing records
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in api.agroai-pilot.com agroai-api-preview.onrender.com; do
+            for route in /v1/auth/email-delivery/status /v1/health; do
+              code="$(curl -sSL --max-time 25 -o check.json -w '%{http_code}' "https://$domain$route" || true)"
+              echo "$domain$route status=$code"
+              head -c 350 check.json || true
+              echo
+            done
+          done
