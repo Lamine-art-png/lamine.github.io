@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BarChart3, CalendarDays, ChevronRight, ClipboardCheck, Leaf, Loader2, Plus, RefreshCcw, ShieldAlert, Sprout, TrendingUp } from "lucide-react";
 import { Link } from "react-router";
 import { apiClient, type ApiError } from "../api/client";
@@ -133,6 +133,7 @@ export function CropIntelligence() {
   const { currentOrganization, currentWorkspace, workspaces } = useAuth();
   const { tx } = usePortalCopy([], COPY);
   const workspaceId = currentWorkspace?.id || "";
+  const activeScopeRef = useRef("");
   const [observations, setObservations] = useState<Observation[]>([]);
   const [profiles, setProfiles] = useState<CropProfile[]>([]);
   const [fieldId, setFieldId] = useState("");
@@ -171,6 +172,17 @@ export function CropIntelligence() {
   const selectedField = fields.find((row) => row.id === fieldId);
   const currentWorkspaceAllowed = Boolean(workspaceId && currentOrganization?.id &&
     workspaces.some((row) => row.id === workspaceId && (!row.organization_id || row.organization_id === currentOrganization.id)));
+  const scopeKey = [currentOrganization?.id || "", workspaceId, fieldId].join(":");
+  // Immediately invalidate an in-flight estimate when the signed-in scope changes.
+  activeScopeRef.current = scopeKey;
+  useEffect(() => {
+    setEstimate(null);
+    setHarvest(null);
+    setMaturity(null);
+    setCalculatorError("");
+    setCopied(false);
+    setBusy(false);
+  }, [scopeKey]);
 
   useEffect(() => {
     let active = true;
@@ -215,34 +227,51 @@ export function CropIntelligence() {
   }, [currentWorkspaceAllowed, fieldId, workspaceId, revision]);
 
   async function runCalculation(action: () => unknown, kind: Pane) {
+    const requestScope = activeScopeRef.current;
     setBusy(true); setCalculatorError("");
     try {
       const value = await action() as Record<string, unknown>;
+      if (activeScopeRef.current !== requestScope) return;
       if (kind === "production") setEstimate(value as EstimateResult);
       if (kind === "harvest") setHarvest(value);
       if (kind === "maturity") setMaturity(value);
     } catch (cause) {
+      if (activeScopeRef.current !== requestScope) return;
       const apiError = cause as ApiError;
       setCalculatorError(apiError.status === 402
         ? tx("Permission or subscription required for this calculation.") + " " + tx("A Professional or higher plan is required for crop calculators.")
         : apiError.message || tx("Request failed. Check your inputs and retry."));
-    } finally { setBusy(false); }
+    } finally {
+      if (activeScopeRef.current === requestScope) setBusy(false);
+    }
   }
 
   function calculateProduction() {
     const counts = production.counts.split(/[\s,;]+/).filter(Boolean).map(Number);
-    if (!production.counts.trim() || counts.some(value => (!Number.isFinite(value) || value < 0)) ||
-      !Number.isSafeInteger(Number(production.population)) || Number(production.population) < 1) {
+    const population = Number(production.population);
+    const validNumber = (raw: string, minimum: number, maximum = Infinity) =>
+      !raw.trim() || (Number.isFinite(Number(raw)) && Number(raw) >= minimum && Number(raw) <= maximum);
+    const validPair = (value: string, se: string) => (!se.trim() || !!value.trim()) && validNumber(se, 0);
+    if (!production.counts.trim() ||
+      counts.some(value => !Number.isSafeInteger(value) || value < 0) ||
+      !Number.isSafeInteger(population) || population < counts.length ||
+      !validNumber(production.detection, Number.EPSILON, 1) ||
+      !validNumber(production.marketable, 0, 1) ||
+      !validNumber(production.weight, Number.EPSILON) ||
+      !validNumber(production.area, Number.EPSILON) ||
+      !validPair(production.detection, production.detectionSe) ||
+      !validPair(production.weight, production.weightSe) ||
+      !validPair(production.marketable, production.marketableSe)) {
       setCalculatorError(tx("Request failed. Check your inputs and retry.")); return;
     }
     const optional = (value: string, se: string) => value.trim() ? { value: num(value), standard_error: Number(se || 0) } : undefined;
     void runCalculation(() => apiClient.fieldIntelligence.productionEstimate({
       unit: production.unit, object_label: production.object, design: production.design,
-      population_units: Number(production.population), sample_counts: counts, count_source: production.source,
+      population_units: population, sample_counts: counts, count_source: "manual_count",
       detection_rate: optional(production.detection, production.detectionSe),
       unit_weight_kg: optional(production.weight, production.weightSe),
       marketable_fraction: optional(production.marketable, production.marketableSe),
-      area_hectares: num(production.area), include_market_proposal: Boolean(production.area && production.weight && production.detection)
+      area_hectares: num(production.area), include_market_proposal: Boolean(production.area && production.weight)
     }), "production");
   }
 
