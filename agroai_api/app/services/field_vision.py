@@ -694,9 +694,14 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
 
     severity, peak_severity, uncorroborated = _corroborated_severity(completed)
 
-    def dominant(values: list[str], default: str = "unknown") -> str:
+    def dominant(values: list[str], severity_order: tuple[str, ...], default: str = "unknown") -> str:
+        # Ties resolve to the most severe value so identical evidence never
+        # depends on set iteration order and never downgrades a hazard.
         useful = [value for value in values if value and value not in {"unknown", "not_visible"}]
-        return max(set(useful), key=useful.count) if useful else default
+        if not useful:
+            return default
+        rank = {value: index for index, value in enumerate(severity_order)}
+        return max(sorted(set(useful)), key=lambda value: (useful.count(value), rank.get(value, -1)))
 
     analysis_state = "structured" if structured else "degraded"
     degraded_reasons = [str(item["degraded_reason"]) for item in completed if item.get("degraded_reason")]
@@ -706,9 +711,9 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
         "hypotheses": _merge_findings(hypothesis_frames, limit=16),
         "observations": list(dict.fromkeys(observations))[:24],
         "possible_issues": list(dict.fromkeys(issues))[:16],
-        "crop_condition": dominant(crop_conditions),
-        "coverage_assessment": dominant(coverage_assessments),
-        "equipment_condition": dominant(equipment_conditions),
+        "crop_condition": dominant(crop_conditions, ("healthy", "mostly_healthy", "stressed", "damaged")),
+        "coverage_assessment": dominant(coverage_assessments, ("adequate", "uneven", "incomplete")),
+        "equipment_condition": dominant(equipment_conditions, ("normal", "attention_needed", "unsafe")),
         "severity": severity,
         "peak_severity": peak_severity,
         "severity_basis": {

@@ -301,7 +301,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/field_intelligence_migration.py preflight --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-preflight.json
+          DATABASE_URL="$FIELD_STAGING_DATABASE_URL" python scripts/field_intelligence_migration.py preflight | tee ../staging-migration-preflight.json
 
       - name: Report the currently deployed staging build (read-only)
         run: |
@@ -320,9 +320,9 @@ jobs:
         working-directory: agroai_api
         run: |
           set -euo pipefail
-          python scripts/field_intelligence_migration.py preflight --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-preflight.json
-          python scripts/field_intelligence_migration.py upgrade --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-upgrade.json
-          python scripts/field_intelligence_migration.py verify --database-url "$FIELD_STAGING_DATABASE_URL" | tee ../staging-migration-verify.json
+          DATABASE_URL="$FIELD_STAGING_DATABASE_URL" python scripts/field_intelligence_migration.py preflight | tee ../staging-migration-preflight.json
+          DATABASE_URL="$FIELD_STAGING_DATABASE_URL" python scripts/field_intelligence_migration.py upgrade | tee ../staging-migration-upgrade.json
+          DATABASE_URL="$FIELD_STAGING_DATABASE_URL" python scripts/field_intelligence_migration.py verify | tee ../staging-migration-verify.json
 
       - name: Prove head to rollback-floor rollback on a disposable database and always clean it
         if: ${{ inputs.mode == 'deploy' }}
@@ -365,7 +365,7 @@ jobs:
           )"
           : > ../staging-rollback-proof.jsonl
           for command in upgrade verify downgrade verify-rollback upgrade verify; do
-            python scripts/field_intelligence_migration.py "$command" --database-url "$proof_url" >> ../staging-rollback-proof.jsonl
+            DATABASE_URL="$proof_url" python scripts/field_intelligence_migration.py "$command" >> ../staging-rollback-proof.jsonl
           done
 
       - name: Trigger staging API deployment

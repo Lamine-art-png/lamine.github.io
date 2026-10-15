@@ -524,3 +524,18 @@ def test_fallback_model_frame_cannot_escalate(monkeypatch):
     assert analysis["images_fallback_model"] == 1
     assert analysis["severity_basis"]["uncorroborated_frames"][0]["reason"] == "untrusted_frame"
     assert analysis["media_moments"][0]["model_role"] == "fallback"
+
+
+@pytest.mark.parametrize(
+    "field,values,expected",
+    [
+        ("equipment_condition", ("normal", "unsafe"), "unsafe"),
+        ("equipment_condition", ("unsafe", "normal"), "unsafe"),
+        ("crop_condition", ("healthy", "damaged"), "damaged"),
+        ("coverage_assessment", ("adequate", "incomplete"), "incomplete"),
+        ("equipment_condition", ("normal", "normal", "unsafe"), "normal"),
+    ],
+)
+def test_tied_conditions_resolve_to_most_severe_deterministically(monkeypatch, field, values, expected):
+    frames = [(_structured(**{field: value}), None) for value in values]
+    assert _run(monkeypatch, frames).analysis[field] == expected

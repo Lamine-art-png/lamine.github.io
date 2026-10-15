@@ -108,3 +108,9 @@ def test_the_old_single_line_pipeline_was_fail_open(tmp_path):
     env = {**os.environ, "PATH": f"{stubs}:{os.environ.get('PATH', '')}"}
     assert subprocess.run([*GITHUB_DEFAULT, str(script)], cwd=tmp_path, env=env).returncode == 0
     assert subprocess.run([*GITHUB_BASH, str(script)], cwd=tmp_path, env=env).returncode != 0
+
+
+def test_staging_database_url_never_reaches_process_arguments():
+    text = WORKFLOW.read_text()
+    assert "--database-url" not in text
+    assert 'DATABASE_URL="$FIELD_STAGING_DATABASE_URL" python scripts/field_intelligence_migration.py preflight' in text
