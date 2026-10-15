@@ -1,0 +1,48 @@
+name: Verify AGRO-AI Academy Live
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-academy-live.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify Academy article, image, and newsroom without changing production
+        shell: bash
+        run: |
+          set -euo pipefail
+          article="https://agroai-pilot.com/news/introducing-agro-ai-academy"
+          cover="${article}/cover.svg"
+          newsroom="https://agroai-pilot.com/news/"
+          script="https://agroai-pilot.com/news/agroai-news-card-restore.js"
+          for attempt in $(seq 1 18); do
+            code_article="$(curl -sSL --max-time 25 -D article.headers -o article.html -w '%{http_code}' "$article" || true)"
+            code_cover="$(curl -sSL --max-time 25 -D cover.headers -o cover.svg -w '%{http_code}' "$cover" || true)"
+            code_news="$(curl -sSL --max-time 25 -D newsroom.headers -o newsroom.html -w '%{http_code}' "$newsroom" || true)"
+            code_script="$(curl -sSL --max-time 25 -o newsroom.js -w '%{http_code}' "$script" || true)"
+            printf 'Attempt %s: academy=%s image=%s newsroom=%s script=%s\n' "$attempt" "$code_article" "$code_cover" "$code_news" "$code_script"
+            if [ "$code_article" = 200 ] && [ "$code_cover" = 200 ] && [ "$code_news" = 200 ] && [ "$code_script" = 200 ] && \
+               grep -F 'Introducing AGRO-AI Academy: Closing the AI Knowledge Gap in Agriculture' article.html >/dev/null && \
+               grep -F 'Thursday, October 15, 2026 · 8:00 a.m. PDT' article.html >/dev/null && \
+               grep -F 'https://www.linkedin.com/company/agro-ai-inc/' article.html >/dev/null && \
+               grep -F 'AGRO-AI Academy' cover.svg >/dev/null && \
+               grep -F '/news/introducing-agro-ai-academy' newsroom.js >/dev/null && \
+               grep -F 'AGRO-AI launches its Enterprise Portal globally' newsroom.html >/dev/null; then
+              echo 'ACADEMY_ARTICLE_LIVE=verified'
+              echo 'ACADEMY_COVER_LIVE=verified'
+              echo 'NEWSROOM_INTACT=verified'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Academy live verification failed.'
+          echo 'Academy final response headers:'; cat article.headers
+          echo 'Cover final response headers:'; cat cover.headers
+          exit 1
