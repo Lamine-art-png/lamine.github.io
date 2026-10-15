@@ -1,0 +1,39 @@
+name: AWS Cover Delivery Diagnostic
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aws-cover-recovery-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect current AWS image delivery without modifying infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request, urllib.error
+          urls = {
+            "live_article": "https://agroai-pilot.com/news/agro-ai-platform-api-aws-marketplace",
+            "live_svg": "https://agroai-pilot.com/news/agro-ai-platform-api-aws-marketplace/cover.svg",
+            "raw_svg": "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-platform-api-aws-marketplace/cover.svg",
+            "live_png": "https://agroai-pilot.com/news/agro-ai-platform-api-aws-marketplace/cover.png",
+            "newsroom_script": "https://agroai-pilot.com/news/agroai-news-card-restore.js",
+          }
+          for k,url in urls.items():
+            for method in ["HEAD","GET"]:
+              try:
+                req = urllib.request.Request(url,method=method,headers={"User-Agent":"AGRO-AI-Cover-Diagnostic/1.0", "Cache-Control":"no-cache"})
+                with urllib.request.urlopen(req,timeout=18) as resp:
+                  body=resp.read() if method=="GET" else b""
+                  print(f"{k} {method}: status={resp.status} type={resp.headers.get('content-type')} bytes={len(body)} url={resp.url} marker={resp.headers.get('x-agroai-asset-source')} head={body[:80]!r}")
+              except urllib.error.HTTPError as e:
+                print(f"{k} {method}: ERROR status={e.code} type={e.headers.get('content-type')} url={e.url} body={e.read(150)!r}")
+              except Exception as e:
+                print(f"{k} {method}: ERROR {type(e).__name__}: {str(e)[:200]}")
+          PY
