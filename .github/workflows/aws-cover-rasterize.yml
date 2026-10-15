@@ -1,0 +1,53 @@
+name: Prepare AWS Marketplace cover raster
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aws-cover-rasterize.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Convert existing SVG artwork into supported WebP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet cairosvg Pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from io import BytesIO
+          from PIL import Image, ImageStat
+          import cairosvg
+          source=Path("client/public/news/agro-ai-platform-api-aws-marketplace/cover.svg")
+          target=source.with_name("cover.webp")
+          if source.stat().st_size < 1000000: raise SystemExit("Unexpected original SVG size")
+          png=cairosvg.svg2png(url=str(source), output_width=1920, output_height=1080)
+          img=Image.open(BytesIO(png)).convert("RGB")
+          stat=ImageStat.Stat(img)
+          print("Raster dimensions:",img.size,"standard deviation:",stat.stddev)
+          if img.size != (1920,1080) or max(stat.stddev) < 10: raise SystemExit("Blank output; refusing to publish")
+          img.save(target,"WEBP",quality=92,method=6)
+          with Image.open(target) as final:
+            assert final.size == (1920,1080)
+            final.verify()
+          print("AWS_COVER_RASTER_READY",target,target.stat().st_size)
+          PY
+      - name: Save converted file to isolated review branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="ops/aws-marketplace-cover-raster-20261014"
+          git config user.name "AGRO-AI automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add client/public/news/agro-ai-platform-api-aws-marketplace/cover.webp
+          git commit -m "assets: derive AWS cover WebP from original artwork"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "ASSET_BRANCH_CREATED $branch"
