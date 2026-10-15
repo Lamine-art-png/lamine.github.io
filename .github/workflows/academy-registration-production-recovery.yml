@@ -1,0 +1,58 @@
+name: Academy Registration Production Recovery
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/academy-registration-production-recovery.yml"
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check exact route and Cloudflare-compatible fetch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          node --check cloudflare/academy-early-access-worker/src/index.js
+          grep -F 'redirect:"manual"' cloudflare/academy-early-access-worker/src/index.js
+          ! grep -F 'redirect:"error"' cloudflare/academy-early-access-worker/src/index.js
+          grep -F 'agroai-pilot.com/academy/early-access' cloudflare/academy-early-access-worker/wrangler.toml
+      - name: Deploy only Academy registration Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/academy-early-access-worker/wrangler.toml
+      - name: Verify public registration and accepted operator notification
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 8
+          page="$(curl -sSL --max-time 25 -o academy.html -w '%{http_code}' https://agroai-pilot.com/academy/early-access)"
+          test "$page" = 200
+          grep -F 'Register for free early access' academy.html >/dev/null
+          code="$(curl -sS --max-time 55 -o register.json -w '%{http_code}' -X POST 'https://agroai-pilot.com/academy/early-access' -H 'content-type: application/json' --data '{"name":"AGRO-AI Academy Workflow Verification","email":"contact@agroai-pilot.com","role":"other","language":"en","consent":"yes"}')"
+          echo "academy_registration_http=$code"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("register.json").read_text())
+          print("registration_saved="+str(bool(data.get("registration_id"))))
+          print("operator_notification_accepted="+str(data.get("notification_sent")))
+          if data.get("registration_id"):
+              print("registration_id="+str(data["registration_id"]))
+          assert data.get("ok") is True and data.get("registration_id"), data
+          assert data.get("notification_sent") is True, data
+          PY
+          test "$code" = 201
+          article="$(curl -sSL --max-time 25 -o article.html -w '%{http_code}' https://agroai-pilot.com/news/introducing-agro-ai-academy)"
+          test "$article" = 200
+          echo "ACADEMY_PUBLIC_REGISTRATION_STORED_AND_NOTIFICATION_ACCEPTED"
