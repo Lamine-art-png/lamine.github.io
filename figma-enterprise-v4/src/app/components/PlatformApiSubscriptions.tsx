@@ -11,7 +11,7 @@ type ApiOffer = {
   status: string;
 };
 type ApiSubscription = { status: string; plan: string | null; billing_interval?: string };
-type ApiBilling = { subscription?: ApiSubscription; portal_available?: boolean };
+type ApiBilling = { subscription?: ApiSubscription };
 type CheckoutReadiness = { eligible: boolean; code: string };
 type CheckoutResult = { checkout_url?: string };
 type PortalResult = { portal_url?: string };
@@ -55,7 +55,7 @@ export function PlatformApiSubscriptions({ canPurchase, hasLiveEnrollment }: { c
           const billing = await apiClient.get<ApiBilling>("/v1/platform/developer/billing");
           if (mounted) {
             setSubscription(billing.subscription || null);
-            setPortalAvailable(Boolean(billing.portal_available));
+            setPortalAvailable(Boolean(billing.subscription && ["active", "trialing", "past_due", "grace", "enterprise_contract"].includes(billing.subscription.status)));
           }
         } catch (cause) {
           if (mounted) setError(cause instanceof Error ? cause.message : "Could not load billing status. Retry.");
