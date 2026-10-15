@@ -16,6 +16,14 @@ assert.match(routes, /path: "crop-intelligence", lazy: lazyComponent\(\(\) => im
 assert.match(nav, /path: "\/crop-intelligence"/);
 assert.match(page, /export function CropIntelligence\(/);
 assert.match(page, /currentWorkspaceAllowed/);
+assert.match(page, /activeScopeRef\.current !== requestScope/, "stale async calculator results must be rejected after scope changes");
+assert.match(page, /setEstimate\(null\)/, "previous scoped estimate must be cleared");
+assert.match(page, /setHarvest\(null\)/, "previous scoped harvest must be cleared");
+assert.match(page, /setMaturity\(null\)/, "previous scoped maturity must be cleared");
+assert.match(page, /population < counts\.length/, "sample population cannot be smaller than the sample count");
+assert.match(page, /include_market_proposal: Boolean\(production\.area && production\.weight\)/, "manual sampling can propose market yield without a detector calibration");
+assert.doesNotMatch(page, /include_market_proposal: Boolean\([^\n]*production\.detection/, "manual market proposal must not require detection calibration");
+assert.match(page, /count_source: "manual_count"/, "manual evidence provenance must be explicit");
 assert.match(page, /fieldCropCondition\(fieldId, workspaceId\)/);
 assert.match(page, /observations\("workspace_id=" \+ encodeURIComponent\(workspaceId\)/);
 assert.match(page, /apiClient\.fieldIntelligence\.cropProfiles\(/);
