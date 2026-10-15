@@ -1,6 +1,5 @@
 const PATH="/academy/early-access";
-// Call the Render origin directly: calling api.agroai-pilot.com from a same-zone Worker fails to reach it.
-const API="https://agroai-api-preview.onrender.com/v1/sales/contact";
+const API="https://api.agroai-pilot.com/v1/sales/contact";
 const LANGS=new Set(["en","pt-BR","fr","es","other"]);
 const ROLES=new Set(["grower","operator","manager","developer","student","other"]);
 const PAGE=`<!doctype html>
@@ -60,12 +59,12 @@ async function register(request){
  if(name.length<2||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!LANGS.has(language)||!ROLES.has(role)||p.consent!=="yes")return response({ok:false,error:"invalid_fields"},422);
  try{
  const body={type:"sales",priority:"low",name,email,role,subject:"AGRO-AI Academy free early-access registration",message:"User opted in to free AGRO-AI Academy course availability and educational updates.",source_page:"academy/early-access",metadata:{campaign:"agro_ai_academy",kind:"free_early_access",email_opt_in:true,language,role,source:"academy_registration"}};
- const r=await fetch(API,{method:"POST",headers:{"content-type":"application/json","accept":"application/json"},body:JSON.stringify(body),redirect:"error"});
- if(!r.ok){ console.error("Academy registration upstream returned status",r.status);return response({ok:false,error:"upstream_unavailable",...(email==="contact@agroai-pilot.com"?{internal_diagnostic:"upstream_status_"+r.status}:{})},503);}
+ const r=await fetch(API,{method:"POST",headers:{"content-type":"application/json","accept":"application/json"},body:JSON.stringify(body),redirect:"manual"});
+ if(!r.ok){console.error("Academy registration upstream returned status",r.status);return response({ok:false,error:"upstream_unavailable"},503);}
  const saved=await r.json();if(saved.status!=="received"||!saved.request_id)return response({ok:false,error:"not_saved"},503);
  if(saved.notification_status!=="emailed") console.error("Academy registration saved but operator email not accepted",saved.request_id,saved.notification_status);
  return response({ok:true,registration_id:saved.request_id,notification_sent:saved.notification_status==="emailed"},201);
- }catch(exc){console.error("Academy registration backend fetch failed",String(exc));return response({ok:false,error:"upstream_unavailable",...(email==="contact@agroai-pilot.com"?{internal_diagnostic:String(exc).slice(0,180)}:{})},503);}
+ }catch(exc){console.error("Academy registration backend fetch failed",String(exc));return response({ok:false,error:"upstream_unavailable"},503);}
 }
 export default{async fetch(request){
  const path=new URL(request.url).pathname.replace(/\/+$/,"");
