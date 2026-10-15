@@ -1,5 +1,6 @@
 const PATH="/academy/early-access";
-const API="https://api.agroai-pilot.com/v1/sales/contact";
+// Call the Render origin directly: calling api.agroai-pilot.com from a same-zone Worker fails to reach it.
+const API="https://agroai-api-preview.onrender.com/v1/sales/contact";
 const LANGS=new Set(["en","pt-BR","fr","es","other"]);
 const ROLES=new Set(["grower","operator","manager","developer","student","other"]);
 const PAGE=`<!doctype html>
@@ -60,9 +61,10 @@ async function register(request){
  try{
  const body={type:"sales",priority:"low",name,email,role,subject:"AGRO-AI Academy free early-access registration",message:"User opted in to free AGRO-AI Academy course availability and educational updates.",source_page:"academy/early-access",metadata:{campaign:"agro_ai_academy",kind:"free_early_access",email_opt_in:true,language,role,source:"academy_registration"}};
  const r=await fetch(API,{method:"POST",headers:{"content-type":"application/json","accept":"application/json"},body:JSON.stringify(body),redirect:"error"});
- if(!r.ok)return response({ok:false,error:"upstream_unavailable"},503);
+ if(!r.ok){ console.error("Academy registration upstream returned status",r.status);return response({ok:false,error:"upstream_unavailable"},503);}
  const saved=await r.json();if(saved.status!=="received"||!saved.request_id)return response({ok:false,error:"not_saved"},503);
- return response({ok:true},201);
+ if(saved.notification_status!=="emailed") console.error("Academy registration saved but operator email not accepted",saved.request_id,saved.notification_status);
+ return response({ok:true,registration_id:saved.request_id,notification_sent:saved.notification_status==="emailed"},201);
  }catch{return response({ok:false,error:"upstream_unavailable"},503);}
 }
 export default{async fetch(request){
