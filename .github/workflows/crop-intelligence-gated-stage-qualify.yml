@@ -23,7 +23,7 @@ jobs:
       REPO: ${{ github.repository }}
       TARGET_BRANCH: codex/crop-intelligence-staging-handoff-20261014
       PR_NUMBER: '574'
-      EXPECTED_SHA: e38d9f155ef8e03b78714dcdd981a636a2c8a333
+      EXPECTED_SHA: 1d1c684a2e3edce18c8b668366242c2acf1d480a
     steps:
       - name: Require exact unmodified draft PR and current base
         run: |
