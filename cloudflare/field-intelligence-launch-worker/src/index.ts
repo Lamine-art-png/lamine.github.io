@@ -2,6 +2,13 @@ const NEWSROOM_PATH = "/news";
 const NEWSROOM_SCRIPT_PATH = "/news/agroai-news-card-restore.js";
 const NEWSROOM_ORIGIN = "https://agroai-343.pages.dev";
 
+const ACADEMY_ARTICLE_PATH = "/news/introducing-agro-ai-academy";
+const ACADEMY_PUBLISH_AT = "2026-10-15T08:00:00-07:00";
+const ACADEMY_PUBLISH_AT_MS = Date.parse(ACADEMY_PUBLISH_AT);
+const ACADEMY_COVER_PATH = `${ACADEMY_ARTICLE_PATH}/cover.svg`;
+const ACADEMY_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-academy/index.html";
+const ACADEMY_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-academy/cover.svg";
+
 const ASSURANCE_ARTICLE_PATH = "/news/agro-ai-assurance-enterprise-portal";
 const FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH = "/news/agro-ai-field-intelligence-upgrade";
 const PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch";
@@ -48,6 +55,15 @@ const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefa
 
 const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
+    {
+      path:"/news/introducing-agro-ai-academy",
+      image:"/news/introducing-agro-ai-academy/cover.svg",
+      category:"Company News",
+      title:"Introducing AGRO-AI Academy: Closing the AI Knowledge Gap in Agriculture",
+      description:"A new, free learning initiative to help farmers, operators and agricultural teams learn how to use AI confidently in their daily work.",
+      date:"San Francisco, California — October 15, 2026",
+      publishAt:"2026-10-15T08:00:00-07:00"
+    },
     {
       path:"/news/agro-ai-platform-api-aws-marketplace",
       image:"/news/agro-ai-platform-api-aws-marketplace/cover.svg",
@@ -155,6 +171,20 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
   window.addEventListener("load",()=>{install();setTimeout(install,600);setTimeout(install,1800);},{once:true});
 })();`;
 
+function academyPublished(now = Date.now()): boolean {
+  return now >= ACADEMY_PUBLISH_AT_MS;
+}
+
+function academyScheduledResponse(): Response {
+  const headers = new Headers();
+  headers.set("cache-control", "no-store");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-robots-tag", "noindex, nofollow");
+  headers.set("x-agroai-scheduled-publication", ACADEMY_PUBLISH_AT);
+  headers.set("retry-after", String(Math.max(1, Math.ceil((ACADEMY_PUBLISH_AT_MS - Date.now()) / 1000))));
+  return new Response(null, { status: 404, headers });
+}
+
 function cropIntelligencePublished(now = Date.now()): boolean {
   return now >= CROP_INTELLIGENCE_PUBLISH_AT_MS;
 }
@@ -211,6 +241,11 @@ async function sourceArticleResponse(request: Request, source: string, userAgent
   const upstream = await fetchArticleSource(source, userAgent);
   if (!upstream.ok) return new Response(unavailable, { status: 503, headers: articleHeaders() });
   return new Response(request.method === "HEAD" ? null : await upstream.text(), { status: 200, headers: articleHeaders() });
+}
+
+async function academyArticleResponse(request: Request): Promise<Response> {
+  if (!academyPublished()) return academyScheduledResponse();
+  return sourceArticleResponse(request, ACADEMY_ARTICLE_SOURCE, "AGRO-AI-Academy-News/1.0", "The AGRO-AI Academy announcement is temporarily unavailable.");
 }
 
 async function cropIntelligenceArticleResponse(request: Request): Promise<Response> {
@@ -341,6 +376,11 @@ export default {
     if (normalized === NEWSROOM_PATH) return newsroomResponse(request);
     if (normalized === NEWSROOM_SCRIPT_PATH) return newsroomScriptResponse(request);
 
+    if (normalized === ACADEMY_ARTICLE_PATH) return academyArticleResponse(request);
+    if (normalized === ACADEMY_COVER_PATH) {
+      if (!academyPublished()) return academyScheduledResponse();
+      return repositoryAssetResponse(request, ACADEMY_COVER_SOURCE, "image/svg+xml", "supplied-academy-cover");
+    }
     if (normalized === CROP_INTELLIGENCE_ARTICLE_PATH) return cropIntelligenceArticleResponse(request);
     if (normalized === CROP_INTELLIGENCE_LOGO_PATH) {
       if (!cropIntelligencePublished()) return cropIntelligenceScheduledResponse();
