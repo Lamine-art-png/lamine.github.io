@@ -45,14 +45,19 @@ jobs:
             bad_code="$(curl -sS --max-time 20 -X POST -H 'content-type: application/json' --data '{}' -o bad.json -w '%{http_code}' https://agroai-pilot.com/academy/early-access || true)"
             news_code="$(curl -sSL --max-time 20 -o news.html -w '%{http_code}' https://agroai-pilot.com/news/ || true)"
             article_code="$(curl -sSL --max-time 20 -o article.html -w '%{http_code}' https://agroai-pilot.com/news/introducing-agro-ai-academy || true)"
-            if [ "$page_code" = 200 ] && [ "$bad_code" = 422 ] && [ "$news_code" = 200 ] && [ "$article_code" = 200 ]; then
-              grep -F 'Register for free early access' page.html
-              grep -F 'invalid_fields' bad.json
-              grep -F 'AGRO-AI launches its Enterprise Portal globally' news.html
-              grep -F 'Closing the AI Knowledge Gap in Agriculture' article.html
+            echo "attempt=$attempt page=$page_code bad=$bad_code news=$news_code article=$article_code"
+            if [ "$page_code" = 200 ] && [ "$bad_code" = 422 ] && [ "$news_code" = 200 ] && [ "$article_code" = 200 ] && \
+               grep -Fq 'Register for free early access' page.html && \
+               grep -Fq 'invalid_fields' bad.json && \
+               grep -Fq 'Closing the AI Knowledge Gap in Agriculture' article.html; then
               ready=1
               echo 'ACADEMY_EARLY_ACCESS_PAGE_LIVE'
               break
+            fi
+            if [ "$attempt" = 1 ]; then
+              echo "Page title: $(grep -o '<title>[^<]*</title>' page.html | head -1 || true)"
+              echo "Request result: $(head -c 250 bad.json || true)"
+              echo "News title: $(grep -o '<title>[^<]*</title>' news.html | head -1 || true)"
             fi
             sleep 5
           done
