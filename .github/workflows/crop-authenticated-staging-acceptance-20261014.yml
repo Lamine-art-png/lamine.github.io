@@ -1,0 +1,135 @@
+name: Crop Intelligence - Authenticated Staging Acceptance
+on:
+  push:
+    branches: [ops/crop-authenticated-staging-acceptance-20261014]
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+jobs:
+  authenticated-browser-proof:
+    runs-on: ubuntu-latest
+    environment: field-intelligence-staging
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      STAGE_SHA: ffdb167378139331fa65b49badb01834f4ba945f
+      PORTAL_URL: ${{ vars.FIELD_STAGING_PORTAL_URL }}
+      API_URL: ${{ vars.FIELD_STAGING_API_URL }}
+      CANARY_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.STAGE_SHA }}
+      - name: Require successful existing staging deploy and authenticated smoke at exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 200); do
+            gh api "repos/$REPO/actions/runs?event=workflow_dispatch&head_sha=$STAGE_SHA&per_page=100" > /tmp/staging-runs.json
+            if python3 - <<'PY'
+          import json,os,subprocess,sys
+          d=json.load(open("/tmp/staging-runs.json"))
+          for r in d.get("workflow_runs",[]):
+              if r.get("name")!="Field Intelligence Staging" or r.get("head_sha")!=os.environ["STAGE_SHA"] or r.get("status")!="completed" or r.get("conclusion")!="success": continue
+              p=subprocess.run(["gh","api",f"repos/{os.environ['REPO']}/actions/runs/{r['id']}/jobs?per_page=100"],text=True,capture_output=True)
+              if p.returncode:continue
+              jobs=json.loads(p.stdout).get("jobs",[])
+              stage=next((x for x in jobs if "Deploy isolated staging" in x.get("name","")),None)
+              if not stage or stage.get("conclusion")!="success":continue
+              steps={s.get("name"):s.get("conclusion") for s in stage.get("steps",[])}
+              required=["Validate immutable staging resource identities","Migrate staging database to the repository head","Trigger staging API deployment","Verify the live staging portal","Run the 20-step staging smoke"]
+              if all(steps.get(name)=="success" for name in required):
+                  print("Exact-SHA protected staging deployment verified; workflow run",r["id"])
+                  sys.exit(0)
+          sys.exit(1)
+          PY
+            then
+              break
+            fi
+            if [ "$attempt" -eq 200 ]; then
+              echo "Protected staging deploy not verified; refusing browser acceptance."
+              exit 1
+            fi
+            sleep 20
+          done
+      - name: Verify staging identity and genuine signed-in canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PORTAL_URL" && test -n "$API_URL" && test -n "$CANARY_TOKEN"
+          case "$API_URL" in
+            *api.agroai-pilot.com*|*api-preview.agroai-pilot.com*) echo "Refusing production API"; exit 1 ;;
+          esac
+          curl --fail --silent --show-error --max-time 30 "$PORTAL_URL/deployment-meta.json" > /tmp/portal-meta.json
+          curl --fail --silent --show-error --max-time 30 "$API_URL/v1/health" > /tmp/api-health.json
+          curl --fail --silent --show-error --max-time 30 -H "Authorization: Bearer $CANARY_TOKEN" "$API_URL/v1/auth/bootstrap" > /tmp/canary.json
+          python3 - <<'PY'
+          import json,os
+          p=json.load(open("/tmp/portal-meta.json"));a=json.load(open("/tmp/api-health.json"));b=json.load(open("/tmp/canary.json"))
+          assert p["build_sha"]==a["build_sha"]==os.environ["STAGE_SHA"],"stale API or portal"
+          assert p["environment"]=="staging" and p["api_url"].rstrip("/")==os.environ["API_URL"].rstrip("/")
+          assert b.get("user") and b.get("workspaces"),"canary login lacks real authenticated workspace"
+          print("Verified actual staging API, portal and canary login")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Exercise real desktop and mobile Crop Intelligence in Chromium
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+          mkdir -p ../crop-staging-browser-evidence
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          import { chromium } from "playwright";
+          const browser=await chromium.launch({headless:true});
+          const errors=[],routes=[],token=process.env.CANARY_TOKEN;
+          const api=process.env.API_URL.replace(/\/$/,"");
+          const portal=process.env.PORTAL_URL.replace(/\/$/,"");
+          async function check(name,device){
+            const ctx=await browser.newContext(device);
+            await ctx.addInitScript(t=>localStorage.setItem("agroai_access_token",t),token);
+            const page=await ctx.newPage();
+            page.on("pageerror",e=>errors.push(name+": "+e.message.slice(0,200)));
+            page.on("request",req=>{
+              if(req.url().includes("/v1/")){
+                if(!req.url().startsWith(api+"/v1/"))errors.push("Non-staging API origin");
+                else routes.push(new URL(req.url()).pathname);
+              }
+            });
+            await page.goto(portal+"/crop-intelligence",{waitUntil:"domcontentloaded",timeout:60000});
+            await page.getByRole("heading",{name:"Crop Intelligence",level:1}).waitFor({timeout:60000});
+            await page.getByRole("combobox",{name:"Select a field"}).waitFor({timeout:30000});
+            for(const label of ["Production estimate","Harvest window","Maturity assessment","Crop health"])
+              await page.getByRole("tab",{name:label}).click();
+            assert.equal(await page.getByRole("tab").count(),4);
+            assert.equal(await page.getByText("Sign in and select an operation to see its field evidence.").count(),0);
+            await page.screenshot({path:"../crop-staging-browser-evidence/"+name+".png",fullPage:true});
+            await ctx.close();
+          }
+          try {
+            await check("desktop",{viewport:{width:1366,height:768}});
+            await check("mobile",{viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+            assert.ok(routes.some(x=>x.includes("/v1/auth/bootstrap")),"actual backend login was not called");
+            assert.ok(routes.some(x=>x.includes("/v1/field-intelligence/")),"real staging field APIs not called");
+            assert.deepEqual(errors,[],"Browser errors or production API requests");
+            fs.writeFileSync("../crop-staging-browser-evidence/evidence.json",JSON.stringify({commit:process.env.STAGE_SHA,authenticated:true,desktop:true,mobile:true,paths:[...new Set(routes)]},null,2));
+            console.log("Verified real authenticated Crop Intelligence journey in desktop and mobile Chromium");
+          } finally {await browser.close();}
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crop-intelligence-authenticated-staging-evidence
+          path: crop-staging-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
