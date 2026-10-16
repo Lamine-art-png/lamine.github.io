@@ -144,7 +144,8 @@ jobs:
                grep -F 'AGRO-AI launches its Enterprise Portal globally' live-newsroom.html >/dev/null && \
                grep -F '/news/agro-ai-crop-intelligence-enterprise-portal' newsroom-script.js >/dev/null && \
                grep -F '/news/agro-ai-assurance-enterprise-portal' newsroom-script.js >/dev/null && \
-               grep -F '/news/agro-ai-field-intelligence-upgrade' newsroom-script.js >/dev/null; then
+               grep -F '/news/agro-ai-field-intelligence-upgrade' newsroom-script.js >/dev/null && \
+               grep -F '/news/agro-ai-multi-state-research-milestone' newsroom-script.js >/dev/null; then
               python3 - <<'PY'
           from pathlib import Path
           import re
@@ -241,6 +242,32 @@ jobs:
 
           echo "Field Intelligence update article did not verify live"
           printf 'article_status=%s cover_status=%s logo_status=%s\n' "$article_status" "$cover_status" "$logo_status"
+          exit 1
+
+      - name: Prove research milestone article and supplied SVG live
+        shell: bash
+        run: |
+          set -euo pipefail
+          article_url="https://agroai-pilot.com/news/agro-ai-multi-state-research-milestone"
+          cover_url="${article_url}/cover.svg"
+          for attempt in $(seq 1 24); do
+            article_code="$(curl -sS -L -H 'Cache-Control: no-cache' -D research.headers -o research.html -w '%{http_code}' --max-time 25 "${article_url}" || true)"
+            cover_code="$(curl -sS -L -H 'Cache-Control: no-cache' -D research-cover.headers -o research-cover.svg -w '%{http_code}' --max-time 25 "${cover_url}" || true)"
+            if [ "$article_code" = "200" ] && [ "$cover_code" = "200" ] && \
+               grep -Fq 'AGRO-AI Marks Major Research Milestone with UC Merced and the University of Arizona' research.html && \
+               grep -Fq 'Friday, October 16, 2026 · 8:00 a.m. PDT' research.html && \
+               grep -Fq 'https://agroai-pilot.com/news/agro-ai-multi-state-research-milestone/cover.svg' research.html && \
+               grep -Fqi 'content-type: image/svg+xml' research-cover.headers && \
+               grep -Fq 'x-agroai-asset-source: supplied-research-milestone-cover' research-cover.headers && \
+               grep -Fq '<svg ' research-cover.svg && \
+               test "$(wc -c < research-cover.svg)" -gt 200000; then
+              echo "research_milestone_article_and_cover=verified_live"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Research milestone article or cover did not verify live"
+          echo "article_code=${article_code} cover_code=${cover_code}"
           exit 1
 
       - name: Prove existing managed articles remain live

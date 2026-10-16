@@ -2,6 +2,11 @@ const NEWSROOM_PATH = "/news";
 const NEWSROOM_SCRIPT_PATH = "/news/agroai-news-card-restore.js";
 const NEWSROOM_ORIGIN = "https://agroai-343.pages.dev";
 
+const RESEARCH_ARTICLE_PATH = "/news/agro-ai-multi-state-research-milestone";
+const RESEARCH_COVER_PATH = `${RESEARCH_ARTICLE_PATH}/cover.svg`;
+const RESEARCH_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-multi-state-research-milestone/index.html";
+const RESEARCH_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-multi-state-research-milestone/cover.svg";
+
 const ACADEMY_ARTICLE_PATH = "/news/introducing-agro-ai-academy";
 const ACADEMY_COVER_PATH = `${ACADEMY_ARTICLE_PATH}/cover.svg`;
 const ACADEMY_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-academy/index.html";
@@ -55,6 +60,14 @@ const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefa
 
 const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
+    {
+      path:"/news/agro-ai-multi-state-research-milestone",
+      image:"/news/agro-ai-multi-state-research-milestone/cover.svg",
+      category:"Company News",
+      title:"AGRO-AI Marks Major Research Milestone with UC Merced and the University of Arizona",
+      description:"A $1 million proposed multi-state research collaboration unites agricultural AI, robotics expertise, and specialty-crop science.",
+      date:"San Francisco, California — October 16, 2026"
+    },
     {
       path:"/news/introducing-agro-ai-academy",
       image:"/news/introducing-agro-ai-academy/cover.svg",
@@ -229,6 +242,10 @@ async function sourceArticleResponse(request: Request, source: string, userAgent
   return new Response(request.method === "HEAD" ? null : await upstream.text(), { status: 200, headers: articleHeaders() });
 }
 
+async function researchArticleResponse(request: Request): Promise<Response> {
+  return sourceArticleResponse(request, RESEARCH_ARTICLE_SOURCE, "AGRO-AI-Research-Milestone-News/1.0", "The AGRO-AI research milestone article is temporarily unavailable.");
+}
+
 async function academyArticleResponse(request: Request): Promise<Response> {
   return sourceArticleResponse(request, ACADEMY_ARTICLE_SOURCE, "AGRO-AI-Academy-News/1.0", "The AGRO-AI Academy announcement is temporarily unavailable.");
 }
@@ -360,6 +377,9 @@ export default {
 
     if (normalized === NEWSROOM_PATH) return newsroomResponse(request);
     if (normalized === NEWSROOM_SCRIPT_PATH) return newsroomScriptResponse(request);
+
+    if (normalized === RESEARCH_ARTICLE_PATH) return researchArticleResponse(request);
+    if (normalized === RESEARCH_COVER_PATH) return repositoryAssetResponse(request, RESEARCH_COVER_SOURCE, "image/svg+xml", "supplied-research-milestone-cover");
 
     if (normalized === ACADEMY_ARTICLE_PATH) return academyArticleResponse(request);
     if (normalized === ACADEMY_COVER_PATH) {
