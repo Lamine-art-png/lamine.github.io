@@ -250,11 +250,11 @@ try {
     await lp.click('button:has-text("Begin")');
     await lp.waitForURL(/\/attempts\//);
     const attemptId = lp.url().split("/").pop();
-    await lp.waitForFunction(() => /\d+:\d\d/.test(document.querySelector("[data-timer-text]").textContent));
+    await lp.locator("[data-timer-text]").filter({ hasText: /\d+:\d\d/ }).waitFor();
     await a11y(lp, "exam");
     await answerAll(lp, attemptId);
     // Autosave persists answers server-side before submission.
-    await lp.waitForFunction(() => document.querySelector("[data-save-state]").textContent.includes("✓"), null, { timeout: 15000 });
+    await lp.locator("[data-save-state]").filter({ hasText: "✓" }).waitFor({ timeout: 15000 });
     const saved = db.prepare("SELECT COUNT(*) AS n FROM attempt_answers WHERE attempt_id = ? AND response_json IS NOT NULL").get(attemptId).n;
     assert.ok(saved >= 15, `autosaved ${saved} answers`);
     await shot(lp, "exam");

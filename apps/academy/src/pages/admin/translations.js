@@ -83,6 +83,10 @@ export async function uiSave(c) {
     // Placeholders such as {name} must survive translation.
     const need = (CATALOGS.en[key].match(/\{\w+\}/g) || []).sort().join();
     const got = (value.match(/\{\w+\}/g) || []).sort().join();
+    // Keys rendered as markup accept only <em> and same-origin links.
+    if (key.endsWith("_html") && !/^(?:[^<>]|<\/?em>|<a href="\/[a-z0-9/_-]*"(?: target="_blank")?>|<\/a>)*$/i.test(value)) {
+      return redirect(`/admin/translations/ui?locale=${locale}&q=${encodeURIComponent(key)}&err=${encodeURIComponent("Only <em> and same-site <a href=\"/…\"> markup is allowed in this text.")}`);
+    }
     if (need !== got) return redirect(`/admin/translations/ui?locale=${locale}&q=${encodeURIComponent(key)}&err=${encodeURIComponent(`Keep the placeholders ${need || "(none)"} unchanged.`)}`);
     await c.env.DB.prepare(
       `INSERT INTO ui_translations (locale, key, value, status, updated_by, updated_at) VALUES (?,?,?,?,?,?)

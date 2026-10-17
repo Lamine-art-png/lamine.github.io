@@ -191,6 +191,8 @@ test("translation overrides change UI copy without a deployment", async () => {
   assert.match(r.text, />Course library</);
   r = await admin.post("/admin/translations/ui", { locale: "en", key: "dash.hello", value: "Hi there", status: "reviewed" });
   assert.match(decodeURIComponent(r.location), /placeholders/, "placeholders are enforced");
+  r = await admin.post("/admin/translations/ui", { locale: "en", key: "home.title_html", value: 'Learn <img src=x onerror="alert(1)">', status: "reviewed" });
+  assert.match(decodeURIComponent(r.location), /Only <em>/, "unsafe markup rejected in HTML strings");
 });
 
 test("analytics show real recorded figures and empty states", async () => {
