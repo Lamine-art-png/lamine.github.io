@@ -1,3 +1,4 @@
 {
-  "en": { "provenance": "source", "reviewed": true }
+  "en": { "provenance": "source", "reviewed": true },
+  "pt-BR": { "provenance": "machine-prepared", "reviewed": false }
 }

@@ -25,7 +25,7 @@ export default {
     }
     return handle(req, env, ctx);
   },
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(runScheduled(env, event.cron));
+  async scheduled(event, env) {
+    return runScheduled(env, event.cron);
   },
 };

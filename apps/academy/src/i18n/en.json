@@ -387,6 +387,8 @@
   "dash.last_lesson": "Last lesson: {lesson}",
   "dash.no_courses_title": "You haven't started a course yet",
   "dash.no_courses_body": "Browse the catalog and enroll in a free course to begin.",
+  "dash.all_done_title": "You've completed every course you started",
+  "dash.all_done_body": "Wonderful work. Explore the catalog to choose what to learn next.",
   "dash.in_progress": "In progress",
   "dash.completed_courses": "Completed",
   "dash.none": "Nothing here yet.",

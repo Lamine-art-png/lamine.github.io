@@ -147,7 +147,7 @@ export async function attemptPage(c) {
     const anyEnglish = c.locale !== "en" && questions.some((q) => q.translation?.status === "missing");
     const body = html`<div class="exam-shell" data-exam data-attempt="${attempt.id}" data-server-now="${new Date().toISOString()}" ${attempt.deadline_at ? raw(`data-deadline="${attempt.deadline_at}"`) : ""}>
       <div class="exam-status"><div class="row-between">
-        <div class="grow"><strong>${a.title}</strong><div class="tiny muted"><span data-answered>0</span>/${questions.length} ${t("assess.answered")} · <span class="save-state" data-save-state data-saving="${t("assess.saving")}" aria-live="polite">${t("assess.autosave_on")}</span></div></div>
+        <div class="grow"><h1 class="exam-title">${a.title}</h1><div class="tiny muted"><span data-answered>0</span>/${questions.length} ${t("assess.answered")} · <span class="save-state" data-save-state data-saving="${t("assess.saving")}" aria-live="polite">${t("assess.autosave_on")}</span></div></div>
         ${attempt.deadline_at ? html`<span class="timer" data-timer role="timer" aria-live="off" aria-label="${t("assess.time_remaining")}">${icon("timer", { size: 18 })}<span data-timer-text>--:--</span></span>` : ""}
       </div></div>
       ${anyEnglish ? alert("info", t(a.is_certification ? "assess.reviewed_only_notice" : "i18n.content_in_english")) : ""}

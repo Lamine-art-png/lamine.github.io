@@ -102,7 +102,9 @@ export async function overview(c) {
             <p class="tiny muted mt-1">${t("progress.percent_complete", { pct: cont.progress_pct })}</p>
             <a class="btn btn-primary" href="/learn/${cont.slug}">${t("course.continue")} ${icon("arrow-right", { size: 16, cls: "ic-flip" })}</a></div>
         </div>`
-      : emptyState({ iconName: "book", title: t("dash.no_courses_title"), body: t("dash.no_courses_body"), action: html`<a class="btn btn-primary" href="/courses">${t("home.cta_explore")}</a>` })}
+      : stats.completed
+        ? emptyState({ iconName: "trophy", title: t("dash.all_done_title"), body: t("dash.all_done_body"), action: html`<a class="btn btn-primary" href="/courses">${t("home.cta_explore")}</a>` })
+        : emptyState({ iconName: "book", title: t("dash.no_courses_title"), body: t("dash.no_courses_body"), action: html`<a class="btn btn-primary" href="/courses">${t("home.cta_explore")}</a>` })}
 
     ${active.length > 1
       ? html`<h2 class="h2 mt-4">${t("dash.in_progress")}</h2><div class="card">${active.slice(1).map(

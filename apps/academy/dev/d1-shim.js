@@ -62,7 +62,8 @@ class Statement {
 export class D1Shim {
   constructor(filename = ":memory:") {
     this.sqlite = new DatabaseSync(filename);
-    this.sqlite.exec("PRAGMA foreign_keys = ON;");
+    this.sqlite.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 10000;");
+    if (filename !== ":memory:") this.sqlite.exec("PRAGMA journal_mode = WAL;");
   }
   prepare(sql) {
     return new Statement(this, sql);

@@ -108,7 +108,7 @@ export async function lessonPage(c) {
   const next = syllabus.lessons[idx + 1];
   const doneCount = syllabus.lessons.filter((l) => progress.get(l.id)?.status === "completed").length;
   const pct = ctx.enrollment?.progress_pct || 0;
-  const rendered = renderMarkdown(lesson.body_md, { headingOffset: 1 });
+  const rendered = renderMarkdown(lesson.body_md, { headingOffset: 0 });
   const isQuizLesson = lesson.type === "quiz" && lesson.assessment_id;
   const assessment = isQuizLesson ? await c.env.DB.prepare("SELECT * FROM assessments WHERE id = ?").bind(lesson.assessment_id).first() : null;
   const transcript = video?.playable ? video.script_md || "" : "";

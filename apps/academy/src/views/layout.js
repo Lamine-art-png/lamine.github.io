@@ -63,12 +63,12 @@ function header(c, active) {
                 <button role="menuitem" type="submit">${icon("logout", { size: 16 })} ${t("nav.sign_out")}</button></form>
             </div></details>`
         : html`<a class="btn btn-quiet btn-sm hide-sm" href="/login">${t("nav.sign_in")}</a>
-               <a class="btn btn-primary btn-sm" href="/register">${t("nav.start_learning")}</a>`}
+               <a class="btn btn-primary btn-sm btn-start" href="/register">${t("nav.start_learning")}</a>`}
       <details class="mobile-nav">
         <summary class="icon-btn" aria-label="${t("nav.menu")}">${icon("menu", { size: 20 })}</summary>
         <nav class="mobile-panel" aria-label="${t("nav.primary")}">
           ${nav.map(([href, label]) => html`<a href="${href}">${label}</a>`)}
-          ${user ? html`<a href="/dashboard">${t("nav.dashboard")}</a>` : html`<a href="/login">${t("nav.sign_in")}</a>`}
+          ${user ? html`<a href="/dashboard">${t("nav.dashboard")}</a>` : html`<a href="/login">${t("nav.sign_in")}</a><a href="/register">${t("nav.start_learning")}</a>`}
         </nav>
       </details>
     </div>

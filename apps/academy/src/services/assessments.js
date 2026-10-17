@@ -231,6 +231,7 @@ const normText = (s) =>
   String(s)
     .normalize("NFKC")
     .toLowerCase()
+    .replace(/(?<!\d)\.|\.(?!\d)/g, " ")
     .replace(/[^\p{L}\p{N}\s.%-]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
