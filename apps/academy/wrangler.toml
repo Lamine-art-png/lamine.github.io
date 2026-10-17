@@ -1,0 +1,76 @@
+# AGRO-AI Academy — standalone Cloudflare Worker with its own D1 database.
+# Isolated from the Platform API (Render), the Enterprise Portal and their data.
+# database_id values are injected at deploy time by the deploy workflow, which
+# creates the databases if they do not exist (see .github/workflows/academy-deploy.yml).
+name = "agroai-academy"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+workers_dev = false
+routes = [
+  { pattern = "academy.agroai-pilot.com", custom_domain = true }
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agroai-academy"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+# Every 15 minutes: scheduled publication, exam auto-submission, email retries.
+# Mondays 15:00 UTC: opt-in learning reminders.
+crons = ["*/15 * * * *", "0 15 * * 1"]
+
+[observability]
+enabled = true
+
+[vars]
+ENVIRONMENT = "production"
+APP_ORIGIN = "https://academy.agroai-pilot.com"
+PORTAL_URL = "https://app.agroai-pilot.com"
+SITE_URL = "https://agroai-pilot.com"
+API_URL = "https://api.agroai-pilot.com"
+API_DOCS_URL = "https://platform.agroai-pilot.com"
+SUPPORT_EMAIL = "contact@agroai-pilot.com"
+EMAIL_FROM = "AGRO-AI Academy <academy@agroai-pilot.com>"
+FIRST_CLASSES_DATE = "2026-10-29"
+# Secrets (set with `wrangler secret put`, never committed):
+#   CERT_SIGNING_SECRET   — required; signs certificate records
+#   RESEND_API_KEY        — enables email delivery
+#   BOOTSTRAP_ADMIN_EMAILS — comma-separated verified emails granted super_admin
+#   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — optional Google sign-in
+#   LINKEDIN_ORGANIZATION_ID — optional LinkedIn company page id
+
+
+[env.staging]
+name = "agroai-academy-staging"
+routes = [
+  { pattern = "academy-staging.agroai-pilot.com", custom_domain = true }
+]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+APP_ORIGIN = "https://academy-staging.agroai-pilot.com"
+PORTAL_URL = "https://app.agroai-pilot.com"
+SITE_URL = "https://agroai-pilot.com"
+API_URL = "https://api.agroai-pilot.com"
+API_DOCS_URL = "https://platform.agroai-pilot.com"
+SUPPORT_EMAIL = "contact@agroai-pilot.com"
+EMAIL_FROM = "AGRO-AI Academy <academy@agroai-pilot.com>"
+FIRST_CLASSES_DATE = "2026-10-29"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "agroai-academy-staging"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[env.staging.triggers]
+crons = ["*/15 * * * *"]

@@ -1,0 +1,14 @@
+{
+  "name": "AGRO-AI Academy",
+  "short_name": "AGRO-AI Academy",
+  "description": "Free agricultural AI courses and verifiable certificates from AGRO-AI.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf6",
+  "theme_color": "#1f3d27",
+  "icons": [
+    { "src": "/static/img/mark-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/img/mark-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
