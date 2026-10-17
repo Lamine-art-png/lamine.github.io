@@ -191,6 +191,8 @@
   "programs.title": "Programs",
   "programs.lead": "Five programs that take you from the foundations of agricultural AI to advanced applications and AGRO-AI's own platform.",
   "programs.in_preparation": "Courses for this program are in preparation.",
+  "programs.planned": "Planned courses",
+  "programs.planned_note": "in preparation; enrollment opens when each course is complete and reviewed",
   "programs.empty": "Programs are being prepared.",
   "programs.roadmap_note": "Programs describe the Academy's academic roadmap. Courses open as their instruction is completed and reviewed.",
   "paths.eyebrow": "Learning paths",

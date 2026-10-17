@@ -9,7 +9,7 @@ import { LOCALES } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
 import { artSvg } from "../views/art.js";
 import { courseCard, pageHead, emptyState, alert, csrfField, field, selectField } from "../views/components.js";
-import { listCourses, listPrograms, listPaths } from "../services/content.js";
+import { listCourses, listPrograms, listPaths, localize } from "../services/content.js";
 import { validEmail } from "../services/users.js";
 import { LEGAL } from "../content/legal.js";
 import { qrSvg } from "../lib/qr.js";
@@ -219,7 +219,12 @@ export function sampleCertificate(c) {
 
 export async function programs(c) {
   const t = c.t;
-  const [list, courses] = await Promise.all([listPrograms(c.env, c.locale), listCourses(c.env, c.locale)]);
+  const [list, courses, planned] = await Promise.all([
+    listPrograms(c.env, c.locale),
+    listCourses(c.env, c.locale),
+    c.env.DB.prepare("SELECT id, program_id, title, level FROM courses WHERE status = 'draft' ORDER BY sort_order").all(),
+  ]);
+  await localize(c.env, "course", planned.results, ["title"], c.locale);
   const body = html`${pageHead({ eyebrow: t("programs.eyebrow"), title: t("programs.title"), lead: t("programs.lead") })}
   <section class="section-tight"><div class="wrap">
     ${list.length
@@ -228,7 +233,14 @@ export async function programs(c) {
           return html`<section class="mt-4" id="${p.slug}" aria-labelledby="h-${p.slug}">
             <div class="section-head"><div><p class="eyebrow">${t("program.label", { code: p.code || "" })}</p><h2 class="h2" id="h-${p.slug}">${p.title}</h2></div>
               <p>${p.summary}</p></div>
-            ${pc.length ? html`<div class="cards cards-3">${pc.map((x) => courseCard(c, x))}</div>` : html`<p class="muted">${t("programs.in_preparation")}</p>`}
+            ${pc.length ? html`<div class="cards cards-3">${pc.map((x) => courseCard(c, x))}</div>` : ""}
+            ${(() => {
+              const pl = planned.results.filter((x) => x.program_id === p.id);
+              return pl.length
+                ? html`<div class="panel mt-2"><p class="small mb-1"><strong>${t("programs.planned")}</strong> <span class="muted">· ${t("programs.planned_note")}</span></p>
+                    <ul class="planned-list">${pl.map((x) => html`<li>${icon("clock", { size: 14 })} ${x.title} <span class="tiny muted">· ${t(`level.${x.level}`)}</span></li>`)}</ul></div>`
+                : "";
+            })()}
           </section>`;
         })
       : emptyState({ title: t("programs.empty") })}

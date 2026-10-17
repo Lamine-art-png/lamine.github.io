@@ -184,6 +184,8 @@
   "programs.title": "Programas",
   "programs.lead": "Cinco programas que levam você dos fundamentos da IA agrícola às aplicações avançadas e à própria plataforma da AGRO-AI.",
   "programs.in_preparation": "Os cursos deste programa estão em preparação.",
+  "programs.planned": "Cursos planejados",
+  "programs.planned_note": "em preparação; as inscrições abrem quando cada curso estiver completo e revisado",
   "programs.empty": "Os programas estão sendo preparados.",
   "programs.roadmap_note": "Os programas descrevem o roteiro acadêmico da Academy. Os cursos abrem à medida que suas aulas são concluídas e revisadas.",
   "paths.eyebrow": "Trilhas de aprendizagem",

@@ -648,3 +648,7 @@ dl.kv dd { margin: 0; font-weight: 600; word-break: break-word; }
   .lang select { max-width: 78px; }
   .header-tools { gap: .15rem; }
 }
+.upcoming-box { display: flex; gap: .6rem; align-items: center; padding: .9rem 1rem; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-text); font-size: 1.02rem; }
+.upcoming-box strong { color: var(--ink); }
+.planned-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: .4rem 1.5rem; font-size: .93rem; }
+.planned-list li { display: flex; gap: .4rem; align-items: center; color: var(--ink-2); }

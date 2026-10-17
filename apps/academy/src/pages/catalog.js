@@ -104,7 +104,7 @@ export async function courseLanding(c) {
       : html`<a class="btn btn-primary btn-block btn-lg" href="/register?next=${encodeURIComponent(`/courses/${course.slug}`)}">${t("course.enroll_free")}</a>
              <p class="small center mt-1">${t("auth.have_account")} <a href="/login?next=${encodeURIComponent(`/courses/${course.slug}`)}">${t("nav.sign_in")}</a></p>`;
   } else if (course.isUpcoming) {
-    action = html`<button class="btn btn-secondary btn-block btn-lg" type="button" disabled>${courseStatusBadge(c, course)}</button>
+    action = html`<div class="upcoming-box">${icon("clock", { size: 20 })}<strong>${course.scheduled_at || course.planned_release_date ? t("course.opens_on", { date: c.fmtDate(course.scheduled_at || course.planned_release_date) }) : t("course.coming_soon")}</strong></div>
       <p class="small muted mt-1">${c.user ? t("course.upcoming_notify_signed_in") : html`${t("course.upcoming_notify")} <a href="/register">${t("auth.create_free")}</a>`}</p>`;
   } else {
     action = html`<p class="muted">${t("course.not_available")}</p>`;
