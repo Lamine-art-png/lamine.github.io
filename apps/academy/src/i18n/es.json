@@ -768,5 +768,8 @@
   "email.certificate.cta": "Ver mi certificado",
   "email.course_reminder.subject": "¿Listo para continuar {course}?",
   "email.course_reminder.body": "Hola, {name}:\n\nTu posición en {course} está guardada. Unos minutos hoy bastan para mantener el ritmo.\n\nRecibes este recordatorio porque activaste los recordatorios de estudio. Puedes desactivarlos en la configuración de tu cuenta.",
-  "email.reminder.cta": "Seguir aprendiendo"
+  "email.reminder.cta": "Seguir aprendiendo",
+  "verify.unavailable": "Verificación no disponible temporalmente",
+  "verify.unavailable_body": "No podemos confirmar esta credencial en este momento, por lo que no debe considerarse válida. Inténtalo más tarde o contacta con AGRO-AI Academy.",
+  "cert.reason.signing_unavailable": "La emisión de certificados está pausada temporalmente. Tu progreso está guardado; vuelve a solicitar tu certificado más tarde."
 }

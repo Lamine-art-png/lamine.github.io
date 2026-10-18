@@ -95,14 +95,21 @@ function buildLayout(questions, assessment) {
   });
 }
 
+/** Auto-submit the learner's open attempt if its time ran out. Returns true if one was closed. */
+export async function settleExpiredAttempt(c, assessment) {
+  const open = await c.env.DB.prepare("SELECT * FROM attempts WHERE user_id = ? AND assessment_id = ? AND status = 'in_progress'").bind(c.user.id, assessment.id).first();
+  if (!open || !deadlinePassed(open)) return false;
+  await submitAttempt(c, open, { auto: true });
+  return true;
+}
+
 export async function startAttempt(c, assessment, course) {
   const { env, user } = c;
+  // An expired open attempt is graded first, so eligibility below is computed
+  // from the updated history and attempt limits and cooldowns still apply.
+  await settleExpiredAttempt(c, assessment);
   const gate = await attemptGate(env, user, assessment, course);
-  if (gate.resume) {
-    if (gate.resume.deadline_at && addSeconds(gate.resume.deadline_at, GRACE_SECONDS) < nowIso()) {
-      await submitAttempt(c, gate.resume, { auto: true });
-    } else return gate.resume;
-  }
+  if (gate.resume) return gate.resume;
   if (!gate.ok) throw new HttpError(409, "attempt_not_allowed", gate.reason, { reason: gate.reason });
   const questions = await drawQuestions(env, assessment.id);
   const layout = buildLayout(questions, assessment);
@@ -338,7 +345,10 @@ export async function submitAttempt(c, attempt, { responses = null, auto = false
       );
     }
   }
-  const now = nowIso();
+  let now = nowIso();
+  // An expired attempt closed at its deadline, whenever it is auto-submitted;
+  // cooldowns are measured from that moment.
+  if (auto && attempt.deadline_at && attempt.deadline_at < now) now = attempt.deadline_at;
   // The status guard makes concurrent submissions harmless: only one wins.
   stmts.push(
     env.DB.prepare("UPDATE attempts SET status = ?, submitted_at = ? WHERE id = ? AND status = 'in_progress'").bind(pending ? "pending_review" : "in_progress", now, attempt.id),

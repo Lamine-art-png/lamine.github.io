@@ -432,18 +432,23 @@ export async function health(c) {
   } catch {
     db = "error";
   }
+  // Deployed environments are unhealthy without certificate signing, so the
+  // post-deploy smoke test fails instead of serving unverifiable credentials.
+  const deployed = c.cfg.environment === "production" || c.cfg.environment === "staging";
+  const signingOk = c.cfg.certSigning === "configured" || !deployed;
+  const ok = db === "ok" && signingOk;
   return json(
     {
-      ok: db === "ok",
+      ok,
       service: "agroai-academy",
       environment: c.cfg.environment,
       database: db,
       courses: schema,
       email: c.cfg.emailEnabled ? "configured" : "not_configured",
-      certificate_signing: c.cfg.certSecret ? "configured" : "not_configured",
+      certificate_signing: c.cfg.certSigning,
       google_sign_in: c.cfg.googleEnabled ? "configured" : "not_configured",
       languages: LOCALES.length,
     },
-    db === "ok" ? 200 : 503,
+    ok ? 200 : 503,
   );
 }

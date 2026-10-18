@@ -128,3 +128,31 @@ export async function correctResponses(env, attemptId) {
 export async function publishCourse(env, courseId) {
   await env.DB.prepare("UPDATE courses SET status = 'published', published_at = ? WHERE id = ?").bind(new Date().toISOString(), courseId).run();
 }
+
+export const A1_SLUG = "introduction-to-ai-in-agriculture";
+
+/** Drive a verified learner through Course A1 (lessons, quizzes, exam) via HTTP. */
+export async function completeA1(env, learner) {
+  await learner.post(`/courses/${A1_SLUG}/enroll`, {});
+  const lessons = (await env.DB.prepare("SELECT * FROM lessons WHERE course_id = 'crs_a1' AND status = 'ready' ORDER BY sort_order").all()).results;
+  for (const l of lessons.filter((x) => x.type !== "quiz" && !x.assessment_id)) {
+    const r = await learner.post(`/learn/${A1_SLUG}/${l.slug}/complete`, {});
+    if (r.status !== 303) throw new Error(`could not complete ${l.slug}: ${r.status}`);
+  }
+  for (const id of ["asm_a1_q1", "asm_a1_q2", "asm_a1_q3", "asm_a1_exam"]) {
+    const r = await learner.post(`/assessments/${id}/start`, {});
+    const attemptId = r.location?.split("/").pop();
+    if (!r.location?.includes("/attempts/")) throw new Error(`could not start ${id}: ${r.location}`);
+    await learner.post(`/attempts/${attemptId}/submit`, await correctResponses(env, attemptId));
+  }
+  const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(learner.email).first();
+  const cert = await env.DB.prepare("SELECT * FROM certificates WHERE user_id = ? AND course_id = 'crs_a1'").bind(user.id).first();
+  return { user, cert };
+}
+
+/** A second env sharing the first env's database, with different settings. */
+export function withSettings(env, overrides) {
+  const next = { ...env, ...overrides };
+  for (const [k, v] of Object.entries(overrides)) if (v === undefined) delete next[k];
+  return next;
+}

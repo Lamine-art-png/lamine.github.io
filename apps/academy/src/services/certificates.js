@@ -68,9 +68,22 @@ export async function signCertificate(cfg, cert) {
   return hmacHex(cfg.certSecret, signaturePayload(cert));
 }
 
-export async function signatureValid(cfg, cert) {
-  if (!cfg.certSecret) return null;
-  return safeEqual(await hmacHex(cfg.certSecret, signaturePayload(cert)), cert.signature);
+/**
+ * Cryptographic integrity of a stored credential. Returns exactly one of
+ *   "valid"       — the HMAC was recomputed and matches the stored signature
+ *   "invalid"     — the record or its signature was altered (or is missing)
+ *   "unavailable" — signing is not configured or verification errored
+ * Callers must treat anything other than "valid" as not verified (fail closed).
+ */
+export async function signatureStatus(cfg, cert) {
+  if (!cfg.certSecret) return "unavailable";
+  if (typeof cert?.signature !== "string" || !/^[0-9a-f]{64}$/.test(cert.signature)) return "invalid";
+  try {
+    return safeEqual(await hmacHex(cfg.certSecret, signaturePayload(cert)), cert.signature) ? "valid" : "invalid";
+  } catch (e) {
+    console.error("certificate signature check failed", e?.message);
+    return "unavailable";
+  }
 }
 
 export async function activeCertificate(env, userId, courseId) {
@@ -87,6 +100,12 @@ export async function issueIfEligible(env, cfg, user, course, { actorId = null, 
   if (existing) return { certificate: existing, created: false };
   const elig = await checkEligibility(env, user, course);
   if (!elig.eligible) return { certificate: null, created: false, reasons: elig.reasons };
+  // Never issue an unsigned credential. The learner's progress is kept and the
+  // certificate can be claimed once signing is configured again.
+  if (!cfg.certSecret) {
+    console.error("certificate issuance skipped: signing is not configured");
+    return { certificate: null, created: false, reasons: ["cert.reason.signing_unavailable"] };
+  }
 
   const program = course.program_id ? await env.DB.prepare("SELECT title FROM programs WHERE id = ?").bind(course.program_id).first() : null;
   const base = await env.DB.prepare("SELECT title FROM courses WHERE id = ?").bind(course.id).first();

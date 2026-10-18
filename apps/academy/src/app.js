@@ -8,6 +8,22 @@ import { registerRoutes } from "./routes.js";
 
 export const BUILD = "2026.10.17";
 
+/** Minimum length of CERT_SIGNING_SECRET outside development and tests. */
+export const MIN_CERT_SECRET_LENGTH = 32;
+
+/**
+ * Certificate signing configuration. Only local development and the test
+ * suite may fall back to a built-in key; every deployed environment (staging
+ * included) must supply its own strong CERT_SIGNING_SECRET or certificates are
+ * neither issued nor shown as valid.
+ */
+export function certSigningConfig(env, environment) {
+  const local = environment === "development" || environment === "test";
+  const secret = String(env.CERT_SIGNING_SECRET || "") || (local ? "development-only-certificate-secret" : "");
+  const status = !secret ? "not_configured" : !local && secret.length < MIN_CERT_SECRET_LENGTH ? "too_short" : "configured";
+  return { certSecret: status === "configured" ? secret : null, certSigning: status };
+}
+
 export function config(env, url) {
   const origin = (env.APP_ORIGIN || url.origin).replace(/\/$/, "");
   const environment = env.ENVIRONMENT || "development";
@@ -22,7 +38,7 @@ export function config(env, url) {
     apiUrl: env.API_URL || "https://api.agroai-pilot.com",
     apiDocsUrl: env.API_DOCS_URL || "https://platform.agroai-pilot.com",
     supportEmail: env.SUPPORT_EMAIL || "contact@agroai-pilot.com",
-    certSecret: env.CERT_SIGNING_SECRET || (environment === "production" ? null : "development-only-certificate-secret"),
+    ...certSigningConfig(env, environment),
     googleEnabled: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
     emailEnabled: Boolean(env.RESEND_API_KEY && env.EMAIL_FROM),
     bootstrapAdmins: String(env.BOOTSTRAP_ADMIN_EMAILS || "")

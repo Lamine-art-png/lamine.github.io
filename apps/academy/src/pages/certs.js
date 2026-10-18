@@ -9,7 +9,7 @@ import { certificatePdf, pdfRepresentable } from "../lib/pdf.js";
 import { formatDate } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
 import { alert, csrfField, emptyState, pageHead } from "../views/components.js";
-import { getByCredential, shareUrls, signatureValid, issueIfEligible } from "../services/certificates.js";
+import { getByCredential, shareUrls, signatureStatus, issueIfEligible } from "../services/certificates.js";
 import { getCourseBySlug } from "../services/content.js";
 
 export function certificateVisual(c, cert, verifyUrl) {
@@ -36,7 +36,9 @@ export async function certificatePage(c) {
   if (!cert) throw new HttpError(404, "not_found");
   if (cert.user_id !== c.user.id && !c.can("certificates.manage")) return redirect(`/verify/${cert.credential_id}`);
   const urls = shareUrls(c.cfg, cert);
-  const fresh = c.url.searchParams.get("new") === "1";
+  const integrity = await signatureStatus(c.cfg, cert);
+  const verified = integrity === "valid";
+  const fresh = c.url.searchParams.get("new") === "1" && verified;
   const latinOk = pdfRepresentable(cert.credential_name);
   const shareText = t("cert.share_text", { course: cert.course_title });
   const body = html`${pageHead({
@@ -47,6 +49,7 @@ export async function certificatePage(c) {
   })}
   <section class="section-tight"><div class="wrap cert-showcase">
     <div>${cert.status === "revoked" ? alert("error", t("cert.revoked_notice", { reason: cert.revoked_reason || "" })) : ""}
+      ${!verified ? alert("error", integrity === "invalid" ? t("verify.integrity_body") : t("verify.unavailable_body")) : ""}
       ${certificateVisual(c, cert, urls.verifyUrl)}
       ${!latinOk ? alert("info", t("cert.pdf_script_note")) : ""}
     </div>
@@ -57,7 +60,7 @@ export async function certificatePage(c) {
         <a class="btn btn-primary" href="${urls.linkedinAdd}" target="_blank" rel="noopener noreferrer">${icon("linkedin", { size: 18 })} ${t("cert.add_linkedin")}</a>
         <a class="btn btn-secondary" href="${urls.linkedinShare}" target="_blank" rel="noopener noreferrer">${icon("linkedin", { size: 18 })} ${t("cert.share_linkedin")}</a>
         <a class="btn btn-secondary" href="${urls.facebook}" target="_blank" rel="noopener noreferrer">${icon("facebook", { size: 18 })} ${t("cert.share_facebook")}</a>
-        <a class="btn btn-secondary" href="${urls.pdf}" download>${icon("download", { size: 18 })} ${t("cert.download_pdf")}</a>
+        ${verified && cert.status === "active" ? html`<a class="btn btn-secondary" href="${urls.pdf}" download>${icon("download", { size: 18 })} ${t("cert.download_pdf")}</a>` : ""}
         <button class="btn btn-secondary" type="button" data-copy="${urls.verifyUrl}" data-copied="${t("cert.copied_link")}">${icon("link", { size: 18 })} ${t("cert.copy_link")}</button>
         <button class="btn btn-secondary" type="button" data-copy="${cert.credential_id}" data-copied="${t("cert.copied_id")}">${icon("copy", { size: 18 })} ${t("cert.copy_id")}</button>
         <button class="btn btn-secondary" type="button" data-share data-share-url="${urls.verifyUrl}" data-share-title="${cert.course_title}" data-share-text="${shareText}" hidden>${icon("share", { size: 18 })} ${t("cert.share_device")}</button>
@@ -84,6 +87,9 @@ export async function certificatePdfRoute(c) {
   if (!cert) throw new HttpError(404, "not_found");
   if (cert.user_id !== c.user.id && !c.can("certificates.manage")) throw new HttpError(404, "not_found");
   if (cert.status !== "active") throw new HttpError(409, "certificate_revoked");
+  // A PDF is only produced for a record whose signature verifies right now.
+  const integrity = await signatureStatus(c.cfg, cert);
+  if (integrity !== "valid") throw new HttpError(integrity === "invalid" ? 409 : 503, integrity === "invalid" ? "certificate_integrity_failed" : "certificate_verification_unavailable");
   await rateLimit(c, "cert-pdf", { limit: 60, windowSeconds: 3600, key: c.user.id });
   const verifyUrl = `${c.cfg.origin}/verify/${cert.credential_id}`;
   const pdf = certificatePdf(cert, { verifyUrl, host: c.cfg.host, issuedDate: formatDate("en", cert.issued_at) });
@@ -128,14 +134,29 @@ export async function verifyPage(c) {
         <a class="btn btn-secondary" href="/verify">${t("verify.try_again")}</a></div></div></section>`;
     return c.page({ title: t("verify.not_found"), body, status: 404, noindex: true });
   }
-  const sigOk = await signatureValid(c.cfg, cert);
-  const valid = cert.status === "active" && sigOk !== false;
+  // Fail closed: a credential is shown as valid only when its signature was
+  // recomputed and matched. Missing configuration or an error never passes.
+  // Revocation is reported whatever the signature says: it can only make a
+  // record less valid (deleted accounts are anonymized and revoked).
+  const integrity = cert.status === "active" ? await signatureStatus(c.cfg, cert) : "not_checked";
+  if (integrity === "unavailable") {
+    const body = html`${pageHead({ eyebrow: t("verify.eyebrow"), title: t("verify.title") })}
+      <section class="section-tight"><div class="wrap narrow"><div class="verify-result invalid" aria-live="polite">
+        <p class="verify-status invalid">${icon("alert", { size: 22 })} ${t("verify.unavailable")}</p>
+        <p>${t("verify.unavailable_body")}</p>
+        <p class="small muted mb-0">${t("verify.credential_id")}: <code>${cert.credential_id}</code></p></div></div></section>`;
+    const res = c.page({ title: t("verify.unavailable"), body, status: 503, noindex: true });
+    res.headers.set("Retry-After", "300");
+    return res;
+  }
+  const state = cert.status !== "active" ? "revoked" : integrity === "valid" ? "valid" : "integrity_failed";
+  const valid = state === "valid";
   const verifyUrl = `${c.cfg.origin}/verify/${cert.credential_id}`;
   const body = html`${pageHead({ eyebrow: t("verify.eyebrow"), title: t("verify.result_title") })}
   <section class="section-tight"><div class="wrap cert-showcase">
-    <div class="verify-result ${valid ? "valid" : "invalid"}" aria-live="polite">
-      <p class="verify-status ${valid ? "valid" : "invalid"}">${icon(valid ? "shield" : "alert", { size: 24 })} ${valid ? t("verify.valid") : cert.status === "revoked" ? t("verify.revoked") : t("verify.integrity_failed")}</p>
-      <p class="muted">${valid ? t("verify.valid_body") : cert.status === "revoked" ? t("verify.revoked_body") : t("verify.integrity_body")}</p>
+    <div class="verify-result ${valid ? "valid" : "invalid"}" aria-live="polite" data-verify-state="${state}">
+      <p class="verify-status ${valid ? "valid" : "invalid"}">${icon(valid ? "shield" : "alert", { size: 24 })} ${t(`verify.${state}`)}</p>
+      <p class="muted">${t(state === "valid" ? "verify.valid_body" : state === "revoked" ? "verify.revoked_body" : "verify.integrity_body")}</p>
       <dl class="kv">
         <dt>${t("verify.holder")}</dt><dd>${cert.credential_name}</dd>
         <dt>${t("verify.credential")}</dt><dd lang="en">${cert.course_title}</dd>

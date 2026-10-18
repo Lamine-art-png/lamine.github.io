@@ -768,5 +768,8 @@
   "email.certificate.cta": "عرض شهادتي",
   "email.course_reminder.subject": "هل أنت مستعد لمتابعة {course}؟",
   "email.course_reminder.body": "مرحبًا {name}،\n\nموضعك في {course} محفوظ. بضع دقائق اليوم تكفي للحفاظ على وتيرتك.\n\nتتلقى هذا التذكير لأنك فعّلت تذكيرات التعلّم. يمكنك إيقافها من إعدادات حسابك.",
-  "email.reminder.cta": "تابع التعلّم"
+  "email.reminder.cta": "تابع التعلّم",
+  "verify.unavailable": "التحقق غير متاح مؤقتًا",
+  "verify.unavailable_body": "لا يمكننا تأكيد هذه الشهادة الآن، لذا يجب عدم اعتبارها صالحة. يُرجى المحاولة لاحقًا أو التواصل مع أكاديمية AGRO-AI.",
+  "cert.reason.signing_unavailable": "إصدار الشهادات متوقف مؤقتًا. تقدّمك محفوظ؛ اطلب شهادتك مرة أخرى لاحقًا."
 }

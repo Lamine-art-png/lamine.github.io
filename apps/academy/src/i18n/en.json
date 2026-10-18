@@ -799,5 +799,8 @@
   "email.certificate.cta": "View my certificate",
   "email.course_reminder.subject": "Ready to continue {course}?",
   "email.course_reminder.body": "Hello {name},\n\nYour place in {course} is saved. A few minutes today is enough to keep your momentum.\n\nYou're receiving this reminder because you turned on learning reminders. You can turn them off in your account settings.",
-  "email.reminder.cta": "Continue learning"
+  "email.reminder.cta": "Continue learning",
+  "verify.unavailable": "Verification temporarily unavailable",
+  "verify.unavailable_body": "We can't confirm this credential right now, so it must not be treated as valid. Please try again later or contact AGRO-AI Academy.",
+  "cert.reason.signing_unavailable": "Certificate issuing is temporarily paused. Your progress is saved; claim your certificate again later."
 }

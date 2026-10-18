@@ -7,7 +7,7 @@ import { md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
 import { csrfField, alert, ring, breadcrumbs, emptyState } from "../views/components.js";
 import { localize } from "../services/content.js";
-import { getAssessment, attemptGate, startAttempt, getOwnAttempt, attemptQuestions, saveResponses, submitAttempt, attemptReview, attemptHistory } from "../services/assessments.js";
+import { getAssessment, attemptGate, settleExpiredAttempt, startAttempt, getOwnAttempt, attemptQuestions, saveResponses, submitAttempt, attemptReview, attemptHistory } from "../services/assessments.js";
 import { activeCertificate } from "../services/certificates.js";
 
 async function courseOf(env, id) {
@@ -19,6 +19,7 @@ export async function intro(c) {
   const a = await getAssessment(c.env, c.params.id);
   await localize(c.env, "assessment", a, ["title", "instructions"], c.locale);
   const course = await courseOf(c.env, a.course_id);
+  await settleExpiredAttempt(c, a);
   const gate = await attemptGate(c.env, c.user, a, course);
   const history = gate.history || (await attemptHistory(c.env, c.user.id, a.id));
   const cert = a.is_certification ? await activeCertificate(c.env, c.user.id, course.id) : null;
