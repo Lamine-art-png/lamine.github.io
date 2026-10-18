@@ -804,5 +804,6 @@
   "languages.content.english": "Anglais",
   "languages.content.reviewed": "Anglais + {n} traduction(s) de cours relue(s)",
   "languages.exams.partial": "Anglais ; quelques questions relues",
-  "languages.help": "Vous parlez l’une de ces langues et souhaitez aider à relire une traduction ?"
+  "languages.help": "Vous parlez l’une de ces langues et souhaitez aider à relire une traduction ?",
+  "dash.not_earned": "Pas encore obtenu"
 }

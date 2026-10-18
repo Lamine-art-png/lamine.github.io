@@ -804,5 +804,6 @@
   "languages.content.english": "الإنجليزية",
   "languages.content.reviewed": "الإنجليزية + {n} ترجمة دورة مراجَعة",
   "languages.exams.partial": "الإنجليزية؛ بعض الأسئلة مراجَعة",
-  "languages.help": "هل تتحدث إحدى هذه اللغات وتود المساعدة في مراجعة ترجمة؟"
+  "languages.help": "هل تتحدث إحدى هذه اللغات وتود المساعدة في مراجعة ترجمة؟",
+  "dash.not_earned": "لم تُحقَّق بعد"
 }

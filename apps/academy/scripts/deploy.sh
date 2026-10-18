@@ -32,10 +32,10 @@ H="node ${HERE}/deploy-helpers.mjs"
 case "$TARGET" in
   staging)
     DB_NAME="agroai-academy-staging"; HOST="academy-staging.agroai-pilot.com"; SERVICE="agroai-academy-staging"
-    ENV_ARGS=(--env staging); BUCKET="${BACKUP_BUCKET:-agroai-academy-staging-backups}" ;;
+    ENV_ARGS=(--env staging); BUCKET="${BACKUP_BUCKET:-agroai-academy-staging-backups}"; FILES_BUCKET="agroai-academy-staging-files" ;;
   production)
     DB_NAME="agroai-academy"; HOST="academy.agroai-pilot.com"; SERVICE="agroai-academy"
-    ENV_ARGS=(); BUCKET="${BACKUP_BUCKET:-agroai-academy-backups}"
+    ENV_ARGS=(); BUCKET="${BACKUP_BUCKET:-agroai-academy-backups}"; FILES_BUCKET="agroai-academy-files"
     if [ "${ACADEMY_DEPLOY_CONFIRM:-}" != "production" ]; then
       echo "Refusing to deploy production without ACADEMY_DEPLOY_CONFIRM=production." >&2
       exit 2
@@ -131,6 +131,12 @@ if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
 else
   echo "    New or empty database: nothing to back up."
   summary "- Backup: not needed (new or empty database)"
+fi
+
+echo "==> Ensuring private file bucket ${FILES_BUCKET}"
+if [ "$($WRANGLER r2 bucket list 2>/dev/null | $H has-bucket "$FILES_BUCKET")" != "yes" ]; then
+  $WRANGLER r2 bucket create "$FILES_BUCKET" >/dev/null || { echo "::error::Could not create file bucket ${FILES_BUCKET}." >&2; exit 1; }
+  echo "    Created ${FILES_BUCKET}."
 fi
 
 echo "==> Applying migrations to ${DB_NAME}"

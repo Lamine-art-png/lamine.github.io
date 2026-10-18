@@ -835,5 +835,6 @@
   "languages.content.english": "English",
   "languages.content.reviewed": "English + {n} reviewed course translation(s)",
   "languages.exams.partial": "English; some reviewed questions",
-  "languages.help": "Speak one of these languages and want to help review a translation?"
+  "languages.help": "Speak one of these languages and want to help review a translation?",
+  "dash.not_earned": "Not yet earned"
 }

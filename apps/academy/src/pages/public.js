@@ -448,6 +448,7 @@ export async function health(c) {
       email: c.cfg.emailEnabled ? "configured" : "not_configured",
       certificate_signing: c.cfg.certSigning,
       google_sign_in: c.cfg.googleEnabled ? "configured" : "not_configured",
+      file_storage: c.env.FILES ? "configured" : "not_configured",
       languages: LOCALES.length,
     },
     ok ? 200 : 503,
@@ -489,7 +490,7 @@ export async function languages(c) {
     <div class="cards cards-4">
       ${["choose", "interface", "content", "exams"].map((k) => html`<div class="panel"><h2 class="h3">${t(`languages.key.${k}.title`)}</h2><p class="small mb-0">${t(`languages.key.${k}.body`)}</p></div>`)}
     </div>
-    <div class="admin-table mt-3"><table>
+    <div class="admin-table mt-3" tabindex="0" role="region" aria-label="${t("languages.table_caption")}"><table>
       <caption class="sr-only">${t("languages.table_caption")}</caption>
       <thead><tr><th scope="col">${t("languages.col.language")}</th><th scope="col">${t("languages.col.interface")}</th><th scope="col">${t("languages.col.courses")}</th><th scope="col">${t("languages.col.exams")}</th></tr></thead>
       <tbody>${LOCALES.map((l) => {

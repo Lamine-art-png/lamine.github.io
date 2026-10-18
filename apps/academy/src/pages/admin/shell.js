@@ -82,8 +82,9 @@ export const statusBadge = (s) => {
   return html`<span class="badge ${cls} status-pill">${String(s || "").replace(/_/g, " ")}</span>`;
 };
 
-export function table(headers, rows) {
-  return html`<div class="admin-table"><table><thead><tr>${headers.map((h) => html`<th scope="col">${h}</th>`)}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="${headers.length}" class="muted">Nothing here yet.</td></tr>`}</tbody></table></div>`;
+export function table(headers, rows, { label = "" } = {}) {
+  // Scrollable on small screens, so the region is focusable for keyboard scrolling.
+  return html`<div class="admin-table" tabindex="0" role="region" aria-label="${label || headers.filter((h) => typeof h === "string" && h).join(", ") || "Table"}"><table><thead><tr>${headers.map((h) => html`<th scope="col">${h}</th>`)}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="${headers.length}" class="muted">Nothing here yet.</td></tr>`}</tbody></table></div>`;
 }
 
 export const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);

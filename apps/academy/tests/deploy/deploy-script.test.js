@@ -113,6 +113,8 @@ test("a fresh staging deploy touches only staging resources", async () => {
   assert.equal(secrets.CERT_SIGNING_SECRET.length, 64, "strong signing key generated");
   assert.ok(secrets.BOOTSTRAP_ADMIN_EMAILS && secrets.RESEND_API_KEY);
   assert.ok(!existsSync(join(ws.state, "secrets-production.json")), "no production secret written");
+  assert.deepEqual(json(ws, "buckets.json"), ["agroai-academy-staging-files"], "only the staging file bucket");
+  assert.match(deployed, /bucket_name = "agroai-academy-staging-files"/);
   assert.match(r.calls, /migrations apply agroai-academy-staging --remote --config wrangler.generated.toml --env staging/);
   assert.doesNotMatch(r.out, /test-token-not-real|re_test_not_real/, "secrets never printed");
   assert.ok(!existsSync(join(ws.dir, "wrangler.generated.toml")), "generated config removed");

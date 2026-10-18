@@ -165,7 +165,7 @@ export async function lessonPage(c) {
         ${lesson.type === "video" || lesson.video_id ? videoBlock(c, lesson, video, lp) : ""}
         ${lesson.summary ? html`<p class="lead mt-3">${lesson.summary}</p>` : ""}
         ${rendered.toc.length > 2 ? html`<nav class="panel mt-2" aria-label="${t("lesson.on_this_page")}"><strong class="small">${t("lesson.on_this_page")}</strong>
-          <ul class="small mb-0">${rendered.toc.filter((h) => h.level <= 2).map((h) => html`<li><a href="#${h.id}">${h.text}</a></li>`)}</ul></nav>` : ""}
+          <ul class="small mb-0 toc-list">${rendered.toc.filter((h) => h.level <= 2).map((h) => html`<li><a href="#${h.id}">${h.text}</a></li>`)}</ul></nav>` : ""}
         <div class="prose mt-3">${raw(rendered.html)}</div>
         ${interactive(c, lesson)}
         ${isQuizLesson && assessment

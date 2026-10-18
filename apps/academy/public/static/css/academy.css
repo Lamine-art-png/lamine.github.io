@@ -545,7 +545,8 @@ tr:last-child td { border-bottom: 0; }
 .achievement { display: flex; gap: .75rem; align-items: center; padding: .6rem 0; }
 .achievement .medal { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); flex-shrink: 0; }
 .achievement.locked .medal { background: var(--surface-2); color: var(--muted); }
-.achievement.locked { opacity: .7; }
+/* Locked achievements are distinguished by their muted medal and label, not by opacity (keeps text contrast). */
+.achievement.locked strong { color: var(--ink-2); font-weight: 600; }
 
 /* ───────── Certificates ───────── */
 .certificate {
@@ -609,6 +610,9 @@ dl.kv dd { margin: 0; font-weight: 600; word-break: break-word; }
 .admin-main { padding: 1.75rem clamp(16px, 3vw, 40px) 4rem; min-width: 0; }
 .admin-main h1 { font-size: clamp(1.6rem, 2.6vw, 2.1rem); }
 .admin-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+.admin-table:focus-visible { outline: 3px solid var(--focus, var(--brand)); outline-offset: 2px; }
+.toc-list a { display: inline-block; min-height: 24px; padding-block: .15rem; }
+.toc-list li + li { margin-top: .15rem; }
 .admin-table table td, .admin-table table th { white-space: nowrap; }
 .admin-table td.wrap-cell { white-space: normal; min-width: 240px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }

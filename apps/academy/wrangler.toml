@@ -23,6 +23,11 @@ database_name = "agroai-academy"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
+# Lesson file resources (private bucket; created by scripts/deploy.sh if missing).
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "agroai-academy-files"
+
 [triggers]
 # Every 15 minutes: scheduled publication, exam auto-submission, email retries.
 # Mondays 15:00 UTC: opt-in learning reminders.
@@ -71,6 +76,10 @@ binding = "DB"
 database_name = "agroai-academy-staging"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "FILES"
+bucket_name = "agroai-academy-staging-files"
 
 [env.staging.triggers]
 crons = ["*/15 * * * *"]

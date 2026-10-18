@@ -59,7 +59,7 @@ export async function intro(c) {
     </div>
     ${history.length
       ? html`<h2 class="h2 mt-4">${t("assess.history")}</h2>
-        <div class="admin-table"><table><thead><tr><th>${t("assess.attempt")}</th><th>${t("assess.date")}</th><th>${t("assess.score")}</th><th>${t("assess.result")}</th><th></th></tr></thead><tbody>
+        <div class="admin-table" tabindex="0" role="region" aria-label="${t("assess.history")}"><table><thead><tr><th>${t("assess.attempt")}</th><th>${t("assess.date")}</th><th>${t("assess.score")}</th><th>${t("assess.result")}</th><th></th></tr></thead><tbody>
         ${history.map(
           (h) => html`<tr><td>#${h.attempt_no}</td><td>${c.fmtDate(h.submitted_at || h.started_at, { dateStyle: "medium", timeStyle: "short" })}</td>
             <td>${h.score_pct != null ? `${c.fmtNum(h.score_pct, { maximumFractionDigits: 1 })}%` : "—"}</td>

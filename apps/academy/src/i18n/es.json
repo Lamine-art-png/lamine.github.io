@@ -804,5 +804,6 @@
   "languages.content.english": "Inglés",
   "languages.content.reviewed": "Inglés + {n} traducción(es) de curso revisada(s)",
   "languages.exams.partial": "Inglés; algunas preguntas revisadas",
-  "languages.help": "¿Hablas uno de estos idiomas y quieres ayudar a revisar una traducción?"
+  "languages.help": "¿Hablas uno de estos idiomas y quieres ayudar a revisar una traducción?",
+  "dash.not_earned": "Aún no obtenido"
 }

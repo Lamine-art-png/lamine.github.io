@@ -151,7 +151,7 @@ export async function overview(c) {
     <section class="card mt-2"><h2 class="h2">${t("dash.achievements")}</h2>
       ${achievements.map(
         (a) => html`<div class="achievement ${a.earned ? "" : "locked"}"><span class="medal">${icon(a.earned ? a.icon : "lock", { size: 18 })}</span>
-          <div><strong class="small">${t(`ach.${a.code}.title`)}</strong><div class="tiny muted">${a.earned ? t("dash.earned_on", { date: c.fmtDate(a.earned.earned_at, { dateStyle: "medium" }) }) : t(`ach.${a.code}.hint`)}</div></div></div>`,
+          <div><strong class="small">${a.earned ? "" : html`<span class="sr-only">${t("dash.not_earned")}: </span>`}${t(`ach.${a.code}.title`)}</strong><div class="tiny muted">${a.earned ? t("dash.earned_on", { date: c.fmtDate(a.earned.earned_at, { dateStyle: "medium" }) }) : t(`ach.${a.code}.hint`)}</div></div></div>`,
       )}
     </section>
     <section class="card mt-2"><div class="row-between"><h2 class="h2 mb-0">${t("dash.notifications")}</h2>${unread ? html`<span class="badge badge-lime">${unread}</span>` : ""}</div>
@@ -187,7 +187,7 @@ export async function resultsTab(c) {
       .all()
   ).results;
   const content = rows.length
-    ? html`<div class="admin-table mt-2"><table><thead><tr><th>${t("assess.assessment")}</th><th>${t("assess.type")}</th><th>${t("assess.date")}</th><th>${t("assess.score")}</th><th>${t("assess.result")}</th><th></th></tr></thead><tbody>
+    ? html`<div class="admin-table mt-2" tabindex="0" role="region" aria-label="${t("assess.history")}"><table><thead><tr><th>${t("assess.assessment")}</th><th>${t("assess.type")}</th><th>${t("assess.date")}</th><th>${t("assess.score")}</th><th>${t("assess.result")}</th><th></th></tr></thead><tbody>
       ${rows.map(
         (r) => html`<tr><td class="wrap-cell"><strong>${r.assessment_title}</strong><div class="tiny muted">${r.course_title}</div></td>
           <td>${r.kind === "exam" ? t("assess.final_exam") : t("assess.quiz")}</td>
