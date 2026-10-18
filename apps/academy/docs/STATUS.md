@@ -91,13 +91,21 @@ Instructor video production is **not complete**: no approved Joshua video assets
 
 Both tests inject the competing write at the exact point of the guarded statement and fail without the fix.
 
+### Codex review of `3469613` (2 × P1, 1 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 archived courses still served their landing page by slug | Archived courses are 404 for everyone except staff and already-enrolled learners (who keep their classroom); no new enrollments | `course-drafts` "an archived course is taken down…" |
+| P1 manual publication not bound to the loaded state | Manual publication passes the loaded status and schedule to the guarded revision insert; an archive in between wins | `course-drafts` "manual publication does not override an archive…" |
+| P2 withdrawn learners could still download private files | Downloads need an active or completed enrollment; preview files only for published courses | `integrations` "R2: lesson files…" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **145/145 pass**.
+- `npm test` (unit, integration, deploy): **147/147 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

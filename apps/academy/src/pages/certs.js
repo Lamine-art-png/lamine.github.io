@@ -200,7 +200,7 @@ export async function verifyPage(c) {
 }
 
 export async function claim(c) {
-  const course = await getCourseBySlug(c.env, c.params.slug, c.locale);
+  const course = await getCourseBySlug(c.env, c.params.slug, c.locale, { userId: c.user?.id });
   await rateLimit(c, "cert-claim", { limit: 20, windowSeconds: 3600, key: c.user.id });
   const result = await issueIfEligible(c.env, c.cfg, c.user, course, { defer: c.defer });
   if (result.certificate) return redirect(`/certificates/${result.certificate.credential_id}${result.created ? "?new=1" : ""}`);

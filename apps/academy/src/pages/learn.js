@@ -14,7 +14,7 @@ import { track } from "../services/activity.js";
 
 async function loadContext(c, { lessonSlug = null } = {}) {
   const staff = c.can("courses.edit");
-  const course = await getCourseBySlug(c.env, c.params.course, c.locale, { staff });
+  const course = await getCourseBySlug(c.env, c.params.course, c.locale, { staff, userId: c.user?.id });
   const enrollment = c.user ? await getEnrollment(c.env, c.user.id, course.id) : null;
   const enrolled = Boolean(enrollment && enrollment.status !== "withdrawn");
   const syllabus = await getSyllabus(c.env, course.id, c.locale, { includeDrafts: staff });
@@ -255,7 +255,7 @@ function noteItem(c, course, lesson, n) {
 }
 
 async function lessonForWrite(c) {
-  const course = await getCourseBySlug(c.env, c.params.course, c.locale, { staff: c.can("courses.edit") });
+  const course = await getCourseBySlug(c.env, c.params.course, c.locale, { staff: c.can("courses.edit"), userId: c.user?.id });
   const lesson = await c.env.DB.prepare("SELECT * FROM lessons WHERE course_id = ? AND slug = ?").bind(course.id, c.params.lesson).first();
   if (!lesson) throw new HttpError(404, "not_found");
   return { course, lesson };
@@ -342,7 +342,7 @@ export async function lessonFeedback(c) {
 }
 
 export async function courseFeedback(c) {
-  const course = await getCourseBySlug(c.env, c.params.slug, c.locale);
+  const course = await getCourseBySlug(c.env, c.params.slug, c.locale, { userId: c.user?.id });
   const enr = await getEnrollment(c.env, c.user.id, course.id);
   if (!enr) throw new HttpError(403, "not_enrolled");
   const b = await c.readBody();
@@ -368,13 +368,16 @@ export async function captions(c) {
 
 export async function resourceDownload(c) {
   const r = await c.env.DB.prepare(
-    `SELECT r.*, l.course_id, l.is_preview FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id WHERE r.id = ?`,
+    `SELECT r.*, l.course_id, l.is_preview, co.status AS course_status FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id JOIN courses co ON co.id = l.course_id WHERE r.id = ?`,
   )
     .bind(c.params.id)
     .first();
   if (!r) throw new HttpError(404, "not_found");
+  // Active (or completed) enrollment only: withdrawn learners lose access to private files.
   const enr = await getEnrollment(c.env, c.user.id, r.course_id);
-  if (!enr && !r.is_preview && !c.can("courses.edit")) throw new HttpError(403, "not_enrolled");
+  const active = enr && enr.status !== "withdrawn";
+  const preview = r.is_preview && r.course_status === "published";
+  if (!active && !preview && !c.can("courses.edit")) throw new HttpError(403, "not_enrolled");
   if (r.kind === "link") return redirect(safeUrl(r.url), 302);
   if (!c.env.FILES || !r.file_key) throw new HttpError(404, "not_found");
   const obj = await c.env.FILES.get(r.file_key);

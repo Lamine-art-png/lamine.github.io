@@ -76,7 +76,7 @@ export async function catalog(c) {
 export async function courseLanding(c) {
   const t = c.t;
   const staff = c.can("courses.edit");
-  const course = await getCourseBySlug(c.env, c.params.slug, c.locale, { staff });
+  const course = await getCourseBySlug(c.env, c.params.slug, c.locale, { staff, userId: c.user?.id });
   const [syllabus, instructors, prereqs, exam, enrollment, rating] = await Promise.all([
     getSyllabus(c.env, course.id, c.locale),
     getInstructorsForCourse(c.env, course.id),

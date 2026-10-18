@@ -497,3 +497,27 @@ test("the scheduler skips a course whose schedule changed after it was selected"
   assert.equal(report.publicationBlocked, 0);
   assert.equal((await live(env, "SELECT scheduled_at FROM courses WHERE id = 'crs_a1'")).scheduled_at, replacement);
 });
+
+test("an archived course is taken down for the public but stays open to its learners", async () => {
+  const { env, admin, learner } = await released();
+  assert.equal((await admin.post("/admin/courses/crs_a1/status", { status: "archived" })).status, 303);
+  assert.equal((await new Client(env).get(`/courses/${A1_SLUG}`)).status, 404, "anonymous");
+  const stranger = await registeredLearner(env, { email: "stranger@academy.test" });
+  assert.equal((await stranger.get(`/courses/${A1_SLUG}`)).status, 404, "not enrolled");
+  assert.equal((await stranger.post(`/courses/${A1_SLUG}/enroll`, {})).status, 404, "no new enrollments");
+  assert.equal((await learner.get(`/courses/${A1_SLUG}`)).status, 200, "enrolled learner keeps access");
+  assert.equal((await learner.get(`/learn/${A1_SLUG}/welcome`)).status, 200);
+  assert.equal((await admin.get(`/courses/${A1_SLUG}`)).status, 200, "staff");
+});
+
+test("manual publication does not override an archive made after the page was loaded", async () => {
+  const { env, admin } = await released();
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Should not go live." }));
+  await approveReviews(admin, "crs_a1");
+  const restore = interleave(env, "INSERT INTO course_revisions", (db) => db.prepare("UPDATE courses SET status = 'archived' WHERE id = 'crs_a1'").run());
+  const r = await publish(admin);
+  restore();
+  assert.match(decodeURIComponent(r.location), /changed while it was being published/);
+  assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "archived");
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Should not go live.");
+});

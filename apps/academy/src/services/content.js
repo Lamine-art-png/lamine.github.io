@@ -124,7 +124,12 @@ export async function listCourses(env, locale, { q = "", topic = "", level = "",
   return rows.map(hydrateCourse);
 }
 
-export async function getCourseBySlug(env, slug, locale, { staff = false } = {}) {
+/**
+ * A course by slug. Drafts are staff-only. Archived courses are taken down:
+ * only staff and learners already enrolled (who keep their classroom and
+ * records) can open them; everyone else, search engines included, gets 404.
+ */
+export async function getCourseBySlug(env, slug, locale, { staff = false, userId = null } = {}) {
   const c = await env.DB.prepare(
     `SELECT c.*, p.title AS program_title, p.slug AS program_slug, p.code AS program_code
        FROM courses c LEFT JOIN programs p ON p.id = c.program_id WHERE c.slug = ?`,
@@ -133,6 +138,10 @@ export async function getCourseBySlug(env, slug, locale, { staff = false } = {})
     .first();
   if (!c) throw new HttpError(404, "not_found");
   if (!staff && c.status === "draft") throw new HttpError(404, "not_found");
+  if (!staff && c.status === "archived") {
+    const enrolled = userId && (await env.DB.prepare("SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND status != 'withdrawn'").bind(userId, c.id).first());
+    if (!enrolled) throw new HttpError(404, "not_found");
+  }
   await localize(env, "course", c, COURSE_FIELDS, locale);
   return hydrateCourse(c);
 }

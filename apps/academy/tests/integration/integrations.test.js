@@ -335,6 +335,11 @@ test("R2: lesson files upload, are stored with their type, and download only for
   assert.equal(dl.headers.get("content-disposition"), 'attachment; filename="Data_quality_worksheet.pdf"');
   assert.equal(dl.headers.get("x-content-type-options"), "nosniff");
   assert.equal(new TextDecoder().decode(new Uint8Array(await dl.res.arrayBuffer())), "%PDF-1.4\n% synthetic worksheet\n");
+  // Withdrawing ends access to private files, even through a saved link.
+  const wd = await env.DB.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE user_id = (SELECT id FROM users WHERE email = 'student@academy.test')").run();
+  assert.equal(wd.meta.changes, 1);
+  assert.equal((await learner.get(`/resources/${res.id}`)).status, 403);
+  await env.DB.prepare("UPDATE enrollments SET status = 'active' WHERE user_id = (SELECT id FROM users WHERE email = 'student@academy.test')").run();
 
   // Removing the resource from the draft keeps the object while the live course
   // still links it; publishing the removal deletes it.
