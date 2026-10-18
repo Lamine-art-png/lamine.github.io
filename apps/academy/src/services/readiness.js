@@ -82,7 +82,7 @@ export async function recordReview(env, { courseId, type, decision, notes, revie
   return { id, hash };
 }
 
-const playable = (v) => v.video_status === "approved" && Boolean(v.hls_url || v.mp4_url);
+const playable = (v) => v.video_status === "approved" && Boolean(v.hls_url || v.mp4_url) && v.video_duration > 0;
 
 /**
  * Checks that must pass before the course draft can be published or
@@ -95,7 +95,7 @@ export async function publishReadiness(env, liveCourse) {
   const hash = await courseContentHash(env, course.id);
   const lessons = (
     await env.DB.prepare(
-      `SELECT l.*, v.status AS video_status, v.hls_url, v.mp4_url, v.title AS video_title,
+      `SELECT l.*, v.status AS video_status, v.hls_url, v.mp4_url, v.duration_seconds AS video_duration, v.title AS video_title,
               (SELECT COUNT(*) FROM video_captions vc WHERE vc.video_id = l.video_id AND vc.status = 'reviewed'
                   AND (vc.locale = ? OR vc.locale LIKE ? || '-%')) AS reviewed_captions
          FROM draft_lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ?`,
@@ -118,7 +118,7 @@ export async function publishReadiness(env, liveCourse) {
   checks.push({
     ok: missingVideo.length === 0,
     label: missingVideo.length
-      ? `${missingVideo.length} required lesson video(s) not approved and playable: ${missingVideo.map((l) => l.title).join(", ")}`
+      ? `${missingVideo.length} required lesson video(s) not approved and playable (URL and duration): ${missingVideo.map((l) => l.title).join(", ")}`
       : needsVideo.length
         ? `All ${needsVideo.length} required lesson videos are approved and playable`
         : "No lesson requires a video",

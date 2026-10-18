@@ -225,19 +225,25 @@
         }
       });
       if (tracking) {
+        // Heartbeats: the server times them and credits only playback that
+        // was possible between two beats, so beats go out every few seconds
+        // while playing and at every play, pause, seek and end.
         let last = 0;
-        const report = (opts) => sendProgress({ lessonId, position: video.currentTime, duration: video.duration || null }, opts);
+        let before = 0;
+        const report = (playing, position = video.currentTime, opts) => {
+          last = Date.now();
+          return sendProgress({ lessonId, position, duration: video.duration || null, playing }, opts);
+        };
         video.addEventListener("timeupdate", () => {
-          if (Date.now() - last > 15000 && !video.paused) {
-            last = Date.now();
-            report();
-          }
+          if (!video.seeking) before = video.currentTime;
+          if (Date.now() - last > 5000 && !video.paused) report(true);
         });
-        // The first play is reported so the server can measure watching time.
-        video.addEventListener("play", () => report(), { once: true });
-        video.addEventListener("pause", () => report());
-        video.addEventListener("ended", () => report());
-        addEventListener("pagehide", () => report({ keepalive: true }));
+        video.addEventListener("play", () => report(true));
+        video.addEventListener("pause", () => report(false));
+        video.addEventListener("seeking", () => report(false, before));
+        video.addEventListener("seeked", () => report(!video.paused));
+        video.addEventListener("ended", () => report(false));
+        addEventListener("pagehide", () => report(false, video.currentTime, { keepalive: true }));
       }
       $$("[data-seek]").forEach((b) => b.addEventListener("click", () => ((video.currentTime = Number(b.dataset.seek)), video.play())));
     }

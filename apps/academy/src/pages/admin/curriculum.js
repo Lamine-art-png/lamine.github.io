@@ -635,6 +635,8 @@ export async function saveVideo(c) {
   const poster = str(b.poster_url, 1000);
   if (![hls, mp4, poster].every(urlOk)) return redirect(`/admin/videos/${v.id}?err=Video%20URLs%20must%20use%20https`);
   if (status === "approved" && !hls && !mp4) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs an HLS or MP4 URL.")}`);
+  // Watch-to-complete is measured against this length; the browser's report is never trusted for it.
+  if (status === "approved" && !(intOrNull(b.duration_seconds) > 0)) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs its duration in seconds.")}`);
   const now = nowIso();
   const approving = status === "approved" && v.status !== "approved";
   await c.env.DB.batch([
