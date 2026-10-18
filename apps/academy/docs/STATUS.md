@@ -99,13 +99,19 @@ Both tests inject the competing write at the exact point of the guarded statemen
 | P1 manual publication not bound to the loaded state | Manual publication passes the loaded status and schedule to the guarded revision insert; an archive in between wins | `course-drafts` "manual publication does not override an archive…" |
 | P2 withdrawn learners could still download private files | Downloads need an active or completed enrollment; preview files only for published courses | `integrations` "R2: lesson files…" |
 
+### Codex review of `04daf3c` (1 × P1) — fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 lock checks were separate from the writes (a release completing in between let a caption, video or instructor edit through) | The live-use condition is part of each write (`… WHERE NOT EXISTS (live use)`); a refused write reports the lock. Together with the version triggers, every ordering of edit and publication is covered | `course-drafts` "caption, video and instructor locks hold even if the course is released mid-request" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **147/147 pass**.
+- `npm test` (unit, integration, deploy): **148/148 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

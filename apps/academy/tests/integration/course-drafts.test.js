@@ -521,3 +521,31 @@ test("manual publication does not override an archive made after the page was lo
   assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "archived");
   assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Should not go live.");
 });
+
+test("caption, video and instructor locks hold even if the course is released mid-request", async () => {
+  const env = makeEnv();
+  const admin = await registeredLearner(env, { email: "founder@academy.test", name: "Founder" });
+  const release = (db) => db.prepare("UPDATE courses SET status = 'published', published_at = ? WHERE id = 'crs_a1'").bind(new Date().toISOString()).run();
+  // Not yet released: the separate lock check passes, then the course goes live before the write.
+  let restore = interleave(env, "INSERT INTO video_captions", release);
+  let r = await admin.post("/admin/videos/vid_a1_data/captions", { locale: "en", status: "reviewed", vtt: "WEBVTT\n\n00:00.000 --> 00:01.000\nLate" });
+  restore();
+  assert.match(decodeURIComponent(r.location), /live in/);
+  assert.equal(await live(env, "SELECT 1 FROM video_captions WHERE video_id = 'vid_a1_data'"), null);
+
+  await env.DB.prepare("UPDATE courses SET status = 'review', published_at = NULL WHERE id = 'crs_a1'").run();
+  const v = await live(env, "SELECT * FROM video_assets WHERE id = 'vid_a1_data'");
+  restore = interleave(env, "UPDATE video_assets SET title", release);
+  r = await admin.post("/admin/videos/vid_a1_data", { title: v.title, provider: "r2", status: "planned", mp4_url: "https://media.example/late.mp4", hls_url: "", script_md: "late" });
+  restore();
+  assert.match(decodeURIComponent(r.location), /live in/);
+  assert.equal((await live(env, "SELECT mp4_url FROM video_assets WHERE id = 'vid_a1_data'")).mp4_url, v.mp4_url);
+
+  await env.DB.prepare("UPDATE courses SET status = 'review', published_at = NULL WHERE id = 'crs_a1'").run();
+  const ins = await live(env, "SELECT i.* FROM instructors i JOIN course_instructors ci ON ci.instructor_id = i.id WHERE ci.course_id = 'crs_a1' LIMIT 1");
+  restore = interleave(env, "UPDATE instructors SET", release);
+  r = await admin.post("/admin/instructors", { id: ins.id, name: "Late Rename", title: ins.title, bio: ins.bio, status: "active" });
+  restore();
+  assert.match(decodeURIComponent(r.location), /shown by a released course/);
+  assert.equal((await live(env, "SELECT name FROM instructors WHERE id = ?", ins.id)).name, ins.name);
+});

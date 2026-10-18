@@ -646,6 +646,13 @@ export async function editVideo(c) {
  * asset in the course draft, which voids the reviews until they are recorded
  * again and is then published as a new revision.
  */
+// The same condition as an SQL predicate on a video id expression, so each
+// write carries its own lock check atomically (a publication completing
+// between a separate check and the write cannot slip through).
+const liveVideoSql = (idExpr) =>
+  `EXISTS (SELECT 1 FROM lessons l JOIN courses c ON c.id = l.course_id
+            WHERE l.video_id = ${idExpr} AND c.published_at IS NOT NULL AND l.slug NOT LIKE '\\_\\_rev\\_%' ESCAPE '\\')`;
+
 async function liveVideoLock(env, videoId) {
   return env.DB.prepare(
     `SELECT c.title FROM lessons l JOIN courses c ON c.id = l.course_id
@@ -674,10 +681,10 @@ export async function saveVideo(c) {
   if (status === "approved" && !(intOrNull(b.duration_seconds) > 0)) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs its duration in seconds.")}`);
   const now = nowIso();
   const approving = status === "approved" && v.status !== "approved";
-  await c.env.DB.batch([
-    c.env.DB.prepare(
+  const res = await c.env.DB.prepare(
       `UPDATE video_assets SET title=?, provider=?, status=?, instructor_id=?, duration_seconds=?, hls_url=?, mp4_url=?, poster_url=?, provider_ref=?, script_md=?,
-         approved_by = CASE WHEN ? THEN ? ELSE approved_by END, approved_at = CASE WHEN ? THEN ? ELSE approved_at END, updated_at=? WHERE id=?`,
+         approved_by = CASE WHEN ? THEN ? ELSE approved_by END, approved_at = CASE WHEN ? THEN ? ELSE approved_at END, updated_at=?
+       WHERE id=? AND NOT ${liveVideoSql("video_assets.id")}`,
     ).bind(
       str(b.title, 200) || v.title,
       ["synthesia", "r2", "stream", "external"].includes(b.provider) ? b.provider : v.provider,
@@ -695,9 +702,9 @@ export async function saveVideo(c) {
       now,
       now,
       v.id,
-    ),
-    auditStmt(c.env, c.user.id, approving ? "video.approve" : "video.update", "video", v.id, { status }),
-  ]);
+    ).run();
+  if (!res.meta.changes) return redirect(`/admin/videos/${v.id}?err=${lockedMessage((await liveVideoLock(c.env, v.id)) || { title: "a released course" })}`);
+  await auditStmt(c.env, c.user.id, approving ? "video.approve" : "video.update", "video", v.id, { status }).run();
   return redirect(`/admin/videos/${v.id}?ok=saved`);
 }
 
@@ -708,12 +715,13 @@ export async function addCaptions(c) {
   const lock = await liveVideoLock(c.env, c.params.id);
   if (lock) return redirect(`/admin/videos/${c.params.id}?err=${lockedMessage(lock)}`);
   const loc = LOCALES.find((l) => l.code === b.locale) || LOCALES[0];
-  await c.env.DB.prepare(
-    `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES (?,?,?,?,?,?,?)
+  const res = await c.env.DB.prepare(
+    `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT ${liveVideoSql("?2")}
      ON CONFLICT(video_id, locale) DO UPDATE SET vtt = excluded.vtt, status = excluded.status, label = excluded.label`,
   )
     .bind(newId("cap_"), c.params.id, loc.code, loc.nativeName, vtt, b.status === "machine" ? "machine" : "reviewed", nowIso())
     .run();
+  if (!res.meta.changes) return redirect(`/admin/videos/${c.params.id}?err=${lockedMessage((await liveVideoLock(c.env, c.params.id)) || { title: "a released course" })}`);
   return redirect(`/admin/videos/${c.params.id}?ok=saved`);
 }
 
@@ -722,7 +730,8 @@ export async function deleteCaptions(c) {
   if (!cap) throw new HttpError(404, "not_found");
   const lock = await liveVideoLock(c.env, cap.video_id);
   if (lock) return redirect(`/admin/videos/${cap.video_id}?err=${lockedMessage(lock)}`);
-  await c.env.DB.prepare("DELETE FROM video_captions WHERE id = ?").bind(c.params.id).run();
+  const res = await c.env.DB.prepare(`DELETE FROM video_captions WHERE id = ? AND NOT ${liveVideoSql("video_captions.video_id")}`).bind(c.params.id).run();
+  if (!res.meta.changes) return redirect(`/admin/videos/${cap.video_id}?err=${lockedMessage((await liveVideoLock(c.env, cap.video_id)) || { title: "a released course" })}`);
   return redirect(`/admin/videos/${cap.video_id}?ok=deleted`);
 }
 
@@ -766,7 +775,14 @@ export async function saveInstructor(c) {
         `/admin/instructors?err=${encodeURIComponent(`This profile is shown by “${lock.title}”. Create a new instructor profile, link it in the course draft, record the reviews and publish the revision.`)}`,
       );
     }
-    await c.env.DB.prepare("UPDATE instructors SET name=?, title=?, bio=?, avatar_url=?, is_ai_avatar=?, disclosure=?, sort_order=?, status=?, updated_at=? WHERE id=?").bind(...vals, now, b.id).run();
+    // The lock is part of the write, so a publication in between cannot be bypassed.
+    const res = await c.env.DB.prepare(
+      `UPDATE instructors SET name=?, title=?, bio=?, avatar_url=?, is_ai_avatar=?, disclosure=?, sort_order=?, status=?, updated_at=?
+        WHERE id=? AND NOT EXISTS (SELECT 1 FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = instructors.id AND c.published_at IS NOT NULL)`,
+    )
+      .bind(...vals, now, b.id)
+      .run();
+    if (!res.meta.changes) return redirect(`/admin/instructors?err=${encodeURIComponent("This profile could not be changed: it is shown by a released course (or no longer exists).")}`);
   } else {
     let slug = slugify(name);
     if (await c.env.DB.prepare("SELECT 1 FROM instructors WHERE slug = ?").bind(slug).first()) slug = `${slug}-${Date.now().toString(36)}`;
