@@ -1,0 +1,229 @@
+// Published content is immutable: editors change a draft, learners keep the
+// live revision until the draft passes readiness (including fresh reviews)
+// and is explicitly published. Publication hides or retires removed content
+// instead of deleting it, so learner progress, attempts and certificates stay.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { makeEnv, Client, registeredLearner, approveReviews, correctResponses, A1_SLUG } from "../helpers.js";
+import { toEditorLines } from "../../src/pages/admin/assessments.js";
+
+const publish = (admin, id = "crs_a1") => admin.post(`/admin/courses/${id}/status`, { status: "published" });
+const blocked = (r) => /Readiness checks must pass/.test(decodeURIComponent(r.location || ""));
+
+/** A1 released as revision 1 (text-first video policy, three reviews recorded). */
+async function released() {
+  const env = makeEnv();
+  const admin = await registeredLearner(env, { email: "founder@academy.test", name: "Founder" });
+  await env.DB.prepare("UPDATE courses SET video_requirement = 'optional', video_waiver_reason = 'Synthetic text-first test' WHERE id = 'crs_a1'").run();
+  await approveReviews(admin, "crs_a1");
+  const r = await publish(admin);
+  assert.ok(!blocked(r), "initial publication");
+  const learner = await registeredLearner(env, { email: "learner@academy.test" });
+  await learner.post(`/courses/${A1_SLUG}/enroll`, {});
+  return { env, admin, learner };
+}
+
+async function lessonForm(env, id, overrides = {}) {
+  const l = await env.DB.prepare("SELECT * FROM draft_lessons WHERE id = ?").bind(id).first();
+  const body = {
+    title: l.title, slug: l.slug, type: l.type, module_id: l.module_id, est_minutes: String(l.est_minutes), sort_order: String(l.sort_order),
+    video_id: l.video_id || "", assessment_id: l.assessment_id || "", status: l.status, is_required: l.is_required ? "1" : undefined,
+    is_preview: l.is_preview ? "1" : undefined, summary: l.summary, body_md: l.body_md, interactive_json: l.interactive_json || "", after: "stay", ...overrides,
+  };
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  return body;
+}
+
+async function questionForm(env, id, overrides = {}) {
+  const q = await env.DB.prepare("SELECT * FROM draft_questions WHERE id = ?").bind(id).first();
+  const key = JSON.parse(q.answer_json);
+  return {
+    type: q.type, difficulty: q.difficulty, points: String(q.points), status: q.status, case_id: q.case_id || "", lesson_id: q.lesson_id || "",
+    prompt: q.prompt, lines: toEditorLines(q), tf: String(key.value ?? true), grading: q.grading, match: key.match || "exact", max_length: "600",
+    rubric: q.rubric || "", explanation: q.explanation || "", ...overrides,
+  };
+}
+
+const live = (env, sql, ...args) => env.DB.prepare(sql).bind(...args).first();
+
+test("edits to a published course stay in the draft until reviewed and published again", async () => {
+  const { env, admin, learner } = await released();
+  assert.equal((await live(env, "SELECT number FROM course_revisions WHERE course_id = 'crs_a1'")).number, 1);
+  const before = await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'");
+
+  // Lesson text, a certification question's answer key, and the course title change.
+  let r = await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Synthetic replacement lesson text." }));
+  assert.match(r.location, /ok=saved/);
+  const q = await live(env, "SELECT * FROM questions WHERE id = 'q_a1x_e1'");
+  // Move the correct mark to the next option.
+  const opts = toEditorLines(q).split("\n");
+  const right = opts.findIndex((l) => l.startsWith("* "));
+  const lines = opts.map((l, i) => (i === (right + 1) % opts.length ? `* ${l.replace(/^\* /, "")}` : l.replace(/^\* /, ""))).join("\n");
+  r = await admin.post("/admin/questions/q_a1x_e1", await questionForm(env, "q_a1x_e1", { lines }));
+  assert.match(r.location, /ok=saved/);
+
+  // Learners and the live tables are unchanged.
+  assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, before.body_md);
+  assert.equal((await live(env, "SELECT answer_json FROM questions WHERE id = 'q_a1x_e1'")).answer_json, q.answer_json);
+  r = await learner.get(`/learn/${A1_SLUG}/welcome`);
+  assert.doesNotMatch(r.text, /Synthetic replacement lesson text/);
+
+  // The editor sees unpublished changes; the earlier approvals no longer apply.
+  r = await admin.get("/admin/courses/crs_a1");
+  assert.match(r.text, /unpublished changes/);
+  assert.match(r.text, /no longer applies — the content changed afterwards/);
+  assert.ok(blocked(await publish(admin)), "publication needs fresh reviews");
+  assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, before.body_md);
+
+  // Fresh reviews, explicit publication: revision 2 goes live.
+  await approveReviews(admin, "crs_a1", "Second Synthetic Reviewer");
+  r = await publish(admin);
+  assert.ok(!blocked(r));
+  const rev = await live(env, "SELECT * FROM course_revisions WHERE course_id = 'crs_a1' ORDER BY number DESC");
+  assert.equal(rev.number, 2);
+  const reviewed = await live(env, "SELECT content_hash FROM course_reviews WHERE course_id = 'crs_a1' AND reviewer_name = 'Second Synthetic Reviewer' LIMIT 1");
+  assert.equal(rev.content_hash, reviewed.content_hash, "the published revision is exactly the reviewed content");
+  r = await learner.get(`/learn/${A1_SLUG}/welcome`);
+  assert.match(r.text, /Synthetic replacement lesson text/);
+  assert.notEqual((await live(env, "SELECT answer_json FROM questions WHERE id = 'q_a1x_e1'")).answer_json, q.answer_json);
+  assert.ok(await live(env, "SELECT 1 FROM audit_log WHERE action = 'course.revision.published'"));
+  r = await admin.get("/admin/courses/crs_a1");
+  assert.match(r.text, /The draft matches the live revision/);
+});
+
+test("course settings edits (title, passing score) also wait for publication", async () => {
+  const { env, admin } = await released();
+  const c = await live(env, "SELECT * FROM courses WHERE id = 'crs_a1'");
+  const form = {
+    title: "Synthetic Renamed Course", slug: c.slug, subtitle: c.subtitle, description: c.description, objectives: JSON.parse(c.objectives_json).join("\n"),
+    program_id: c.program_id || "", level: c.level, duration_minutes: String(c.duration_minutes), source_locale: c.source_locale,
+    planned_release_date: c.planned_release_date || "", sort_order: String(c.sort_order), thumbnail_url: "", prerequisites_text: c.prerequisites_text,
+    certificate_enabled: "1", require_all_lessons: "1", passing_score: "50", video_requirement: "optional", video_waiver_reason: c.video_waiver_reason,
+  };
+  const r = await admin.post("/admin/courses/crs_a1", form);
+  assert.match(r.location, /ok=saved/);
+  const now = await live(env, "SELECT title, passing_score FROM courses WHERE id = 'crs_a1'");
+  assert.equal(now.title, c.title);
+  assert.equal(now.passing_score, c.passing_score);
+  assert.doesNotMatch((await new Client(env).get(`/courses/${A1_SLUG}`)).text, /Synthetic Renamed Course/);
+  assert.ok(blocked(await publish(admin)));
+});
+
+test("removing content hides it from learners but keeps their progress and attempts", async () => {
+  const { env, admin, learner } = await released();
+  const user = await live(env, "SELECT id FROM users WHERE email = 'learner@academy.test'");
+  // The learner completes a lesson and starts the module 4 lessons' exam.
+  let r = await learner.post(`/learn/${A1_SLUG}/limits-and-when-to-challenge/complete`, {});
+  assert.equal(r.status, 303);
+  r = await learner.post("/assessments/asm_a1_q1/start", {});
+  const attemptId = r.location.split("/").pop();
+  const answers = await correctResponses(env, attemptId);
+
+  // An editor removes the completed lesson and a question bank item, then republishes.
+  r = await admin.post("/admin/lessons/les_a1_limits/delete", {});
+  assert.match(r.location, /ok=deleted/);
+  const drawn = (await env.DB.prepare("SELECT question_id FROM attempt_answers WHERE attempt_id = ? LIMIT 1").bind(attemptId).first()).question_id;
+  r = await admin.post(`/admin/questions/${drawn}`, await questionForm(env, drawn, { status: "retired" }));
+  assert.match(r.location, /ok=saved/);
+  await approveReviews(admin, "crs_a1");
+  assert.ok(!blocked(await publish(admin)));
+
+  // Hidden, not deleted; progress kept; the lesson's old URL no longer shows it.
+  const lesson = await live(env, "SELECT status, slug FROM lessons WHERE id = 'les_a1_limits'");
+  assert.equal(lesson.status, "draft");
+  assert.ok(await live(env, "SELECT 1 FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_limits'", user.id), "progress row kept");
+  r = await learner.get(`/courses/${A1_SLUG}`);
+  assert.equal(r.status, 200);
+  assert.match(r.text, /data-ownership-privacy-and-trust|Data ownership/);
+  assert.doesNotMatch(r.text, /limits-and-when-to-challenge/);
+  assert.equal((await learner.get(`/learn/${A1_SLUG}/data-ownership-privacy-and-trust`)).status, 200, "the rest of the course stays available");
+  assert.equal((await learner.get(`/learn/${A1_SLUG}/limits-and-when-to-challenge`)).status, 404);
+  assert.equal((await live(env, "SELECT status FROM questions WHERE id = ?", drawn)).status, "retired");
+
+  // The attempt started before publication submits and scores on its frozen questions.
+  r = await learner.post(`/attempts/${attemptId}/submit`, answers);
+  const graded = await live(env, "SELECT status, score_pct FROM attempts WHERE id = ?", attemptId);
+  assert.equal(graded.status, "graded");
+  assert.equal(graded.score_pct, 100);
+
+  // The freed slug can be reused by a new lesson without touching the hidden one.
+  r = await admin.post("/admin/modules/mod_a1_4/lessons", { title: "Limits and when to challenge", type: "text" });
+  const newId = r.location.split("/").pop().split("?")[0];
+  assert.equal((await live(env, "SELECT slug FROM draft_lessons WHERE id = ?", newId)).slug, "limits-and-when-to-challenge");
+
+  // Discarding restores exactly the published revision: removed content does not come back.
+  await admin.post("/admin/courses/crs_a1/discard", {});
+  assert.equal(await live(env, "SELECT 1 FROM draft_lessons WHERE id IN ('les_a1_limits', ?)", newId), null);
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /The draft matches the live revision/);
+});
+
+test("content removed from the draft is retired on publication and not restored by a discard", async () => {
+  const { env, admin } = await released();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM draft_assessment_rules WHERE assessment_id = 'asm_a1_q3'"),
+    env.DB.prepare("UPDATE draft_lessons SET assessment_id = NULL, type = 'text', body_md = 'Synthetic replacement.' WHERE id = 'les_a1_quiz3'"),
+    env.DB.prepare("DELETE FROM draft_assessments WHERE id = 'asm_a1_q3'"),
+    env.DB.prepare("DELETE FROM draft_questions WHERE id = 'q_a1x_e1'"),
+  ]);
+  await approveReviews(admin, "crs_a1");
+  assert.ok(!blocked(await publish(admin)));
+  const a = await live(env, "SELECT status, removed_at FROM assessments WHERE id = 'asm_a1_q3'");
+  assert.equal(a.status, "retired");
+  assert.ok(a.removed_at);
+  assert.equal((await live(env, "SELECT status FROM questions WHERE id = 'q_a1x_e1'")).status, "retired");
+  await admin.post("/admin/courses/crs_a1/discard", {});
+  assert.equal(await live(env, "SELECT 1 FROM draft_assessments WHERE id = 'asm_a1_q3'"), null);
+  assert.equal(await live(env, "SELECT 1 FROM draft_questions WHERE id = 'q_a1x_e1'"), null);
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /The draft matches the live revision/);
+});
+
+test("a never-released course follows its draft immediately", async () => {
+  const env = makeEnv();
+  const admin = await registeredLearner(env, { email: "founder@academy.test", name: "Founder" });
+  assert.equal((await live(env, "SELECT published_at FROM courses WHERE id = 'crs_a1'")).published_at, null);
+  const r = await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Upcoming synthetic text." }));
+  assert.match(r.location, /ok=saved/);
+  assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Upcoming synthetic text.");
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /Not yet released/);
+});
+
+test("unpublished changes can be discarded", async () => {
+  const { env, admin } = await released();
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Discard me." }));
+  await admin.post("/admin/lessons/les_a1_summary/delete", {});
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /unpublished changes/);
+  const r = await admin.post("/admin/courses/crs_a1/discard", {});
+  assert.match(r.location, /ok=saved/);
+  assert.notEqual((await live(env, "SELECT body_md FROM draft_lessons WHERE id = 'les_a1_welcome'")).body_md, "Discard me.");
+  assert.ok(await live(env, "SELECT 1 FROM draft_lessons WHERE id = 'les_a1_summary'"));
+  const page = (await admin.get("/admin/courses/crs_a1")).text;
+  assert.match(page, /The draft matches the live revision/);
+  assert.doesNotMatch(page, /no longer applies/, "the existing approvals apply again to the restored content");
+  assert.ok(await live(env, "SELECT 1 FROM audit_log WHERE action = 'course.draft.discarded'"));
+});
+
+test("only publishers can publish changes; learners cannot reach draft actions", async () => {
+  const { env, admin, learner } = await released();
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Editor change." }));
+  await approveReviews(admin, "crs_a1");
+  const editor = await registeredLearner(env, { email: "editor@academy.test" });
+  const eid = (await live(env, "SELECT id FROM users WHERE email = 'editor@academy.test'")).id;
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'content_editor', ?)").bind(eid, new Date().toISOString()).run();
+  assert.equal((await publish(editor)).status, 403);
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Editor change.");
+  assert.equal((await learner.post("/admin/courses/crs_a1/discard", {})).status, 403);
+  assert.equal((await learner.post("/admin/lessons/les_a1_welcome", { body_md: "x" })).status, 403);
+});
+
+test("draw rules can only use the course's own question banks", async () => {
+  const { env, admin } = await released();
+  await env.DB.prepare("INSERT INTO draft_question_banks (id, course_id, title, created_at, updated_at) VALUES ('bnk_other', 'crs_a2', 'Other course bank', '2026-01-01', '2026-01-01')").run();
+  const r = await admin.post("/admin/assessments/asm_a1_exam/rules", { bank_id: "bnk_other", draw_count: "1" });
+  assert.match(decodeURIComponent(r.location), /belongs to this course/);
+  assert.equal(await live(env, "SELECT 1 FROM draft_assessment_rules WHERE bank_id = 'bnk_other'"), null);
+  // Even if one were inserted directly, readiness refuses publication.
+  await env.DB.prepare("INSERT INTO draft_assessment_rules (id, assessment_id, bank_id, draw_count, sort_order) VALUES ('rul_x', 'asm_a1_exam', 'bnk_other', 1, 9)").run();
+  await approveReviews(admin, "crs_a1");
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /belongs to another course/);
+  assert.ok(blocked(await publish(admin)));
+});

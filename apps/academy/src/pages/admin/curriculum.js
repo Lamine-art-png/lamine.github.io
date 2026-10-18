@@ -10,6 +10,7 @@ import { TOPICS } from "../public.js";
 import { PROFESSIONAL_ROLES } from "../../services/users.js";
 import { LOCALES } from "../../lib/i18n.js";
 import { publishReadiness, recordReview, REVIEW_TYPES, REVIEW_DECISIONS } from "../../services/readiness.js";
+import { draftCourse, draftChanged, latestRevision, liveToDraftStatements, publishDraft, pruneFiles } from "../../services/drafts.js";
 
 export { publishReadiness };
 
@@ -21,9 +22,10 @@ const COURSE_STATUSES = ["draft", "review", "scheduled", "published", "archived"
 export async function courses(c) {
   const rows = (
     await c.env.DB.prepare(
-      `SELECT c.*, p.code AS program_code, (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id) AS lessons,
+      `SELECT c.id, c.status, c.scheduled_at, d.slug, d.title, d.planned_release_date, p.code AS program_code,
+              (SELECT COUNT(*) FROM draft_lessons l WHERE l.course_id = c.id) AS lessons,
               (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) AS enrolled
-         FROM courses c LEFT JOIN programs p ON p.id = c.program_id ORDER BY COALESCE(p.sort_order, 99), c.sort_order`,
+         FROM courses c JOIN draft_courses d ON d.id = c.id LEFT JOIN programs p ON p.id = d.program_id ORDER BY COALESCE(p.sort_order, 99), d.sort_order`,
     ).all()
   ).results;
   const body = table(
@@ -47,12 +49,17 @@ export async function newCourse(c) {
   return adminPage(c, { title: "New course", active: "/admin/courses", body });
 }
 
+/** A course slug is taken if any other course uses it live or in its draft. */
+async function slugTaken(env, slug, exceptId = "") {
+  return env.DB.prepare("SELECT 1 FROM courses WHERE slug = ?1 AND id != ?2 UNION ALL SELECT 1 FROM draft_courses WHERE slug = ?1 AND id != ?2").bind(slug, exceptId).first();
+}
+
 export async function createCourse(c) {
   const b = await c.readBody();
   const title = str(b.title, 200);
   if (!title) return redirect("/admin/courses/new?err=Title%20is%20required");
   let slug = slugify(title) || newId("course-").toLowerCase();
-  if (await c.env.DB.prepare("SELECT 1 FROM courses WHERE slug = ?").bind(slug).first()) slug = `${slug}-${Date.now().toString(36)}`;
+  if (await slugTaken(c.env, slug)) slug = `${slug}-${Date.now().toString(36)}`;
   const id = newId("crs_");
   const now = nowIso();
   await c.env.DB.batch([
@@ -66,25 +73,30 @@ export async function createCourse(c) {
       now,
       now,
     ),
+    c.env.DB.prepare("INSERT INTO draft_courses (id, slug, program_id, title, level, updated_at, updated_by) SELECT id, slug, program_id, title, level, updated_at, ? FROM courses WHERE id = ?").bind(c.user.id, id),
     auditStmt(c.env, c.user.id, "course.create", "course", id, { title }),
   ]);
   return redirect(`/admin/courses/${id}?ok=created`);
 }
 
 export async function editCourse(c) {
-  const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
+  const course = await draftCourse(c.env, c.params.id);
   if (!course) throw new HttpError(404, "not_found");
-  const [programs, modules, lessons, instructors, linked, allCourses, prereqs, assessments, readiness] = await Promise.all([
+  const [programs, modules, lessons, instructors, linked, allCourses, prereqs, assessments, readiness, revision] = await Promise.all([
     c.env.DB.prepare("SELECT id, title FROM programs ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT * FROM modules WHERE course_id = ? ORDER BY sort_order, created_at").bind(course.id).all(),
-    c.env.DB.prepare("SELECT l.*, v.status AS video_status FROM lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ? ORDER BY l.sort_order, l.created_at").bind(course.id).all(),
+    c.env.DB.prepare("SELECT * FROM draft_modules WHERE course_id = ? ORDER BY sort_order, created_at").bind(course.id).all(),
+    c.env.DB.prepare("SELECT l.*, v.status AS video_status FROM draft_lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ? ORDER BY l.sort_order, l.created_at").bind(course.id).all(),
     c.env.DB.prepare("SELECT id, name FROM instructors ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT instructor_id FROM course_instructors WHERE course_id = ?").bind(course.id).all(),
+    c.env.DB.prepare("SELECT instructor_id FROM draft_course_instructors WHERE course_id = ?").bind(course.id).all(),
     c.env.DB.prepare("SELECT id, title FROM courses WHERE id != ? ORDER BY title").bind(course.id).all(),
-    c.env.DB.prepare("SELECT * FROM course_prerequisites WHERE course_id = ?").bind(course.id).all(),
-    c.env.DB.prepare("SELECT * FROM assessments WHERE course_id = ? ORDER BY kind DESC, created_at").bind(course.id).all(),
+    c.env.DB.prepare("SELECT * FROM draft_course_prerequisites WHERE course_id = ?").bind(course.id).all(),
+    c.env.DB.prepare("SELECT * FROM draft_assessments WHERE course_id = ? ORDER BY kind DESC, created_at").bind(course.id).all(),
     publishReadiness(c.env, course),
+    latestRevision(c.env, course.id),
   ]);
+  // A released course changes for learners only by publishing a reviewed revision.
+  const released = Boolean(course.published_at);
+  const unpublished = released && revision?.content_hash !== readiness.hash;
   const linkedIds = new Set(linked.results.map((r) => r.instructor_id));
   const objectives = parseJson(course.objectives_json, []);
   const audience = new Set(parseJson(course.audience_json, []));
@@ -95,7 +107,20 @@ export async function editCourse(c) {
   <section class="panel"><div class="row-between"><div><strong>Status:</strong> ${statusBadge(course.status)}
       ${course.scheduled_at ? html`<span class="small"> · publishes ${course.scheduled_at.slice(0, 16).replace("T", " ")} UTC</span>` : ""}
       ${course.published_at ? html`<span class="small"> · published ${course.published_at.slice(0, 10)}</span>` : ""}</div>
-    <a class="btn btn-sm btn-quiet" href="/courses/${course.slug}">Preview course page</a></div>
+    <a class="btn btn-sm btn-quiet" href="/courses/${course.slug}">View live course page</a></div>
+    ${released
+      ? html`<div class="alert ${unpublished ? "alert-warn" : "alert-info"} mt-2" id="revision">
+          <p class="small mb-0">${revision ? `Live content is revision ${revision.number}, published ${revision.published_at.slice(0, 10)}.` : "Live content was released before revisions were recorded."}
+          ${unpublished
+            ? "This draft has unpublished changes. Learners keep seeing the live revision until the changes pass every check below (including fresh reviews) and are published."
+            : "The draft matches the live revision."}</p>
+          ${unpublished
+            ? html`<div class="row mt-1">${c.can("courses.publish") && course.status === "published"
+                ? html`<form method="post" action="/admin/courses/${course.id}/status" class="inline">${hidden(c)}<input type="hidden" name="status" value="published"><button class="btn btn-primary btn-sm" ${readiness.ok ? "" : raw("disabled")}>Publish changes as revision ${(revision?.number || 0) + 1}</button></form>`
+                : ""}
+              <form method="post" action="/admin/courses/${course.id}/discard" class="inline" data-confirm="Discard every unpublished change and return the draft to the live content?">${hidden(c)}<button class="btn btn-danger btn-sm">Discard unpublished changes</button></form></div>`
+            : ""}</div>`
+      : html`<p class="tiny muted mt-1">Not yet released: edits appear on the upcoming course page straight away. Once published, edits are kept as a draft until they are reviewed and published again.</p>`}
     <h2 class="h2 mt-2">Publication readiness</h2>
     <ul class="check-list">${readiness.checks.map((ch) => html`<li><span aria-hidden="true">${ch.ok ? (ch.warn ? "⚠️" : "✅") : "❌"}</span> <span>${ch.label}</span></li>`)}</ul>
     <form method="post" action="/admin/courses/${course.id}/status" class="row mt-2">${hidden(c)}
@@ -107,7 +132,7 @@ export async function editCourse(c) {
   </section>
 
   <section class="form-card mt-3" id="reviews"><h2 class="h2">Mandatory reviews</h2>
-    <p class="small muted">Each decision is recorded against the exact course content at that moment. Editing lessons, assessments or questions afterwards voids earlier approvals until they are recorded again.</p>
+    <p class="small muted">Each decision is recorded against the exact draft content at that moment. Editing lessons, assessments or questions afterwards voids earlier approvals until they are recorded again.</p>
     ${table(
       ["Review", "Current state", "History"],
       readiness.reviews.map(
@@ -213,8 +238,8 @@ export async function saveCourse(c) {
   const id = c.params.id;
   const slug = slugify(b.slug || b.title);
   if (!slug) return redirect(`/admin/courses/${id}?err=Invalid%20slug`);
-  const clash = await c.env.DB.prepare("SELECT id FROM courses WHERE slug = ? AND id != ?").bind(slug, id).first();
-  if (clash) return redirect(`/admin/courses/${id}?err=Slug%20already%20used`);
+  if (!(await c.env.DB.prepare("SELECT 1 FROM courses WHERE id = ?").bind(id).first())) throw new HttpError(404, "not_found");
+  if (await slugTaken(c.env, slug, id)) return redirect(`/admin/courses/${id}?err=Slug%20already%20used`);
   const objectives = String(b.objectives || "").split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 20);
   const audience = list(b.audience).filter((r) => PROFESSIONAL_ROLES.includes(r));
   const topics = list(b.topics).filter((k) => TOPICS.includes(k));
@@ -230,8 +255,8 @@ export async function saveCourse(c) {
   const policyChanged = before && (before.video_requirement !== videoRequirement || (before.video_waiver_reason || null) !== videoWaiver);
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `UPDATE courses SET title=?, slug=?, subtitle=?, description=?, objectives_json=?, program_id=?, level=?, duration_minutes=?, source_locale=?, planned_release_date=?, sort_order=?,
-         thumbnail_url=?, prerequisites_text=?, audience_json=?, topics_json=?, certificate_enabled=?, require_all_lessons=?, require_quizzes_pass=?, passing_score=?, content_review_note=?, video_requirement=?, video_waiver_reason=?, updated_at=? WHERE id=?`,
+      `UPDATE draft_courses SET title=?, slug=?, subtitle=?, description=?, objectives_json=?, program_id=?, level=?, duration_minutes=?, source_locale=?, planned_release_date=?, sort_order=?,
+         thumbnail_url=?, prerequisites_text=?, audience_json=?, topics_json=?, certificate_enabled=?, require_all_lessons=?, require_quizzes_pass=?, passing_score=?, updated_at=?, updated_by=? WHERE id=?`,
     ).bind(
       str(b.title, 200),
       slug,
@@ -252,19 +277,20 @@ export async function saveCourse(c) {
       bool(b.require_all_lessons),
       bool(b.require_quizzes_pass),
       passing,
-      str(b.content_review_note, 1000) || null,
-      videoRequirement,
-      videoWaiver,
       now,
+      c.user.id,
       id,
     ),
-    c.env.DB.prepare("DELETE FROM course_instructors WHERE course_id = ?").bind(id),
-    ...instructors.map((iid, i) => c.env.DB.prepare("INSERT OR IGNORE INTO course_instructors (course_id, instructor_id, sort_order) VALUES (?,?,?)").bind(id, iid, i)),
-    c.env.DB.prepare("DELETE FROM course_prerequisites WHERE course_id = ?").bind(id),
-    ...prereq.map((pid) => c.env.DB.prepare("INSERT OR IGNORE INTO course_prerequisites (course_id, prerequisite_course_id, is_required) VALUES (?,?,?)").bind(id, pid, required.has(pid) ? 1 : 0)),
+    // Publication policy (not reviewed content) stays on the live record.
+    c.env.DB.prepare("UPDATE courses SET content_review_note=?, video_requirement=?, video_waiver_reason=?, updated_at=? WHERE id=?").bind(str(b.content_review_note, 1000) || null, videoRequirement, videoWaiver, now, id),
+    c.env.DB.prepare("DELETE FROM draft_course_instructors WHERE course_id = ?").bind(id),
+    ...instructors.map((iid, i) => c.env.DB.prepare("INSERT OR IGNORE INTO draft_course_instructors (course_id, instructor_id, sort_order) SELECT ?, id, ? FROM instructors WHERE id = ?").bind(id, i, iid)),
+    c.env.DB.prepare("DELETE FROM draft_course_prerequisites WHERE course_id = ?").bind(id),
+    ...prereq.map((pid) => c.env.DB.prepare("INSERT OR IGNORE INTO draft_course_prerequisites (course_id, prerequisite_course_id, is_required) SELECT ?, id, ? FROM courses WHERE id = ?").bind(id, required.has(pid) ? 1 : 0, pid)),
     auditStmt(c.env, c.user.id, "course.update", "course", id, { slug }),
     ...(policyChanged ? [auditStmt(c.env, c.user.id, "course.video_policy", "course", id, { video_requirement: videoRequirement, reason: videoWaiver })] : []),
   ]);
+  await draftChanged(c.env, id);
   return redirect(`/admin/courses/${id}?ok=saved`);
 }
 
@@ -274,9 +300,15 @@ export async function setCourseStatus(c) {
   if (!course) throw new HttpError(404, "not_found");
   const status = COURSE_STATUSES.includes(b.status) ? b.status : course.status;
   if ((status === "published" || status === "scheduled") && !c.can("courses.publish")) throw new HttpError(403, "forbidden");
+  let readiness = null;
   if (status === "published" || status === "scheduled") {
-    const r = await publishReadiness(c.env, course);
-    if (!r.ok) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent("Readiness checks must pass before publishing.")}`);
+    readiness = await publishReadiness(c.env, course);
+    if (!readiness.ok) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent("Readiness checks must pass before publishing.")}`);
+  }
+  if (status === "published") {
+    // Copy the reviewed draft live as a new revision, atomically with the status.
+    await publishDraft(c.env, course, { actorId: c.user.id, hash: readiness.hash });
+    return redirect(`/admin/courses/${course.id}?ok=published`);
   }
   let scheduledAt = null;
   if (status === "scheduled") {
@@ -286,17 +318,19 @@ export async function setCourseStatus(c) {
   }
   const now = nowIso();
   await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END, updated_at = ? WHERE id = ?").bind(
-      status,
-      scheduledAt,
-      status,
-      now,
-      now,
-      course.id,
-    ),
+    c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?").bind(status, scheduledAt, now, course.id),
     auditStmt(c.env, c.user.id, `course.status.${status}`, "course", course.id, { from: course.status, scheduled_at: scheduledAt }),
   ]);
-  return redirect(`/admin/courses/${course.id}?ok=${status === "published" ? "published" : "saved"}`);
+  return redirect(`/admin/courses/${course.id}?ok=saved`);
+}
+
+/** Throw away unpublished draft edits of a released course: the draft becomes the live revision again. */
+export async function discardDraft(c) {
+  const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
+  if (!course) throw new HttpError(404, "not_found");
+  if (!course.published_at) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent("This course has not been released; its draft is its content.")}`);
+  await c.env.DB.batch([...liveToDraftStatements(c.env, course.id), auditStmt(c.env, c.user.id, "course.draft.discarded", "course", course.id, {})]);
+  return redirect(`/admin/courses/${course.id}?ok=saved`);
 }
 
 export async function saveReview(c) {
@@ -314,54 +348,72 @@ export async function saveReview(c) {
 
 export async function addModule(c) {
   const b = await c.readBody();
-  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM modules WHERE course_id = ?").bind(c.params.id).first();
+  if (!(await c.env.DB.prepare("SELECT 1 FROM courses WHERE id = ?").bind(c.params.id).first())) throw new HttpError(404, "not_found");
+  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM draft_modules WHERE course_id = ?").bind(c.params.id).first();
   const now = nowIso();
-  await c.env.DB.prepare("INSERT INTO modules (id, course_id, title, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?)").bind(newId("mod_"), c.params.id, str(b.title, 200) || "Untitled module", max.m + 1, now, now).run();
+  await c.env.DB.prepare("INSERT INTO draft_modules (id, course_id, title, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?)").bind(newId("mod_"), c.params.id, str(b.title, 200) || "Untitled module", max.m + 1, now, now).run();
+  await draftChanged(c.env, c.params.id);
   return redirect(`/admin/courses/${c.params.id}?ok=created`);
 }
 
 export async function saveModule(c) {
   const b = await c.readBody();
-  const m = await c.env.DB.prepare("SELECT * FROM modules WHERE id = ?").bind(c.params.id).first();
+  const m = await c.env.DB.prepare("SELECT * FROM draft_modules WHERE id = ?").bind(c.params.id).first();
   if (!m) throw new HttpError(404, "not_found");
-  await c.env.DB.prepare("UPDATE modules SET title = ?, sort_order = ?, updated_at = ? WHERE id = ?").bind(str(b.title, 200) || m.title, intOrNull(b.sort_order) ?? m.sort_order, nowIso(), m.id).run();
+  await c.env.DB.prepare("UPDATE draft_modules SET title = ?, sort_order = ?, updated_at = ? WHERE id = ?").bind(str(b.title, 200) || m.title, intOrNull(b.sort_order) ?? m.sort_order, nowIso(), m.id).run();
+  await draftChanged(c.env, m.course_id);
   return redirect(`/admin/courses/${m.course_id}?ok=saved`);
 }
 
 export async function deleteModule(c) {
-  const m = await c.env.DB.prepare("SELECT * FROM modules WHERE id = ?").bind(c.params.id).first();
+  const m = await c.env.DB.prepare("SELECT * FROM draft_modules WHERE id = ?").bind(c.params.id).first();
   if (!m) throw new HttpError(404, "not_found");
-  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM lessons WHERE module_id = ?").bind(m.id).first();
+  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM draft_lessons WHERE module_id = ?").bind(m.id).first();
   if (n.n) return redirect(`/admin/courses/${m.course_id}?err=Module%20is%20not%20empty`);
-  await c.env.DB.prepare("DELETE FROM modules WHERE id = ?").bind(m.id).run();
+  await c.env.DB.prepare("DELETE FROM draft_modules WHERE id = ?").bind(m.id).run();
+  await draftChanged(c.env, m.course_id);
   return redirect(`/admin/courses/${m.course_id}?ok=deleted`);
+}
+
+/**
+ * Lesson slugs are unique within the draft. A slug kept by a lesson that the
+ * live course still shows is also reserved, so progress links never point at
+ * a different lesson after the next publication.
+ */
+async function lessonSlugTaken(env, courseId, slug, exceptId = "") {
+  return env.DB.prepare(
+    "SELECT 1 FROM draft_lessons WHERE course_id = ?1 AND slug = ?2 AND id != ?3 UNION ALL SELECT 1 FROM lessons WHERE course_id = ?1 AND slug = ?2 AND id != ?3 AND status = 'ready'",
+  )
+    .bind(courseId, slug, exceptId)
+    .first();
 }
 
 export async function addLesson(c) {
   const b = await c.readBody();
-  const m = await c.env.DB.prepare("SELECT * FROM modules WHERE id = ?").bind(c.params.id).first();
+  const m = await c.env.DB.prepare("SELECT * FROM draft_modules WHERE id = ?").bind(c.params.id).first();
   if (!m) throw new HttpError(404, "not_found");
   const title = str(b.title, 200) || "Untitled lesson";
   let slug = slugify(title) || "lesson";
-  if (await c.env.DB.prepare("SELECT 1 FROM lessons WHERE course_id = ? AND slug = ?").bind(m.course_id, slug).first()) slug = `${slug}-${Date.now().toString(36)}`;
-  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM lessons WHERE course_id = ?").bind(m.course_id).first();
+  if (await lessonSlugTaken(c.env, m.course_id, slug)) slug = `${slug}-${Date.now().toString(36)}`;
+  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM draft_lessons WHERE course_id = ?").bind(m.course_id).first();
   const id = newId("les_");
   const now = nowIso();
-  await c.env.DB.prepare("INSERT INTO lessons (id, course_id, module_id, slug, title, type, status, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?, 'draft', ?, ?, ?)")
+  await c.env.DB.prepare("INSERT INTO draft_lessons (id, course_id, module_id, slug, title, type, status, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?, 'draft', ?, ?, ?)")
     .bind(id, m.course_id, m.id, slug, title, LESSON_TYPES.includes(b.type) ? b.type : "text", max.m + 1, now, now)
     .run();
+  await draftChanged(c.env, m.course_id);
   return redirect(`/admin/lessons/${id}?ok=created`);
 }
 
 export async function editLesson(c) {
-  const l = await c.env.DB.prepare("SELECT * FROM lessons WHERE id = ?").bind(c.params.id).first();
+  const l = await c.env.DB.prepare("SELECT * FROM draft_lessons WHERE id = ?").bind(c.params.id).first();
   if (!l) throw new HttpError(404, "not_found");
   const [course, modules, videos, assessments, resources] = await Promise.all([
-    c.env.DB.prepare("SELECT id, title, slug FROM courses WHERE id = ?").bind(l.course_id).first(),
-    c.env.DB.prepare("SELECT id, title FROM modules WHERE course_id = ? ORDER BY sort_order").bind(l.course_id).all(),
+    c.env.DB.prepare("SELECT id, title, slug FROM draft_courses WHERE id = ?").bind(l.course_id).first(),
+    c.env.DB.prepare("SELECT id, title FROM draft_modules WHERE course_id = ? ORDER BY sort_order").bind(l.course_id).all(),
     c.env.DB.prepare("SELECT id, title, status FROM video_assets ORDER BY created_at DESC").all(),
-    c.env.DB.prepare("SELECT id, title, kind FROM assessments WHERE course_id = ?").bind(l.course_id).all(),
-    c.env.DB.prepare("SELECT * FROM lesson_resources WHERE lesson_id = ? ORDER BY sort_order").bind(l.id).all(),
+    c.env.DB.prepare("SELECT id, title, kind FROM draft_assessments WHERE course_id = ?").bind(l.course_id).all(),
+    c.env.DB.prepare("SELECT * FROM draft_lesson_resources WHERE lesson_id = ? ORDER BY sort_order").bind(l.id).all(),
   ]);
   const preview = c.url.searchParams.get("preview") === "1";
   const body = html`<p><a href="/admin/courses/${course.id}">← ${course.title}</a> · <a href="/learn/${course.slug}/${l.slug}">Open in classroom</a></p>
@@ -396,34 +448,38 @@ export async function editLesson(c) {
           <button class="btn btn-sm btn-secondary">Upload</button></form>`
       : ""}
   </section>
-  <form method="post" action="/admin/lessons/${l.id}/delete" class="mt-3" data-confirm="Delete this lesson and its learner progress?">${hidden(c)}<button class="btn btn-danger btn-sm">Delete lesson</button></form>`;
+  <form method="post" action="/admin/lessons/${l.id}/delete" class="mt-3" data-confirm="Remove this lesson from the draft? After the next publication learners no longer see it; their progress records are kept.">${hidden(c)}<button class="btn btn-danger btn-sm">Delete lesson</button></form>`;
   return adminPage(c, { title: l.title, active: "/admin/courses", body });
 }
 
 export async function saveLesson(c) {
   const b = await c.readBody();
-  const l = await c.env.DB.prepare("SELECT * FROM lessons WHERE id = ?").bind(c.params.id).first();
+  const l = await c.env.DB.prepare("SELECT * FROM draft_lessons WHERE id = ?").bind(c.params.id).first();
   if (!l) throw new HttpError(404, "not_found");
   const slug = slugify(b.slug || b.title) || l.slug;
-  if (await c.env.DB.prepare("SELECT 1 FROM lessons WHERE course_id = ? AND slug = ? AND id != ?").bind(l.course_id, slug, l.id).first()) return redirect(`/admin/lessons/${l.id}?err=Slug%20already%20used`);
+  if (await lessonSlugTaken(c.env, l.course_id, slug, l.id)) return redirect(`/admin/lessons/${l.id}?err=Slug%20already%20used`);
   let interactive = str(b.interactive_json, 20000) || null;
   if (interactive) {
     const parsed = parseJson(interactive, null);
     if (!parsed || !["reveal", "checklist"].includes(parsed.kind)) return redirect(`/admin/lessons/${l.id}?err=${encodeURIComponent("Interactive block must be valid JSON with kind reveal or checklist.")}`);
     interactive = JSON.stringify(parsed);
   }
+  // Module, video and assessment must belong to this course draft (or exist).
+  const moduleId = b.module_id && (await c.env.DB.prepare("SELECT 1 FROM draft_modules WHERE id = ? AND course_id = ?").bind(b.module_id, l.course_id).first()) ? b.module_id : l.module_id;
+  const assessmentId = b.assessment_id && (await c.env.DB.prepare("SELECT 1 FROM draft_assessments WHERE id = ? AND course_id = ?").bind(b.assessment_id, l.course_id).first()) ? b.assessment_id : null;
+  const videoId = b.video_id && (await c.env.DB.prepare("SELECT 1 FROM video_assets WHERE id = ?").bind(b.video_id).first()) ? b.video_id : null;
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `UPDATE lessons SET title=?, slug=?, type=?, module_id=?, est_minutes=?, sort_order=?, video_id=?, assessment_id=?, status=?, is_required=?, is_preview=?, summary=?, body_md=?, interactive_json=?, updated_at=? WHERE id=?`,
+      `UPDATE draft_lessons SET title=?, slug=?, type=?, module_id=?, est_minutes=?, sort_order=?, video_id=?, assessment_id=?, status=?, is_required=?, is_preview=?, summary=?, body_md=?, interactive_json=?, updated_at=? WHERE id=?`,
     ).bind(
       str(b.title, 200) || l.title,
       slug,
       LESSON_TYPES.includes(b.type) ? b.type : l.type,
-      b.module_id || l.module_id,
+      moduleId,
       Math.max(1, intOrNull(b.est_minutes) || 5),
       intOrNull(b.sort_order) ?? l.sort_order,
-      b.video_id || null,
-      b.assessment_id || null,
+      videoId,
+      assessmentId,
       b.status === "ready" ? "ready" : "draft",
       bool(b.is_required),
       bool(b.is_preview),
@@ -435,13 +491,22 @@ export async function saveLesson(c) {
     ),
     auditStmt(c.env, c.user.id, "lesson.update", "lesson", l.id, { course_id: l.course_id }),
   ]);
+  await draftChanged(c.env, l.course_id);
   return redirect(`/admin/lessons/${l.id}?ok=saved${b.after === "preview" ? "&preview=1" : ""}`);
 }
 
 export async function deleteLesson(c) {
-  const l = await c.env.DB.prepare("SELECT * FROM lessons WHERE id = ?").bind(c.params.id).first();
+  const l = await c.env.DB.prepare("SELECT * FROM draft_lessons WHERE id = ?").bind(c.params.id).first();
   if (!l) throw new HttpError(404, "not_found");
-  await c.env.DB.batch([c.env.DB.prepare("DELETE FROM lessons WHERE id = ?").bind(l.id), auditStmt(c.env, c.user.id, "lesson.delete", "lesson", l.id, { title: l.title })]);
+  // Only the draft row goes; the live lesson is hidden (never deleted) on publication.
+  const files = (await c.env.DB.prepare("SELECT file_key FROM draft_lesson_resources WHERE lesson_id = ? AND file_key IS NOT NULL").bind(l.id).all()).results;
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM draft_lesson_resources WHERE lesson_id = ?").bind(l.id),
+    c.env.DB.prepare("DELETE FROM draft_lessons WHERE id = ?").bind(l.id),
+    auditStmt(c.env, c.user.id, "lesson.delete", "lesson", l.id, { title: l.title }),
+  ]);
+  await draftChanged(c.env, l.course_id);
+  await pruneFiles(c.env, files.map((f) => f.file_key));
   return redirect(`/admin/courses/${l.course_id}?ok=deleted`);
 }
 
@@ -449,7 +514,10 @@ export async function addResource(c) {
   const b = await c.readBody();
   const url = str(b.url, 1000);
   if (!/^https:\/\//.test(url)) return redirect(`/admin/lessons/${c.params.id}?err=Resource%20links%20must%20use%20https`);
-  await c.env.DB.prepare("INSERT INTO lesson_resources (id, lesson_id, title, kind, url, created_at) VALUES (?,?,?, 'link', ?, ?)").bind(newId("res_"), c.params.id, str(b.title, 200), url, nowIso()).run();
+  const l = await c.env.DB.prepare("SELECT course_id FROM draft_lessons WHERE id = ?").bind(c.params.id).first();
+  if (!l) throw new HttpError(404, "not_found");
+  await c.env.DB.prepare("INSERT INTO draft_lesson_resources (id, lesson_id, title, kind, url, created_at) VALUES (?,?,?, 'link', ?, ?)").bind(newId("res_"), c.params.id, str(b.title, 200), url, nowIso()).run();
+  await draftChanged(c.env, l.course_id);
   return redirect(`/admin/lessons/${c.params.id}?ok=saved`);
 }
 
@@ -473,6 +541,8 @@ function contentMatches(type, head) {
 
 export async function uploadResource(c) {
   if (!c.env.FILES) throw new HttpError(404, "not_found");
+  const lesson = await c.env.DB.prepare("SELECT course_id FROM draft_lessons WHERE id = ?").bind(c.params.id).first();
+  if (!lesson) throw new HttpError(404, "not_found");
   const form = await c.req.formData();
   const file = form.get("file");
   if (!file || typeof file === "string") return redirect(`/admin/lessons/${c.params.id}?err=No%20file`);
@@ -485,18 +555,21 @@ export async function uploadResource(c) {
   const key = `resources/${c.params.id}/${newId("")}${ext}`;
   // R2 needs a body of known length: pass the Blob itself, not an unsized stream.
   await c.env.FILES.put(key, file, { httpMetadata: { contentType: file.type, contentDisposition: "attachment" } });
-  await c.env.DB.prepare("INSERT INTO lesson_resources (id, lesson_id, title, kind, file_key, mime, size_bytes, created_at) VALUES (?,?,?, 'file', ?, ?, ?, ?)")
+  await c.env.DB.prepare("INSERT INTO draft_lesson_resources (id, lesson_id, title, kind, file_key, mime, size_bytes, created_at) VALUES (?,?,?, 'file', ?, ?, ?, ?)")
     .bind(newId("res_"), c.params.id, str(form.get("title"), 200) || file.name.slice(0, 200), key, file.type, file.size, nowIso())
     .run();
+  await draftChanged(c.env, lesson.course_id);
   await audit(c, "resource.upload", "lesson", c.params.id, { key, size: file.size });
   return redirect(`/admin/lessons/${c.params.id}?ok=saved`);
 }
 
 export async function deleteResource(c) {
-  const r = await c.env.DB.prepare("SELECT * FROM lesson_resources WHERE id = ?").bind(c.params.id).first();
+  const r = await c.env.DB.prepare("SELECT r.*, l.course_id FROM draft_lesson_resources r JOIN draft_lessons l ON l.id = r.lesson_id WHERE r.id = ?").bind(c.params.id).first();
   if (!r) throw new HttpError(404, "not_found");
-  if (r.file_key && c.env.FILES) await c.env.FILES.delete(r.file_key);
-  await c.env.DB.prepare("DELETE FROM lesson_resources WHERE id = ?").bind(r.id).run();
+  await c.env.DB.prepare("DELETE FROM draft_lesson_resources WHERE id = ?").bind(r.id).run();
+  await draftChanged(c.env, r.course_id);
+  // The stored file goes only once neither the live course nor any draft uses it.
+  await pruneFiles(c.env, [r.file_key]);
   return redirect(`/admin/lessons/${r.lesson_id}?ok=deleted`);
 }
 
@@ -505,7 +578,7 @@ export async function deleteResource(c) {
 const VIDEO_STATUSES = ["planned", "scripted", "rendering", "in_review", "approved", "retired"];
 
 export async function videos(c) {
-  const rows = (await c.env.DB.prepare("SELECT v.*, (SELECT COUNT(*) FROM lessons l WHERE l.video_id = v.id) AS uses FROM video_assets v ORDER BY v.created_at DESC").all()).results;
+  const rows = (await c.env.DB.prepare("SELECT v.*, (SELECT COUNT(DISTINCT id) FROM (SELECT id FROM lessons WHERE video_id = v.id UNION SELECT id FROM draft_lessons WHERE video_id = v.id)) AS uses FROM video_assets v ORDER BY v.created_at DESC").all()).results;
   const body = html`<div class="alert alert-info">Only videos with status “approved” and a playable URL are shown to learners. Generating new Synthesia renders is a separate, approved production step — this page records and approves finished assets.</div>
   ${table(["Title", "Provider", "Status", "Duration", "Used by", ""], rows.map((v) => html`<tr><td class="wrap-cell">${v.title}</td><td>${v.provider}</td><td>${statusBadge(v.status)}</td><td>${v.duration_seconds ? `${Math.round(v.duration_seconds / 60)} min` : "—"}</td><td>${v.uses} lesson(s)</td><td><a href="/admin/videos/${v.id}">Edit</a></td></tr>`))}
   <form method="post" action="/admin/videos" class="row mt-2">${hidden(c)}<input name="title" placeholder="New video title" required class="grow" aria-label="Video title"><button class="btn btn-secondary btn-sm">Add video</button></form>`;

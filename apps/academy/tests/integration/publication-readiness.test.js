@@ -72,7 +72,7 @@ test("editing content after approval voids the approvals", async () => {
   await approveA1Videos(env, admin);
   await approveReviews(admin, "crs_a1");
   // An exam question changes after review.
-  await env.DB.prepare("UPDATE questions SET prompt = prompt || ' (edited)' WHERE id = 'q_a1m1_1'").run();
+  await env.DB.prepare("UPDATE draft_questions SET prompt = prompt || ' (edited)' WHERE id = 'q_a1m1_1'").run();
   let r = await admin.get("/admin/courses/crs_a1");
   assert.match(r.text, /no longer applies — the content changed afterwards/);
   assert.ok(blocked(await publish(admin)));
@@ -139,7 +139,7 @@ test("scheduled publication re-checks readiness and returns unready courses to r
   let r = await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2026-10-29T15:00" });
   assert.equal(await status(env), "scheduled");
   // Content changes after scheduling; the schedule arrives.
-  await env.DB.prepare("UPDATE lessons SET body_md = body_md || '\n\nEdited.' WHERE id = 'les_a1_welcome'").run();
+  await env.DB.prepare("UPDATE draft_lessons SET body_md = body_md || '\n\nEdited.' WHERE id = 'les_a1_welcome'").run();
   await env.DB.prepare("UPDATE courses SET scheduled_at = ? WHERE id = 'crs_a1'").bind(new Date(Date.now() - 60000).toISOString()).run();
   const report = await runScheduled(env, "*/15 * * * *");
   assert.equal(report.published, 0);

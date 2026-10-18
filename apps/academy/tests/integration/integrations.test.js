@@ -5,7 +5,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { makeEnv, Client, registeredLearner, publishCourse, completeA1, ORIGIN, tokenFrom } from "../helpers.js";
+import { makeEnv, Client, registeredLearner, publishCourse, publishDraftUnchecked, completeA1, ORIGIN, tokenFrom } from "../helpers.js";
 import { runScheduled } from "../../src/services/jobs.js";
 
 const realFetch = globalThis.fetch;
@@ -306,6 +306,9 @@ test("R2: lesson files upload, are stored with their type, and download only for
   const pdfBytes = new TextEncoder().encode("%PDF-1.4\n% synthetic worksheet\n");
   let r = await upload(admin, "les_a1_data", { name: "worksheet.pdf", type: "application/pdf", bytes: pdfBytes, title: "Data quality worksheet" });
   assert.match(r.location, /ok=saved/);
+  // The course is released: the upload waits in the draft until the next publication.
+  assert.equal(await env.DB.prepare("SELECT * FROM lesson_resources WHERE lesson_id = 'les_a1_data' AND kind = 'file'").first(), null);
+  await publishDraftUnchecked(env, "crs_a1");
   const res = await env.DB.prepare("SELECT * FROM lesson_resources WHERE lesson_id = 'les_a1_data' AND kind = 'file'").first();
   assert.ok(FILES.store.has(res.file_key));
   assert.equal(FILES.store.get(res.file_key).opts.httpMetadata.contentType, "application/pdf");
@@ -333,9 +336,14 @@ test("R2: lesson files upload, are stored with their type, and download only for
   assert.equal(dl.headers.get("x-content-type-options"), "nosniff");
   assert.equal(new TextDecoder().decode(new Uint8Array(await dl.res.arrayBuffer())), "%PDF-1.4\n% synthetic worksheet\n");
 
-  // Deleting the resource removes the stored object.
+  // Removing the resource from the draft keeps the object while the live course
+  // still links it; publishing the removal deletes it.
   await admin.post(`/admin/resources/${res.id}/delete`, {});
+  assert.equal(FILES.store.size, 1);
+  assert.equal((await learner.get(`/resources/${res.id}`)).status, 200);
+  await publishDraftUnchecked(env, "crs_a1");
   assert.equal(FILES.store.size, 0);
+  assert.equal((await learner.get(`/resources/${res.id}`)).status, 404);
 });
 
 test("R2: uploads are unavailable when no bucket is bound", async () => {

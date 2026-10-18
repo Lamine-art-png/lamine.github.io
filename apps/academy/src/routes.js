@@ -119,6 +119,7 @@ export function registerRoutes(r) {
   r.get("/admin/courses/:id", cur.editCourse, p("courses.edit"));
   r.post("/admin/courses/:id", cur.saveCourse, p("courses.edit"));
   r.post("/admin/courses/:id/status", cur.setCourseStatus, p("courses.edit"));
+  r.post("/admin/courses/:id/discard", cur.discardDraft, p("courses.edit"));
   r.post("/admin/courses/:id/reviews", cur.saveReview, p("courses.review"));
   r.post("/admin/courses/:id/modules", cur.addModule, p("courses.edit"));
   r.post("/admin/courses/:id/assessments", asm.createAssessment, p("assessments.edit"));

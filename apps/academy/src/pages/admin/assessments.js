@@ -6,38 +6,44 @@ import { newId, nowIso, parseJson, randomToken } from "../../lib/util.js";
 import { auditStmt, audit } from "../../lib/security.js";
 import { adminPage, table, statusBadge, hidden, input, textarea, select, checkbox, bool, str, intOrNull, pct } from "./shell.js";
 import { QUESTION_TYPES, questionStats, gradeAnswer } from "../../services/assessments.js";
+import { draftCourse, draftChanged } from "../../services/drafts.js";
+
+// Editors work on the course draft (draft_* tables); learners only see what a
+// reviewed publication copied live. Attempts and grading always use live data.
+const bankCourse = async (env, bankId) => (await env.DB.prepare("SELECT course_id FROM draft_question_banks WHERE id = ?").bind(bankId).first())?.course_id;
 
 // ───────────── Assessments ─────────────
 
 export async function createAssessment(c) {
   const b = await c.readBody();
-  const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
+  const course = await draftCourse(c.env, c.params.id);
   if (!course) throw new HttpError(404, "not_found");
   const exam = b.kind === "exam";
   const id = newId("asm_");
   const now = nowIso();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `INSERT INTO assessments (id, course_id, kind, title, passing_score, max_attempts, cooldown_minutes, time_limit_seconds, feedback_policy, is_certification, status, created_at, updated_at)
+      `INSERT INTO draft_assessments (id, course_id, kind, title, passing_score, max_attempts, cooldown_minutes, time_limit_seconds, feedback_policy, is_certification, status, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?, 'draft', ?, ?)`,
     ).bind(id, course.id, exam ? "exam" : "quiz", str(b.title, 200) || (exam ? "Final exam" : "Quiz"), course.passing_score, exam ? 3 : null, exam ? 60 : 0, exam ? 1800 : null, exam ? "correctness" : "full", exam ? 1 : 0, now, now),
     auditStmt(c.env, c.user.id, "assessment.create", "assessment", id, { course_id: course.id, kind: exam ? "exam" : "quiz" }),
   ]);
+  await draftChanged(c.env, course.id);
   return redirect(`/admin/assessments/${id}?ok=created`);
 }
 
 export async function editAssessment(c) {
-  const a = await c.env.DB.prepare("SELECT * FROM assessments WHERE id = ?").bind(c.params.id).first();
+  const a = await c.env.DB.prepare("SELECT * FROM draft_assessments WHERE id = ?").bind(c.params.id).first();
   if (!a) throw new HttpError(404, "not_found");
   const [course, rules, banks, attempts] = await Promise.all([
-    c.env.DB.prepare("SELECT id, title FROM courses WHERE id = ?").bind(a.course_id).first(),
+    c.env.DB.prepare("SELECT id, title FROM draft_courses WHERE id = ?").bind(a.course_id).first(),
     c.env.DB.prepare(
-      `SELECT r.*, b.title AS bank_title, (SELECT COUNT(*) FROM questions q WHERE q.bank_id = r.bank_id AND q.status = 'active' AND (r.difficulty IS NULL OR q.difficulty = r.difficulty)) AS available
-         FROM assessment_rules r JOIN question_banks b ON b.id = r.bank_id WHERE r.assessment_id = ? ORDER BY r.sort_order`,
+      `SELECT r.*, b.title AS bank_title, (SELECT COUNT(*) FROM draft_questions q WHERE q.bank_id = r.bank_id AND q.status = 'active' AND (r.difficulty IS NULL OR q.difficulty = r.difficulty)) AS available
+         FROM draft_assessment_rules r JOIN draft_question_banks b ON b.id = r.bank_id WHERE r.assessment_id = ? ORDER BY r.sort_order`,
     )
       .bind(a.id)
       .all(),
-    c.env.DB.prepare("SELECT id, title FROM question_banks WHERE course_id = ? OR course_id IS NULL ORDER BY title").bind(a.course_id).all(),
+    c.env.DB.prepare("SELECT id, title FROM draft_question_banks WHERE course_id = ? ORDER BY title").bind(a.course_id).all(),
     c.env.DB.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) AS passed, AVG(score_pct) AS avg FROM attempts WHERE assessment_id = ? AND status = 'graded'").bind(a.id).first(),
   ]);
   const body = html`<p><a href="/admin/courses/${course.id}">← ${course.title}</a></p>
@@ -60,7 +66,7 @@ export async function editAssessment(c) {
     ${checkbox("shuffle_options", "Shuffle answer options", a.shuffle_options)}
     <button class="btn btn-primary">Save policy</button></form>
   <section class="form-card mt-3"><h2 class="h2">Question selection rules</h2>
-    <p class="small muted">Each attempt draws randomly from these banks. Questions never repeat within an attempt.</p>
+    <p class="small muted">Each attempt draws randomly from these banks (this course's banks only, so one course's publication never changes another course's exam). Questions never repeat within an attempt.</p>
     ${table(
       ["Bank", "Difficulty", "Draw", "Available", ""],
       rules.results.map(
@@ -81,18 +87,18 @@ export async function editAssessment(c) {
 
 export async function saveAssessment(c) {
   const b = await c.readBody();
-  const a = await c.env.DB.prepare("SELECT * FROM assessments WHERE id = ?").bind(c.params.id).first();
+  const a = await c.env.DB.prepare("SELECT * FROM draft_assessments WHERE id = ?").bind(c.params.id).first();
   if (!a) throw new HttpError(404, "not_found");
   const minutes = intOrNull(b.time_limit_minutes);
   const status = ["draft", "active", "retired"].includes(b.status) ? b.status : a.status;
   const isCert = bool(b.is_certification);
   if (status === "active" && isCert) {
-    const other = await c.env.DB.prepare("SELECT id FROM assessments WHERE course_id = ? AND is_certification = 1 AND status = 'active' AND id != ?").bind(a.course_id, a.id).first();
+    const other = await c.env.DB.prepare("SELECT id FROM draft_assessments WHERE course_id = ? AND is_certification = 1 AND status = 'active' AND id != ?").bind(a.course_id, a.id).first();
     if (other) return redirect(`/admin/assessments/${a.id}?err=${encodeURIComponent("This course already has an active certification exam.")}`);
   }
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `UPDATE assessments SET title=?, instructions=?, kind=?, status=?, passing_score=?, time_limit_seconds=?, max_attempts=?, cooldown_minutes=?, feedback_policy=?,
+      `UPDATE draft_assessments SET title=?, instructions=?, kind=?, status=?, passing_score=?, time_limit_seconds=?, max_attempts=?, cooldown_minutes=?, feedback_policy=?,
          is_certification=?, is_required=?, shuffle_questions=?, shuffle_options=?, updated_at=? WHERE id=?`,
     ).bind(
       str(b.title, 200) || a.title,
@@ -113,22 +119,28 @@ export async function saveAssessment(c) {
     ),
     auditStmt(c.env, c.user.id, "assessment.update", "assessment", a.id, { status, passing: b.passing_score }),
   ]);
+  await draftChanged(c.env, a.course_id);
   return redirect(`/admin/assessments/${a.id}?ok=saved`);
 }
 
 export async function addRule(c) {
   const b = await c.readBody();
-  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM assessment_rules WHERE assessment_id = ?").bind(c.params.id).first();
-  await c.env.DB.prepare("INSERT INTO assessment_rules (id, assessment_id, bank_id, difficulty, draw_count, sort_order) VALUES (?,?,?,?,?,?)")
-    .bind(newId("rul_"), c.params.id, b.bank_id, ["easy", "medium", "hard"].includes(b.difficulty) ? b.difficulty : null, Math.min(200, Math.max(1, intOrNull(b.draw_count) || 1)), max.m + 1)
+  const a = await c.env.DB.prepare("SELECT id, course_id FROM draft_assessments WHERE id = ?").bind(c.params.id).first();
+  if (!a) throw new HttpError(404, "not_found");
+  if ((await bankCourse(c.env, b.bank_id)) !== a.course_id) return redirect(`/admin/assessments/${a.id}?err=${encodeURIComponent("Choose a question bank that belongs to this course.")}`);
+  const max = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM draft_assessment_rules WHERE assessment_id = ?").bind(a.id).first();
+  await c.env.DB.prepare("INSERT INTO draft_assessment_rules (id, assessment_id, bank_id, difficulty, draw_count, sort_order) VALUES (?,?,?,?,?,?)")
+    .bind(newId("rul_"), a.id, b.bank_id, ["easy", "medium", "hard"].includes(b.difficulty) ? b.difficulty : null, Math.min(200, Math.max(1, intOrNull(b.draw_count) || 1)), max.m + 1)
     .run();
+  await draftChanged(c.env, a.course_id);
   return redirect(`/admin/assessments/${c.params.id}?ok=saved`);
 }
 
 export async function deleteRule(c) {
-  const r = await c.env.DB.prepare("SELECT assessment_id FROM assessment_rules WHERE id = ?").bind(c.params.id).first();
+  const r = await c.env.DB.prepare("SELECT r.assessment_id, a.course_id FROM draft_assessment_rules r JOIN draft_assessments a ON a.id = r.assessment_id WHERE r.id = ?").bind(c.params.id).first();
   if (!r) throw new HttpError(404, "not_found");
-  await c.env.DB.prepare("DELETE FROM assessment_rules WHERE id = ?").bind(c.params.id).run();
+  await c.env.DB.prepare("DELETE FROM draft_assessment_rules WHERE id = ?").bind(c.params.id).run();
+  await draftChanged(c.env, r.course_id);
   return redirect(`/admin/assessments/${r.assessment_id}?ok=deleted`);
 }
 
@@ -137,31 +149,34 @@ export async function deleteRule(c) {
 export async function banks(c) {
   const [rows, courses] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT b.*, c.title AS course_title, (SELECT COUNT(*) FROM questions q WHERE q.bank_id = b.id) AS total, (SELECT COUNT(*) FROM questions q WHERE q.bank_id = b.id AND q.status = 'active') AS active
-         FROM question_banks b LEFT JOIN courses c ON c.id = b.course_id ORDER BY c.title, b.title`,
+      `SELECT b.*, c.title AS course_title, (SELECT COUNT(*) FROM draft_questions q WHERE q.bank_id = b.id) AS total, (SELECT COUNT(*) FROM draft_questions q WHERE q.bank_id = b.id AND q.status = 'active') AS active
+         FROM draft_question_banks b LEFT JOIN draft_courses c ON c.id = b.course_id ORDER BY c.title, b.title`,
     ).all(),
-    c.env.DB.prepare("SELECT id, title FROM courses ORDER BY title").all(),
+    c.env.DB.prepare("SELECT id, title FROM draft_courses ORDER BY title").all(),
   ]);
-  const body = html`${table(["Bank", "Course", "Questions", "Active", ""], rows.results.map((b) => html`<tr><td><a href="/admin/banks/${b.id}">${b.title}</a></td><td>${b.course_title || "Shared"}</td><td>${b.total}</td><td>${b.active}</td><td><a href="/admin/banks/${b.id}">Open</a></td></tr>`))}
+  const body = html`${table(["Bank", "Course", "Questions", "Active", ""], rows.results.map((b) => html`<tr><td><a href="/admin/banks/${b.id}">${b.title}</a></td><td>${b.course_title || "Unassigned (cannot be drawn from)"}</td><td>${b.total}</td><td>${b.active}</td><td><a href="/admin/banks/${b.id}">Open</a></td></tr>`))}
   <form method="post" action="/admin/banks" class="row mt-2">${hidden(c)}
     <input name="title" placeholder="New bank title" required class="grow" aria-label="Bank title">
-    <select name="course_id" aria-label="Course"><option value="">Shared (all courses)</option>${courses.results.map((x) => html`<option value="${x.id}">${x.title}</option>`)}</select>
+    <select name="course_id" aria-label="Course" required>${courses.results.map((x) => html`<option value="${x.id}">${x.title}</option>`)}</select>
     <button class="btn btn-sm btn-secondary">Create bank</button></form>`;
   return adminPage(c, { title: "Question banks", active: "/admin/banks", body });
 }
 
 export async function createBank(c) {
   const b = await c.readBody();
+  // Every bank belongs to one course: its questions are reviewed and published with that course.
+  if (!(await c.env.DB.prepare("SELECT 1 FROM courses WHERE id = ?").bind(b.course_id || "").first())) return redirect(`/admin/banks?err=${encodeURIComponent("Choose the course this bank belongs to.")}`);
   const id = newId("bnk_");
   const now = nowIso();
-  await c.env.DB.prepare("INSERT INTO question_banks (id, course_id, title, created_at, updated_at) VALUES (?,?,?,?,?)").bind(id, b.course_id || null, str(b.title, 200) || "Untitled bank", now, now).run();
+  await c.env.DB.prepare("INSERT INTO draft_question_banks (id, course_id, title, created_at, updated_at) VALUES (?,?,?,?,?)").bind(id, b.course_id, str(b.title, 200) || "Untitled bank", now, now).run();
+  await draftChanged(c.env, b.course_id);
   return redirect(`/admin/banks/${id}?ok=created`);
 }
 
 export async function bankDetail(c) {
-  const bank = await c.env.DB.prepare("SELECT * FROM question_banks WHERE id = ?").bind(c.params.id).first();
+  const bank = await c.env.DB.prepare("SELECT * FROM draft_question_banks WHERE id = ?").bind(c.params.id).first();
   if (!bank) throw new HttpError(404, "not_found");
-  const [stats, cases] = await Promise.all([questionStats(c.env, bank.id), c.env.DB.prepare("SELECT * FROM question_cases WHERE bank_id = ?").bind(bank.id).all()]);
+  const [stats, cases] = await Promise.all([questionStats(c.env, bank.id), c.env.DB.prepare("SELECT * FROM draft_question_cases WHERE bank_id = ?").bind(bank.id).all()]);
   const body = html`
   ${table(
     ["Question", "Type", "Difficulty", "Status", "Answered", "Correct", ""],
@@ -180,7 +195,9 @@ export async function bankDetail(c) {
 
 export async function addCase(c) {
   const b = await c.readBody();
-  await c.env.DB.prepare("INSERT INTO question_cases (id, bank_id, title, body_md, created_at) VALUES (?,?,?,?,?)").bind(newId("cas_"), c.params.id, str(b.title, 200), str(b.body_md, 10000), nowIso()).run();
+  if (!(await c.env.DB.prepare("SELECT 1 FROM draft_question_banks WHERE id = ?").bind(c.params.id).first())) throw new HttpError(404, "not_found");
+  await c.env.DB.prepare("INSERT INTO draft_question_cases (id, bank_id, title, body_md, created_at) VALUES (?,?,?,?,?)").bind(newId("cas_"), c.params.id, str(b.title, 200), str(b.body_md, 10000), nowIso()).run();
+  await draftChanged(c.env, await bankCourse(c.env, c.params.id));
   return redirect(`/admin/banks/${c.params.id}?ok=created`);
 }
 
@@ -259,13 +276,14 @@ export function fromEditorLines(type, text, previous, extra = {}) {
 }
 
 export async function questionForm(c) {
-  const editing = c.params.qid ? await c.env.DB.prepare("SELECT * FROM questions WHERE id = ?").bind(c.params.qid).first() : null;
+  const editing = c.params.qid ? await c.env.DB.prepare("SELECT * FROM draft_questions WHERE id = ?").bind(c.params.qid).first() : null;
+  if (c.params.qid && !editing) throw new HttpError(404, "not_found");
   const bankId = editing?.bank_id || c.params.id;
-  const bank = await c.env.DB.prepare("SELECT * FROM question_banks WHERE id = ?").bind(bankId).first();
+  const bank = await c.env.DB.prepare("SELECT * FROM draft_question_banks WHERE id = ?").bind(bankId).first();
   if (!bank) throw new HttpError(404, "not_found");
   const [cases, lessons] = await Promise.all([
-    c.env.DB.prepare("SELECT id, title FROM question_cases WHERE bank_id = ?").bind(bank.id).all(),
-    bank.course_id ? c.env.DB.prepare("SELECT id, title FROM lessons WHERE course_id = ? ORDER BY sort_order").bind(bank.course_id).all() : { results: [] },
+    c.env.DB.prepare("SELECT id, title FROM draft_question_cases WHERE bank_id = ?").bind(bank.id).all(),
+    bank.course_id ? c.env.DB.prepare("SELECT id, title FROM draft_lessons WHERE course_id = ? ORDER BY sort_order").bind(bank.course_id).all() : { results: [] },
   ]);
   const q = editing || { type: "single", difficulty: "medium", points: 1, grading: "auto", status: "active" };
   const k = parseJson(q.answer_json, {});
@@ -300,8 +318,10 @@ export async function questionForm(c) {
 
 export async function saveQuestion(c) {
   const b = await c.readBody();
-  const editing = c.params.qid ? await c.env.DB.prepare("SELECT * FROM questions WHERE id = ?").bind(c.params.qid).first() : null;
+  const editing = c.params.qid ? await c.env.DB.prepare("SELECT * FROM draft_questions WHERE id = ?").bind(c.params.qid).first() : null;
+  if (c.params.qid && !editing) throw new HttpError(404, "not_found");
   const bankId = editing?.bank_id || c.params.id;
+  if (!(await c.env.DB.prepare("SELECT 1 FROM draft_question_banks WHERE id = ?").bind(bankId).first())) throw new HttpError(404, "not_found");
   const type = QUESTION_TYPES.includes(b.type) ? b.type : "single";
   const back = editing ? `/admin/questions/${editing.id}` : `/admin/banks/${bankId}/questions/new`;
   let built;
@@ -330,19 +350,20 @@ export async function saveQuestion(c) {
   let id = editing?.id;
   if (editing) {
     await c.env.DB.prepare(
-      "UPDATE questions SET type=?, difficulty=?, prompt=?, data_json=?, answer_json=?, explanation=?, rubric=?, grading=?, points=?, status=?, case_id=?, lesson_id=?, updated_at=? WHERE id=?",
+      "UPDATE draft_questions SET type=?, difficulty=?, prompt=?, data_json=?, answer_json=?, explanation=?, rubric=?, grading=?, points=?, status=?, case_id=?, lesson_id=?, updated_at=? WHERE id=?",
     )
       .bind(...vals, now, id)
       .run();
   } else {
     id = newId("qst_");
     await c.env.DB.prepare(
-      "INSERT INTO questions (type, difficulty, prompt, data_json, answer_json, explanation, rubric, grading, points, status, case_id, lesson_id, id, bank_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO draft_questions (type, difficulty, prompt, data_json, answer_json, explanation, rubric, grading, points, status, case_id, lesson_id, id, bank_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
       .bind(...vals, id, bankId, now, now)
       .run();
   }
   await audit(c, editing ? "question.update" : "question.create", "question", id, { bank_id: bankId });
+  await draftChanged(c.env, await bankCourse(c.env, bankId));
   return redirect(`/admin/banks/${bankId}?ok=saved`);
 }
 

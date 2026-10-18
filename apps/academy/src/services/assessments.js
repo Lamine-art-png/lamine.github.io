@@ -549,13 +549,14 @@ export async function gradeAnswer(c, attemptId, questionId, points, comment) {
 }
 
 /** Per-question difficulty analytics for administrators. */
+/** Item statistics for the draft questions of a bank (answers come from live attempts). */
 export async function questionStats(env, bankId) {
   return (
     await env.DB.prepare(
       `SELECT q.id, q.prompt, q.type, q.difficulty, q.status,
               COUNT(aa.attempt_id) AS answered,
               SUM(CASE WHEN aa.is_correct = 1 THEN 1 ELSE 0 END) AS correct
-         FROM questions q LEFT JOIN attempt_answers aa ON aa.question_id = q.id AND aa.points_awarded IS NOT NULL
+         FROM draft_questions q LEFT JOIN attempt_answers aa ON aa.question_id = q.id AND aa.points_awarded IS NOT NULL
         WHERE q.bank_id = ? GROUP BY q.id ORDER BY q.created_at`,
     )
       .bind(bankId)

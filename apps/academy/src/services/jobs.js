@@ -5,6 +5,7 @@ import { auditStmt } from "../lib/security.js";
 import { flushOutbox, queueEmail } from "./email.js";
 import { submitAttempt } from "./assessments.js";
 import { publishReadiness } from "./readiness.js";
+import { publishDraft } from "./drafts.js";
 import { notifyStmt } from "./activity.js";
 
 export async function runScheduled(env, cron = "") {
@@ -23,10 +24,7 @@ export async function runScheduled(env, cron = "") {
   for (const c of due) {
     const readiness = await publishReadiness(env, c);
     if (readiness.ok) {
-      await env.DB.batch([
-        env.DB.prepare("UPDATE courses SET status = 'published', published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, now, c.id),
-        auditStmt(env, null, "course.status.published", "course", c.id, { by: "schedule" }),
-      ]);
+      await publishDraft(env, c, { hash: readiness.hash, by: "schedule" });
       report.published++;
     } else {
       const failed = readiness.checks.filter((x) => !x.ok).map((x) => x.label);

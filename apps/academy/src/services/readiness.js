@@ -2,6 +2,7 @@
 // published or scheduled, including mandatory reviews and approved media.
 import { newId, nowIso, parseJson, sha256Hex } from "../lib/util.js";
 import { auditStmt } from "../lib/security.js";
+import { draftCourse } from "./drafts.js";
 
 /** Reviews every course needs, each recorded against the exact content reviewed. */
 export const MANDATORY_REVIEWS = [
@@ -15,7 +16,8 @@ export const REVIEW_DECISIONS = ["approved", "changes_requested"];
 const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(Object.entries(row).filter(([k]) => !drop.includes(k)));
 
 /**
- * Fingerprint of everything reviewers sign off on: course description,
+ * Fingerprint of everything reviewers sign off on in the course draft (the
+ * content that the next publication would make live): course description,
  * modules, lessons, resources, assessments, draw rules and questions. Any
  * edit after an approval changes the fingerprint and voids that approval.
  * Video files are approved separately on their own asset records.
@@ -23,21 +25,21 @@ const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(O
 export async function courseContentHash(env, courseId) {
   const all = async (sql, ...args) => (await env.DB.prepare(sql).bind(...args).all()).results.map((r) => strip(r));
   const course = await env.DB.prepare(
-    "SELECT id, title, subtitle, description, objectives_json, level, source_locale, certificate_enabled, passing_score, require_all_lessons, require_quizzes_pass FROM courses WHERE id = ?",
+    "SELECT id, title, subtitle, description, objectives_json, level, source_locale, certificate_enabled, passing_score, require_all_lessons, require_quizzes_pass FROM draft_courses WHERE id = ?",
   )
     .bind(courseId)
     .first();
-  const assessments = await all("SELECT * FROM assessments WHERE course_id = ? ORDER BY id", courseId);
+  const assessments = await all("SELECT * FROM draft_assessments WHERE course_id = ? ORDER BY id", courseId);
   const ids = assessments.map((a) => a.id);
-  const rules = ids.length ? await all(`SELECT * FROM assessment_rules WHERE assessment_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids) : [];
+  const rules = ids.length ? await all(`SELECT * FROM draft_assessment_rules WHERE assessment_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids) : [];
   const bankIds = [...new Set(rules.map((r) => r.bank_id))];
   const inBanks = (table, order = "id") =>
-    bankIds.length ? all(`SELECT * FROM ${table} WHERE bank_id IN (${bankIds.map(() => "?").join(",")}) ORDER BY ${order}`, ...bankIds) : [];
+    bankIds.length ? all(`SELECT * FROM draft_${table} WHERE bank_id IN (${bankIds.map(() => "?").join(",")}) ORDER BY ${order}`, ...bankIds) : [];
   const doc = {
     course,
-    modules: await all("SELECT * FROM modules WHERE course_id = ? ORDER BY id", courseId),
-    lessons: await all("SELECT * FROM lessons WHERE course_id = ? ORDER BY id", courseId),
-    resources: await all("SELECT r.* FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id WHERE l.course_id = ? ORDER BY r.id", courseId),
+    modules: await all("SELECT * FROM draft_modules WHERE course_id = ? ORDER BY id", courseId),
+    lessons: await all("SELECT * FROM draft_lessons WHERE course_id = ? ORDER BY id", courseId),
+    resources: await all("SELECT r.* FROM draft_lesson_resources r JOIN draft_lessons l ON l.id = r.lesson_id WHERE l.course_id = ? ORDER BY r.id", courseId),
     assessments,
     rules,
     cases: await inBanks("question_cases"),
@@ -82,15 +84,21 @@ export async function recordReview(env, { courseId, type, decision, notes, revie
 
 const playable = (v) => v.video_status === "approved" && Boolean(v.hls_url || v.mp4_url);
 
-/** Checks that must pass before a course can be published or scheduled. */
-export async function publishReadiness(env, course) {
+/**
+ * Checks that must pass before the course draft can be published or
+ * scheduled. Content comes from the draft; status and video policy from the
+ * live course record.
+ */
+export async function publishReadiness(env, liveCourse) {
+  const course = (await draftCourse(env, liveCourse.id)) || liveCourse;
   const checks = [];
+  const hash = await courseContentHash(env, course.id);
   const lessons = (
     await env.DB.prepare(
       `SELECT l.*, v.status AS video_status, v.hls_url, v.mp4_url, v.title AS video_title,
               (SELECT COUNT(*) FROM video_captions vc WHERE vc.video_id = l.video_id AND vc.status = 'reviewed'
                   AND (vc.locale = ? OR vc.locale LIKE ? || '-%')) AS reviewed_captions
-         FROM lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ?`,
+         FROM draft_lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ?`,
     )
       .bind(course.source_locale || "en", (course.source_locale || "en").split("-")[0], course.id)
       .all()
@@ -128,14 +136,23 @@ export async function publishReadiness(env, course) {
 
   const brokenQuiz = ready.filter((l) => l.type === "quiz" && !l.assessment_id);
   checks.push({ ok: brokenQuiz.length === 0, label: brokenQuiz.length ? `Quiz lessons without an assessment: ${brokenQuiz.map((l) => l.title).join(", ")}` : "Quiz lessons are linked to assessments" });
+  // A bank is published with the course that owns it, so draws from another
+  // course's (or an unassigned) bank would let one publication change another.
+  const foreign = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM draft_assessment_rules r JOIN draft_assessments a ON a.id = r.assessment_id
+       LEFT JOIN draft_question_banks b ON b.id = r.bank_id WHERE a.course_id = ? AND (b.course_id IS NULL OR b.course_id <> a.course_id)`,
+  )
+    .bind(course.id)
+    .first();
+  checks.push({ ok: !foreign.n, label: foreign.n ? `${foreign.n} draw rule(s) use a question bank that belongs to another course` : "Every draw rule uses this course's own question banks" });
   if (course.certificate_enabled) {
-    const exam = await env.DB.prepare("SELECT * FROM assessments WHERE course_id = ? AND kind = 'exam' AND is_certification = 1 AND status = 'active'").bind(course.id).first();
+    const exam = await env.DB.prepare("SELECT * FROM draft_assessments WHERE course_id = ? AND kind = 'exam' AND is_certification = 1 AND status = 'active'").bind(course.id).first();
     checks.push({ ok: Boolean(exam), label: exam ? "Active certification exam" : "Certificates are enabled but there is no active certification exam" });
     if (exam) {
-      const rules = (await env.DB.prepare("SELECT * FROM assessment_rules WHERE assessment_id = ?").bind(exam.id).all()).results;
+      const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ?").bind(exam.id).all()).results;
       let short = 0;
       for (const r of rules) {
-        const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
+        const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
         if (n.n < r.draw_count) short++;
       }
       checks.push({ ok: rules.length > 0 && short === 0, label: rules.length ? (short ? `${short} draw rule(s) need more active questions` : "Question banks can satisfy every draw rule") : "Exam has no question draw rules" });
@@ -143,7 +160,7 @@ export async function publishReadiness(env, course) {
   }
   checks.push({ ok: Boolean(course.description?.trim() && parseJson(course.objectives_json, []).length), label: "Description and learning objectives present" });
 
-  const reviews = await reviewState(env, course.id);
+  const reviews = await reviewState(env, course.id, hash);
   for (const r of reviews) {
     const who = r.latest ? r.latest.reviewer_name || r.latest.reviewer_display || "a reviewer" : "";
     const label = {
@@ -155,5 +172,5 @@ export async function publishReadiness(env, course) {
     checks.push({ ok: r.state === "approved", label, review: r.type });
   }
   checks.push({ ok: true, warn: Boolean(course.content_review_note), label: course.content_review_note ? `Review note: ${course.content_review_note}` : "No outstanding review note" });
-  return { checks, ok: checks.every((x) => x.ok), reviews };
+  return { checks, ok: checks.every((x) => x.ok), reviews, hash };
 }

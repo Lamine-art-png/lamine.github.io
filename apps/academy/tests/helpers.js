@@ -129,6 +129,13 @@ export async function publishCourse(env, courseId) {
   await env.DB.prepare("UPDATE courses SET status = 'published', published_at = ? WHERE id = ?").bind(new Date().toISOString(), courseId).run();
 }
 
+/** Test shortcut: publish a course's current draft as a revision without the readiness gate. */
+export async function publishDraftUnchecked(env, courseId) {
+  const { publishDraft } = await import("../src/services/drafts.js");
+  const { courseContentHash } = await import("../src/services/readiness.js");
+  return publishDraft(env, { id: courseId }, { hash: await courseContentHash(env, courseId), by: "test" });
+}
+
 export const A1_SLUG = "introduction-to-ai-in-agriculture";
 
 /** Drive a verified learner through Course A1 (lessons, quizzes, exam) via HTTP. */
