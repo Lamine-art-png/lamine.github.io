@@ -16,6 +16,8 @@ on:
     paths:
       - "apps/academy/**"
       - "shared/supported-locales.json"
+      - "shared/registries/countries.json"
+      - ".github/workflows/academy-ci.yml"
       - ".github/workflows/academy-deploy.yml"
   workflow_dispatch:
     inputs:
