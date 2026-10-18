@@ -17,8 +17,9 @@ export async function runScheduled(env, cron = "") {
 
   // 1. Publish courses whose scheduled time has arrived — only if they still
   // pass every readiness check (content may have changed since scheduling).
-  // A course that no longer qualifies returns to review (shown as upcoming).
-  const due = (await env.DB.prepare("SELECT * FROM courses WHERE status = 'scheduled' AND scheduled_at <= ?").bind(now).all()).results;
+  // A course that no longer qualifies returns to review (shown as upcoming);
+  // a scheduled update of a live course is dropped and the live revision stays.
+  const due = (await env.DB.prepare("SELECT * FROM courses WHERE status IN ('scheduled','published') AND scheduled_at IS NOT NULL AND scheduled_at <= ?").bind(now).all()).results;
   report.published = 0;
   report.publicationBlocked = 0;
   for (const c of due) {
@@ -37,7 +38,7 @@ export async function runScheduled(env, cron = "") {
         await env.DB.prepare("SELECT DISTINCT user_id FROM user_roles WHERE role IN ('super_admin','academy_admin')").all()
       ).results;
       await env.DB.batch([
-        env.DB.prepare("UPDATE courses SET status = 'review', scheduled_at = NULL, updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, c.id),
+        env.DB.prepare("UPDATE courses SET status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, scheduled_at = NULL, updated_at = ? WHERE id = ?").bind(now, c.id),
         auditStmt(env, null, "course.schedule.blocked", "course", c.id, { failed }),
         ...publishers.map((p) => notifyStmt(env, p.user_id, { kind: "admin", title: `Scheduled publication stopped: ${c.title}`, body: failed.join(" · ").slice(0, 400), url: `/admin/courses/${c.id}` })),
       ]);

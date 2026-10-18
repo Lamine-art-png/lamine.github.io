@@ -360,3 +360,61 @@ test("an instructor profile shown by a released course cannot be changed in plac
   await env.DB.prepare("UPDATE instructors SET bio = bio || ' x' WHERE id = ?").bind(ins.id).run();
   assert.notEqual(await courseContentHash(env, "crs_a1"), before);
 });
+
+test("taking a live course offline needs the publish permission", async () => {
+  const { env } = await released();
+  const editor = await registeredLearner(env, { email: "editor2@academy.test" });
+  const eid = (await live(env, "SELECT id FROM users WHERE email = 'editor2@academy.test'")).id;
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'content_editor', ?)").bind(eid, new Date().toISOString()).run();
+  for (const status of ["draft", "review", "archived"]) {
+    assert.equal((await editor.post("/admin/courses/crs_a1/status", { status })).status, 403, status);
+  }
+  assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "published");
+});
+
+test("an edit to a linked, not-yet-live video between readiness and publication aborts it", async () => {
+  const { env, admin } = await released();
+  const { publishReadiness } = await import("../../src/services/readiness.js");
+  const { publishDraft, DraftChangedError } = await import("../../src/services/drafts.js");
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO video_assets (id, title, provider, status, created_at, updated_at) VALUES ('vid_new', 'Replacement', 'r2', 'planned', ?, ?)").bind(now, now).run();
+  await admin.post("/admin/lessons/les_a1_summary", await lessonForm(env, "les_a1_summary", { video_id: "vid_new" }));
+  await approveReviews(admin, "crs_a1");
+  const course = await live(env, "SELECT * FROM courses WHERE id = 'crs_a1'");
+  const readiness = await publishReadiness(env, course);
+  assert.ok(readiness.ok, JSON.stringify(readiness.checks.filter((x) => !x.ok)));
+  // The (not yet locked) asset changes after the check.
+  await env.DB.prepare("UPDATE video_assets SET script_md = 'Unreviewed transcript' WHERE id = 'vid_new'").run();
+  await assert.rejects(publishDraft(env, course, { hash: readiness.hash, version: readiness.version }), DraftChangedError);
+  assert.notEqual((await live(env, "SELECT video_id FROM lessons WHERE id = 'les_a1_summary'")).video_id, "vid_new", "nothing published");
+});
+
+test("scheduling an update keeps the live revision published and enrollable", async () => {
+  const { env, admin } = await released();
+  const { runScheduled } = await import("../../src/services/jobs.js");
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Scheduled update text." }));
+  await approveReviews(admin, "crs_a1");
+  let r = await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2030-01-01T09:00" });
+  assert.match(r.location, /ok=saved/);
+  let c = await live(env, "SELECT status, scheduled_at FROM courses WHERE id = 'crs_a1'");
+  assert.equal(c.status, "published", "live revision stays published");
+  assert.ok(c.scheduled_at);
+  const newcomer = await registeredLearner(env, { email: "newcomer@academy.test" });
+  r = await newcomer.post(`/courses/${A1_SLUG}/enroll`, {});
+  assert.equal(r.status, 303);
+  assert.ok(await live(env, "SELECT 1 FROM enrollments e JOIN users u ON u.id = e.user_id WHERE u.email = 'newcomer@academy.test'"));
+  // The time comes: the reviewed draft is published as a new revision.
+  await env.DB.prepare("UPDATE courses SET scheduled_at = ? WHERE id = 'crs_a1'").bind(new Date(Date.now() - 60000).toISOString()).run();
+  let report = await runScheduled(env, "*/15 * * * *");
+  assert.equal(report.published, 1);
+  assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Scheduled update text.");
+  // A scheduled update that no longer passes readiness is dropped; the live revision stays published.
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Unreviewed text." }));
+  await env.DB.prepare("UPDATE courses SET scheduled_at = ? WHERE id = 'crs_a1'").bind(new Date(Date.now() - 60000).toISOString()).run();
+  report = await runScheduled(env, "*/15 * * * *");
+  assert.equal(report.publicationBlocked, 1);
+  c = await live(env, "SELECT status, scheduled_at FROM courses WHERE id = 'crs_a1'");
+  assert.equal(c.status, "published");
+  assert.equal(c.scheduled_at, null);
+  assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Scheduled update text.");
+});

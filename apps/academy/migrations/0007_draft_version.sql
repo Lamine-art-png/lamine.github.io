@@ -1,6 +1,7 @@
 -- Publication is bound to the exact draft that passed readiness. Every write
--- to a draft table bumps draft_state.version (in the same statement, through
--- triggers); readiness reads the version before fingerprinting the draft, and
+-- to a draft table, or to a record the reviewed fingerprint includes (video
+-- assets, captions, instructor profiles), bumps draft_state.version (in the
+-- same statement, through triggers); readiness reads the version before fingerprinting the draft, and
 -- the publication batch aborts if the version has moved in the meantime.
 -- Reverse with migrations/down/0007_draft_version.down.sql.
 CREATE TABLE draft_state (
@@ -42,3 +43,12 @@ CREATE TRIGGER draft_questions_delete_version AFTER DELETE ON draft_questions BE
 CREATE TRIGGER draft_assessment_rules_insert_version AFTER INSERT ON draft_assessment_rules BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
 CREATE TRIGGER draft_assessment_rules_update_version AFTER UPDATE ON draft_assessment_rules BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
 CREATE TRIGGER draft_assessment_rules_delete_version AFTER DELETE ON draft_assessment_rules BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_assets_insert_version AFTER INSERT ON video_assets BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_assets_update_version AFTER UPDATE ON video_assets BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_assets_delete_version AFTER DELETE ON video_assets BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_captions_insert_version AFTER INSERT ON video_captions BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_captions_update_version AFTER UPDATE ON video_captions BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER video_captions_delete_version AFTER DELETE ON video_captions BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER instructors_insert_version AFTER INSERT ON instructors BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER instructors_update_version AFTER UPDATE ON instructors BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER instructors_delete_version AFTER DELETE ON instructors BEGIN UPDATE draft_state SET version = version + 1 WHERE id = 1; END;

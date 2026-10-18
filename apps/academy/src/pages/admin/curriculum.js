@@ -299,7 +299,11 @@ export async function setCourseStatus(c) {
   const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
   if (!course) throw new HttpError(404, "not_found");
   const status = COURSE_STATUSES.includes(b.status) ? b.status : course.status;
-  if ((status === "published" || status === "scheduled") && !c.can("courses.publish")) throw new HttpError(403, "forbidden");
+  // Publishing, scheduling, and any change to a published course's
+  // availability (draft, review, archive) need the publish permission.
+  if ((status === "published" || status === "scheduled" || course.status === "published" || course.status === "scheduled") && !c.can("courses.publish")) {
+    throw new HttpError(403, "forbidden");
+  }
   let readiness = null;
   if (status === "published" || status === "scheduled") {
     readiness = await publishReadiness(c.env, course);
@@ -322,8 +326,11 @@ export async function setCourseStatus(c) {
     scheduledAt = new Date(`${when.slice(0, 16)}:00Z`).toISOString();
   }
   const now = nowIso();
+  // Scheduling an update of a live course keeps the live revision published
+  // (enrollment stays open); the scheduler publishes the reviewed draft later.
+  const nextStatus = status === "scheduled" && course.status === "published" ? "published" : status;
   await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?").bind(status, scheduledAt, now, course.id),
+    c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?").bind(nextStatus, scheduledAt, now, course.id),
     auditStmt(c.env, c.user.id, `course.status.${status}`, "course", course.id, { from: course.status, scheduled_at: scheduledAt }),
   ]);
   return redirect(`/admin/courses/${course.id}?ok=saved`);

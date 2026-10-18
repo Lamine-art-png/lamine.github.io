@@ -74,13 +74,21 @@ Instructor video production is **not complete**: no approved Joshua video assets
 | P1 an in-flight autosave could change answers during grading | Submission closes the attempt to writes (`submitted_at`) atomically before reading answers; the autosave guard then rejects late saves | `attempt-snapshots` "an autosave in flight during submission…" (fails without the fix) |
 | P2 instructor profile edits bypassed revisions | Profiles shown by a released course are locked; linked profiles' fields are in the reviewed fingerprint | `course-drafts` "an instructor profile shown by a released course…" |
 
+### Codex review of `071a244` (3 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 a content editor could take a live course offline (draft/review/archive) | Any status change of a published or scheduled course needs `courses.publish` | `course-drafts` "taking a live course offline…" |
+| P1 a linked, not-yet-live video or instructor could change between readiness and publication | Video assets, captions and instructor profiles also bump `draft_state.version` (triggers), so such an edit aborts the publication | `course-drafts` "an edit to a linked, not-yet-live video…" |
+| P1 scheduling an update made the live course "upcoming" and closed enrollment | A scheduled update keeps the course `published` with `scheduled_at`; the scheduler publishes the reviewed draft, or drops the schedule (live revision kept) if readiness fails | `course-drafts` "scheduling an update keeps the live revision…" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **140/140 pass**.
+- `npm test` (unit, integration, deploy): **143/143 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
