@@ -50,8 +50,12 @@ use `/admin`. The dev mailbox and `/__dev/cron` exist only in the dev server.
 ## Tests
 
 ```bash
-npm test                   # unit + integration (34 tests), runs the real Worker in-process
+npm test                   # unit, integration and deploy-script tests (99), the real Worker in-process
 npm run test:e2e           # Chromium end-to-end journey with WCAG contrast/label/overflow checks
+node tests/e2e/shaping-oracle.mjs   # certificate-name shaping vs Chromium/HarfBuzz (117 names)
+node tests/e2e/pdf-poppler.mjs      # certificate PDFs rendered and extracted by Poppler
+node tests/e2e/axe.mjs              # axe-core WCAG 2.2 AA scan (needs axe-core installed)
+npm run test:staging -- https://academy-staging.agroai-pilot.com   # against deployed staging
 ```
 
 The e2e test drives the full journey through the UI: founder publishes →
@@ -62,24 +66,35 @@ plus mobile, dark theme and Arabic RTL.
 
 ## Deploy
 
-`.github/workflows/academy-deploy.yml` runs on pushes to `main` that touch the
-Academy (or manually): CI → **staging** deploy + smoke test → **production**
-deploy + smoke test. `scripts/deploy.sh`:
+`.github/workflows/academy-deploy.yml` keeps staging and production apart:
 
-1. Refuses to deploy if the hostname already has a DNS record that is not this
-   Worker's custom domain (it never edits DNS).
-2. Creates the D1 database if missing, backs up production, applies migrations.
-3. Deploys the Worker with its custom domain (Cloudflare provisions DNS + TLS).
-4. Generates `CERT_SIGNING_SECRET` inside Cloudflare if absent and loads
-   optional secrets from GitHub secrets.
+| | Staging | Production |
+|---|---|---|
+| Trigger | every push to `main` touching the Academy | manual *Academy Deploy* run on `main` with `target=production` and `confirm=deploy academy production`, after staging passes in the same run |
+| GitHub environment | `academy-staging` | `academy-production` (add required reviewers) |
+| App secrets | `ACADEMY_STAGING_*` | `ACADEMY_PRODUCTION_*` |
+| Worker / D1 | `agroai-academy-staging` | `agroai-academy` |
+| Files / backups (R2) | `agroai-academy-staging-files` / `-staging-backups` | `agroai-academy-files` / `agroai-academy-backups` |
+| Checks after deploy | smoke test + staging integration test (`tests/remote/staging.mjs`, real D1 over HTTP) | smoke test |
 
-GitHub secrets used (environment `production`): `CLOUDFLARE_API_TOKEN`,
-`CLOUDFLARE_ACCOUNT_ID` (already used by other workflows) and, optionally,
-`ACADEMY_BOOTSTRAP_ADMIN_EMAILS`, `ACADEMY_RESEND_API_KEY`,
-`ACADEMY_GOOGLE_CLIENT_ID`, `ACADEMY_GOOGLE_CLIENT_SECRET`.
+`scripts/deploy.sh <target>` (production also needs `ACADEMY_DEPLOY_CONFIRM=production`):
 
-Rollback: `npx wrangler rollback --name agroai-academy` (Worker) and
-`migrations/down/*.down.sql` (schema, destructive — export first).
+1. Refuses to deploy if the hostname has a DNS record that is not this Worker (never edits DNS).
+2. Creates the D1 database and file bucket if missing; fills in only this target's database id.
+3. **Backs up before migrating**: export → restore into a scratch SQLite database and check
+   integrity, foreign keys and row counts → gzip (GPG AES-256 with `BACKUP_PASSPHRASE`) →
+   private R2 bucket → read back and compare checksums. Any failure stops the deploy before the
+   schema or code changes. A D1 Time Travel bookmark is recorded as a second recovery path.
+4. Applies migrations, deploys the Worker, then sets secrets. The certificate signing key is
+   never replaced, and never generated while certificates exist.
+
+Restore drill (never touches the live database):
+`bash scripts/restore-backup.sh agroai-academy-backups/<key> agroai-academy-restore-<date> <sha256>`.
+
+Rollback: `npx wrangler rollback --name agroai-academy` (Worker); schema changes are additive
+and reversible with `migrations/down/*.down.sql` (destructive — export first).
+
+The exact secrets, Cloudflare permissions and launch steps are in `docs/STATUS.md`.
 
 ## Operating the Academy
 
@@ -87,12 +102,16 @@ Rollback: `npx wrangler rollback --name agroai-academy` (Worker) and
   super administrators after verifying their email. Super admins grant other
   roles (academy admin, instructor, content editor) from *Admin → Learners*.
 * **Publishing:** *Admin → Courses* shows a readiness checklist. Publishing or
-  scheduling is blocked until every check passes. Course A1 is in **review**
-  with a planned date of 29 Oct 2026; publish it after faculty review.
-* **Videos:** *Admin → Videos* records Synthesia/R2/Stream assets and their
-  captions. Only **approved** videos with a playable URL are shown; others show
-  an honest "in production" notice. Course A1 ships with a spoken script per
-  lesson ready for Joshua video production.
+  scheduling is blocked until every check passes, including three mandatory reviews
+  (academic, assessment, accessibility) recorded against the exact current content —
+  editing afterwards voids them — and, under the default video policy, approved,
+  playable, captioned videos for every planned lesson video. A course may switch to an
+  "optional" video policy with a recorded, audited reason. Scheduled courses are
+  re-checked at publication time. Course A1 is in **review** for 29 Oct 2026.
+* **Videos:** *Admin → Videos* records Synthesia/R2/Stream assets (https URLs only) and
+  their captions. Only **approved** videos with a playable URL are shown; others show an
+  honest "in production" notice. Video lessons complete only by watching. Course A1 ships
+  with a spoken script per lesson ready for Joshua video production; no video is approved yet.
 * **Questions:** written in a plain-text format (`* ` marks correct options,
   `Left => Right` for matching, one line per ordered item).
 * **Translations:** *Admin → Translations* edits UI strings without a deploy,
