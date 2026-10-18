@@ -43,6 +43,9 @@ ${ctaLabel && url ? `<p style="margin:24px 0"><a href="${escapeHtml(url)}" style
   return { subject, html, text, category: spec.category };
 }
 
+export const STAGING_TEST_DOMAIN = "academy-staging-test.invalid";
+export const isStagingTestAddress = (email) => String(email || "").toLowerCase().endsWith(`@${STAGING_TEST_DOMAIN}`);
+
 /**
  * Queue a templated email for a user. Returns the outbox row id, or null when
  * the learner's preferences opt out of this category.
@@ -57,11 +60,14 @@ export async function queueEmail(env, cfg, { user, template, vars = {}, to = nul
   const t = makeTranslator(user?.locale || "en", await loadOverrides(env));
   const msg = renderEmail(t, cfg, template, { name: user?.display_name || "", ...vars });
   const id = newId("em_");
+  const address = to || user.email;
+  // Synthetic staging test accounts use the reserved .invalid domain and are never sent.
+  const status = cfg.environment === "staging" && isStagingTestAddress(address) ? "suppressed" : cfg.emailEnabled ? "pending" : "unconfigured";
   await env.DB.prepare(
     `INSERT INTO email_outbox (id, user_id, to_email, template, category, locale, subject, html, text, status, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
   )
-    .bind(id, user?.id ?? null, to || user.email, template, msg.category, t.locale, msg.subject, msg.html, msg.text, cfg.emailEnabled ? "pending" : "unconfigured", nowIso())
+    .bind(id, user?.id ?? null, address, template, msg.category, t.locale, msg.subject, msg.html, msg.text, status, nowIso())
     .run();
   return id;
 }

@@ -2,7 +2,7 @@
 // contact, legal pages, and SEO endpoints.
 import { html, raw } from "../lib/html.js";
 import { redirect, json, serializeCookie, HttpError } from "../lib/http.js";
-import { newId, nowIso } from "../lib/util.js";
+import { newId, nowIso, safeEqual } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { md } from "../lib/markdown.js";
 import { LOCALES } from "../lib/i18n.js";
@@ -11,6 +11,7 @@ import { artSvg } from "../views/art.js";
 import { courseCard, pageHead, emptyState, alert, csrfField, field, selectField } from "../views/components.js";
 import { listCourses, listPrograms, listPaths, localize } from "../services/content.js";
 import { validEmail } from "../services/users.js";
+import { isStagingTestAddress } from "../services/email.js";
 import { LEGAL } from "../content/legal.js";
 import { qrSvg } from "../lib/qr.js";
 
@@ -451,4 +452,19 @@ export async function health(c) {
     },
     ok ? 200 : 503,
   );
+}
+
+/**
+ * Staging-only test inbox for the automated staging test. Returns the latest
+ * message for a synthetic @academy-staging-test.invalid address. Disabled (404)
+ * unless ENVIRONMENT is "staging" and a strong STAGING_TEST_TOKEN is set, and
+ * the caller presents that token. Never available in production.
+ */
+export async function stagingInbox(c) {
+  const token = String(c.env.STAGING_TEST_TOKEN || "");
+  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const to = String(c.url.searchParams.get("to") || "").toLowerCase();
+  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token) || !isStagingTestAddress(to)) throw new HttpError(404, "not_found");
+  const row = await c.env.DB.prepare("SELECT template, subject, text, status, created_at FROM email_outbox WHERE to_email = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(to).first();
+  return json(row ? { ok: true, message: row } : { ok: false }, row ? 200 : 404);
 }
