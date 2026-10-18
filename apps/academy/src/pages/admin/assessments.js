@@ -231,11 +231,25 @@ const shortId = () => randomToken(4).replace(/[-_]/g, "x");
 export function fromEditorLines(type, text, previous, extra = {}) {
   const lines = String(text || "").split("\n").map((s) => s.trim()).filter(Boolean);
   const prevData = parseJson(previous?.data_json, {});
-  const reuse = (list, txt) => (list || []).find((o) => o.text === txt)?.id || shortId();
+  // An id is reused at most once, so two options can never share an id (and a
+  // wrong duplicate can never be graded as the correct one).
+  const used = new Set();
+  const reuse = (list, txt) => {
+    const prev = (list || []).find((o) => o.text === txt && !used.has(o.id));
+    let id = prev?.id;
+    while (!id || used.has(id)) id = shortId();
+    used.add(id);
+    return id;
+  };
+  const unique = (texts, what) => {
+    if (new Set(texts.map((t) => t.toLowerCase())).size !== texts.length) throw new Error(`Each ${what} must be different.`);
+  };
   switch (type) {
     case "single":
     case "multiple": {
-      const options = lines.map((l) => ({ correct: l.startsWith("*"), text: l.replace(/^\*\s*/, "") })).map((o) => ({ ...o, id: reuse(prevData.options, o.text) }));
+      const parsed = lines.map((l) => ({ correct: l.startsWith("*"), text: l.replace(/^\*\s*/, "") }));
+      unique(parsed.map((o) => o.text), "option");
+      const options = parsed.map((o) => ({ ...o, id: reuse(prevData.options, o.text) }));
       const correct = options.filter((o) => o.correct).map((o) => o.id);
       if (options.length < 2) throw new Error("Provide at least two options.");
       if (!correct.length) throw new Error("Mark at least one correct option with *.");
@@ -260,9 +274,11 @@ export function fromEditorLines(type, text, previous, extra = {}) {
         }
       }
       if (left.length < 2) throw new Error("Provide at least two pairs.");
+      unique(left.map((l) => l.text), "left-hand item");
       return { data: { left, right }, answer: { pairs } };
     }
     case "ordering": {
+      unique(lines, "item");
       const items = lines.map((t) => ({ id: reuse(prevData.items, t), text: t }));
       if (items.length < 2) throw new Error("Provide at least two items in the correct order.");
       return { data: { items }, answer: { order: items.map((i) => i.id) } };

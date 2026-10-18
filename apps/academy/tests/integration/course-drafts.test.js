@@ -549,3 +549,46 @@ test("caption, video and instructor locks hold even if the course is released mi
   assert.match(decodeURIComponent(r.location), /shown by a released course/);
   assert.equal((await live(env, "SELECT name FROM instructors WHERE id = ?", ins.id)).name, ins.name);
 });
+
+test("malformed interactive blocks are refused, and a stored one never breaks the lesson page", async () => {
+  const { env, admin, learner } = await released();
+  const r = await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { interactive_json: '{"kind":"reveal"}' }));
+  assert.match(decodeURIComponent(r.location), /Interactive block must be JSON/);
+  await env.DB.prepare(`UPDATE lessons SET interactive_json = '{"kind":"checklist","items":"oops"}' WHERE id = 'les_a1_welcome'`).run();
+  assert.equal((await learner.get(`/learn/${A1_SLUG}/welcome`)).status, 200);
+});
+
+test("a scheduled update can be cancelled without publishing or taking the course offline", async () => {
+  const { env, admin } = await released();
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Pending update." }));
+  await approveReviews(admin, "crs_a1");
+  await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2030-01-01T09:00" });
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /Cancel scheduled publication/);
+  const r = await admin.post("/admin/courses/crs_a1/unschedule", {});
+  assert.match(r.location, /ok=saved/);
+  const c = await live(env, "SELECT status, scheduled_at FROM courses WHERE id = 'crs_a1'");
+  assert.equal(c.status, "published");
+  assert.equal(c.scheduled_at, null);
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Pending update.", "not published");
+  const editor = await registeredLearner(env, { email: "editor4@academy.test" });
+  const eid = (await live(env, "SELECT id FROM users WHERE email = 'editor4@academy.test'")).id;
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'content_editor', ?)").bind(eid, new Date().toISOString()).run();
+  assert.equal((await editor.post("/admin/courses/crs_a1/unschedule", {})).status, 403);
+});
+
+test("overlapping progress reports never move the resume position backwards", async () => {
+  const { env, learner } = await released();
+  const user = await live(env, "SELECT id FROM users WHERE email = 'learner@academy.test'");
+  const newer = new Date().toISOString();
+  const older = new Date(Date.now() - 60000).toISOString();
+  await learner.postJson("/api/progress", { lessonId: "les_a1_welcome", position: 1, clientAt: new Date(Date.now() - 120000).toISOString() });
+  // The newer report's write lands while the older report is in flight (after it read the row).
+  const restore = interleave(env, "INSERT INTO lesson_progress", (db) =>
+    db.prepare("UPDATE lesson_progress SET position_seconds = 100, client_updated_at = ? WHERE user_id = ? AND lesson_id = 'les_a1_welcome'").bind(newer, user.id).run(),
+  );
+  await learner.postJson("/api/progress", { lessonId: "les_a1_welcome", position: 10, clientAt: older });
+  restore();
+  const p = await live(env, "SELECT position_seconds, client_updated_at FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_welcome'", user.id);
+  assert.equal(p.position_seconds, 100);
+  assert.equal(p.client_updated_at, newer);
+});

@@ -8,6 +8,7 @@ import { renderMarkdown, md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
 import { csrfField, translationNotice, lessonTypeIcon, progressBar, alert } from "../views/components.js";
 import { getCourseBySlug, getSyllabus, getLesson, getVideo } from "../services/content.js";
+import { validInteractive } from "../lib/interactive.js";
 import { getEnrollment, progressMap, recordProgress } from "../services/progress.js";
 import { certificationExam, activeCertificate } from "../services/certificates.js";
 import { track } from "../services/activity.js";
@@ -37,7 +38,8 @@ export async function resume(c) {
 
 function interactive(c, lesson) {
   const data = parseJson(lesson.interactive_json, null);
-  if (!data) return "";
+  // Shapes are validated when saved; anything older or malformed is skipped, never a 500.
+  if (!validInteractive(data)) return "";
   if (data.kind === "reveal") {
     return html`<section class="mt-3" aria-label="${c.t("lesson.interactive")}"><h2 class="h2">${data.title || c.t("lesson.check_understanding")}</h2>
       ${data.cards.map((card) => html`<details class="panel mt-1"><summary><strong>${card.front}</strong></summary><p class="mt-1 mb-0">${card.back}</p></details>`)}</section>`;

@@ -94,20 +94,21 @@ export async function recordProgress(c, lesson, report) {
     const watch = await recordWatchBeat(env, user.id, lesson, { position, playing: report.playing, now });
     complete = watch.complete;
   }
-  const stale = prev?.client_updated_at && prev.client_updated_at > clientAt;
+  // Out-of-order reports are resolved inside the upsert (newest client time
+  // wins), so two overlapping requests cannot move the position backwards.
   await env.DB.prepare(
     `INSERT INTO lesson_progress (user_id, lesson_id, course_id, status, position_seconds, duration_seconds, scroll_pct, started_at, completed_at, last_viewed_at, client_updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-       position_seconds = CASE WHEN ?12 THEN position_seconds ELSE excluded.position_seconds END,
+       position_seconds = CASE WHEN client_updated_at > excluded.client_updated_at THEN position_seconds ELSE excluded.position_seconds END,
        duration_seconds = COALESCE(excluded.duration_seconds, duration_seconds),
        scroll_pct = MAX(scroll_pct, excluded.scroll_pct),
        status = CASE WHEN status = 'completed' OR excluded.status = 'completed' THEN 'completed' ELSE 'started' END,
        completed_at = COALESCE(completed_at, excluded.completed_at),
        last_viewed_at = excluded.last_viewed_at,
-       client_updated_at = CASE WHEN ?12 THEN client_updated_at ELSE excluded.client_updated_at END`,
+       client_updated_at = CASE WHEN client_updated_at > excluded.client_updated_at THEN client_updated_at ELSE excluded.client_updated_at END`,
   )
-    .bind(user.id, lesson.id, lesson.course_id, complete ? "completed" : "started", position, duration, scroll, now, complete ? now : null, now, clientAt, stale ? 1 : 0)
+    .bind(user.id, lesson.id, lesson.course_id, complete ? "completed" : "started", position, duration, scroll, now, complete ? now : null, now, clientAt)
     .run();
   await env.DB.prepare("UPDATE enrollments SET last_lesson_id = ?, last_activity_at = ? WHERE user_id = ? AND course_id = ?").bind(lesson.id, now, user.id, lesson.course_id).run();
 

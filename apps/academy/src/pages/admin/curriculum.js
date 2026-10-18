@@ -5,6 +5,7 @@ import { redirect, HttpError } from "../../lib/http.js";
 import { newId, nowIso, parseJson, slugify } from "../../lib/util.js";
 import { audit, auditStmt } from "../../lib/security.js";
 import { renderMarkdown } from "../../lib/markdown.js";
+import { validInteractive } from "../../lib/interactive.js";
 import { adminPage, table, statusBadge, hidden, input, textarea, select, checkbox, bool, str, intOrNull } from "./shell.js";
 import { TOPICS } from "../public.js";
 import { PROFESSIONAL_ROLES } from "../../services/users.js";
@@ -128,6 +129,9 @@ export async function editCourse(c) {
       <select id="st" name="status">${COURSE_STATUSES.map((s) => html`<option value="${s}" ${s === course.status ? raw("selected") : ""}>${s}</option>`)}</select>
       <label for="sched" class="mb-0">Publish at (UTC, for “scheduled”)</label><input id="sched" type="datetime-local" name="scheduled_at" value="${(course.scheduled_at || "").slice(0, 16)}">
       <button class="btn btn-primary btn-sm">Apply</button></form>
+    ${course.scheduled_at && c.can("courses.publish")
+      ? html`<form method="post" action="/admin/courses/${course.id}/unschedule" class="mt-1">${hidden(c)}<button class="btn btn-quiet btn-sm">Cancel scheduled publication${course.status === "published" ? " (the live revision stays as it is)" : ""}</button></form>`
+      : ""}
     <p class="tiny muted mt-1">Publishing and scheduling require every check above to pass. “Review” shows the course as upcoming without opening enrollment.</p>
   </section>
 
@@ -340,6 +344,18 @@ export async function setCourseStatus(c) {
   return redirect(`/admin/courses/${course.id}?ok=saved`);
 }
 
+/** Cancel a pending scheduled publication without publishing or taking the live course offline. */
+export async function cancelSchedule(c) {
+  if (!c.can("courses.publish")) throw new HttpError(403, "forbidden");
+  const res = await c.env.DB.prepare(
+    "UPDATE courses SET scheduled_at = NULL, status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, updated_at = ? WHERE id = ? AND scheduled_at IS NOT NULL",
+  )
+    .bind(nowIso(), c.params.id)
+    .run();
+  if (res.meta.changes) await auditStmt(c.env, c.user.id, "course.schedule.cancelled", "course", c.params.id, {}).run();
+  return redirect(`/admin/courses/${c.params.id}?ok=saved`);
+}
+
 /** Throw away unpublished draft edits of a released course: the draft becomes the live revision again. */
 export async function discardDraft(c) {
   const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
@@ -477,7 +493,11 @@ export async function saveLesson(c) {
   let interactive = str(b.interactive_json, 20000) || null;
   if (interactive) {
     const parsed = parseJson(interactive, null);
-    if (!parsed || !["reveal", "checklist"].includes(parsed.kind)) return redirect(`/admin/lessons/${l.id}?err=${encodeURIComponent("Interactive block must be valid JSON with kind reveal or checklist.")}`);
+    if (!validInteractive(parsed)) {
+      return redirect(
+        `/admin/lessons/${l.id}?err=${encodeURIComponent('Interactive block must be JSON: {"kind":"reveal","cards":[{"front":"…","back":"…"}]} or {"kind":"checklist","title":"…","items":["…"]}.')}`,
+      );
+    }
     interactive = JSON.stringify(parsed);
   }
   // Module, video and assessment must belong to this course draft (or exist).

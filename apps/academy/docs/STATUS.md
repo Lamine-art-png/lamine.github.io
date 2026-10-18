@@ -105,13 +105,22 @@ Both tests inject the competing write at the exact point of the guarded statemen
 |---|---|---|
 | P1 lock checks were separate from the writes (a release completing in between let a caption, video or instructor edit through) | The live-use condition is part of each write (`… WHERE NOT EXISTS (live use)`); a refused write reports the lock. Together with the version triggers, every ordering of edit and publication is covered | `course-drafts` "caption, video and instructor locks hold even if the course is released mid-request" |
 
+### Codex review of `7a0d218` (2 × P1, 2 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 edited choice questions could give two options the same id | Option, item and left-hand labels must be unique; a previous id is reused at most once | `tests/unit/editor-options.test.js` |
+| P1 a malformed interactive block could 500 a lesson page | Shapes validated on save (`src/lib/interactive.js`); the page skips anything malformed | `course-drafts` "malformed interactive blocks…" |
+| P2 no way to cancel a scheduled update | "Cancel scheduled publication" (publish permission) clears the schedule; the live revision stays | `course-drafts` "a scheduled update can be cancelled…" |
+| P2 overlapping progress reports could move the resume position back | The newest client time wins inside the upsert, not from a separate read | `course-drafts` "overlapping progress reports…" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **148/148 pass**.
+- `npm test` (unit, integration, deploy): **152/152 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
