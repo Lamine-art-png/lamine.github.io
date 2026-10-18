@@ -46,9 +46,9 @@ jobs:
       - name: Bundle the Worker exactly as Cloudflare will (dry run, no credentials)
         run: npx --yes wrangler@4.107.0 deploy --dry-run --outdir dist --config wrangler.toml
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and axe-core
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
+          npm install --no-save --no-package-lock playwright@1.56.1 axe-core@4.10.2
           npx playwright install --with-deps chromium
 
       - name: Certificate-name shaping matches Chromium (HarfBuzz) for 100+ names
@@ -58,6 +58,9 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
           node tests/e2e/pdf-poppler.mjs
+
+      - name: Automated WCAG 2.2 AA scan (axe-core) of public, learner and admin pages
+        run: node tests/e2e/axe.mjs
 
       - name: Browser end-to-end journey with accessibility checks
         run: node tests/e2e/run.mjs --shots e2e-artifacts
