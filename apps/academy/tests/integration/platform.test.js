@@ -273,3 +273,41 @@ test("SEO endpoints: sitemap, robots, structured data, health", async () => {
   r = await c.get("/courses/agricultural-robotics");
   assert.equal(r.status, 404, "draft courses are hidden from the public");
 });
+
+test("language support is described honestly: selectable, translated, reviewed, fallback", async () => {
+  const env = makeEnv();
+  const anon = new Client(env);
+  // English: no notice. Machine-prepared catalog: marked as unreviewed. No catalog: English fallback, said plainly.
+  let r = await anon.get("/?lang=en");
+  assert.doesNotMatch(r.text, /class="lang-notice/);
+  r = await anon.get("/?lang=es");
+  assert.match(r.text, /class="lang-notice[^]*traducido automáticamente|class="lang-notice[^]*tradujo automáticamente/);
+  r = await anon.get("/?lang=de");
+  assert.match(r.text, /class="lang-notice[^]*isn(?:'|&#39;)t translated yet, so pages are shown in English/);
+  assert.match(r.text, /<html lang="de"/);
+  // The picker separates translated interfaces from English-for-now ones.
+  assert.match(r.text, /<optgroup label="Interface translated">/);
+  assert.match(r.text, /<optgroup label="Interface in English for now">/);
+  // The home page does not claim 60 translated languages.
+  r = await anon.get("/?lang=en");
+  assert.doesNotMatch(r.text, /Learn in any of \d+ languages|in your language/);
+  assert.match(r.text, /interface translated into 6/);
+  // The language support page lists every language with its real status.
+  r = await anon.get("/languages");
+  assert.equal(r.status, 200);
+  const rows = r.text.match(/<tr><th scope="row">/g) || [];
+  assert.equal(rows.length, 60);
+  assert.equal((r.text.match(/">English for now<\/span>/g) || []).length, 54);
+  assert.equal((r.text.match(/">Automatic translation, not yet reviewed<\/span>/g) || []).length, 5);
+  assert.match(r.text, /Original \(English\)/);
+  // A reviewed course translation is counted; machine drafts are not.
+  await publishCourse(env, "crs_a1");
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO content_translations (entity_type, entity_id, field, locale, value, status, updated_at) VALUES ('course','crs_a1','title','pt-BR','Introdução à IA na Agricultura','reviewed',?), ('course','crs_a1','title','fr-FR','Introduction à l’IA','machine',?)").bind(now, now).run();
+  r = await anon.get("/languages");
+  const row = (code) => new RegExp(`<th scope="row"><span lang="${code}"[^]*?</tr>`).exec(r.text)[0];
+  assert.match(row("pt-BR"), /English \+ 1 reviewed course translation/);
+  assert.doesNotMatch(row("fr-FR"), /reviewed course translation/, "machine drafts are not counted");
+  r = await anon.get("/sitemap.xml");
+  assert.match(r.text, /\/languages</);
+});

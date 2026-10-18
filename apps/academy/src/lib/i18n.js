@@ -56,6 +56,20 @@ export function negotiate(acceptLanguage) {
 
 export const localeInfo = (code) => BY_CODE.get(String(code).toLowerCase()) || BY_CODE.get("en");
 
+/**
+ * How far the interface is translated for a locale:
+ *   "source"   — English, the original
+ *   "reviewed" — a catalog reviewed by native speakers
+ *   "machine"  — a machine-prepared catalog not yet reviewed
+ *   "fallback" — no catalog: English text with the locale's formatting and direction
+ */
+export function interfaceStatus(code) {
+  if (code === "en") return "source";
+  if (!CATALOGS[code]) return "fallback";
+  return CATALOG_META[code]?.reviewed ? "reviewed" : "machine";
+}
+export const TRANSLATED_INTERFACE_COUNT = LOCALES.filter((l) => interfaceStatus(l.code) !== "fallback").length;
+
 // Database overrides, cached per isolate for a short time.
 let overrideCache = { at: 0, data: new Map() };
 export async function loadOverrides(env, force = false) {

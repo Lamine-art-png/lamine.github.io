@@ -621,6 +621,9 @@ dl.kv dd { margin: 0; font-weight: 600; word-break: break-word; }
 
 .toast { position: fixed; bottom: 24px; inset-inline-start: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: .75rem 1.25rem; border-radius: 999px; box-shadow: var(--shadow-lg); z-index: 100; font-weight: 600; font-size: .93rem; max-width: calc(100vw - 32px); }
 [dir="rtl"] .toast { transform: translateX(50%); }
+.lang-notice { background: var(--warn-soft); color: var(--ink); border-bottom: 1px solid var(--line); font-size: .88rem; padding: .45rem 0; }
+.lang-notice .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.lang-notice a { font-weight: 600; }
 .offline-pill { position: fixed; bottom: 16px; inset-inline-end: 16px; z-index: 90; background: var(--warn-soft); color: var(--warn); border: 1px solid var(--line); padding: .45rem .85rem; border-radius: 999px; font-size: .85rem; font-weight: 600; display: inline-flex; gap: .4rem; align-items: center; }
 
 .error-page { padding-block: clamp(64px, 12vw, 140px); }

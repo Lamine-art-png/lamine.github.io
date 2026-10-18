@@ -460,6 +460,17 @@ const UPLOAD_TYPES = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
 };
 
+const startsWith = (head, sig) => sig.every((b, i) => head[i] === b);
+function contentMatches(type, head) {
+  if (type === "application/pdf") return startsWith(head, [0x25, 0x50, 0x44, 0x46]);
+  if (type === "image/png") return startsWith(head, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (type === "image/jpeg") return startsWith(head, [0xff, 0xd8, 0xff]);
+  if (type === "application/zip" || type.includes("openxmlformats")) return startsWith(head, [0x50, 0x4b, 0x03, 0x04]);
+  // Text: no NUL bytes and not an HTML/SVG document.
+  const text = new TextDecoder().decode(head).trimStart().toLowerCase();
+  return !head.includes(0) && !text.startsWith("<");
+}
+
 export async function uploadResource(c) {
   if (!c.env.FILES) throw new HttpError(404, "not_found");
   const form = await c.req.formData();
@@ -468,8 +479,12 @@ export async function uploadResource(c) {
   if (file.size > 25 * 1024 * 1024) return redirect(`/admin/lessons/${c.params.id}?err=Files%20are%20limited%20to%2025%20MB`);
   const ext = UPLOAD_TYPES[file.type];
   if (!ext) return redirect(`/admin/lessons/${c.params.id}?err=Unsupported%20file%20type`);
+  // The declared type must match the file's contents (magic bytes).
+  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  if (!contentMatches(file.type, head)) return redirect(`/admin/lessons/${c.params.id}?err=${encodeURIComponent("The file's contents do not match its type.")}`);
   const key = `resources/${c.params.id}/${newId("")}${ext}`;
-  await c.env.FILES.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
+  // R2 needs a body of known length: pass the Blob itself, not an unsized stream.
+  await c.env.FILES.put(key, file, { httpMetadata: { contentType: file.type, contentDisposition: "attachment" } });
   await c.env.DB.prepare("INSERT INTO lesson_resources (id, lesson_id, title, kind, file_key, mime, size_bytes, created_at) VALUES (?,?,?, 'file', ?, ?, ?, ?)")
     .bind(newId("res_"), c.params.id, str(form.get("title"), 200) || file.name.slice(0, 200), key, file.type, file.size, nowIso())
     .run();

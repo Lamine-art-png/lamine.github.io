@@ -5,7 +5,7 @@ import { redirect, json, serializeCookie, HttpError } from "../lib/http.js";
 import { newId, nowIso, safeEqual } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { md } from "../lib/markdown.js";
-import { LOCALES } from "../lib/i18n.js";
+import { LOCALES, interfaceStatus, TRANSLATED_INTERFACE_COUNT } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
 import { artSvg } from "../views/art.js";
 import { courseCard, pageHead, emptyState, alert, csrfField, field, selectField } from "../views/components.js";
@@ -39,7 +39,7 @@ function instructorCard(c, i) {
 
 function faqList(c, keys = FAQ_KEYS) {
   return html`<div class="faq">${keys.map(
-    (k) => html`<details id="${k === "certificates" ? "certificates" : `faq-${k}`}"><summary>${c.t(`faq.${k}.q`)}</summary><p>${c.t(`faq.${k}.a`, { languages: LOCALES.length, date: c.fmtDate(c.cfg.firstClassesDate) })}</p></details>`,
+    (k) => html`<details id="${k === "certificates" ? "certificates" : `faq-${k}`}"><summary>${c.t(`faq.${k}.q`)}</summary><p>${c.t(`faq.${k}.a`, { languages: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT, date: c.fmtDate(c.cfg.firstClassesDate) })}</p></details>`,
   )}</div>`;
 }
 
@@ -64,7 +64,7 @@ export async function home(c) {
       <ul class="hero-points">
         <li>${icon("check-circle", { size: 18 })} ${t("home.point_free")}</li>
         <li>${icon("award", { size: 18 })} ${t("home.point_certificates")}</li>
-        <li>${icon("globe", { size: 18 })} ${t("home.point_languages", { n: LOCALES.length })}</li>
+        <li>${icon("globe", { size: 18 })} ${t("home.point_languages", { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT })}</li>
       </ul>
     </div>
     <div class="hero-visual">
@@ -82,7 +82,7 @@ export async function home(c) {
 <section class="section-tight section-alt">
   <div class="wrap stat-band">
     <div class="stat"><span class="value">$0</span><span class="label">${t("home.stat_cost")}</span></div>
-    <div class="stat"><span class="value">${c.fmtNum(LOCALES.length)}</span><span class="label">${t("home.stat_languages")}</span></div>
+    <div class="stat"><span class="value">${c.fmtNum(TRANSLATED_INTERFACE_COUNT)}</span><span class="label">${t("home.stat_languages")}</span></div>
     <div class="stat"><span class="value">5</span><span class="label">${t("home.stat_programs")}</span></div>
     <div class="stat"><span class="value">80%</span><span class="label">${t("home.stat_passing")}</span></div>
   </div>
@@ -162,8 +162,8 @@ ${team.length
     <div>
       <p class="eyebrow">${t("home.global_eyebrow")}</p>
       <h2 class="h2">${t("home.global_title", { n: LOCALES.length })}</h2>
-      <p class="lead">${t("home.global_lead")}</p>
-      <p class="small muted">${t("home.global_note")}</p>
+      <p class="lead">${t("home.global_lead", { translated: TRANSLATED_INTERFACE_COUNT })}</p>
+      <p class="small muted">${t("home.global_note")} <a href="/languages">${t("lang.notice_link")}</a></p>
     </div>
     <div class="topic-chips">${nativeSample.map((n) => html`<span class="chip" lang="">${n}</span>`)}<span class="chip">+${LOCALES.length - nativeSample.length}</span></div>
   </div>
@@ -308,7 +308,7 @@ export async function faq(c) {
       mainEntity: FAQ_KEYS.map((k) => ({
         "@type": "Question",
         name: t(`faq.${k}.q`),
-        acceptedAnswer: { "@type": "Answer", text: t(`faq.${k}.a`, { languages: LOCALES.length, date: c.fmtDate(c.cfg.firstClassesDate) }) },
+        acceptedAnswer: { "@type": "Answer", text: t(`faq.${k}.a`, { languages: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT, date: c.fmtDate(c.cfg.firstClassesDate) }) },
       })),
     },
   });
@@ -401,7 +401,7 @@ export async function art(c) {
 export async function sitemap(c) {
   const courses = await listCourses(c.env, "en");
   const programsList = await listPrograms(c.env, "en");
-  const staticPaths = ["/", "/courses", "/paths", "/programs", "/instructors", "/about", "/faq", "/help", "/contact", "/verify", "/terms", "/privacy", "/accessibility"];
+  const staticPaths = ["/", "/courses", "/paths", "/programs", "/instructors", "/about", "/faq", "/help", "/contact", "/verify", "/terms", "/privacy", "/accessibility", "/languages"];
   const urls = [
     ...staticPaths.map((p) => ({ loc: c.cfg.origin + p })),
     ...courses.map((x) => ({ loc: `${c.cfg.origin}/courses/${x.slug}`, lastmod: x.updated_at })),
@@ -467,4 +467,40 @@ export async function stagingInbox(c) {
   if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token) || !isStagingTestAddress(to)) throw new HttpError(404, "not_found");
   const row = await c.env.DB.prepare("SELECT template, subject, text, status, created_at FROM email_outbox WHERE to_email = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(to).first();
   return json(row ? { ok: true, message: row } : { ok: false }, row ? 200 : 404);
+}
+
+/** Public language-support page: what is translated, reviewed or English-only, per language. */
+export async function languages(c) {
+  const t = c.t;
+  const rows = (
+    await c.env.DB.prepare(
+      `SELECT t.locale,
+              COUNT(DISTINCT CASE WHEN t.entity_type = 'course' AND t.field = 'title' AND t.status = 'reviewed' THEN t.entity_id END) AS courses,
+              COUNT(DISTINCT CASE WHEN t.entity_type = 'question' AND t.status = 'reviewed' THEN t.entity_id END) AS questions
+         FROM content_translations t
+        WHERE (t.entity_type <> 'course' OR t.entity_id IN (SELECT id FROM courses WHERE status = 'published'))
+        GROUP BY t.locale`,
+    ).all()
+  ).results;
+  const content = new Map(rows.map((r) => [r.locale, r]));
+  const label = (status) => t(`languages.interface.${status}`);
+  const body = html`${pageHead({ eyebrow: t("languages.eyebrow"), title: t("languages.title"), lead: t("languages.lead", { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT }) })}
+  <section class="section-tight"><div class="wrap">
+    <div class="cards cards-4">
+      ${["choose", "interface", "content", "exams"].map((k) => html`<div class="panel"><h2 class="h3">${t(`languages.key.${k}.title`)}</h2><p class="small mb-0">${t(`languages.key.${k}.body`)}</p></div>`)}
+    </div>
+    <div class="admin-table mt-3"><table>
+      <caption class="sr-only">${t("languages.table_caption")}</caption>
+      <thead><tr><th scope="col">${t("languages.col.language")}</th><th scope="col">${t("languages.col.interface")}</th><th scope="col">${t("languages.col.courses")}</th><th scope="col">${t("languages.col.exams")}</th></tr></thead>
+      <tbody>${LOCALES.map((l) => {
+        const st = interfaceStatus(l.code);
+        const ct = content.get(l.code);
+        return html`<tr><th scope="row"><span lang="${l.code}" dir="${l.dir}">${l.nativeName}</span> <span class="tiny muted">${l.englishName}</span></th>
+          <td><span class="badge ${st === "source" || st === "reviewed" ? "badge-green" : st === "machine" ? "badge-warn" : ""}">${label(st)}</span></td>
+          <td>${l.code === "en" ? t("languages.content.original") : ct?.courses ? t("languages.content.reviewed", { n: ct.courses }) : t("languages.content.english")}</td>
+          <td>${l.code === "en" ? t("languages.content.original") : ct?.questions ? t("languages.exams.partial") : t("languages.content.english")}</td></tr>`;
+      })}</tbody></table></div>
+    <p class="small muted mt-3">${t("languages.help")} <a href="/contact">${t("nav.contact")}</a></p>
+  </div></section>`;
+  return c.page({ title: t("languages.title"), description: t("languages.lead", { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT }), body, active: "languages" });
 }

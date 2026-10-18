@@ -34,6 +34,7 @@ export function registerRoutes(r) {
   r.get("/sitemap.xml", pub.sitemap);
   r.get("/robots.txt", pub.robots);
   r.get("/healthz", pub.health);
+  r.get("/languages", pub.languages);
   r.get("/__staging/inbox", pub.stagingInbox);
 
   // Authentication

@@ -1,6 +1,6 @@
 // Page shell: document head (SEO, social, hreflang), header, footer.
 import { html, raw, jsonScript } from "../lib/html.js";
-import { LOCALES } from "../lib/i18n.js";
+import { LOCALES, interfaceStatus } from "../lib/i18n.js";
 import { icon } from "./icons.js";
 import { BUILD } from "../app.js";
 
@@ -12,10 +12,25 @@ function langSwitcher(c) {
     ${[...c.url.searchParams].filter(([k]) => k !== "lang").map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}">`)}
     <label class="lang-label">${icon("globe", { size: 16 })}<span class="sr-only">${c.t("nav.language")}</span>
       <select name="lang" aria-label="${c.t("nav.language")}" data-current="${here}">
-        ${LOCALES.map((l) => html`<option value="${l.code}" lang="${l.code}" dir="${l.dir}" ${l.code === c.locale ? raw("selected") : ""}>${l.nativeName}</option>`)}
+        ${[
+          ["translated", LOCALES.filter((l) => interfaceStatus(l.code) !== "fallback")],
+          ["fallback", LOCALES.filter((l) => interfaceStatus(l.code) === "fallback")],
+        ].map(
+          ([group, list]) => html`<optgroup label="${c.t(`nav.lang_group_${group}`)}">${list.map(
+            (l) => html`<option value="${l.code}" lang="${l.code}" dir="${l.dir}" ${l.code === c.locale ? raw("selected") : ""}>${l.nativeName}</option>`,
+          )}</optgroup>`,
+        )}
       </select></label>
     <noscript><button class="btn btn-sm btn-quiet" type="submit">${c.t("action.apply")}</button></noscript>
   </form>`;
+}
+
+/** Says plainly when the interface is a machine draft or not translated yet. */
+function languageNotice(c) {
+  const status = interfaceStatus(c.locale);
+  if (status !== "machine" && status !== "fallback") return "";
+  return html`<div class="lang-notice no-print" role="note"><div class="wrap">${icon("globe", { size: 15 })}
+    <span>${c.t(`lang.notice_${status}`, { language: c.localeInfo.nativeName })}</span> <a href="/languages">${c.t("lang.notice_link")}</a></div></div>`;
 }
 
 function themeToggle(c) {
@@ -100,6 +115,7 @@ function footer(c) {
       <a href="/faq">${t("nav.faq")}</a></nav>
     <nav aria-label="${t("footer.support")}"><h2>${t("footer.support")}</h2>
       <a href="/help">${t("nav.help")}</a><a href="/contact">${t("nav.contact")}</a><a href="/accessibility">${t("nav.accessibility")}</a>
+      <a href="/languages">${t("nav.languages")}</a>
       <a href="/terms">${t("nav.terms")}</a><a href="/privacy">${t("nav.privacy")}</a></nav>
     <nav aria-label="${t("footer.ecosystem")}"><h2>${t("footer.ecosystem")}</h2>
       <a href="${c.cfg.siteUrl}" rel="noopener">${t("footer.agroai_site")} ${icon("external", { size: 13 })}</a>
@@ -155,6 +171,7 @@ ${jsonLd ? html`<script type="application/ld+json">${jsonScript(jsonLd)}</script
 <body class="${bodyClass}">
 <a class="skip-link" href="#main">${t("a11y.skip_to_content")}</a>
 ${bare ? "" : header(c, active)}
+${languageNotice(c)}
 <main id="main" tabindex="-1">${body}</main>
 ${bare ? "" : footer(c)}
 <div class="toast" role="status" aria-live="polite" data-toast hidden></div>

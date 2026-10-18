@@ -382,7 +382,7 @@ export async function resourceDownload(c) {
   return new Response(obj.body, {
     headers: {
       "Content-Type": r.mime || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${r.title.replace(/[^\w.-]+/g, "_").slice(0, 80)}"`,
+      "Content-Disposition": `attachment; filename="${r.title.replace(/[^\w.-]+/g, "_").slice(0, 80)}${(/\.[a-z0-9]+$/.exec(r.file_key) || [""])[0]}"`,
       "Cache-Control": "private, max-age=3600",
     },
   });

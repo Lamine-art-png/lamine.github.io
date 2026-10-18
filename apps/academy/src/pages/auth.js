@@ -2,8 +2,8 @@
 import { html, raw } from "../lib/html.js";
 import { redirect, HttpError, serializeCookie } from "../lib/http.js";
 import { nowIso, addSeconds, randomToken, sha256Hex, b64url } from "../lib/util.js";
-import { createSession, destroySession, verifyPassword, passwordProblem, rateLimit, cookieNames, audit, hashPassword } from "../lib/security.js";
-import { LOCALES, matchLocale } from "../lib/i18n.js";
+import { createSession, destroySession, verifyPassword, passwordProblem, rateLimit, cookieNames, audit, auditStmt, hashPassword } from "../lib/security.js";
+import { LOCALES, matchLocale, TRANSLATED_INTERFACE_COUNT } from "../lib/i18n.js";
 import countries from "../../../../shared/registries/countries.json" with { type: "json" };
 import { icon } from "../views/icons.js";
 import { artSvg } from "../views/art.js";
@@ -37,7 +37,7 @@ function authShell(c, { title, body }) {
     body: html`<div class="auth-page">
       <aside class="auth-aside">${raw(artSvg("contours", "auth", "green", 800, 1000).replace("<svg ", '<svg class="bg-art" '))}
         <h2>${t("auth.aside_title")}</h2>
-        <ul class="check-list">${["free", "certificates", "languages", "progress"].map((k) => html`<li>${icon("check-circle", { size: 18 })} <span>${t(`auth.aside.${k}`, { n: LOCALES.length })}</span></li>`)}</ul>
+        <ul class="check-list">${["free", "certificates", "languages", "progress"].map((k) => html`<li>${icon("check-circle", { size: 18 })} <span>${t(`auth.aside.${k}`, { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT })}</span></li>`)}</ul>
       </aside>
       <div class="auth-main"><div class="form-wrap">${body}</div></div>
     </div>`,
@@ -328,7 +328,17 @@ export async function googleCallback(c) {
     const existing = await findUserByEmail(c.env, info.email);
     if (existing) {
       userId = existing.id;
-      await c.env.DB.prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?").bind(now, userId).run();
+      if (!existing.email_verified_at) {
+        // The account was registered with this address but never verified, so
+        // whoever chose its password may not own the address (pre-account
+        // hijacking). Google has verified the owner: clear that password and
+        // sign out every existing session before linking.
+        await c.env.DB.batch([
+          c.env.DB.prepare("UPDATE users SET password_hash = NULL, email_verified_at = ?, updated_at = ? WHERE id = ?").bind(now, now, userId),
+          c.env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, userId),
+          auditStmt(c.env, userId, "account.unverified_password_cleared", "user", userId, { provider: "google" }),
+        ]);
+      }
     } else {
       userId = await createUser(c.env, c.cfg, {
         email: info.email,
