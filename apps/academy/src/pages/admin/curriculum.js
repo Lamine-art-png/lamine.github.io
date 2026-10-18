@@ -530,7 +530,7 @@ export async function editVideo(c) {
   <section class="form-card mt-3"><h2 class="h2">Captions (WebVTT)</h2>
     ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · <form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
     <form method="post" action="/admin/videos/${v.id}/captions" class="mt-2">${hidden(c)}
-      <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en")}${select("status", "Status", ["machine", "reviewed"], "reviewed")}</div>
+      <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en", { id: "a-caption_locale" })}${select("status", "Caption status", ["machine", "reviewed"], "reviewed", { id: "a-caption_status" })}</div>
       ${textarea("vtt", "WebVTT content", "WEBVTT\n\n", { rows: 8, cls: "code", required: true })}
       <button class="btn btn-secondary btn-sm">Add captions</button></form></section>`;
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
@@ -649,18 +649,18 @@ export async function programsAdmin(c) {
   const body = html`<h2 class="h2">Programs</h2>
   ${programs.results.map(
     (p) => html`<form class="panel mt-2" method="post" action="/admin/programs/${p.id}">${hidden(c)}
-      <div class="grid-2">${input(`title`, "Title", p.title)}${input("code", "Code", p.code)}</div>
-      ${input("summary", "Summary", p.summary)}
-      <div class="row">${select("status", "Status", ["draft", "published", "archived"], p.status)}${input("sort_order", "Order", p.sort_order, { type: "number" })}<button class="btn btn-sm btn-secondary">Save program</button></div></form>`,
+      <div class="grid-2">${input(`title`, "Title", p.title, { id: `prg-title-${p.id}` })}${input("code", "Code", p.code, { id: `prg-code-${p.id}` })}</div>
+      ${input("summary", "Summary", p.summary, { id: `prg-summary-${p.id}` })}
+      <div class="row">${select("status", "Status", ["draft", "published", "archived"], p.status, { id: `prg-status-${p.id}` })}${input("sort_order", "Order", p.sort_order, { type: "number", id: `prg-order-${p.id}` })}<button class="btn btn-sm btn-secondary">Save program</button></div></form>`,
   )}
   <h2 class="h2 mt-4">Learning paths (by professional role)</h2>
   ${paths.results.map((p) => {
     const ids = new Set(links.results.filter((l) => l.path_id === p.id).map((l) => l.course_id));
     return html`<form class="panel mt-2" method="post" action="/admin/paths/${p.id}">${hidden(c)}
-      <div class="grid-2">${input("title", "Title", p.title)}${select("role", "Role", PROFESSIONAL_ROLES, p.role)}</div>
-      ${input("summary", "Summary", p.summary)}
+      <div class="grid-2">${input("title", "Title", p.title, { id: `path-title-${p.id}` })}${select("role", "Role", PROFESSIONAL_ROLES, p.role, { id: `path-role-${p.id}` })}</div>
+      ${input("summary", "Summary", p.summary, { id: `path-summary-${p.id}` })}
       <fieldset><legend>Courses (in order of selection below)</legend><div class="topic-chips">${courses.results.map((x) => html`<label class="chip"><input type="checkbox" name="courses" value="${x.id}" ${ids.has(x.id) ? raw("checked") : ""}> ${x.title}</label>`)}</div></fieldset>
-      <div class="row">${select("status", "Status", ["draft", "published", "archived"], p.status)}<button class="btn btn-sm btn-secondary">Save path</button></div></form>`;
+      <div class="row">${select("status", "Status", ["draft", "published", "archived"], p.status, { id: `path-status-${p.id}` })}<button class="btn btn-sm btn-secondary">Save path</button></div></form>`;
   })}`;
   return adminPage(c, { title: "Programs & learning paths", active: "/admin/programs", body });
 }

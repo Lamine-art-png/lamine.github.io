@@ -71,14 +71,37 @@ test("approved videos render a player and auto-complete at 90% watched", async (
   r = await u.get("/learn/introduction-to-ai-in-agriculture/welcome");
   assert.doesNotMatch(r.text, /<video/);
   assert.match(r.text, /Instructor video in production/);
-  // 50% watched: started; 95% watched: completed.
+  // Watch-to-complete lessons offer no "Mark as complete" button.
+  r = await u.get("/learn/introduction-to-ai-in-agriculture/data-the-raw-material");
+  assert.doesNotMatch(r.text, /data-complete-form/);
+  assert.match(r.text, /completes automatically when you(?:'|&#39;)ve watched most of the video/);
+  // Playback starts, 50% watched: started.
+  await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 0, duration: 200 });
   await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 100, duration: 200 });
   let p = await env.DB.prepare("SELECT * FROM lesson_progress WHERE lesson_id='les_a1_data'").first();
   assert.equal(p.status, "started");
+  // A forged report of 95% seconds after starting is not accepted, nor is an explicit completion.
+  await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 190, duration: 200 });
+  await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 190, duration: 200, complete: true });
+  r = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.match(r.location, /\?watch=1$/);
+  p = await env.DB.prepare("SELECT * FROM lesson_progress WHERE lesson_id='les_a1_data'").first();
+  assert.equal(p.status, "started", "completion requires plausible watching time");
+  r = await u.get(r.location);
+  assert.match(r.text, /Watch the video to complete this lesson/);
+  // After enough real time (≥45% of the length, i.e. up to 2× speed), 95% completes it.
+  await env.DB.prepare("UPDATE lesson_progress SET started_at = ? WHERE lesson_id='les_a1_data'").bind(new Date(Date.now() - 100_000).toISOString()).run();
   await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 190, duration: 200 });
   p = await env.DB.prepare("SELECT * FROM lesson_progress WHERE lesson_id='les_a1_data'").first();
   assert.equal(p.status, "completed");
   assert.ok(p.completed_at);
+  // The server-known length wins over a client-reported duration.
+  await env.DB.prepare("UPDATE video_assets SET duration_seconds = 600 WHERE id='vid_a1_data'").run();
+  await env.DB.prepare("UPDATE lesson_progress SET status='started', completed_at=NULL WHERE lesson_id='les_a1_data'").run();
+  await u.postJson("/api/progress", { lessonId: "les_a1_data", position: 190, duration: 200 });
+  p = await env.DB.prepare("SELECT * FROM lesson_progress WHERE lesson_id='les_a1_data'").first();
+  assert.equal(p.status, "started", "190 s of a 600 s video is not 90%");
+  await env.DB.prepare("UPDATE video_assets SET duration_seconds = NULL WHERE id='vid_a1_data'").run();
   // Resume position on another device: the page carries the saved start.
   await env.DB.prepare("UPDATE lesson_progress SET status='started', completed_at=NULL, position_seconds=73 WHERE lesson_id='les_a1_data'").run();
   const otherDevice = new Client(env);

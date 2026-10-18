@@ -105,8 +105,8 @@ export async function support(c) {
     ? rows.map(
         (r) => html`<article class="panel mt-2"><div class="row-between"><strong>${r.topic} · ${r.name} &lt;<a href="mailto:${r.email}">${r.email}</a>&gt;</strong><span class="tiny muted">${r.created_at.slice(0, 16).replace("T", " ")} UTC</span></div>
           <p class="mt-1">${r.message}</p>
-          <form method="post" action="/admin/support/${r.id}">${hidden(c)}${textarea("admin_note", "Internal note", r.admin_note, { rows: 2 })}
-            <div class="row">${select("status", "Status", ["open", "answered", "closed"], r.status)}<button class="btn btn-secondary btn-sm">Save</button></div></form></article>`,
+          <form method="post" action="/admin/support/${r.id}">${hidden(c)}${textarea("admin_note", "Internal note", r.admin_note, { rows: 2, id: `sup-note-${r.id}` })}
+            <div class="row">${select("status", "Status", ["open", "answered", "closed"], r.status, { id: `sup-status-${r.id}` })}<button class="btn btn-secondary btn-sm">Save</button></div></form></article>`,
       )
     : html`<p class="muted">No ${status} requests.</p>`}`;
   return adminPage(c, { title: "Support requests", active: "/admin/support", body });

@@ -83,12 +83,16 @@ export async function recordProgress(c, lesson, report) {
   const scroll = clamp(Math.round(Number(report.scroll) || 0), 0, 100);
   const clientAt = typeof report.clientAt === "string" && /^\d{4}-\d\d-\d\dT/.test(report.clientAt) ? report.clientAt : now;
   let complete = report.complete === true || report.complete === "1" || report.complete === 1;
-  // Video lessons complete automatically after 90% has been watched.
-  if (!complete && lesson.type === "video" && duration && position / duration >= 0.9) complete = true;
   // Quiz lessons complete only through a graded attempt (see assessments).
   if (lesson.type === "quiz" && lesson.assessment_id) complete = false;
 
-  const prev = await env.DB.prepare("SELECT status, client_updated_at FROM lesson_progress WHERE user_id = ? AND lesson_id = ?").bind(user.id, lesson.id).first();
+  const prev = await env.DB.prepare("SELECT status, started_at, client_updated_at FROM lesson_progress WHERE user_id = ? AND lesson_id = ?").bind(user.id, lesson.id).first();
+  // Video lessons with an approved video complete only by watching: 90% of the
+  // video's length reached, over a plausible amount of time since playback
+  // started (up to 2× speed). An explicit "complete" is not accepted for them.
+  if (await watchRequired(env, lesson)) {
+    complete = watchedEnough(lesson.video, { position, duration, startedAt: prev?.started_at, now });
+  }
   const stale = prev?.client_updated_at && prev.client_updated_at > clientAt;
   await env.DB.prepare(
     `INSERT INTO lesson_progress (user_id, lesson_id, course_id, status, position_seconds, duration_seconds, scroll_pct, started_at, completed_at, last_viewed_at, client_updated_at)
@@ -114,6 +118,21 @@ export async function recordProgress(c, lesson, report) {
   }
   const summary = await recomputeCourse(c, lesson.course_id);
   return { completed: complete || prev?.status === "completed", newlyCompleted, ...summary };
+}
+
+/** Whether a lesson completes only by watching its approved, playable video. */
+export async function watchRequired(env, lesson) {
+  if (lesson.type !== "video" || !lesson.video_id) return false;
+  lesson.video ??= await env.DB.prepare("SELECT status, hls_url, mp4_url, duration_seconds FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
+  const v = lesson.video;
+  return Boolean(v && v.status === "approved" && (v.hls_url || v.mp4_url));
+}
+
+export function watchedEnough(video, { position, duration, startedAt, now }) {
+  const total = Number(video?.duration_seconds) || duration;
+  if (!total || position < total * 0.9) return false;
+  const elapsed = startedAt ? (Date.parse(now) - Date.parse(startedAt)) / 1000 : 0;
+  return elapsed >= total * 0.45;
 }
 
 export async function markQuizLessonComplete(env, userId, lessonId, courseId) {

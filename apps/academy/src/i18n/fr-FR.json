@@ -772,5 +772,6 @@
   "verify.unavailable": "Vérification temporairement indisponible",
   "verify.unavailable_body": "Nous ne pouvons pas confirmer ce titre pour le moment ; il ne doit donc pas être considéré comme valide. Réessayez plus tard ou contactez AGRO-AI Academy.",
   "cert.reason.signing_unavailable": "La délivrance des certificats est temporairement suspendue. Votre progression est enregistrée ; réclamez votre certificat plus tard.",
-  "notify.admin": "{title}"
+  "notify.admin": "{title}",
+  "lesson.watch_to_complete": "Regardez la vidéo pour terminer cette leçon. Votre progression est enregistrée au fil du visionnage."
 }

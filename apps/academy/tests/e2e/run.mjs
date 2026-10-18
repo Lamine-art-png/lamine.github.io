@@ -6,7 +6,7 @@
 // Starts the dev server on a fresh database, drives Chromium with Playwright,
 // and exits non-zero on any failure. Screenshots (optional) stay local.
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,6 +85,9 @@ async function a11y(page, label) {
       return [255, 255, 255];
     };
     if (!document.querySelector("main")) out.push("no <main> landmark");
+    const ids = new Map();
+    for (const el of document.querySelectorAll("[id]")) ids.set(el.id, (ids.get(el.id) || 0) + 1);
+    for (const [id, n] of ids) if (n > 1) out.push(`duplicate id "${id}" (${n}×)`);
     if (document.querySelectorAll("h1").length !== 1) out.push(`expected one h1, found ${document.querySelectorAll("h1").length}`);
     for (const img of document.querySelectorAll("img")) if (!img.hasAttribute("alt")) out.push(`img without alt: ${img.src}`);
     for (const el of document.querySelectorAll("input:not([type=hidden]), select, textarea")) {
@@ -133,9 +136,29 @@ async function a11y(page, label) {
   if (problems.length) throw new Error(`${label}: accessibility problems:\n  - ${problems.join("\n  - ")}`);
 }
 
+// Approved lesson videos point at a synthetic WebM clip served by the test
+// (stands in for R2/Stream media; generated with ffmpeg, 20 s, captions separate).
+const CLIP = readFileSync(join(root, "tests/fixtures/synthetic-lesson-clip.webm"));
+const MEDIA = "https://media.academy.test/a1";
+async function serveMedia(context) {
+  await context.route(`${MEDIA}/**`, (route) => {
+    const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || "");
+    if (!range) return route.fulfill({ status: 200, body: CLIP, headers: { "content-type": "video/webm", "accept-ranges": "bytes", "content-length": String(CLIP.length) } });
+    const start = Number(range[1]);
+    const end = range[2] ? Math.min(Number(range[2]), CLIP.length - 1) : CLIP.length - 1;
+    return route.fulfill({
+      status: 206,
+      body: CLIP.subarray(start, end + 1),
+      headers: { "content-type": "video/webm", "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${CLIP.length}`, "content-length": String(end - start + 1) },
+    });
+  });
+}
+const VTT = "WEBVTT\n\n00:00:00.000 --> 00:00:06.000\nSynthetic caption one.\n\n00:00:06.000 --> 00:00:20.000\nSynthetic caption two.\n";
+
 const browser = await chromium.launch();
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  await serveMedia(ctx);
   const page = await ctx.newPage();
   const consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(e.message));
@@ -160,6 +183,48 @@ try {
     const m = await mail("founder@academy.test", "verify_email");
     await page.goto(/https?:\/\/\S+verify-email\?token=\S+/.exec(m.text)[0]);
     await page.goto(`${base}/admin/courses/crs_a1`);
+    await shot(page, "admin-course-not-ready");
+    assert.ok((await page.locator("text=❌").count()) > 0, "A1 is blocked before reviews and videos");
+    await a11y(page, "/admin/courses/crs_a1");
+
+    // Approve the first lesson video through the console: media URL, reviewed captions.
+    const videos = db.prepare("SELECT v.id, v.title, v.instructor_id, v.script_md FROM video_assets v JOIN lessons l ON l.video_id = v.id WHERE l.course_id = 'crs_a1' ORDER BY l.sort_order").all();
+    await page.goto(`${base}/admin/videos/${videos[0].id}`);
+    await a11y(page, "/admin/videos/:id");
+    await page.fill("#a-vtt", VTT);
+    await page.selectOption("#a-caption_status", "reviewed");
+    await page.click('button:has-text("Add captions")');
+    await page.waitForLoadState();
+    await page.selectOption("#a-provider", "r2");
+    await page.fill("#a-mp4_url", `${MEDIA}/${videos[0].id}.webm`);
+    await page.fill("#a-duration_seconds", "20");
+    await page.selectOption("#a-status", "approved");
+    await page.click('button:has-text("Save video")');
+    await page.waitForLoadState();
+    assert.equal(db.prepare("SELECT status FROM video_assets WHERE id = ?").get(videos[0].id).status, "approved");
+    // The remaining approvals use the same endpoints (as the founder, with the page's CSRF token).
+    const csrf = await page.locator('meta[name="csrf-token"]').getAttribute("content");
+    for (const v of videos.slice(1)) {
+      let r = await page.request.post(`${base}/admin/videos/${v.id}/captions`, { form: { _csrf: csrf, locale: "en", status: "reviewed", vtt: VTT }, headers: { origin: base }, maxRedirects: 0 });
+      assert.equal(r.status(), 303);
+      r = await page.request.post(`${base}/admin/videos/${v.id}`, {
+        form: { _csrf: csrf, title: v.title, provider: "r2", status: "approved", instructor_id: v.instructor_id || "", duration_seconds: "20", hls_url: "", mp4_url: `${MEDIA}/${v.id}.webm`, poster_url: "", provider_ref: "", script_md: v.script_md },
+        headers: { origin: base },
+        maxRedirects: 0,
+      });
+      assert.equal(r.status(), 303);
+    }
+
+    // Record the three mandatory reviews through the form.
+    await page.goto(`${base}/admin/courses/crs_a1#reviews`);
+    for (const type of ["academic", "assessment", "accessibility"]) {
+      await page.selectOption("#a-review_type", type);
+      await page.selectOption("#a-decision", "approved");
+      await page.fill("#a-reviewer_name", "Synthetic E2E Faculty");
+      await page.check('input[name="confirm"]');
+      await page.click('button:has-text("Record review decision")');
+      await page.waitForLoadState();
+    }
     await shot(page, "admin-course");
     assert.equal(await page.locator("text=❌").count(), 0, "readiness checks pass");
     await page.selectOption("#st", "published");
@@ -173,6 +238,7 @@ try {
   });
 
   const learner = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: "en-US" });
+  await serveMedia(learner);
   const lp = await learner.newPage();
   lp.on("pageerror", (e) => consoleErrors.push(e.message));
 
@@ -192,10 +258,88 @@ try {
     await lp.waitForURL(/verified=1/);
   });
 
-  await step("learner enrolls and studies with saved progress", async () => {
+  // One lesson is switched to a video lesson to exercise watch-to-complete in the browser.
+  const WATCH_SLUG = "data-the-raw-material";
+
+  await step("instructor video: playback, captions, saved position, resume", async () => {
     await lp.goto(`${base}/courses/introduction-to-ai-in-agriculture`);
     await lp.click('button:has-text("Enroll for free")');
     await lp.waitForURL(/\/learn\/introduction-to-ai-in-agriculture\/welcome/);
+    const video = lp.locator("[data-player] video");
+    await video.waitFor();
+    assert.match(await lp.locator("[data-player] source").first().getAttribute("type"), /video\/webm/);
+    assert.equal(await lp.locator('[data-player] track[kind="captions"]').count(), 1);
+    // Wait until the browser has decoded the media's metadata.
+    await lp.waitForSelector("[data-player] video", { state: "attached" });
+    const meta = await video.evaluate((v) => new Promise((res) => (v.readyState >= 1 ? res(v.duration) : v.addEventListener("loadedmetadata", () => res(v.duration), { once: true }))));
+    assert.ok(meta > 19 && meta < 21, `duration ${meta}`);
+    await a11y(lp, "lesson with video");
+    // Captions in the learner's language are on by default; the toggle turns them off and on.
+    const mode = () => video.evaluate((v) => v.textTracks[0].mode);
+    assert.equal(await mode(), "showing", "default captions shown");
+    await lp.click("[data-captions-toggle]");
+    assert.equal(await mode(), "disabled");
+    await lp.click("[data-captions-toggle]");
+    const cues = await video.evaluate((v) => new Promise((res) => {
+      const t = v.textTracks[0];
+      const done = () => res({ mode: t.mode, cues: t.cues ? t.cues.length : 0 });
+      if (t.cues && t.cues.length) return done();
+      v.querySelector("track").addEventListener("load", done, { once: true });
+      setTimeout(done, 3000);
+    }));
+    assert.equal(cues.mode, "showing");
+    assert.equal(cues.cues, 2);
+    // Play, then pause at ~10 s: the position is saved on the server.
+    await video.evaluate((v) => ((v.muted = true), v.play()));
+    await video.evaluate((v) => new Promise((res) => { v.currentTime = 10; v.addEventListener("seeked", res, { once: true }); }));
+    await video.evaluate((v) => v.pause());
+    const userId = db.prepare("SELECT id FROM users WHERE email='amina@academy.test'").get().id;
+    let saved = null;
+    for (let i = 0; i < 40 && !(saved?.position_seconds >= 9); i++) {
+      await lp.waitForTimeout(150);
+      saved = db.prepare("SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_welcome'").get(userId);
+    }
+    assert.ok(saved && saved.position_seconds >= 9 && saved.position_seconds <= 11, `saved position ${saved?.position_seconds}`);
+    assert.ok(saved.duration_seconds > 19, "duration reported");
+    assert.equal(saved.status, "started", "a text lesson with a video is not auto-completed");
+    // Reload (another session would behave the same): playback resumes at the saved position.
+    await lp.reload();
+    const resumed = await lp.locator("[data-player] video").evaluate((v) => new Promise((res) => {
+      const check = () => (v.currentTime > 0 ? res(v.currentTime) : setTimeout(check, 50));
+      if (v.readyState >= 1) check(); else v.addEventListener("loadedmetadata", () => setTimeout(check, 50), { once: true });
+      setTimeout(() => res(v.currentTime), 4000);
+    }));
+    assert.ok(resumed >= 9 && resumed <= 11, `resumed at ${resumed}`);
+    await shot(lp, "lesson-video");
+  });
+
+  await step("video lesson completes only after watching (2× speed)", async () => {
+    db.prepare("UPDATE lessons SET type = 'video' WHERE slug = ? AND course_id = 'crs_a1'").run(WATCH_SLUG);
+    await lp.goto(`${base}/learn/introduction-to-ai-in-agriculture/${WATCH_SLUG}`);
+    assert.equal(await lp.locator("[data-complete-form]").count(), 0, "no manual completion for video lessons");
+    const video = lp.locator("[data-player] video");
+    await video.evaluate((v) => new Promise((res) => (v.readyState >= 1 ? res() : v.addEventListener("loadedmetadata", res, { once: true }))));
+    // Seeking straight to the end is not enough: the server measures watching time.
+    await video.evaluate((v) => ((v.muted = true), v.play()));
+    await video.evaluate((v) => new Promise((res) => { v.currentTime = 19.5; v.addEventListener("ended", res, { once: true }); }));
+    await lp.waitForTimeout(500);
+    const userId = db.prepare("SELECT id FROM users WHERE email='amina@academy.test'").get().id;
+    const row = () => db.prepare("SELECT l.* FROM lesson_progress l JOIN lessons x ON x.id = l.lesson_id WHERE l.user_id = ? AND x.slug = ?").get(userId, WATCH_SLUG);
+    assert.equal(row().status, "started", "skipping to the end does not complete the lesson");
+    // Watch from the start at 2× speed (10 s of real time for 20 s of video).
+    await video.evaluate((v) => new Promise((res) => { v.currentTime = 0; v.playbackRate = 2; v.addEventListener("ended", res, { once: true }); v.play(); }));
+    let r = row();
+    for (let i = 0; i < 40 && r.status !== "completed"; i++) {
+      await lp.waitForTimeout(150);
+      r = row();
+    }
+    assert.equal(r.status, "completed", "watched video completes the lesson");
+    await lp.reload();
+    await lp.locator(".complete-box strong").filter({ hasText: "Completed" }).waitFor();
+  });
+
+  await step("learner enrolls and studies with saved progress", async () => {
+    await lp.goto(`${base}/learn/introduction-to-ai-in-agriculture/welcome`);
     await a11y(lp, "lesson");
     await shot(lp, "lesson");
     // Notes save without a reload.
@@ -203,7 +347,7 @@ try {
     await lp.click('button:has-text("Save note")');
     await lp.waitForSelector("text=Ask the co-op about soil probes.");
     const lessons = db.prepare("SELECT slug, type FROM lessons WHERE course_id='crs_a1' ORDER BY sort_order").all();
-    for (const l of lessons.filter((x) => x.type !== "quiz")) {
+    for (const l of lessons.filter((x) => x.type !== "quiz" && x.slug !== WATCH_SLUG)) {
       await lp.goto(`${base}/learn/introduction-to-ai-in-agriculture/${l.slug}`);
       await lp.click('button:has-text("Mark as complete")');
       await lp.waitForLoadState();

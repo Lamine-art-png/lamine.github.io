@@ -213,6 +213,8 @@
             report();
           }
         });
+        // The first play is reported so the server can measure watching time.
+        video.addEventListener("play", () => report(), { once: true });
         video.addEventListener("pause", () => report());
         video.addEventListener("ended", () => report());
         addEventListener("pagehide", () => report({ keepalive: true }));

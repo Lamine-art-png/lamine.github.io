@@ -772,5 +772,6 @@
   "verify.unavailable": "Verificación no disponible temporalmente",
   "verify.unavailable_body": "No podemos confirmar esta credencial en este momento, por lo que no debe considerarse válida. Inténtalo más tarde o contacta con AGRO-AI Academy.",
   "cert.reason.signing_unavailable": "La emisión de certificados está pausada temporalmente. Tu progreso está guardado; vuelve a solicitar tu certificado más tarde.",
-  "notify.admin": "{title}"
+  "notify.admin": "{title}",
+  "lesson.watch_to_complete": "Mira el video para completar esta lección. Tu avance se guarda mientras lo ves."
 }

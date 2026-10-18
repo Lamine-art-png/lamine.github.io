@@ -102,16 +102,16 @@ export function hidden(c) {
   return html`<input type="hidden" name="_csrf" value="${c.csrf}">`;
 }
 
-export function input(name, label, value = "", { type = "text", required = false, hint = "", attrs = "" } = {}) {
-  return html`<div class="field"><label for="a-${name}">${label}</label><input id="a-${name}" name="${name}" type="${type}" value="${value ?? ""}" ${required ? raw("required") : ""} ${raw(attrs)}>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;
+export function input(name, label, value = "", { type = "text", required = false, hint = "", attrs = "", id = `a-${name}` } = {}) {
+  return html`<div class="field"><label for="${id}">${label}</label><input id="${id}" name="${name}" type="${type}" value="${value ?? ""}" ${required ? raw("required") : ""} ${raw(attrs)}>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;
 }
 
-export function textarea(name, label, value = "", { rows = 6, hint = "", cls = "", required = false } = {}) {
-  return html`<div class="field"><label for="a-${name}">${label}</label><textarea id="a-${name}" name="${name}" rows="${rows}" class="${cls}" ${required ? raw("required") : ""}>${value ?? ""}</textarea>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;
+export function textarea(name, label, value = "", { rows = 6, hint = "", cls = "", required = false, id = `a-${name}` } = {}) {
+  return html`<div class="field"><label for="${id}">${label}</label><textarea id="${id}" name="${name}" rows="${rows}" class="${cls}" ${required ? raw("required") : ""}>${value ?? ""}</textarea>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;
 }
 
-export function select(name, label, options, value, { hint = "" } = {}) {
-  return html`<div class="field"><label for="a-${name}">${label}</label><select id="a-${name}" name="${name}">${options.map((o) => {
+export function select(name, label, options, value, { hint = "", id = `a-${name}` } = {}) {
+  return html`<div class="field"><label for="${id}">${label}</label><select id="${id}" name="${name}">${options.map((o) => {
     const [v, l] = Array.isArray(o) ? o : [o, o];
     return html`<option value="${v}" ${String(v) === String(value ?? "") ? raw("selected") : ""}>${l}</option>`;
   })}</select>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;

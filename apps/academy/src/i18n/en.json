@@ -803,5 +803,6 @@
   "verify.unavailable": "Verification temporarily unavailable",
   "verify.unavailable_body": "We can't confirm this credential right now, so it must not be treated as valid. Please try again later or contact AGRO-AI Academy.",
   "cert.reason.signing_unavailable": "Certificate issuing is temporarily paused. Your progress is saved; claim your certificate again later.",
-  "notify.admin": "{title}"
+  "notify.admin": "{title}",
+  "lesson.watch_to_complete": "Watch the video to complete this lesson. Your place is saved as you go."
 }

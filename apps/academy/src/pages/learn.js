@@ -50,6 +50,12 @@ function interactive(c, lesson) {
   return "";
 }
 
+/** Media type for the progressive (non-HLS) source, from its file extension. */
+function fileVideoType(url) {
+  const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase();
+  return { webm: "video/webm", mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime" }[ext] || "video/mp4";
+}
+
 function videoBlock(c, lesson, video, progress) {
   const t = c.t;
   if (video?.playable) {
@@ -57,7 +63,7 @@ function videoBlock(c, lesson, video, progress) {
     return html`<div class="player" data-player data-lesson="${lesson.id}" data-start="${start}">
         <video controls playsinline preload="metadata" ${video.poster_url ? raw(`poster="${safeUrl(video.poster_url)}"`) : ""} aria-label="${lesson.title}">
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
-          ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="video/mp4">` : ""}
+          ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="${fileVideoType(video.mp4_url)}">` : ""}
           ${video.captions.map((cap, i) => html`<track kind="captions" src="/captions/${cap.id}.vtt" srclang="${cap.locale}" label="${cap.label}" ${cap.locale === c.locale || (i === 0 && !video.captions.some((x) => x.locale === c.locale)) ? raw("default") : ""}>`)}
           <p>${t("lesson.video_unsupported")} ${video.mp4_url ? html`<a href="${safeUrl(video.mp4_url)}">${t("lesson.download_video")}</a>` : ""}</p>
         </video>
@@ -152,6 +158,7 @@ export async function lessonPage(c) {
       <article class="class-content" data-lesson-root data-lesson-id="${lesson.id}" data-lesson-type="${lesson.type}" data-track="${canTrack ? "1" : "0"}" data-completed="${completed ? "1" : "0"}">
         ${!enrolled && previewAccess ? alert("info", html`${t("lesson.preview_notice")} <a href="/courses/${course.slug}">${t("course.enroll_free")}</a>`) : ""}
         ${flash ? alert("success", t("lesson.marked_complete")) : ""}
+        ${c.url.searchParams.get("watch") === "1" && !completed ? alert("info", t("lesson.watch_to_complete")) : ""}
         <p class="eyebrow">${icon(lessonTypeIcon(lesson.type), { size: 14 })} ${t(`lesson.type.${lesson.type}`)} · ${t("duration.minutes", { n: lesson.est_minutes })}</p>
         <h1 class="display-sm">${lesson.title}</h1>
         ${translationNotice(c, lesson._tr)}
@@ -178,7 +185,9 @@ export async function lessonPage(c) {
                   : exam
                     ? html`<a class="btn btn-primary" href="/assessments/${exam.id}">${t("lesson.go_to_exam")}</a>`
                     : ""
-                : html`<form method="post" action="/learn/${course.slug}/${lesson.slug}/complete" data-complete-form>${csrfField(c)}
+                : lesson.type === "video" && video?.playable
+                  ? ""
+                  : html`<form method="post" action="/learn/${course.slug}/${lesson.slug}/complete" data-complete-form>${csrfField(c)}
                     <button class="btn btn-primary" type="submit">${icon("check", { size: 16 })} ${t("lesson.mark_complete")}</button></form>`}
             </div>`
           : ""}
@@ -258,6 +267,7 @@ export async function completeLesson(c) {
   const { course, lesson } = await lessonForWrite(c);
   const result = await recordProgress(c, lesson, { complete: true, position: 0, clientAt: nowIso() });
   if (wantsJson(c)) return json({ ok: true, ...result, certificate: result.certificate?.credential_id || null });
+  if (!result.completed) return redirect(`/learn/${course.slug}/${lesson.slug}?watch=1`);
   if (result.certificate) return redirect(`/certificates/${result.certificate.credential_id}?new=1`);
   const syllabus = await getSyllabus(c.env, course.id, c.locale);
   const idx = syllabus.lessons.findIndex((l) => l.id === lesson.id);

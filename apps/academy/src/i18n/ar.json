@@ -772,5 +772,6 @@
   "verify.unavailable": "التحقق غير متاح مؤقتًا",
   "verify.unavailable_body": "لا يمكننا تأكيد هذه الشهادة الآن، لذا يجب عدم اعتبارها صالحة. يُرجى المحاولة لاحقًا أو التواصل مع أكاديمية AGRO-AI.",
   "cert.reason.signing_unavailable": "إصدار الشهادات متوقف مؤقتًا. تقدّمك محفوظ؛ اطلب شهادتك مرة أخرى لاحقًا.",
-  "notify.admin": "{title}"
+  "notify.admin": "{title}",
+  "lesson.watch_to_complete": "شاهد الفيديو لإكمال هذا الدرس. يُحفظ موضعك أثناء المشاهدة."
 }
