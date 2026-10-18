@@ -75,20 +75,25 @@ plus mobile, dark theme and Arabic RTL.
 | App secrets | `ACADEMY_STAGING_*` | `ACADEMY_PRODUCTION_*` |
 | Worker / D1 | `agroai-academy-staging` | `agroai-academy` |
 | Files / backups (R2) | `agroai-academy-staging-files` / `-staging-backups` | `agroai-academy-files` / `agroai-academy-backups` |
-| Checks after deploy | smoke test + staging integration test (`tests/remote/staging.mjs`, real D1 over HTTP) | smoke test |
+| Checks after deploy | smoke test + **mandatory** staging write-path test (`tests/remote/staging.mjs`, real D1 over HTTP; fails without its token) | smoke test |
 
 `scripts/deploy.sh <target>` (production also needs `ACADEMY_DEPLOY_CONFIRM=production`):
 
 1. Refuses to deploy if the hostname has a DNS record that is not this Worker (never edits DNS).
 2. Creates the D1 database and file bucket if missing; fills in only this target's database id.
-3. **Backs up before migrating**: export → restore into a scratch SQLite database and check
-   integrity, foreign keys and row counts → gzip (GPG AES-256 with `BACKUP_PASSPHRASE`) →
-   private R2 bucket → read back and compare checksums. Any failure stops the deploy before the
-   schema or code changes. A D1 Time Travel bookmark is recorded as a second recovery path.
+3. **Backs up before migrating**: fingerprint critical records (learners, roles, enrollments,
+   progress, attempts, answers, certificates, reviews, revisions) → export → fingerprint again →
+   restore into a scratch SQLite database and check integrity, foreign keys, that **every critical
+   record unchanged during the export is present and identical** (no tolerance; append-only
+   records may never vanish), other tables' row counts, and that pending migrations apply to the
+   restored copy → gzip (GPG AES-256 with `BACKUP_PASSPHRASE`) → private R2 bucket → read back and
+   compare checksums. Any failure stops the deploy before the schema or code changes. A D1 Time
+   Travel bookmark is recorded as a second recovery path.
 4. Applies migrations, deploys the Worker, then sets secrets. The certificate signing key is
    never replaced, and never generated while certificates exist.
 
-Restore drill (never touches the live database):
+Restore drill (never touches the live database; the restored database's row counts and critical
+records are compared with the backup exactly):
 `bash scripts/restore-backup.sh agroai-academy-backups/<key> agroai-academy-restore-<date> <sha256>`.
 
 Rollback: `npx wrangler rollback --name agroai-academy` (Worker); schema changes are additive
@@ -101,16 +106,23 @@ The exact secrets, Cloudflare permissions and launch steps are in `docs/STATUS.m
 * **Admins:** set `ACADEMY_BOOTSTRAP_ADMIN_EMAILS`; those addresses become
   super administrators after verifying their email. Super admins grant other
   roles (academy admin, instructor, content editor) from *Admin → Learners*.
-* **Publishing:** *Admin → Courses* shows a readiness checklist. Publishing or
-  scheduling is blocked until every check passes, including three mandatory reviews
-  (academic, assessment, accessibility) recorded against the exact current content —
-  editing afterwards voids them — and, under the default video policy, approved,
-  playable, captioned videos for every planned lesson video. A course may switch to an
+* **Publishing:** editors always change a **draft** of the course. Learners see the live
+  content, which changes only when a draft is published as a numbered **revision**.
+  *Admin → Courses* shows a readiness checklist. Publishing or scheduling is blocked until
+  every check passes, including three mandatory reviews (academic, assessment,
+  accessibility) recorded against the exact draft — editing afterwards voids them — and,
+  under the default video policy, approved, playable, captioned videos for every planned
+  lesson video. Publication never deletes what learners used: removed lessons are hidden,
+  removed modules, assessments and questions retired, and open exam attempts keep their
+  frozen questions and policy. Unpublished changes can be discarded. A course that has
+  never been released follows its draft directly (it is shown as upcoming). A course may switch to an
   "optional" video policy with a recorded, audited reason. Scheduled courses are
   re-checked at publication time. Course A1 is in **review** for 29 Oct 2026.
 * **Videos:** *Admin → Videos* records Synthesia/R2/Stream assets (https URLs only) and
   their captions. Only **approved** videos with a playable URL are shown; others show an
-  honest "in production" notice. Video lessons complete only by watching. Course A1 ships
+  honest "in production" notice. Approval requires the video's duration. Video lessons
+  complete only by watching, measured by the server from timed heartbeats
+  (`docs/VIDEO_PROGRESS.md` explains the rule and its trust boundary). Course A1 ships
   with a spoken script per lesson ready for Joshua video production; no video is approved yet.
 * **Questions:** written in a plain-text format (`* ` marks correct options,
   `Left => Right` for matching, one line per ordered item).
