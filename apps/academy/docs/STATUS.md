@@ -1,6 +1,6 @@
 # AGRO-AI Academy — execution status
 
-Updated 2026-10-18. Branch: `claude/inspiring-hypatia-gq0x5p`. Nothing is deployed yet;
+Updated 2026-10-18 (second audit pass). Branch: `claude/inspiring-hypatia-gq0x5p`. Nothing is deployed yet;
 merging to `main` deploys **staging only**. Production needs a separate, confirmed dispatch.
 
 ## Launch plan for 29 October (one excellent course)
@@ -10,11 +10,12 @@ and passes every automatic check, but by design it **cannot be published** until
 the following in the admin console (Admin → Courses → A1):
 
 1. **Record the three mandatory reviews** (academic, assessment, accessibility). Each
-   approval is bound to a fingerprint of the exact content reviewed; any later edit to
-   lessons, quizzes or exam questions voids it until it is recorded again.
+   approval is bound to a fingerprint of the exact draft reviewed; any later edit to
+   lessons, quizzes or exam questions voids it until it is recorded again. After launch,
+   every change is a draft that needs fresh reviews and an explicit "Publish changes".
 2. **Decide on instructor video**, one of:
    - *Required* (default): approve all 14 Joshua videos in Admin → Videos — playable HLS or
-     MP4 URL plus **reviewed English captions** for each. None exist yet; scripts are ready.
+     MP4 URL, **duration in seconds**, plus **reviewed English captions** for each. None exist yet; scripts are ready.
    - *Optional*: switch the course's video policy to "optional" with a written reason
      (for example "text-first launch; videos follow after approval"). It is audited and
      shown in the readiness list; learners see an "in production" notice instead of video.
@@ -41,12 +42,52 @@ Instructor video production is **not complete**: no approved Joshua video assets
 | 11 | No regressions elsewhere | Only `apps/academy/**` and the two `academy-*` workflows changed. New, separately named Workers, databases and buckets; DNS guard refuses existing records. | see "Regression check" |
 | 12 | Security, authorization, accessibility | See "Audit" below. | axe-core scan of 38 pages in CI; e2e accessibility checks |
 
+## Second audit pass (2026-10-18)
+
+| # | Finding | Resolution | Evidence (each test fails on the previous code) |
+|---|---|---|---|
+| Codex P1 | Attempts reinterpreted after an assessment is edited | Migration 0004: each attempt freezes its policy (kind, passing score, time limit, feedback policy, certification) and every drawn question (prompt, options, answer key, explanation, rubric, grading, points, case, translation). Scoring, grading, the attempt and review pages read the snapshot. | `tests/integration/attempt-snapshots.test.js` (4) |
+| Codex P1 | Edits to a published course bypassed the mandatory reviews | Migration 0005: editors change a **draft**; learners see only live content, which changes only when a draft that passed readiness (reviews bound to that exact draft) is explicitly published as a numbered revision (`course_revisions`). Publication hides/retires removed content, never deletes it; progress, attempts and certificates keep their references. Discard restores the live revision. Banks belong to one course. | `tests/integration/course-drafts.test.js` (9) |
+| Codex P2 | Country-registry changes did not trigger Academy CI/deploy | Registry added to CI and deploy path filters; a unit test derives every out-of-app import and checks the filters. | `tests/unit/workflow-paths.test.js` |
+| 4 | Backup accepted up to max(5, 1%) missing rows | Critical records (users, roles, enrollments, progress, attempts, answers, certificates, certificate events, reviews, revisions) fingerprinted before and after the export: every record unchanged across the export must be in the dump identically; append-only records may never vanish. Pending migrations are rehearsed on the restored copy. Restore drills compare the new database with the backup exactly. | `tests/deploy/deploy-script.test.js` (21 scenarios incl. one dropped certificate/attempt/enrollment, an altered certificate, a vanished certificate, concurrent writes, a migration failing on real data, a lossy restore) |
+| 5 | Staging write-path test skipped without credentials | Missing/short `ACADEMY_STAGING_TEST_INBOX_TOKEN` fails the staging job (before deploy and in the test); production `needs: staging`. A staging-only, token-protected probe course (published through the revision path) makes the full write path run on every deploy: registration, verification, sign-in, enrollment, progress, completion, certification exam, certificate issuance, public signature verification, password reset, account deletion (certificate revoked). | `tests/integration/staging-harness.test.js` (5), `tests/unit/release-gate.test.js` |
+| 6 | Video completion trusted a client position plus wall-clock time | Server-timed heartbeats (migration 0006): only forward playback possible at ≤2× between beats 2–120 s apart (server clock) is credited; spans are merged; completion at 90% of the **server-recorded** duration (approval now requires it). Trust boundary in `docs/VIDEO_PROGRESS.md`. | `tests/integration/video-watch.test.js` (8: forged 95%, explicit completion, start-and-wait, fake duration, 3× speed, floods, replayed queues, rewatch loops, interleaved tabs, legitimate 1×/2× with pauses and seeks); e2e plays a real clip at 2× |
+| 7 | Settings changed during an active exam | Covered by the snapshots, and end to end through the admin path: edit threshold (100%), time limit (1 min) and feedback (full), review, publish during an open exam → deadline, 80% threshold and correctness-only feedback unchanged. | `course-drafts.test.js` "publishing new exam settings while an exam is open…" |
+| 8 | Preserve safeguards | Signature verification, Unicode PDFs, reviews, localization and environment isolation untouched and still tested. | full suite below |
+
+### Results of this pass (local, commit noted in the PR)
+
+- `npm test` (unit, integration, deploy): **132/132 pass**.
+- Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass**, including video watch-to-complete at 2×.
+- Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
+- Seed and i18n index regenerate with no diff. Repository secret scan passes.
+- axe-core is not installable in the offline sandbox; the WCAG scan runs in Academy CI.
+
+### Outstanding issues (honest list)
+
+- **Not deployed and not verified live.** Staging has never run: the Cloudflare and staging
+  secrets below must be added first. The staging gate will fail (by design) until
+  `ACADEMY_STAGING_TEST_INBOX_TOKEN` exists.
+- **Video assurance has a stated limit:** a script sending plausible heartbeats in real time
+  for half the video's length can pass; the credential rests on the graded exam.
+- **Backups:** records created or changed during the export are reported, not required;
+  D1 has no consistent-snapshot export, so the Time Travel bookmark remains the
+  point-in-time recovery path for those.
+- **Course drafts:** content translations (Admin → Translations) still apply to live content
+  directly and are not part of the reviewed revision (certification exams use only reviewed
+  translations, frozen per attempt). The admin "Open in classroom" link shows the live
+  revision, not the draft.
+- Earlier items remain: Telugu/Myanmar names in PDFs, GPL font counsel review, unreviewed
+  machine catalogs, separation of duties, manual screen-reader audit, no adaptive-streaming
+  library.
+
 ## Exact deployment requirements
 
 GitHub (repository settings → Environments):
 
 - Environment **`academy-staging`**: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
-  `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS`, `ACADEMY_STAGING_TEST_INBOX_TOKEN` (random, ≥32 chars).
+  `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS`, `ACADEMY_STAGING_TEST_INBOX_TOKEN` (random, ≥32 chars;
+  **mandatory** — without it the staging job fails and production cannot deploy).
   Optional: `ACADEMY_STAGING_RESEND_API_KEY`, `ACADEMY_STAGING_CERT_SIGNING_SECRET`,
   `ACADEMY_STAGING_BACKUP_PASSPHRASE`, `ACADEMY_STAGING_GOOGLE_CLIENT_ID/SECRET`.
 - Environment **`academy-production`**: add **required reviewers**; secrets `CLOUDFLARE_API_TOKEN`,
@@ -75,7 +116,7 @@ manually on `main` with `target=production` and `confirm=deploy academy producti
 ## Regression check (other AGRO-AI systems)
 
 - Files changed outside `apps/academy/`: `.github/workflows/academy-ci.yml`,
-  `.github/workflows/academy-deploy.yml` (both Academy-only, path-filtered).
+  `.github/workflows/academy-deploy.yml` (both Academy-only, path-filtered). Nothing else.
 - Enterprise Portal, Platform API, marketing site, guides and other Workers: no file changed.
   `shared/supported-locales.json` and `shared/registries/countries.json` are read, not modified.
 - Cloudflare resources are new and Academy-named; the existing `agroai-academy-early-access`
