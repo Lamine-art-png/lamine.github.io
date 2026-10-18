@@ -36,6 +36,8 @@ export function registerRoutes(r) {
   r.get("/healthz", pub.health);
   r.get("/languages", pub.languages);
   r.get("/__staging/inbox", pub.stagingInbox);
+  // Bearer-token authenticated (no cookies), so no CSRF token; 404 outside staging.
+  r.post("/__staging/probe-course", pub.stagingProbeCourse, { csrf: false });
 
   // Authentication
   r.get("/register", (c) => auth.registerPage(c));

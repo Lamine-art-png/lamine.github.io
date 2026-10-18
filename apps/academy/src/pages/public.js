@@ -12,6 +12,7 @@ import { courseCard, pageHead, emptyState, alert, csrfField, field, selectField 
 import { listCourses, listPrograms, listPaths, localize } from "../services/content.js";
 import { validEmail } from "../services/users.js";
 import { isStagingTestAddress } from "../services/email.js";
+import { ensureProbeCourse } from "../services/staging-probe.js";
 import { LEGAL } from "../content/legal.js";
 import { qrSvg } from "../lib/qr.js";
 
@@ -468,6 +469,14 @@ export async function stagingInbox(c) {
   if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token) || !isStagingTestAddress(to)) throw new HttpError(404, "not_found");
   const row = await c.env.DB.prepare("SELECT template, subject, text, status, created_at FROM email_outbox WHERE to_email = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(to).first();
   return json(row ? { ok: true, message: row } : { ok: false }, row ? 200 : 404);
+}
+
+/** Staging only, token-protected: ensure the synthetic probe course exists (staging integration test). */
+export async function stagingProbeCourse(c) {
+  const token = String(c.env.STAGING_TEST_TOKEN || "");
+  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
+  return json({ ok: true, probe: await ensureProbeCourse(c.env) });
 }
 
 /** Public language-support page: what is translated, reviewed or English-only, per language. */

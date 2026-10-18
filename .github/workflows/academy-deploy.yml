@@ -63,12 +63,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Require staging test credentials (release gate)
+        run: |
+          if [ "${#STAGING_TEST_INBOX_TOKEN}" -lt 32 ]; then
+            echo "::error::ACADEMY_STAGING_TEST_INBOX_TOKEN (32+ characters) is required: the staging write-path test is mandatory before production."
+            exit 1
+          fi
       - name: Deploy staging
         working-directory: apps/academy
         run: bash scripts/deploy.sh staging
       - name: Smoke test staging (read-only)
         working-directory: apps/academy
         run: bash scripts/smoke.sh https://academy-staging.agroai-pilot.com
+      # Mandatory: production (needs: staging) runs only if this passes.
       - name: Staging integration test against Cloudflare D1 over HTTP
         working-directory: apps/academy
         run: node tests/remote/staging.mjs https://academy-staging.agroai-pilot.com

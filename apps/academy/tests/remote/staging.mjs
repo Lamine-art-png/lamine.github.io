@@ -3,8 +3,12 @@
 //   STAGING_TEST_INBOX_TOKEN=… node tests/remote/staging.mjs https://academy-staging.agroai-pilot.com
 // Write-path checks use a synthetic @academy-staging-test.invalid learner
 // (mail to it is suppressed), run only when /healthz reports "staging", and
-// delete the learner at the end. Without the inbox token only read-only
-// checks run.
+// delete the learner at the end. The write path is mandatory: without the
+// inbox token, or if any step cannot run, the test fails and production
+// deployment (which needs this job) is blocked. The learner enrolls in a
+// synthetic staging-only probe course, so enrollment, progress, completion,
+// a certification exam, certificate issuance and verification run on every
+// deploy whatever the publication state of the real courses.
 import { RemoteClient } from "./client.mjs";
 
 const BASE = process.argv[2];
@@ -82,10 +86,18 @@ async function main() {
   });
 
   if (environment !== "staging") throw new Error(`refusing write-path checks: target reports environment "${environment}"`);
-  if (!TOKEN) {
-    console.log("::warning::ACADEMY_STAGING_TEST_INBOX_TOKEN is not configured; write-path staging checks were skipped.");
-    return;
+  if (TOKEN.length < 32) {
+    console.log("::error::ACADEMY_STAGING_TEST_INBOX_TOKEN is missing or shorter than 32 characters; the mandatory write-path checks cannot run.");
+    throw new Error("write-path checks cannot run without the staging test inbox token (ACADEMY_STAGING_TEST_INBOX_TOKEN)");
   }
+
+  let probe;
+  await step("staging probe course is published through the revision path", async () => {
+    const r = await fetch(`${BASE}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } });
+    expect(r.status === 200, `probe-course returned ${r.status} (is STAGING_TEST_TOKEN set on the staging Worker?)`);
+    probe = (await r.json()).probe;
+    expect(probe?.slug && probe.assessmentId && probe.questionId, "probe course details missing");
+  });
 
   const learner = new RemoteClient(BASE);
   const email = `staging-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}@academy-staging-test.invalid`;
@@ -119,12 +131,10 @@ async function main() {
     expect(r.status === 200, "dashboard after sign-in");
   });
 
-  await step("course enrollment and progress (if A1 is open on staging)", async () => {
-    const page = await learner.get(`/courses/${A1}`);
-    if (!page.text.includes(`/courses/${A1}/enroll`)) return "A1 is not open for enrollment on staging (upcoming); skipped";
-    let r = await learner.post(`/courses/${A1}/enroll`, {});
+  await step("enrollment, progress and lesson completion (D1 writes)", async () => {
+    let r = await learner.post(`/courses/${probe.slug}/enroll`, {});
     expect(r.status === 303, `enroll returned ${r.status}`);
-    r = await learner.get(`/learn/${A1}`);
+    r = await learner.get(`/learn/${probe.slug}`);
     expect(r.status === 302 && r.location, "resume did not redirect to a lesson");
     const lesson = await learner.get(r.location.replace(BASE, ""));
     const id = /data-lesson-id="([^"]+)"/.exec(lesson.text)?.[1];
@@ -132,10 +142,31 @@ async function main() {
     const res = await fetch(`${BASE}/api/progress`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json", "x-csrf-token": learner.csrf, origin: BASE, cookie: [...learner.jar].map(([k, v]) => `${k}=${v}`).join("; ") },
-      body: JSON.stringify({ lessonId: id, position: 17, scroll: 40, clientAt: new Date().toISOString() }),
+      body: JSON.stringify({ lessonId: id, position: 0, scroll: 100, clientAt: new Date().toISOString() }),
     });
     expect(res.status === 200, `progress API returned ${res.status}`);
-    return "enrolled and saved progress";
+    r = await learner.post(`/learn/${probe.slug}/${probe.lessonSlug}/complete`, {});
+    expect(r.status === 303, `lesson completion returned ${r.status}`);
+  });
+
+  let credential;
+  await step("certification exam attempt, grading and certificate issuance", async () => {
+    let r = await learner.post(`/assessments/${probe.assessmentId}/start`, {});
+    expect(r.status === 303 && /\/attempts\//.test(r.location || ""), `exam start returned ${r.status} ${r.location || ""}`);
+    const attempt = r.location.replace(BASE, "");
+    await learner.get(attempt);
+    r = await learner.post(`${attempt}/submit`, { [`q[${probe.questionId}]`]: probe.correctOption });
+    expect(r.status === 303, `submit returned ${r.status}`);
+    const page = await learner.get("/dashboard/certificates");
+    credential = /href="\/certificates\/([A-Z0-9-]+)"/.exec(page.text)?.[1];
+    expect(credential, "no certificate issued after passing the probe exam");
+    return credential;
+  });
+
+  await step("public verification recomputes the certificate signature", async () => {
+    const r = await new RemoteClient(BASE).get(`/verify/${credential}`);
+    expect(r.status === 200, `verify returned ${r.status}`);
+    expect(/data-verify-state="valid"/.test(r.text), "verification page does not report a valid signature");
   });
 
   await step("password reset email and new password", async () => {
@@ -165,6 +196,8 @@ async function main() {
     await again.get("/login");
     r = await again.post("/login", { email, password });
     expect(r.status !== 303 || !(r.location || "").includes("dashboard"), "deleted account can still sign in");
+    const v = await new RemoteClient(BASE).get(`/verify/${credential}`);
+    expect(/data-verify-state="revoked"/.test(v.text), "the deleted learner's certificate is not reported as revoked");
   });
 }
 
