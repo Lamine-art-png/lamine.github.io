@@ -241,7 +241,9 @@
         video.addEventListener("play", () => report(true));
         video.addEventListener("pause", () => report(false));
         video.addEventListener("seeking", () => report(false, before));
-        video.addEventListener("seeked", () => report(!video.paused));
+        // After a seek, a playing heartbeat restarts the run. A paused state here
+        // may be stale (play() pending); the "play" event reports that case.
+        video.addEventListener("seeked", () => !video.paused && report(true));
         video.addEventListener("ended", () => report(false));
         addEventListener("pagehide", () => report(false, video.currentTime, { keepalive: true }));
       }

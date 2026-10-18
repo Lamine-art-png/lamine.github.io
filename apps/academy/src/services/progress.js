@@ -135,17 +135,20 @@ export async function watchRequired(env, lesson) {
 // Trust boundary: the browser reports where playback is; the server decides
 // how much of that could have been watched. Only the server clock is used.
 // A heartbeat credits the span [previous position, this position] when the
-// previous heartbeat said playback was running, it arrived 1–120 s earlier,
-// and the advance is possible at up to MAX_RATE× speed (plus a small allowance
-// for timer jitter). Jumps, seeks, rewinds, bursts of queued or replayed
+// previous heartbeat said playback was running, it arrived 2–120 s earlier,
+// and the advance is possible at up to MAX_RATE× speed (plus a margin for
+// network latency). Jumps, seeks, rewinds, bursts of queued or replayed
 // reports and interleaved sessions are not credited. Credited spans are
 // merged; the lesson completes when they cover WATCH_SHARE of the video's
 // server-known length. A scripted client that sends plausible heartbeats in
-// real time for at least half the video's length can still pass: the server
+// real time for about a third of the video's length can still pass: the server
 // cannot see the screen. That residual risk is accepted and documented.
 export const MAX_RATE = 2;
 export const WATCH_SHARE = 0.9;
-const JITTER_SECONDS = 0.5;
+// Network latency can shorten the server-measured interval between two
+// heartbeats; honest 2× playback needs a margin of 10% plus one second.
+const RATE_MARGIN = 1.1;
+const JITTER_SECONDS = 1;
 const MAX_GAP_SECONDS = 120;
 export const MIN_GAP_SECONDS = 2;
 
@@ -163,17 +166,18 @@ export function mergeSegments(segments) {
 
 /**
  * Pure credit rule for one heartbeat (exported for tests and documentation).
- * Regular beats (≥ MIN_GAP_SECONDS apart) may advance elapsed × MAX_RATE plus
- * a small jitter allowance. A closing beat (pause, seek, end) that arrives
- * sooner gets no allowance and ends the run, so rapid or alternating beats can
- * never credit more than MAX_RATE × the server-measured time (2.25× at most).
+ * Regular beats (≥ MIN_GAP_SECONDS apart) may advance elapsed × MAX_RATE
+ * plus a latency margin (10% + 1 s). A closing beat (pause, seek, end) that
+ * arrives sooner gets no margin and ends the run, so rapid or alternating
+ * beats can never credit more than 2.7× the server-measured time (beats
+ * exactly 2 s apart); with the player's 5 s heartbeats the bound is 2.4×.
  */
 export function creditFor(prev, { position, at, playing }) {
   if (!prev || !prev.playing) return null;
   const elapsed = (Date.parse(at) - Date.parse(prev.last_beat_at)) / 1000;
   if (!(elapsed > 0 && elapsed <= MAX_GAP_SECONDS)) return null;
   if (elapsed < MIN_GAP_SECONDS && playing) return null;
-  const allowed = elapsed * MAX_RATE + (elapsed >= MIN_GAP_SECONDS ? JITTER_SECONDS : 0);
+  const allowed = elapsed >= MIN_GAP_SECONDS ? elapsed * MAX_RATE * RATE_MARGIN + JITTER_SECONDS : elapsed * MAX_RATE;
   const advance = position - prev.last_position;
   if (advance <= 0 || advance > allowed) return null;
   return [prev.last_position, position];

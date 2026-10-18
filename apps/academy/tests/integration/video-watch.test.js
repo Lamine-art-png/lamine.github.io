@@ -37,7 +37,10 @@ test("credit rule: forward playback up to 2× between timed beats only", () => {
   const prev = { playing: 1, last_position: 100, last_beat_at: "2026-10-18T10:00:00.000Z" };
   const at = (s) => new Date(Date.parse(prev.last_beat_at) + s * 1000).toISOString();
   assert.deepEqual(creditFor(prev, { position: 110, at: at(5), playing: true }), [100, 110], "2× over 5 s");
-  assert.equal(creditFor(prev, { position: 111, at: at(5), playing: true }), null, "faster than 2× (+0.5 s jitter)");
+  assert.deepEqual(creditFor(prev, { position: 112, at: at(5), playing: true }), [100, 112], "2× with network latency (10% + 1 s margin)");
+  assert.equal(creditFor(prev, { position: 112.1, at: at(5), playing: true }), null, "faster than the margin allows");
+  // Regression (CI): 5 s of honest 2× playback whose heartbeats reach the server 4.6 s apart.
+  assert.deepEqual(creditFor(prev, { position: 110, at: at(4.6), playing: true }), [100, 110], "latency between heartbeats");
   assert.equal(creditFor(prev, { position: 90, at: at(5), playing: true }), null, "backwards");
   assert.equal(creditFor(prev, { position: 105, at: at(1), playing: true }), null, "beats closer than 2 s while playing");
   assert.deepEqual(creditFor(prev, { position: 102, at: at(1), playing: false }), [100, 102], "a closing beat gets exactly 2× without jitter");

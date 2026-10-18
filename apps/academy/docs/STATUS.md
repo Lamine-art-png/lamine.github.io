@@ -69,7 +69,7 @@ Instructor video production is **not complete**: no approved Joshua video assets
   secrets below must be added first. The staging gate will fail (by design) until
   `ACADEMY_STAGING_TEST_INBOX_TOKEN` exists.
 - **Video assurance has a stated limit:** a script sending plausible heartbeats in real time
-  for half the video's length can pass; the credential rests on the graded exam.
+  for about a third of the video's length can pass; the credential rests on the graded exam.
 - **Backups:** records created or changed during the export are reported, not required;
   D1 has no consistent-snapshot export, so the Time Travel bookmark remains the
   point-in-time recovery path for those.
