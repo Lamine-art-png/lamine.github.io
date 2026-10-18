@@ -227,3 +227,45 @@ test("draw rules can only use the course's own question banks", async () => {
   assert.match((await admin.get("/admin/courses/crs_a1")).text, /belongs to another course/);
   assert.ok(blocked(await publish(admin)));
 });
+
+test("publishing new exam settings while an exam is open changes neither its score, threshold nor deadline", async () => {
+  const { env, admin, learner } = await released();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE lessons SET is_required = 0 WHERE course_id = 'crs_a1'"),
+    env.DB.prepare("UPDATE draft_lessons SET is_required = 0 WHERE course_id = 'crs_a1'"),
+  ]);
+  let r = await learner.post("/assessments/asm_a1_exam/start", {});
+  const attemptId = r.location.split("/").pop();
+  const before = await live(env, "SELECT * FROM attempts WHERE id = ?", attemptId);
+  const answers = await correctResponses(env, attemptId);
+  // Answer one question wrong: 95% would fail under a 100% threshold, passes under 80%.
+  const layout = JSON.parse(before.layout_json);
+  const wrong = layout.find((l) => Object.keys(answers).some((k) => k === `q[${l.q}]`));
+  answers[`q[${wrong.q}]`] = "not-an-option";
+
+  // The editor raises the threshold to 100%, cuts the time limit to 1 minute and shows full answers; reviewed and published.
+  const a = await live(env, "SELECT * FROM draft_assessments WHERE id = 'asm_a1_exam'");
+  r = await admin.post("/admin/assessments/asm_a1_exam", {
+    title: a.title, instructions: a.instructions, kind: a.kind, status: a.status, passing_score: "100", time_limit_minutes: "1",
+    max_attempts: String(a.max_attempts ?? ""), cooldown_minutes: String(a.cooldown_minutes), feedback_policy: "full",
+    is_certification: "1", is_required: "1", shuffle_questions: a.shuffle_questions ? "1" : undefined, shuffle_options: a.shuffle_options ? "1" : undefined,
+  });
+  assert.match(r.location, /ok=saved/);
+  await approveReviews(admin, "crs_a1");
+  assert.ok(!blocked(await publish(admin)));
+  assert.equal((await live(env, "SELECT passing_score FROM assessments WHERE id = 'asm_a1_exam'")).passing_score, 100, "live exam now requires 100%");
+
+  const page = await learner.get(`/attempts/${attemptId}`);
+  assert.match(page.text, new RegExp(`data-deadline="${before.deadline_at}"`), "deadline unchanged");
+  r = await learner.post(`/attempts/${attemptId}/submit`, answers);
+  const after = await live(env, "SELECT * FROM attempts WHERE id = ?", attemptId);
+  assert.equal(after.status, "graded");
+  assert.equal(after.deadline_at, before.deadline_at);
+  assert.ok(after.score_pct < 100 && after.score_pct >= 80);
+  assert.equal(after.passed, 1, "graded against the 80% threshold in force when the exam started");
+  const result = await learner.get(`/attempts/${attemptId}`);
+  const q = await live(env, "SELECT explanation FROM questions WHERE id = ?", wrong.q);
+  assert.ok(q.explanation.length > 10);
+  const esc = q.explanation.slice(0, 40).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+  assert.ok(!result.text.includes(esc), "the exam's original feedback policy (correctness only) still applies: no explanations");
+});
