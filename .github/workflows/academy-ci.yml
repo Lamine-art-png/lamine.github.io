@@ -51,6 +51,14 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.56.1
           npx playwright install --with-deps chromium
 
+      - name: Certificate-name shaping matches Chromium (HarfBuzz) for 100+ names
+        run: node tests/e2e/shaping-oracle.mjs
+
+      - name: Certificate PDFs render and extract correctly in Poppler
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
+          node tests/e2e/pdf-poppler.mjs
+
       - name: Browser end-to-end journey with accessibility checks
         run: node tests/e2e/run.mjs --shots e2e-artifacts
 

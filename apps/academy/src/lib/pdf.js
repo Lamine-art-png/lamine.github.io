@@ -1,9 +1,13 @@
 // Minimal PDF 1.4 writer (standard-14 fonts, WinAnsi text, vector drawing,
-// one embedded JPEG) and the AGRO-AI Academy certificate layout.
+// one embedded JPEG, embedded TrueType subsets for shaped Unicode text) and
+// the AGRO-AI Academy certificate layout.
 import { WIDTHS } from "./font-metrics.js";
 import { MARK_JPEG_B64, MARK_JPEG_SIZE } from "./brand-jpeg.js";
 import { encodeQr } from "./qr.js";
 import { b64urlDecode } from "./util.js";
+import { subsetFont } from "./ttf.js";
+import { itemize } from "./shape.js";
+import { fontKeysFor } from "./name-fonts.js";
 
 const CP1252_EXTRA = {
   0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x2030: 0x89,
@@ -38,6 +42,27 @@ export function winAnsi(text) {
 
 export const pdfRepresentable = (text) => !winAnsi(text).lossy;
 
+/** Scripts in `text` that no certificate font covers (empty when the PDF can print it). */
+export function unsupportedNameScripts(text) {
+  const scripts = new Set(itemize(String(text)).map((c) => (c.script === "zyyy" ? "latn" : c.script)));
+  return [...scripts].filter((sc) => !fontKeysFor(sc).length);
+}
+
+/** PDF text string: literal for WinAnsi text, UTF-16BE (with BOM) otherwise. */
+function pdfTextString(text) {
+  const w = winAnsi(text);
+  if (!w.lossy) return pdfString(w.codes);
+  let hex = "FEFF";
+  for (const ch of String(text)) {
+    const cp = ch.codePointAt(0);
+    if (cp > 0xffff) {
+      const v = cp - 0x10000;
+      hex += (0xd800 + (v >> 10)).toString(16).padStart(4, "0") + (0xdc00 + (v & 0x3ff)).toString(16).padStart(4, "0");
+    } else hex += cp.toString(16).padStart(4, "0");
+  }
+  return `<${hex.toUpperCase()}>`;
+}
+
 function textWidth(codes, font, size, charSpace = 0) {
   const w = WIDTHS[font];
   return codes.reduce((s, c) => s + (c >= 32 ? w[c - 32] || 500 : 0), 0) * (size / 1000) + charSpace * codes.length;
@@ -60,6 +85,52 @@ const n = (v) => (Math.round(v * 100) / 100).toString();
 class Canvas {
   constructor() {
     this.ops = [];
+    /** Embedded fonts: Font → Map(gid → text) of glyphs used. */
+    this.embedded = new Map();
+  }
+  /**
+   * Draw a shaped line (from shapeLine at `size`). Glyph ids are resolved to
+   * subset ids when the PDF is assembled. ActualText carries the exact text
+   * for copy, search and screen readers.
+   */
+  shaped(line, text, x, y, { size, color = "#10231b", align = "left", maxWidth = 0 }) {
+    let k = 1;
+    if (maxWidth && line.width > maxWidth) k = maxWidth / line.width;
+    const w = line.width * k;
+    const ox = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+    for (const g of line.glyphs) {
+      if (!this.embedded.has(g.font)) this.embedded.set(g.font, new Map());
+      const used = this.embedded.get(g.font);
+      if (!used.has(g.gid)) used.set(g.gid, g.text);
+    }
+    // Glyphs are written run by run in reading order, each at its own position.
+    // Left-to-right runs (where Indic reordering and ligatures break glyph-by-
+    // glyph extraction) carry their text as ActualText; right-to-left runs are
+    // extracted from the ToUnicode map, which viewers reorder themselves.
+    const glyphs = [...line.glyphs].sort((a, b) => a.logical - b.logical);
+    const runs = line.runs || [{ text, rtl: false }];
+    this.ops.push((fonts) => {
+      let out = `BT ${rgb(color)} rg`;
+      let current = null;
+      let open = -1;
+      for (const g of glyphs) {
+        const run = g.run ?? 0;
+        if (run !== open) {
+          if (open >= 0 && !runs[open].rtl) out += " EMC";
+          if (!runs[run].rtl) out += ` /Span << /ActualText ${pdfTextString(runs[run].text)} >> BDC`;
+          open = run;
+        }
+        const f = fonts.get(g.font);
+        if (current !== f.key) {
+          out += ` /${f.key} ${n(size * k)} Tf`;
+          current = f.key;
+        }
+        out += ` 1 0 0 1 ${n(ox + g.x * k)} ${n(y + g.y * k)} Tm <${f.newId.get(g.gid).toString(16).padStart(4, "0")}> Tj`;
+      }
+      if (open >= 0 && !runs[open].rtl) out += " EMC";
+      return `${out} ET`;
+    });
+    return size * k;
   }
   fill(hex) {
     this.ops.push(`${rgb(hex)} rg`);
@@ -128,9 +199,18 @@ function buildPdf(canvas, { width, height, jpeg, title, subject }) {
     for (const part of [].concat(body)) write(part);
     write("\nendobj\n");
   };
-  const content = canvas.ops.join("\n");
   const fonts = Object.entries(FONT_KEYS);
   const fontObjBase = 7;
+  // Embedded TrueType subsets: 5 objects each, after the standard fonts.
+  const embedded = new Map();
+  let nextObj = fontObjBase + fonts.length;
+  let e = 0;
+  for (const [font, used] of canvas.embedded) {
+    const { bytes, newId } = subsetFont(font, [...used.keys()]);
+    embedded.set(font, { key: `E${++e}`, font, used, bytes, newId, obj: nextObj });
+    nextObj += 5;
+  }
+  const content = canvas.ops.map((op) => (typeof op === "function" ? op(embedded) : op)).join("\n");
   write("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
   obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
   obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
@@ -138,14 +218,31 @@ function buildPdf(canvas, { width, height, jpeg, title, subject }) {
     3,
     `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Contents 4 0 R /Resources << /Font << ${fonts
       .map(([, key], i) => `/${key} ${fontObjBase + i} 0 R`)
+      .concat([...embedded.values()].map((f) => `/${f.key} ${f.obj} 0 R`))
       .join(" ")} >> /XObject << /Im1 5 0 R >> /ProcSet [/PDF /Text /ImageC] >> >>`,
   );
   obj(4, [`<< /Length ${enc.encode(content).length} >>\nstream\n`, content, "\nendstream"]);
   obj(5, [`<< /Type /XObject /Subtype /Image /Width ${jpeg.size} /Height ${jpeg.size} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.bytes.length} >>\nstream\n`, jpeg.bytes, "\nendstream"]);
-  const info = (s) => pdfString(winAnsi(s).codes);
-  obj(6, `<< /Title ${info(title)} /Subject ${info(subject)} /Author (AGRO-AI Academy) /Creator (AGRO-AI Academy) /Producer (AGRO-AI Academy credential service) >>`);
+  obj(6, `<< /Title ${pdfTextString(title)} /Subject ${pdfTextString(subject)} /Author (AGRO-AI Academy) /Creator (AGRO-AI Academy) /Producer (AGRO-AI Academy credential service) >>`);
   fonts.forEach(([name], i) => obj(fontObjBase + i, `<< /Type /Font /Subtype /Type1 /BaseFont /${name} /Encoding /WinAnsiEncoding >>`));
-  const count = fontObjBase + fonts.length;
+  for (const f of embedded.values()) {
+    const scale = 1000 / f.font.unitsPerEm;
+    const tag = subsetTag(f.bytes);
+    const base = `${tag}+${f.font.name}`;
+    const order = [...f.newId].sort((a, b) => a[1] - b[1]);
+    const widths = order.map(([old]) => Math.round(f.font.advance(old) * scale)).join(" ");
+    const bbox = f.font.bbox.map((v) => Math.round(v * scale)).join(" ");
+    obj(f.obj, `<< /Type /Font /Subtype /Type0 /BaseFont /${base} /Encoding /Identity-H /DescendantFonts [${f.obj + 1} 0 R] /ToUnicode ${f.obj + 4} 0 R >>`);
+    obj(f.obj + 1, `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${base} /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${f.obj + 2} 0 R /CIDToGIDMap /Identity /W [0 [${widths}]] >>`);
+    obj(
+      f.obj + 2,
+      `<< /Type /FontDescriptor /FontName /${base} /Flags 4 /FontBBox [${bbox}] /ItalicAngle 0 /Ascent ${Math.round(f.font.ascender * scale)} /Descent ${Math.round(f.font.descender * scale)} /CapHeight ${Math.round(f.font.capHeight * scale)} /StemV 80 /FontFile2 ${f.obj + 3} 0 R >>`,
+    );
+    obj(f.obj + 3, [`<< /Length ${f.bytes.length} /Length1 ${f.bytes.length} >>\nstream\n`, f.bytes, "\nendstream"]);
+    const cmap = toUnicodeCMap(order.map(([old, nw]) => [nw, f.used.get(old) || ""]));
+    obj(f.obj + 4, [`<< /Length ${enc.encode(cmap).length} >>\nstream\n`, cmap, "\nendstream"]);
+  }
+  const count = nextObj;
   const xref = length;
   let table = `xref\n0 ${count}\n0000000000 65535 f \n`;
   for (let i = 1; i < count; i++) table += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
@@ -160,6 +257,51 @@ function buildPdf(canvas, { width, height, jpeg, title, subject }) {
   return out;
 }
 
+/** Six-letter subset tag derived from the subset's bytes (PDF 9.6.4). */
+function subsetTag(bytes) {
+  let h = 2166136261;
+  for (let i = 0; i < bytes.length; i += 7) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
+  let tag = "";
+  for (let i = 0; i < 6; i++) {
+    tag += String.fromCharCode(65 + (h % 26));
+    h = (Math.floor(h / 26) ^ Math.imul(i + 1, 2654435761)) >>> 0;
+  }
+  return tag;
+}
+
+/** ToUnicode CMap mapping glyph ids (CIDs) to the text they represent. */
+function toUnicodeCMap(entries) {
+  const utf16 = (str) =>
+    [...str]
+      .map((ch) => {
+        const cp = ch.codePointAt(0);
+        if (cp <= 0xffff) return cp.toString(16).padStart(4, "0");
+        const v = cp - 0x10000;
+        return (0xd800 + (v >> 10)).toString(16) + (0xdc00 + (v & 0x3ff)).toString(16);
+      })
+      .join("")
+      .toUpperCase();
+  const lines = entries.filter(([, t]) => t).map(([cid, t]) => `<${cid.toString(16).padStart(4, "0").toUpperCase()}> <${utf16(t)}>`);
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += 100) chunks.push(`${Math.min(100, lines.length - i)} beginbfchar\n${lines.slice(i, i + 100).join("\n")}\nendbfchar`);
+  return [
+    "/CIDInit /ProcSet findresource begin",
+    "12 dict begin",
+    "begincmap",
+    "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def",
+    "/CMapName /Adobe-Identity-UCS def",
+    "/CMapType 2 def",
+    "1 begincodespacerange",
+    "<0000> <FFFF>",
+    "endcodespacerange",
+    ...chunks,
+    "endcmap",
+    "CMapName currentdict /CMap defineresource pop",
+    "end",
+    "end",
+  ].join("\n");
+}
+
 const markJpeg = () => {
   const b64 = MARK_JPEG_B64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return { bytes: b64urlDecode(b64), size: MARK_JPEG_SIZE };
@@ -169,7 +311,7 @@ const markJpeg = () => {
  * Render the official certificate (A4 landscape). The credential is issued in
  * English, its canonical language; `labels` allows localized UI copies later.
  */
-export function certificatePdf(cert, { verifyUrl, host, issuedDate }) {
+export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = null }) {
   const W = 842;
   const H = 595;
   const cv = new Canvas();
@@ -200,7 +342,9 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate }) {
   cv.text("CERTIFICATE OF COMPLETION", cx, H - 168, { font: "Helvetica-Bold", size: 12, color: limeText, align: "center", charSpace: 3.2 });
   cv.stroke(lime, 0.8).line(cx - 36, H - 182, cx + 36, H - 182);
   cv.text("This certifies that", cx, H - 214, { font: "Times-Italic", size: 15, color: muted, align: "center" });
-  cv.text(cert.credential_name, cx, H - 262, { font: "Times-Bold", size: 40, color: ink, align: "center", maxWidth: 660 });
+  // Names outside Windows-1252 are shaped and set in an embedded font.
+  if (nameLine) cv.shaped(nameLine, cert.credential_name, cx, H - 262, { size: 40, color: ink, align: "center", maxWidth: 660 });
+  else cv.text(cert.credential_name, cx, H - 262, { font: "Times-Bold", size: 40, color: ink, align: "center", maxWidth: 660 });
   cv.text("has successfully completed the course and passed its final assessment", cx, H - 296, { font: "Helvetica", size: 12, color: "#3c4e43", align: "center" });
   const titleLines = cv.wrap(cert.course_title, "Times-Bold", 26, 640).slice(0, 2);
   titleLines.forEach((line, i) => cv.text(line, cx, H - 338 - i * 30, { font: "Times-Bold", size: 26, color: green, align: "center", maxWidth: 680 }));

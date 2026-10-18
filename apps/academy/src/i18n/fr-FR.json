@@ -617,7 +617,7 @@
   "cert.congrats_lead": "Vous avez obtenu le certificat AGRO-AI Academy du cours {course}.",
   "cert.owner_lead": "Votre certification AGRO-AI Academy vérifiée.",
   "cert.revoked_notice": "Ce certificat a été révoqué. {reason}",
-  "cert.pdf_script_note": "Le PDF téléchargeable imprime les noms en caractères latins. Si votre nom s’écrit dans un autre alphabet, indiquez une graphie latine comme nom de certification, ou imprimez ce certificat web qui affiche votre nom tel qu’il est écrit.",
+  "cert.pdf_script_note": "Le PDF téléchargeable ne peut pas encore imprimer les noms dans ce système d’écriture. Indiquez une graphie latine comme nom de certification, ou imprimez ce certificat web qui affiche votre nom tel qu’il est écrit.",
   "cert.share_title": "Partagez votre réussite",
   "cert.share_lead": "Le partage reste toujours votre choix : rien n’est publié sans votre action.",
   "cert.add_linkedin": "Ajouter au profil LinkedIn",

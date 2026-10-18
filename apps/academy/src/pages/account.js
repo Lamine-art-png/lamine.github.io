@@ -5,7 +5,7 @@ import { redirect, HttpError, serializeCookie } from "../lib/http.js";
 import { nowIso } from "../lib/util.js";
 import { verifyPassword, passwordProblem, revokeAllSessions, audit, cookieNames, rateLimit } from "../lib/security.js";
 import { LOCALES, matchLocale } from "../lib/i18n.js";
-import { pdfRepresentable } from "../lib/pdf.js";
+import { unsupportedNameScripts } from "../lib/pdf.js";
 import { alert, csrfField, field, selectField, pageHead } from "../views/components.js";
 import { PROFESSIONAL_ROLES, setPassword, deleteAccount } from "../services/users.js";
 import { sendEmail, queueEmail, deliverById } from "../services/email.js";
@@ -38,7 +38,7 @@ export async function accountPage(c, { errors = {} } = {}) {
         ${field(c, { name: "display_name", label: t("form.full_name"), value: u.display_name, required: true, autocomplete: "name", error: errors.display_name && t(errors.display_name) })}
         ${field(c, { name: "credential_name", label: t("account.credential_name"), value: u.credential_name, hint: t("account.credential_name_hint") })}
       </div>
-      ${!pdfRepresentable(credName) ? alert("info", t("cert.pdf_script_note")) : ""}
+      ${unsupportedNameScripts(credName).length ? alert("info", t("cert.pdf_script_note")) : ""}
       <div class="grid-2">
         ${selectField(c, { name: "locale", label: t("form.language"), required: true, value: u.locale, options: LOCALES.map((l) => [l.code, `${l.nativeName} · ${l.englishName}`]) })}
         ${selectField(c, { name: "country", label: t("form.country"), value: u.country, options: [["", t("form.choose")], ...countryOptions(c)] })}

@@ -1,0 +1,264 @@
+Fonts used to print learner names on AGRO-AI Academy certificate PDFs
+=====================================================================
+
+The PDF writer embeds only the glyphs a name needs (a subset) in each
+certificate. These files are served as static assets and are not used to
+style web pages.
+
+| File                        | Font                         | License                                                |
+|-----------------------------|------------------------------|--------------------------------------------------------|
+| DejaVuSerif-Bold.ttf        | DejaVu Serif Bold            | Bitstream Vera / DejaVu free license (below)           |
+| DejaVuSans-Bold.ttf         | DejaVu Sans Bold             | Bitstream Vera / DejaVu free license (below)           |
+| FreeSerif.ttf               | GNU FreeFont FreeSerif       | GPL-3+ with the FreeFont font exception (below)        |
+| FreeSerifBold.ttf           | GNU FreeFont FreeSerif Bold  | GPL-3+ with the FreeFont font exception (below)        |
+| WenQuanYiZenHei-Names.ttf   | WenQuanYi Zen Hei (subset)   | GPL-2 with font embedding exception, M+ FONTS License   |
+
+WenQuanYiZenHei-Names.ttf is a modified version of wqy-zenhei.ttc (face 0):
+it keeps the CJK ideographs, kana, Hangul, Bopomofo and punctuation glyphs
+and drops vertical-layout tables. It was produced with
+apps/academy/src/lib/ttf.js (subsetFont). As permitted by the license, the
+font embedding exception is extended to this modified version.
+
+Sources: DejaVu https://dejavu-fonts.github.io/ · GNU FreeFont
+https://savannah.gnu.org/projects/freefont/ · WenQuanYi http://wenq.org/
+The fonts were taken from the Ubuntu packages fonts-dejavu-core,
+fonts-freefont-ttf and fonts-wqy-zenhei; their copyright files follow.
+
+
+──────── fonts-dejavu-core ────────
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: DejaVu fonts
+Upstream-Author: Stepan Roh <src@users.sourceforge.net> (original author),
+                  see /usr/share/doc/fonts-dejavu-core/AUTHORS for full list
+Source: https://dejavu-fonts.github.io/
+
+Files: *
+Copyright: Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. 
+ Bitstream Vera is a trademark of Bitstream, Inc.
+ DejaVu changes are in public domain.
+License: bitstream-vera
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of the fonts accompanying this license ("Fonts") and associated
+ documentation files (the "Font Software"), to reproduce and distribute the
+ Font Software, including without limitation the rights to use, copy, merge,
+ publish, distribute, and/or sell copies of the Font Software, and to permit
+ persons to whom the Font Software is furnished to do so, subject to the
+ following conditions:
+ .
+ The above copyright and trademark notices and this permission notice shall
+ be included in all copies of one or more of the Font Software typefaces.
+ .
+ The Font Software may be modified, altered, or added to, and in particular
+ the designs of glyphs or characters in the Fonts may be modified and
+ additional glyphs or characters may be added to the Fonts, only if the fonts
+ are renamed to names not containing either the words "Bitstream" or the word
+ "Vera".
+ .
+ This License becomes null and void to the extent applicable to Fonts or Font
+ Software that has been modified and is distributed under the "Bitstream
+ Vera" names.
+ .
+ The Font Software may be sold as part of a larger software package but no
+ copy of one or more of the Font Software typefaces may be sold by itself.
+ .
+ THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT,
+ TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL BITSTREAM OR THE GNOME
+ FOUNDATION BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING
+ ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+ THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE
+ FONT SOFTWARE.
+ .
+ Except as contained in this notice, the names of Gnome, the Gnome
+ Foundation, and Bitstream Inc., shall not be used in advertising or
+ otherwise to promote the sale, use or other dealings in this Font Software
+ without prior written authorization from the Gnome Foundation or Bitstream
+ Inc., respectively. For further information, contact: fonts at gnome dot
+ org.
+
+Files: debian/*
+Copyright: (C) 2005-2006 Peter Cernak <pce@users.sourceforge.net> 
+           (C) 2006-2011 Davide Viti <zinosat@tiscali.it>
+           (C) 2011-2013 Christian Perrier <bubulle@debian.org>
+           (C) 2013 Fabian Greffrath <fabian+debian@greffrath.com>
+License: GPL-2+
+ This program is free software; you can redistribute it
+ and/or modify it under the terms of the GNU General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or (at your option) any later
+ version.
+ .
+ This program is distributed in the hope that it will be
+ useful, but WITHOUT ANY WARRANTY; without even the implied
+ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ PURPOSE.  See the GNU General Public License for more
+ details.
+ .
+ You should have received a copy of the GNU General Public
+ License along with this package; if not, write to the Free
+ Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ Boston, MA  02110-1301 USA
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ /usr/share/common-licenses/GPL-2'.
+
+──────── fonts-freefont-ttf ────────
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: GNU FreeFont
+Upstream-Contact: Steve White <Stevan.White@gmail.com>
+Source: https://savannah.gnu.org/projects/freefont/
+
+Files: *
+Copyright: 2002-2012, GNU Freefont contributors
+  2009-2012, Steve White <Stevan.White@gmail.com>
+  2011, Emmanuel Vallois
+License: GPL-3+
+
+Files: */*.ttf */*.otf */*.woff
+Copyright: 2002-2012, GNU Freefont contributors
+License: GPL-3+ with Special Font Exception
+
+Files: debian/*
+Copyright: 2002-2003, Peter Hawkins <peterh@debian.org>
+  2004, Josh Triplett <josh.trip@verizon.net>
+  2004, Panayotis Katsaloulis <panayotis@panayotis.com>
+  2005-2006, Konstantinos Margaritis <markos@debian.org>
+  2006-2014, Christian Perrier <bubulle@debian.org>
+  2007-2011, Davide Viti <zinosat@tiscali.it>
+  2016-2023, Fabian Greffrath <fabian@debian.org>
+  2016, Adam Borowski <kilobyte@angband.pl>
+License: GPL-3+
+
+License: GPL-3+
+ GNU FreeFont is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the
+ Free Software Foundation; either version 3 of the License, or (at your option)
+ any later version.
+ .
+ The fonts are distributed in the hope that they will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ for more details.
+ .
+ You should have received a copy of the GNU General Public License along
+ with this program; if not, write to the Free Software Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
+
+License: GPL-3+ with Special Font Exception
+ GNU FreeFont is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the
+ Free Software Foundation; either version 3 of the License, or (at your option)
+ any later version.
+ .
+ The fonts are distributed in the hope that they will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ for more details.
+ .
+ You should have received a copy of the GNU General Public License along
+ with this program; if not, write to the Free Software Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ .
+ * Regarding the use of built font files.
+ .
+ As a special exception, if you create a document which uses this font, and
+ embed this font or unaltered portions of this font into the document, this
+ font does not by itself cause the resulting document to be covered by the
+ GNU General Public License. This exception does not however invalidate any
+ other reasons why the document might be covered by the GNU General Public
+ License. If you modify this font, you may extend this exception to your
+ version of the font, but you are not obligated to do so.  If you do not
+ wish to do so, delete this exception statement from your version.
+ .
+ * Clarification of exception, regarding intended use of embedded fonts
+ .
+ The exception to the GNU General Public License for the GNU FreeFont
+ software exempts a user that embeds part or all of the GNU FreeFont software
+ in a document, as well as subsequent users and distributors of the document,
+ from complying with the GNU GPL under some circumstances.
+ .
+ Specifically, this exemption applies when the embedder has not modified
+ the GNU FreeFont software before embedding it. This is true even though
+ portions of the software become part of the document.
+ .
+ Therefore users of fonts released with this exception need not concern
+ themselves with the license terms to:
+ .
+    Create a printable file using the fonts.
+    - Publish such a file.
+    - Redistribute such a file.
+    - Publicly display such a file.
+    - Print such a file or display it on the screen.
+ .
+ However anyone distributing the font software as software separately from
+ the document, even if the way the font software was obtained was to extract
+ it from a document, would have to comply with the GNU GPL.
+ .
+ A modified version of the GNU FreeFont software must comply with the GNU GPL.
+ It may optionally carry the same exception as the GNU FreeFont software
+ itself, and we recommend releasing modified versions that way. If it does,
+ then users will likewise be permitted to embed the modified version in
+ documents and be exempt from the GNU GPL requirements on those documents.
+
+──────── fonts-wqy-zenhei ────────
+t: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: WenQuanYi Zen Hei
+Upstream-Contact: Qianqian Fang <fangq #nmr _mgh _harvard _edu>
+                  The WenQuanYi Project
+Source: http://wenq.org/
+
+Files: *
+Copyright: 2007-2009, Qianqian Fang and The WenQuanYi Project Board of Trustees
+           1998-2004, Koanughi Un
+           1999-2004, Tsong-Min Wu, Tsong-Huey Wu
+           2005, Tsong-Min Wu, Tsong-Huey Wu and Edward G.J. Lee
+           2004, Firefly
+           2002-2008, M+ FONTS PROJECT
+License: GPL-2 with Font embedding exception and M+ FONTS License
+
+Files: debian/*
+Copyright: 2007-2011, Zhengpeng Hou <zhengpeng-hou@ubuntu.com>
+           2009, Anthony Fok <foka@debian.org>
+           2011-2012, Osamu Aoki <osamu@debian.org>
+           2013, Christian Perrier <bubulle@debian.org>
+           2014-2017, Hideki Yamane <henrich@debian.org>
+License: GPL-2 with Font embedding exception
+
+License: GPL-2 with Font embedding exception
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this package; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+ .
+ As a special exception, if you create a document which uses this
+ font, and embed this font or unaltered portions of this font into
+ the document, this font does not by itself cause the resulting
+ document to be covered by the GNU General Public License.  This
+ exception does not however invalidate any other reasons why the
+ document might be covered by the GNU General Public License.  If you
+ modify this font, you may extend this exception to your version of
+ the font, but you are not obligated to do so.  If you do not wish to
+ do so, delete this exception statement from your version.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in `/usr/share/common-licenses/GPL-2'.
+
+License: M+ FONTS License
+ These fonts are free software.
+ Unlimited permission is granted to use, copy, and distribute it, with
+ or without modification, either commercially and noncommercially.
+ THESE FONTS ARE PROVIDED "AS IS" WITHOUT WARRANTY.

@@ -5,7 +5,8 @@ import { redirect, HttpError } from "../lib/http.js";
 import { newId, nowIso } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { qrSvg } from "../lib/qr.js";
-import { certificatePdf, pdfRepresentable } from "../lib/pdf.js";
+import { unsupportedNameScripts } from "../lib/pdf.js";
+import { renderCertificatePdf } from "../services/certificate-pdf.js";
 import { formatDate } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
 import { alert, csrfField, emptyState, pageHead } from "../views/components.js";
@@ -39,7 +40,7 @@ export async function certificatePage(c) {
   const integrity = await signatureStatus(c.cfg, cert);
   const verified = integrity === "valid";
   const fresh = c.url.searchParams.get("new") === "1" && verified;
-  const latinOk = pdfRepresentable(cert.credential_name);
+  const pdfOk = unsupportedNameScripts(cert.credential_name).length === 0;
   const shareText = t("cert.share_text", { course: cert.course_title });
   const body = html`${pageHead({
     eyebrow: t("cert.eyebrow"),
@@ -51,7 +52,7 @@ export async function certificatePage(c) {
     <div>${cert.status === "revoked" ? alert("error", t("cert.revoked_notice", { reason: cert.revoked_reason || "" })) : ""}
       ${!verified ? alert("error", integrity === "invalid" ? t("verify.integrity_body") : t("verify.unavailable_body")) : ""}
       ${certificateVisual(c, cert, urls.verifyUrl)}
-      ${!latinOk ? alert("info", t("cert.pdf_script_note")) : ""}
+      ${!pdfOk || c.url.searchParams.get("pdf") === "unsupported" ? alert("info", t("cert.pdf_script_note")) : ""}
     </div>
     <div>
       <h2 class="h2">${t("cert.share_title")}</h2>
@@ -60,7 +61,7 @@ export async function certificatePage(c) {
         <a class="btn btn-primary" href="${urls.linkedinAdd}" target="_blank" rel="noopener noreferrer">${icon("linkedin", { size: 18 })} ${t("cert.add_linkedin")}</a>
         <a class="btn btn-secondary" href="${urls.linkedinShare}" target="_blank" rel="noopener noreferrer">${icon("linkedin", { size: 18 })} ${t("cert.share_linkedin")}</a>
         <a class="btn btn-secondary" href="${urls.facebook}" target="_blank" rel="noopener noreferrer">${icon("facebook", { size: 18 })} ${t("cert.share_facebook")}</a>
-        ${verified && cert.status === "active" ? html`<a class="btn btn-secondary" href="${urls.pdf}" download>${icon("download", { size: 18 })} ${t("cert.download_pdf")}</a>` : ""}
+        ${verified && pdfOk && cert.status === "active" ? html`<a class="btn btn-secondary" href="${urls.pdf}" download>${icon("download", { size: 18 })} ${t("cert.download_pdf")}</a>` : ""}
         <button class="btn btn-secondary" type="button" data-copy="${urls.verifyUrl}" data-copied="${t("cert.copied_link")}">${icon("link", { size: 18 })} ${t("cert.copy_link")}</button>
         <button class="btn btn-secondary" type="button" data-copy="${cert.credential_id}" data-copied="${t("cert.copied_id")}">${icon("copy", { size: 18 })} ${t("cert.copy_id")}</button>
         <button class="btn btn-secondary" type="button" data-share data-share-url="${urls.verifyUrl}" data-share-title="${cert.course_title}" data-share-text="${shareText}" hidden>${icon("share", { size: 18 })} ${t("cert.share_device")}</button>
@@ -92,7 +93,13 @@ export async function certificatePdfRoute(c) {
   if (integrity !== "valid") throw new HttpError(integrity === "invalid" ? 409 : 503, integrity === "invalid" ? "certificate_integrity_failed" : "certificate_verification_unavailable");
   await rateLimit(c, "cert-pdf", { limit: 60, windowSeconds: 3600, key: c.user.id });
   const verifyUrl = `${c.cfg.origin}/verify/${cert.credential_id}`;
-  const pdf = certificatePdf(cert, { verifyUrl, host: c.cfg.host, issuedDate: formatDate("en", cert.issued_at) });
+  let pdf;
+  try {
+    pdf = await renderCertificatePdf(c.env, c.cfg.origin, cert, { verifyUrl, host: c.cfg.host, issuedDate: formatDate("en", cert.issued_at) });
+  } catch (e) {
+    if (e instanceof HttpError && e.code === "name_script_unsupported") return redirect(`/certificates/${cert.credential_id}?pdf=unsupported`);
+    throw e;
+  }
   c.defer(
     c.env.DB.prepare("INSERT INTO certificate_events (id, certificate_id, event, actor_id, created_at) VALUES (?,?,?,?,?)").bind(newId("ce_"), cert.id, "pdf_downloaded", c.user.id, nowIso()).run(),
   );

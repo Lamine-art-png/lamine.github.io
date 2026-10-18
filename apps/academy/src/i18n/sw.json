@@ -617,7 +617,7 @@
   "cert.congrats_lead": "Umepata cheti cha AGRO-AI Academy cha kozi ya {course}.",
   "cert.owner_lead": "Cheti chako kilichothibitishwa cha AGRO-AI Academy.",
   "cert.revoked_notice": "Cheti hiki kimefutwa. {reason}",
-  "cert.pdf_script_note": "PDF inayopakuliwa huchapisha majina kwa herufi za Kilatini. Ikiwa jina lako linatumia alfabeti nyingine, weka tahajia ya Kilatini kama jina kwenye cheti, au chapisha cheti hiki cha tovuti kinachoonyesha jina lako kama lilivyoandikwa.",
+  "cert.pdf_script_note": "PDF inayopakuliwa bado haiwezi kuchapisha majina kwa mfumo huu wa uandishi. Weka tahajia ya Kilatini kama jina kwenye cheti, au chapisha cheti hiki cha tovuti kinachoonyesha jina lako kama lilivyoandikwa.",
   "cert.share_title": "Shiriki mafanikio yako",
   "cert.share_lead": "Kushiriki ni uamuzi wako daima — hakuna kinachochapishwa usipofanya mwenyewe.",
   "cert.add_linkedin": "Ongeza kwenye wasifu wa LinkedIn",
