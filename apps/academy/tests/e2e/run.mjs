@@ -165,15 +165,16 @@ try {
   page.on("console", (m) => m.type() === "error" && !/Failed to load resource/.test(m.text()) && consoleErrors.push(m.text()));
 
   await step("public pages render accessibly", async () => {
-    for (const [path, name] of [["/", "home"], ["/courses", "catalog"], ["/courses/introduction-to-ai-in-agriculture", "course"], ["/programs", "programs"], ["/paths", "paths"], ["/verify", "verify-form"], ["/faq", "faq"], ["/about", "about"], ["/contact", "contact"], ["/privacy", "privacy"], ["/register", "register"], ["/login", "login"]]) {
+    for (const [path, name] of [["/", "home"], ["/courses", "catalog"], ["/courses/introduction-to-ai-in-agriculture", "course"], ["/programs", "programs"], ["/paths", "paths"], ["/verify", "verify-form"], ["/faq", "faq"], ["/about", "about"], ["/contact", "contact"], ["/privacy", "privacy"], ["/register", "register"], ["/login", "login"], ["/languages", "languages"], ["/?lang=es", "home-es-machine"], ["/courses?lang=de", "catalog-de-fallback"]]) {
       await page.goto(base + path);
       await a11y(page, path);
+      if (path.includes("lang=")) assert.equal(await page.locator(".lang-notice").count(), 1, `${path}: language notice shown`);
       await shot(page, `public-${name}`);
     }
   });
 
   await step("founder registers, verifies and publishes Course A1 from the admin console", async () => {
-    await page.goto(`${base}/register`);
+    await page.goto(`${base}/register?lang=en`);
     await page.fill("#f-display_name", "Academy Founder");
     await page.fill("#f-email", "founder@academy.test");
     await page.fill("#f-password", "harvest moon over the valley");

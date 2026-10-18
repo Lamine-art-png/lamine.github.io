@@ -6,7 +6,7 @@ import { negotiate, matchLocale, localeInfo, makeTranslator, loadOverrides, form
 import { renderPage, renderError } from "./views/layout.js";
 import { registerRoutes } from "./routes.js";
 
-export const BUILD = "2026.10.17";
+export const BUILD = "2026.10.18";
 
 /** Minimum length of CERT_SIGNING_SECRET outside development and tests. */
 export const MIN_CERT_SECRET_LENGTH = 32;

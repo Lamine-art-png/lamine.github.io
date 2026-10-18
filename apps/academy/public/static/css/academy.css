@@ -265,6 +265,10 @@ legend { font-weight: 650; padding: 0 .35rem; }
   .primary-nav { display: none; }
   .mobile-nav { display: block; }
 }
+.site-header.nav-compact .primary-nav { display: none; }
+.site-header.nav-compact .mobile-nav { display: block; }
+.site-header.tools-compact .btn-start { display: none; }
+.site-header.tools-compact .lang select { max-width: 78px; }
 @media (max-width: 560px) {
   .hide-sm { display: none !important; }
   .brand-text { font-size: 1rem; }

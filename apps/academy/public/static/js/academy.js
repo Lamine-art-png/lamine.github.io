@@ -119,6 +119,26 @@
   addEventListener("offline", () => pill && (pill.hidden = false));
   flushQueue();
 
+  // ───── Header fit ─────
+  // Labels differ in length between languages, so the header switches to the
+  // compact menu when its row actually overflows, not at a fixed width.
+  const header = $(".site-header");
+  const row = header && $(".header-row", header);
+  if (row) {
+    const fit = () => {
+      header.classList.remove("nav-compact", "tools-compact");
+      if (row.scrollWidth > row.clientWidth + 1) header.classList.add("nav-compact");
+      if (row.scrollWidth > row.clientWidth + 1) header.classList.add("tools-compact");
+    };
+    let frame = 0;
+    addEventListener("resize", () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    document.fonts?.ready.then(fit);
+    fit();
+  }
+
   // ───── Classroom ─────
   const root = $("[data-lesson-root]");
   if (root) {
