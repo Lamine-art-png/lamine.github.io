@@ -80,6 +80,9 @@ async function liveProduction(api) {
   db.prepare(
     "INSERT INTO certificates (id, credential_id, user_id, course_id, credential_name, course_title, issued_at, status, signature, created_at) VALUES ('crt_1','AGA-AAAA-BBBB-CCCC','usr_1','crs_a1','Synthetic Grower','Intro',?, 'active', ?, ?)",
   ).run(now, "0".repeat(64), now);
+  db.prepare("INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES ('usr_2', 'other@academy.test', 'Synthetic Other', ?, ?)").run(now, now);
+  db.prepare("INSERT INTO enrollments (id, user_id, course_id, enrolled_at, last_activity_at) VALUES ('enr_1', 'usr_1', 'crs_a1', ?, ?)").run(now, now);
+  db.prepare("INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, layout_json, started_at) VALUES ('att_1', 'usr_1', 'asm_a1_exam', 'crs_a1', 1, 'in_progress', '[]', ?)").run(now);
   db.close();
   writeFileSync(join(ws.state, "calls.log"), "");
   return ws;
@@ -148,6 +151,11 @@ for (const [failure, message] of [
   ["export", /Database export failed; refusing to migrate/],
   ["truncated-export", /Backup verification failed/],
   ["lossy-export", /Backup verification failed.*users/],
+  ["drop-one-certificate", /Backup verification failed.*table certificates: 1 record\(s\) missing/],
+  ["drop-one-attempt", /Backup verification failed.*table attempts: 1 record\(s\) missing/],
+  ["drop-one-enrollment", /Backup verification failed.*table enrollments: 1 record\(s\) missing/],
+  ["alter-certificate", /Backup verification failed.*table certificates: 1 record\(s\) differ/],
+  ["certificate-vanishes", /Backup verification failed.*certificates: 1 append-only record\(s\) disappeared/],
   ["put", /Backup upload failed; refusing to migrate/],
   ["corrupt-get", /Stored backup does not match/],
   ["get", /Could not read the stored backup back/],
@@ -163,10 +171,37 @@ for (const [failure, message] of [
     assert.doesNotMatch(r.calls, /migrations apply/);
     assert.equal(json(ws, "deployed-production.json").at, deployedBefore, "Worker not redeployed");
     const db = new DatabaseSync(join(ws.state, "d1-agroai-academy.sqlite"));
-    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users").get().n, 1, "learner data untouched");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users").get().n, 2, "learner data untouched");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM attempts").get().n, 1);
     db.close();
   });
 }
+
+test("learners writing during the export do not fail an exact backup", async () => {
+  const api = await cloudflareApi({ ownedHosts: [{ host: "academy.agroai-pilot.com", service: "agroai-academy" }] });
+  const ws = await liveProduction(api);
+  const r = await run(ws, "production", api, { ...prod, FAKE_FAIL: "concurrent-signup,concurrent-deletion,concurrent-grading" });
+  api.close();
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /note: table users: 1 record\(s\) changed during the export/);
+  assert.match(r.out, /note: table attempts: 1 record\(s\) changed during the export/);
+  assert.match(r.out, /Critical records verified exactly: users=1, enrollments=1, attempts=0, certificates=1/);
+});
+
+test("pending migrations are rehearsed on the restored copy before touching live data", async () => {
+  const api = await cloudflareApi({ ownedHosts: [{ host: "academy.agroai-pilot.com", service: "agroai-academy" }] });
+  const ws = await liveProduction(api);
+  // A migration that only fails on real data: a new unique index the existing rows violate.
+  writeFileSync(join(ws.dir, "migrations", "9999_synthetic_unique_title.sql"), "CREATE UNIQUE INDEX synthetic_unique_display ON users(created_at);\n");
+  const db = new DatabaseSync(join(ws.state, "d1-agroai-academy.sqlite"));
+  db.exec("UPDATE users SET created_at = '2026-01-01T00:00:00.000Z'");
+  db.close();
+  const r = await run(ws, "production", api, prod);
+  api.close();
+  assert.notEqual(r.code, 0);
+  assert.match(r.out, /migration 9999_synthetic_unique_title\.sql fails on the restored data/);
+  assert.doesNotMatch(r.calls, /migrations apply/);
+});
 
 test("backups can be encrypted with a passphrase", async () => {
   const api = await cloudflareApi({ ownedHosts: [{ host: "academy.agroai-pilot.com", service: "agroai-academy" }] });
@@ -248,6 +283,11 @@ test("a stored backup restores into a new database without touching the live one
   assert.equal(restored.prepare("SELECT credential_id FROM certificates").get().credential_id, "AGA-AAAA-BBBB-CCCC");
   assert.ok(restored.prepare("SELECT COUNT(*) AS n FROM lessons").get().n > 0);
   restored.close();
+  assert.match(rr.out, /Every table's row count and every critical record match the backup/);
   rr = await runRestore(ws, [key[1], "agroai-academy-restore-drill"]);
   assert.equal(rr.code, 2, "never restores into an existing database");
+  // An import that silently loses certificates is caught.
+  rr = await runRestore(ws, [key[1], "agroai-academy-restore-drill-2"], { FAKE_FAIL: "lossy-import" });
+  assert.equal(rr.code, 1);
+  assert.match(rr.out, /Restored row counts differ from the backup/);
 });

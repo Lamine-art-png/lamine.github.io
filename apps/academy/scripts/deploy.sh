@@ -86,6 +86,11 @@ echo "==> Backing up ${DB_NAME} before migrations"
 TABLES_JSON="$(d1 "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")" || { echo "::error::Could not read the database schema; refusing to continue." >&2; exit 1; }
 if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
   COUNTS_SQL="$(printf '%s' "$TABLES_JSON" | $H counts-sql)"
+  CRITICAL_SQL="$(printf '%s' "$TABLES_JSON" | $H critical-sql)"
+  # Critical records (learners, enrollments, attempts, certificates, reviews) are
+  # fingerprinted before and after the export; every record unchanged across the
+  # export window must be in the backup exactly (no tolerance).
+  d1 "$CRITICAL_SQL" | $H critical-json > "$WORK/critical-before.json" || { echo "::error::Could not fingerprint critical records." >&2; exit 1; }
   d1 "$COUNTS_SQL" | $H counts-json > "$WORK/live-counts.json" || { echo "::error::Could not count live rows." >&2; exit 1; }
   echo "    Live rows: $(cat "$WORK/live-counts.json")"
   STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -101,9 +106,12 @@ if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
 
   $WRANGLER d1 export "$DB_NAME" --remote "${CONFIG[@]}" --output "$WORK/backup.sql" >/dev/null || { echo "::error::Database export failed; refusing to migrate." >&2; exit 1; }
   test -s "$WORK/backup.sql" || { echo "::error::Database export is empty; refusing to migrate." >&2; exit 1; }
-  echo "==> Verifying the export restores cleanly"
-  node "${HERE}/backup-verify.mjs" "$WORK/backup.sql" --expect "$WORK/live-counts.json" > "$WORK/verify.json" || {
-    echo "::error::Backup verification failed: $(cat "$WORK/verify.json")" >&2; exit 1; }
+  d1 "$CRITICAL_SQL" | $H critical-json > "$WORK/critical-after.json" || { echo "::error::Could not fingerprint critical records after the export." >&2; exit 1; }
+  echo "==> Verifying the export: completeness, integrity, restore and migration rehearsal"
+  node "${HERE}/backup-verify.mjs" "$WORK/backup.sql" --expect "$WORK/live-counts.json" \
+    --before "$WORK/critical-before.json" --after "$WORK/critical-after.json" --migrations migrations > "$WORK/verify.json" || {
+    echo "::error::Backup verification failed: $(node -e 'const v=require(process.argv[1]);console.log(v.problems.join("; "))' "$WORK/verify.json")" >&2; exit 1; }
+  node -e 'const v=require(process.argv[1]);for(const n of v.notes)console.log("    note: "+n);console.log("    Critical records verified exactly: "+Object.entries(v.critical).map(([t,c])=>t+"="+c.stable).join(", "));console.log("    Pending migrations rehearsed on the restored copy: "+(v.rehearsed.join(", ")||"none"))' "$WORK/verify.json"
   echo "    Restore check passed."
 
   gzip -9 -n -c "$WORK/backup.sql" > "$WORK/backup.sql.gz"

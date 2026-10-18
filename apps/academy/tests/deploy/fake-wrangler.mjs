@@ -41,7 +41,9 @@ if (group === "d1" && sub === "list") {
   if (FAIL.has("execute")) fail("execute failed");
   const db = new DatabaseSync(dbFile(third), { enableForeignKeyConstraints: false });
   if (flag("--file")) {
-    db.exec(readFileSync(flag("--file"), "utf8"));
+    let sql = readFileSync(flag("--file"), "utf8");
+    if (FAIL.has("lossy-import")) sql = sql.split("\n").filter((l) => !/^INSERT INTO "certificates"/.test(l)).join("\n");
+    db.exec(sql);
     db.close();
     process.stdout.write(JSON.stringify([{ results: [], success: true, meta: {} }]));
   } else {
@@ -54,9 +56,23 @@ if (group === "d1" && sub === "list") {
   process.stdout.write(JSON.stringify({ bookmark: "00000085-0000024c-00004c6d-fake", timestamp: new Date().toISOString() }));
 } else if (group === "d1" && sub === "export") {
   if (FAIL.has("export")) fail("export failed");
+  // Learners keep using the Academy while the export runs.
+  const live = new DatabaseSync(dbFile(argv[2]), { enableForeignKeyConstraints: false });
+  const now = new Date().toISOString();
+  if (FAIL.has("concurrent-signup")) live.prepare("INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES ('usr_new', 'new@academy.test', 'Synthetic New', ?, ?)").run(now, now);
+  if (FAIL.has("concurrent-deletion")) live.exec("DELETE FROM users WHERE id = 'usr_2'");
+  if (FAIL.has("concurrent-grading")) live.exec("UPDATE attempts SET status = 'graded', score_pct = 90, passed = 1 WHERE id = 'att_1'");
+  if (FAIL.has("certificate-vanishes")) live.exec("DELETE FROM certificates WHERE id = 'crt_1'");
+  live.close();
   let sql = dumpDatabase(argv[2] && dbFile(argv[2]));
+  const drop = (re) => (sql = sql.split("\n").filter((l) => !re.test(l)).join("\n"));
   if (FAIL.has("truncated-export")) sql = sql.slice(0, Math.floor(sql.length / 2));
-  if (FAIL.has("lossy-export")) sql = sql.split("\n").filter((l) => !l.startsWith('INSERT INTO "users"')).join("\n");
+  if (FAIL.has("lossy-export")) drop(/^INSERT INTO "users"/);
+  // Single-record losses that a count tolerance would have accepted.
+  if (FAIL.has("drop-one-certificate")) drop(/^INSERT INTO "certificates".*'crt_1'/);
+  if (FAIL.has("drop-one-attempt")) drop(/^INSERT INTO "attempts".*'att_1'/);
+  if (FAIL.has("drop-one-enrollment")) drop(/^INSERT INTO "enrollments".*'enr_1'/);
+  if (FAIL.has("alter-certificate")) sql = sql.replace(/'0{64}'/, `'${"1".repeat(64)}'`);
   writeFileSync(flag("--output"), sql);
 } else if (group === "d1" && sub === "migrations" && third === "apply") {
   if (FAIL.has("migrate")) fail("migration failed");

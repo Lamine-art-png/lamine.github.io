@@ -6,6 +6,9 @@
 //   scalar <column>       → first row's <column> from `wrangler d1 execute --json`
 //   counts-sql            → SELECT statement counting rows of every table in `rows` output
 //   counts-json           → {table: n} from the counts query output
+//   critical-sql          → query fingerprinting critical records, from a table listing
+//   critical-json         → {table: {key: hash}} from the critical query output
+//   same-json <file>      → "same"/"different" (exit 1) comparing stdin JSON with a file
 //   has-secret <name>     → "yes"/"no" from `wrangler secret list --format json`
 //   has-bucket <name>     → "yes"/"no" from `wrangler r2 bucket list`
 //   zone-id               → first zone id from the Cloudflare zones API
@@ -13,6 +16,7 @@
 //   domain-owned <service>→ "yes"/"no" from the Workers custom domains API
 //   set-db-id <name> <id> → wrangler.toml on stdin with only <name>'s database_id replaced
 import { readFileSync } from "node:fs";
+import { criticalSql, fingerprints } from "./backup-verify.mjs";
 
 const [cmd, ...args] = process.argv.slice(2);
 const input = readFileSync(0, "utf8");
@@ -27,6 +31,7 @@ const d1Rows = (s) => {
   if (first && first.success === false) throw new Error("d1 query failed");
   return first?.results ?? [];
 };
+const sortKeys = (v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
 const out = (v) => process.stdout.write(typeof v === "string" ? v : JSON.stringify(v));
 
 switch (cmd) {
@@ -51,6 +56,19 @@ switch (cmd) {
       .map((r) => r.name)
       .filter((n) => /^[A-Za-z0-9_]+$/.test(n) && !n.startsWith("_cf_") && !n.startsWith("sqlite_"));
     out(names.map((n) => `SELECT '${n}' AS t, COUNT(*) AS n FROM "${n}"`).join(" UNION ALL ") || "SELECT 'none' AS t, 0 AS n");
+    break;
+  }
+  case "critical-sql":
+    out(criticalSql(d1Rows(input).map((r) => r.name)));
+    break;
+  case "critical-json":
+    out(fingerprints(d1Rows(input)));
+    break;
+  case "same-json": {
+    // Exit 1 unless the JSON on stdin equals the JSON file given (restore drills).
+    const same = JSON.stringify(sortKeys(jsonFrom(input))) === JSON.stringify(sortKeys(JSON.parse(readFileSync(args[0], "utf8"))));
+    out(same ? "same" : "different");
+    process.exitCode = same ? 0 : 1;
     break;
   }
   case "counts-json":

@@ -33,10 +33,22 @@ fi
 gunzip -c "$WORK/backup.sql.gz" > "$WORK/backup.sql"
 
 echo "==> Verifying the backup restores cleanly"
-node "${HERE}/backup-verify.mjs" "$WORK/backup.sql"
+H="node ${HERE}/deploy-helpers.mjs"
+node "${HERE}/backup-verify.mjs" "$WORK/backup.sql" --fingerprints "$WORK/dump-critical.json" > "$WORK/verify.json" || {
+  echo "Backup verification failed: $(node -e 'console.log(require(process.argv[1]).problems.join("; "))' "$WORK/verify.json")" >&2; exit 1; }
+node -e 'const v=require(process.argv[1]);process.stdout.write(JSON.stringify(Object.fromEntries(Object.entries(v.tables).filter(([t])=>t!=="d1_migrations"))))' "$WORK/verify.json" > "$WORK/dump-counts.json"
 
 echo "==> Importing into new database ${NEW_DB}"
 $WRANGLER d1 create "$NEW_DB" >/dev/null
 $WRANGLER d1 execute "$NEW_DB" --remote --file "$WORK/backup.sql" --yes >/dev/null
+
+echo "==> Checking the restored database matches the backup exactly"
+q() { $WRANGLER d1 execute "$NEW_DB" --remote --json --command "$1"; }
+TABLES="$(q "SELECT name FROM sqlite_master WHERE type = 'table' AND name <> 'd1_migrations' ORDER BY name")"
+q "$(printf '%s' "$TABLES" | $H counts-sql)" | $H counts-json | $H same-json "$WORK/dump-counts.json" >/dev/null || {
+  echo "Restored row counts differ from the backup; do not use ${NEW_DB}." >&2; exit 1; }
+q "$(printf '%s' "$TABLES" | $H critical-sql)" | $H critical-json | $H same-json "$WORK/dump-critical.json" >/dev/null || {
+  echo "Restored learner, exam or certificate records differ from the backup; do not use ${NEW_DB}." >&2; exit 1; }
+echo "    Every table's row count and every critical record match the backup."
 echo "==> Restored into ${NEW_DB}. The live database was not modified."
 echo "    To switch the Worker, set its database_id in wrangler.toml and deploy after review."
