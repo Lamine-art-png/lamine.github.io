@@ -5,7 +5,7 @@ import { auditStmt } from "../lib/security.js";
 import { flushOutbox, queueEmail } from "./email.js";
 import { submitAttempt } from "./assessments.js";
 import { publishReadiness } from "./readiness.js";
-import { publishDraft } from "./drafts.js";
+import { publishDraft, DraftChangedError } from "./drafts.js";
 import { notifyStmt } from "./activity.js";
 
 export async function runScheduled(env, cron = "") {
@@ -24,8 +24,13 @@ export async function runScheduled(env, cron = "") {
   for (const c of due) {
     const readiness = await publishReadiness(env, c);
     if (readiness.ok) {
-      await publishDraft(env, c, { hash: readiness.hash, by: "schedule" });
-      report.published++;
+      try {
+        await publishDraft(env, c, { hash: readiness.hash, version: readiness.version, by: "schedule" });
+        report.published++;
+      } catch (e) {
+        // A draft edit raced the check: stay scheduled; the next run re-checks.
+        if (!(e instanceof DraftChangedError)) throw e;
+      }
     } else {
       const failed = readiness.checks.filter((x) => !x.ok).map((x) => x.label);
       const publishers = (

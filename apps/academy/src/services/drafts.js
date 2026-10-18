@@ -36,6 +36,13 @@ const scope = (p) => ({
   assessment_rules: `assessment_id IN (SELECT id FROM ${p}assessments WHERE course_id = ?1)`,
 });
 
+export class DraftChangedError extends Error {
+  constructor() {
+    super("The draft changed while it was being published; nothing was published.");
+    this.code = "draft_changed";
+  }
+}
+
 // Bind ?1 (course id) and, where used, ?2 (the current time).
 const bindAll = (env, sql, courseId) => {
   const now = nowIso();
@@ -126,8 +133,19 @@ export async function pruneFiles(env, keys) {
   }
 }
 
-/** Publish the draft: copy it live, record the revision and the status, atomically. */
-export async function publishDraft(env, course, { actorId = null, hash, by = "editor" } = {}) {
+/** The global draft version; read it before fingerprinting a draft for publication. */
+export async function draftVersion(env) {
+  return (await env.DB.prepare("SELECT version FROM draft_state WHERE id = 1").first())?.version ?? 0;
+}
+
+/**
+ * Publish the draft: copy it live, record the revision and the status,
+ * atomically. `hash` must be the fingerprint taken at draft version
+ * `version`; if any draft changed since, the revision insert (first in the
+ * batch) gets a NULL hash, violates NOT NULL and the whole batch rolls back.
+ */
+export async function publishDraft(env, course, { actorId = null, hash, version, by = "editor" } = {}) {
+  if (!hash || !Number.isInteger(version)) throw new Error("publishDraft needs the reviewed hash and the draft version it was taken at");
   const before = (await env.DB.prepare("SELECT r.file_key FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id WHERE l.course_id = ? AND r.file_key IS NOT NULL").bind(course.id).all()).results;
   const last = await latestRevision(env, course.id);
   const number = (last?.number || 0) + 1;
@@ -138,20 +156,19 @@ export async function publishDraft(env, course, { actorId = null, hash, by = "ed
   )
     .bind(course.id)
     .first();
-  await env.DB.batch([
-    ...draftToLiveStatements(env, course.id),
-    env.DB.prepare("INSERT INTO course_revisions (id, course_id, number, content_hash, published_by, published_at, summary_json) VALUES (?,?,?,?,?,?,?)").bind(
-      newId("rev_"),
-      course.id,
-      number,
-      hash,
-      actorId,
-      now,
-      JSON.stringify({ ...counts, by }),
-    ),
-    env.DB.prepare("UPDATE courses SET status = 'published', scheduled_at = NULL, published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ?").bind(now, now, course.id),
-    auditStmt(env, actorId, "course.revision.published", "course", course.id, { number, content_hash: hash, by }),
-  ]);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO course_revisions (id, course_id, number, content_hash, published_by, published_at, summary_json) VALUES (?, ?, ?, (SELECT ? FROM draft_state WHERE id = 1 AND version = ?), ?, ?, ?)",
+      ).bind(newId("rev_"), course.id, number, hash, version, actorId, now, JSON.stringify({ ...counts, by })),
+      ...draftToLiveStatements(env, course.id),
+      env.DB.prepare("UPDATE courses SET status = 'published', scheduled_at = NULL, published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ?").bind(now, now, course.id),
+      auditStmt(env, actorId, "course.revision.published", "course", course.id, { number, content_hash: hash, by }),
+    ]);
+  } catch (e) {
+    if (/NOT NULL/i.test(String(e?.message)) && (await draftVersion(env)) !== version) throw new DraftChangedError();
+    throw e;
+  }
   await pruneFiles(env, before.map((r) => r.file_key));
   return number;
 }

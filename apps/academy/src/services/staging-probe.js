@@ -4,8 +4,8 @@
 // runs on every staging deploy, whatever the state of the real courses.
 // Created through the normal draft → revision publication path. Never
 // reachable outside staging (see pages/public.js stagingProbeCourse).
-import { nowIso } from "../lib/util.js";
-import { publishDraft } from "./drafts.js";
+import { newId, nowIso } from "../lib/util.js";
+import { publishDraft, draftVersion } from "./drafts.js";
 import { courseContentHash } from "./readiness.js";
 
 export const PROBE = {
@@ -17,9 +17,12 @@ export const PROBE = {
   correctOption: "o1",
 };
 
+/**
+ * Ensure the probe exists, change its draft (a per-run marker in the lesson)
+ * and publish that change as a new revision, so every staging run exercises
+ * the draft → reviewed-hash → revision publication path end to end.
+ */
 export async function ensureProbeCourse(env) {
-  const existing = await env.DB.prepare("SELECT status FROM courses WHERE id = ?").bind(PROBE.courseId).first();
-  if (existing?.status === "published") return PROBE;
   const now = nowIso();
   const objectives = JSON.stringify(["Exercise the staging write path"]);
   await env.DB.batch(
@@ -62,7 +65,12 @@ export async function ensureProbeCourse(env) {
       ["INSERT OR IGNORE INTO draft_assessment_rules (id, assessment_id, bank_id, draw_count, sort_order) VALUES ('rul_staging_probe', ?1, 'bnk_staging_probe', 1, 1)", PROBE.assessmentId],
     ].map(([sql, ...args]) => env.DB.prepare(sql).bind(...args)),
   );
-  // The synthetic course is not reviewed; it is published directly as its first revision.
-  await publishDraft(env, { id: PROBE.courseId }, { hash: await courseContentHash(env, PROBE.courseId), by: "staging-probe" });
-  return PROBE;
+  const marker = `probe-${newId("").toLowerCase()}`;
+  await env.DB.prepare("UPDATE draft_lessons SET body_md = ?, updated_at = ? WHERE id = 'les_staging_probe'")
+    .bind(`Synthetic lesson text for staging checks.\n\nRun marker: ${marker}`, now)
+    .run();
+  // The synthetic course is not reviewed; each run publishes its draft directly as a new revision.
+  const version = await draftVersion(env);
+  const revision = await publishDraft(env, { id: PROBE.courseId }, { hash: await courseContentHash(env, PROBE.courseId), version, by: "staging-probe" });
+  return { ...PROBE, revision, marker };
 }

@@ -82,7 +82,7 @@ async function liveProduction(api) {
   ).run(now, "0".repeat(64), now);
   db.prepare("INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES ('usr_2', 'other@academy.test', 'Synthetic Other', ?, ?)").run(now, now);
   db.prepare("INSERT INTO enrollments (id, user_id, course_id, enrolled_at, last_activity_at) VALUES ('enr_1', 'usr_1', 'crs_a1', ?, ?)").run(now, now);
-  db.prepare("INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, layout_json, started_at) VALUES ('att_1', 'usr_1', 'asm_a1_exam', 'crs_a1', 1, 'in_progress', '[]', ?)").run(now);
+  db.prepare("INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, layout_json, started_at, policy_json) VALUES ('att_1', 'usr_1', 'asm_a1_exam', 'crs_a1', 1, 'in_progress', '[]', ?, ?)").run(now, JSON.stringify({ passing_score: 80 }));
   db.close();
   writeFileSync(join(ws.state, "calls.log"), "");
   return ws;
@@ -155,6 +155,7 @@ for (const [failure, message] of [
   ["drop-one-attempt", /Backup verification failed.*table attempts: 1 record\(s\) missing/],
   ["drop-one-enrollment", /Backup verification failed.*table enrollments: 1 record\(s\) missing/],
   ["alter-certificate", /Backup verification failed.*table certificates: 1 record\(s\) differ/],
+  ["strip-attempt-snapshot", /Backup verification failed.*table attempts: 1 record\(s\) differ/],
   ["certificate-vanishes", /Backup verification failed.*certificates: 1 append-only record\(s\) disappeared/],
   ["put", /Backup upload failed; refusing to migrate/],
   ["corrupt-get", /Stored backup does not match/],

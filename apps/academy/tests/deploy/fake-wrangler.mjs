@@ -72,6 +72,8 @@ if (group === "d1" && sub === "list") {
   if (FAIL.has("drop-one-certificate")) drop(/^INSERT INTO "certificates".*'crt_1'/);
   if (FAIL.has("drop-one-attempt")) drop(/^INSERT INTO "attempts".*'att_1'/);
   if (FAIL.has("drop-one-enrollment")) drop(/^INSERT INTO "enrollments".*'enr_1'/);
+  // Row kept, frozen attempt policy lost: scoring would fall back to live settings after a restore.
+  if (FAIL.has("strip-attempt-snapshot")) sql = sql.replace(`'{"passing_score":80}'`, "NULL");
   if (FAIL.has("alter-certificate")) sql = sql.replace(/'0{64}'/, `'${"1".repeat(64)}'`);
   writeFileSync(flag("--output"), sql);
 } else if (group === "d1" && sub === "migrations" && third === "apply") {

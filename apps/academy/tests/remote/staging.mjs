@@ -96,7 +96,13 @@ async function main() {
     const r = await fetch(`${BASE}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } });
     expect(r.status === 200, `probe-course returned ${r.status} (is STAGING_TEST_TOKEN set on the staging Worker?)`);
     probe = (await r.json()).probe;
-    expect(probe?.slug && probe.assessmentId && probe.questionId, "probe course details missing");
+    expect(probe?.slug && probe.assessmentId && probe.questionId && probe.marker, "probe course details missing");
+    expect(Number.isInteger(probe.revision) && probe.revision >= 1, "no revision was published");
+    // A second request must publish another revision, proving the path runs every time.
+    const again = await (await fetch(`${BASE}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).json();
+    expect(again.probe?.revision === probe.revision + 1, `expected revision ${probe.revision + 1}, got ${again.probe?.revision}`);
+    probe = again.probe;
+    return `revision ${probe.revision}`;
   });
 
   const learner = new RemoteClient(BASE);
@@ -139,6 +145,7 @@ async function main() {
     const lesson = await learner.get(r.location.replace(BASE, ""));
     const id = /data-lesson-id="([^"]+)"/.exec(lesson.text)?.[1];
     expect(id, "lesson id not found on the lesson page");
+    expect(lesson.text.includes(probe.marker), "the newly published revision is not what learners see");
     const res = await fetch(`${BASE}/api/progress`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json", "x-csrf-token": learner.csrf, origin: BASE, cookie: [...learner.jar].map(([k, v]) => `${k}=${v}`).join("; ") },

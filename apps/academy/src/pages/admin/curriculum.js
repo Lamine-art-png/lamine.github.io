@@ -10,7 +10,7 @@ import { TOPICS } from "../public.js";
 import { PROFESSIONAL_ROLES } from "../../services/users.js";
 import { LOCALES } from "../../lib/i18n.js";
 import { publishReadiness, recordReview, REVIEW_TYPES, REVIEW_DECISIONS } from "../../services/readiness.js";
-import { draftCourse, draftChanged, latestRevision, liveToDraftStatements, publishDraft, pruneFiles } from "../../services/drafts.js";
+import { draftCourse, draftChanged, latestRevision, liveToDraftStatements, publishDraft, pruneFiles, DraftChangedError } from "../../services/drafts.js";
 
 export { publishReadiness };
 
@@ -307,7 +307,12 @@ export async function setCourseStatus(c) {
   }
   if (status === "published") {
     // Copy the reviewed draft live as a new revision, atomically with the status.
-    await publishDraft(c.env, course, { actorId: c.user.id, hash: readiness.hash });
+    try {
+      await publishDraft(c.env, course, { actorId: c.user.id, hash: readiness.hash, version: readiness.version });
+    } catch (e) {
+      if (e instanceof DraftChangedError) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent(e.message + " Check the readiness list and publish again.")}`);
+      throw e;
+    }
     return redirect(`/admin/courses/${course.id}?ok=published`);
   }
   let scheduledAt = null;
@@ -624,10 +629,29 @@ export async function editVideo(c) {
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
 }
 
+/**
+ * A video shown by a released course's live lessons is immutable, like the
+ * revision itself: media, transcript and captions change only by linking a new
+ * asset in the course draft, which voids the reviews until they are recorded
+ * again and is then published as a new revision.
+ */
+async function liveVideoLock(env, videoId) {
+  return env.DB.prepare(
+    `SELECT c.title FROM lessons l JOIN courses c ON c.id = l.course_id
+      WHERE l.video_id = ? AND c.published_at IS NOT NULL AND l.slug NOT LIKE '\\_\\_rev\\_%' ESCAPE '\\' LIMIT 1`,
+  )
+    .bind(videoId)
+    .first();
+}
+const lockedMessage = (lock) =>
+  encodeURIComponent(`This video is live in “${lock.title}”. To change it, add a new video asset, link it to the lesson in the course draft, record the reviews and publish the revision.`);
+
 export async function saveVideo(c) {
   const b = await c.readBody();
   const v = await c.env.DB.prepare("SELECT * FROM video_assets WHERE id = ?").bind(c.params.id).first();
   if (!v) throw new HttpError(404, "not_found");
+  const lock = await liveVideoLock(c.env, v.id);
+  if (lock) return redirect(`/admin/videos/${v.id}?err=${lockedMessage(lock)}`);
   const status = VIDEO_STATUSES.includes(b.status) ? b.status : v.status;
   const urlOk = (u) => !u || /^https:\/\//.test(u);
   const hls = str(b.hls_url, 1000);
@@ -670,6 +694,8 @@ export async function addCaptions(c) {
   const b = await c.readBody();
   const vtt = String(b.vtt || "").replace(/\r\n?/g, "\n").slice(0, 500000);
   if (!vtt.startsWith("WEBVTT")) return redirect(`/admin/videos/${c.params.id}?err=Captions%20must%20be%20WebVTT`);
+  const lock = await liveVideoLock(c.env, c.params.id);
+  if (lock) return redirect(`/admin/videos/${c.params.id}?err=${lockedMessage(lock)}`);
   const loc = LOCALES.find((l) => l.code === b.locale) || LOCALES[0];
   await c.env.DB.prepare(
     `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES (?,?,?,?,?,?,?)
@@ -683,6 +709,8 @@ export async function addCaptions(c) {
 export async function deleteCaptions(c) {
   const cap = await c.env.DB.prepare("SELECT video_id FROM video_captions WHERE id = ?").bind(c.params.id).first();
   if (!cap) throw new HttpError(404, "not_found");
+  const lock = await liveVideoLock(c.env, cap.video_id);
+  if (lock) return redirect(`/admin/videos/${cap.video_id}?err=${lockedMessage(lock)}`);
   await c.env.DB.prepare("DELETE FROM video_captions WHERE id = ?").bind(c.params.id).run();
   return redirect(`/admin/videos/${cap.video_id}?ok=deleted`);
 }

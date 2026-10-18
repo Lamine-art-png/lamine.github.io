@@ -269,3 +269,80 @@ test("publishing new exam settings while an exam is open changes neither its sco
   const esc = q.explanation.slice(0, 40).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
   assert.ok(!result.text.includes(esc), "the exam's original feedback policy (correctness only) still applies: no explanations");
 });
+
+test("every published course field and relation is covered by the reviewed fingerprint", async () => {
+  const { env, admin } = await released();
+  const { courseContentHash } = await import("../../src/services/readiness.js");
+  const base = await courseContentHash(env, "crs_a1");
+  const changes = [
+    "UPDATE draft_courses SET audience_json = '[\"agronomist\"]' WHERE id = 'crs_a1'",
+    "UPDATE draft_courses SET topics_json = '[]' WHERE id = 'crs_a1'",
+    "UPDATE draft_courses SET prerequisites_text = 'Synthetic change' WHERE id = 'crs_a1'",
+    "UPDATE draft_courses SET slug = 'synthetic-new-slug' WHERE id = 'crs_a1'",
+    "UPDATE draft_courses SET duration_minutes = duration_minutes + 1 WHERE id = 'crs_a1'",
+    "UPDATE draft_courses SET thumbnail_url = 'https://media.example/x.png' WHERE id = 'crs_a1'",
+    "DELETE FROM draft_course_instructors WHERE course_id = 'crs_a1'",
+    "INSERT INTO draft_course_prerequisites (course_id, prerequisite_course_id, is_required) VALUES ('crs_a1', 'crs_a2', 1)",
+    "UPDATE video_assets SET script_md = script_md || ' (edited)' WHERE id = 'vid_a1_data'",
+    "INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES ('cap_x', 'vid_a1_data', 'fr-FR', 'Français', 'WEBVTT\n', 'reviewed', '2026-01-01')",
+  ];
+  let previous = base;
+  for (const sql of changes) {
+    await env.DB.prepare(sql).run();
+    const next = await courseContentHash(env, "crs_a1");
+    assert.notEqual(next, previous, `not fingerprinted: ${sql}`);
+    previous = next;
+  }
+  // And the editor sees it as an unpublished change voiding the reviews.
+  assert.match((await admin.get("/admin/courses/crs_a1")).text, /no longer applies/);
+});
+
+test("a draft edit between the readiness check and publication aborts the publication", async () => {
+  const { env, admin } = await released();
+  const { publishReadiness } = await import("../../src/services/readiness.js");
+  const { publishDraft, DraftChangedError } = await import("../../src/services/drafts.js");
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Reviewed text." }));
+  await approveReviews(admin, "crs_a1");
+  const course = await live(env, "SELECT * FROM courses WHERE id = 'crs_a1'");
+  const readiness = await publishReadiness(env, course);
+  assert.ok(readiness.ok);
+  // A concurrent save lands after the check.
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Unreviewed text." }));
+  await assert.rejects(publishDraft(env, course, { hash: readiness.hash, version: readiness.version }), DraftChangedError);
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Unreviewed text.", "nothing published");
+  assert.equal((await live(env, "SELECT MAX(number) AS n FROM course_revisions WHERE course_id = 'crs_a1'")).n, 1, "no revision recorded");
+});
+
+test("an attempt completes the quiz lesson it started for, even if a revision moves the quiz", async () => {
+  const { env, admin, learner } = await released();
+  const r = await learner.post("/assessments/asm_a1_q1/start", {});
+  const attemptId = r.location.split("/").pop();
+  const answers = await correctResponses(env, attemptId);
+  // The quiz moves from the module 1 quiz lesson to the summary lesson.
+  await admin.post("/admin/lessons/les_a1_quiz1", await lessonForm(env, "les_a1_quiz1", { assessment_id: "", type: "text", body_md: "Synthetic replacement text." }));
+  await admin.post("/admin/lessons/les_a1_summary", await lessonForm(env, "les_a1_summary", { type: "quiz", assessment_id: "asm_a1_q1" }));
+  await approveReviews(admin, "crs_a1");
+  assert.ok(!blocked(await publish(admin)));
+  assert.equal((await live(env, "SELECT assessment_id FROM lessons WHERE id = 'les_a1_summary'")).assessment_id, "asm_a1_q1");
+  await learner.post(`/attempts/${attemptId}/submit`, answers);
+  const user = await live(env, "SELECT id FROM users WHERE email = 'learner@academy.test'");
+  assert.equal((await live(env, "SELECT status FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_quiz1'", user.id))?.status, "completed");
+  assert.equal(await live(env, "SELECT status FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_summary'", user.id), null, "the moved-to lesson is not completed");
+});
+
+test("a video shown by a released course cannot be changed in place", async () => {
+  const { env, admin } = await released();
+  const v = await live(env, "SELECT * FROM video_assets WHERE id = 'vid_a1_data'");
+  let r = await admin.post("/admin/videos/vid_a1_data", { title: v.title, provider: "r2", status: "approved", duration_seconds: "60", mp4_url: "https://media.example/new.mp4", hls_url: "", script_md: "x" });
+  assert.match(decodeURIComponent(r.location), /live in “Introduction to Artificial Intelligence in Agriculture”/);
+  r = await admin.post("/admin/videos/vid_a1_data/captions", { locale: "en", status: "reviewed", vtt: "WEBVTT\n\n00:00.000 --> 00:01.000\nReplaced" });
+  assert.match(decodeURIComponent(r.location), /live in/);
+  assert.equal(await live(env, "SELECT 1 FROM video_captions WHERE video_id = 'vid_a1_data'"), null);
+  const after = await live(env, "SELECT * FROM video_assets WHERE id = 'vid_a1_data'");
+  assert.deepEqual(after, v, "asset unchanged");
+  // A video not linked by any released course's live lessons stays editable.
+  r = await admin.post("/admin/videos", { title: "Replacement" });
+  const id = r.location.split("/").pop().split("?")[0];
+  r = await admin.post(`/admin/videos/${id}/captions`, { locale: "en", status: "reviewed", vtt: "WEBVTT\n" });
+  assert.match(r.location, /ok=saved/);
+});

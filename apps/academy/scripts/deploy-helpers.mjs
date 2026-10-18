@@ -59,7 +59,7 @@ switch (cmd) {
     break;
   }
   case "critical-sql":
-    out(criticalSql(d1Rows(input).map((r) => r.name)));
+    out(criticalSql(d1Rows(input).map((r) => ({ name: r.name, sql: r.sql ?? null }))));
     break;
   case "critical-json":
     out(fingerprints(d1Rows(input)));

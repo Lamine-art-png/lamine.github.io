@@ -161,6 +161,10 @@ export async function startAttempt(c, assessment, course) {
   const layout = buildLayout(questions, assessment);
   const snapshot = await snapshotQuestions(env, questions.map((q) => q.id), c.locale, assessment.is_certification);
   const policy = Object.fromEntries(POLICY_FIELDS.map((k) => [k, assessment[k] ?? null]));
+  // Which quiz lessons this attempt completes, and the course rule for it, are
+  // frozen too: a later revision moving the assessment cannot redirect completion.
+  policy.quiz_lesson_ids = (await env.DB.prepare("SELECT id FROM lessons WHERE assessment_id = ? AND course_id = ?").bind(assessment.id, assessment.course_id).all()).results.map((l) => l.id);
+  policy.require_quizzes_pass = course.require_quizzes_pass ? 1 : 0;
   const now = nowIso();
   const attempt = {
     policy_json: JSON.stringify(policy),
@@ -418,8 +422,12 @@ export async function finalizeAttempt(c, attemptId, { auto = false } = {}) {
   if (pct >= 100) await grantAchievement(env, learner.id, "perfect_score");
 
   const course = await env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(attempt.course_id).first();
-  const lessons = (await env.DB.prepare("SELECT id FROM lessons WHERE assessment_id = ?").bind(assessment.id).all()).results;
-  const completesLesson = assessment.kind === "exam" ? Boolean(passed) : Boolean(passed || !course.require_quizzes_pass);
+  // The lessons and quiz rule frozen when the attempt started (live lookup only for legacy attempts).
+  const lessons = Array.isArray(assessment.quiz_lesson_ids)
+    ? assessment.quiz_lesson_ids.map((id) => ({ id }))
+    : (await env.DB.prepare("SELECT id FROM lessons WHERE assessment_id = ? AND course_id = ?").bind(assessment.id, course.id).all()).results;
+  const requirePass = assessment.require_quizzes_pass ?? course.require_quizzes_pass;
+  const completesLesson = assessment.kind === "exam" ? Boolean(passed) : Boolean(passed || !requirePass);
   if (completesLesson) for (const l of lessons) await markQuizLessonComplete(env, learner.id, l.id, course.id);
   // Recompute as the learner (the reviewer may be the one finalizing).
   const lc = { ...c, user: learner };

@@ -36,19 +36,34 @@ export const CRITICAL = {
   user_roles: { key: "user_id || ':' || role", cols: ["granted_at"] },
   enrollments: { key: "id", cols: ["user_id", "course_id", "status", "enrolled_at", "completed_at"] },
   lesson_progress: { key: "user_id || ':' || lesson_id", cols: ["course_id", "status", "started_at", "completed_at"] },
-  attempts: { key: "id", cols: ["user_id", "assessment_id", "attempt_no", "status", "started_at", "submitted_at", "score_pct", "passed"] },
-  attempt_answers: { key: "attempt_id || ':' || question_id", cols: ["response_json", "is_correct", "points_awarded", "max_points"] },
+  // Attempts keep everything needed to reproduce them exactly: the frozen
+  // policy and question snapshots, the drawn layout, locale and deadline.
+  attempts: {
+    key: "id",
+    cols: ["user_id", "assessment_id", "attempt_no", "status", "locale", "layout_json", "policy_json", "started_at", "deadline_at", "submitted_at", "graded_at", "score_points", "max_points", "score_pct", "passed"],
+  },
+  attempt_answers: { key: "attempt_id || ':' || question_id", cols: ["question_json", "response_json", "is_correct", "points_awarded", "max_points", "needs_review", "reviewer_comment"] },
   certificates: { key: "id", cols: ["credential_id", "course_id", "credential_name", "course_title", "score_pct", "issued_at", "status", "signature"], appendOnly: true },
   certificate_events: { key: "id", cols: ["certificate_id", "event", "created_at"], appendOnly: true },
   course_reviews: { key: "id", cols: ["course_id", "review_type", "decision", "content_hash", "created_at"], appendOnly: true },
   course_revisions: { key: "id", cols: ["course_id", "number", "content_hash", "published_at"], appendOnly: true },
 };
 
-/** One query returning (t, k, f) for every critical record in the tables that exist. */
+/**
+ * One query returning (t, k, f) for every critical record in the tables that
+ * exist. `tables` are sqlite_master rows ({name, sql}); a fingerprint column
+ * is used only if the table has it, so an older schema (before a migration
+ * added it) is fingerprinted the same way live and in the dump.
+ */
 export function criticalSql(tables) {
+  const schema = new Map(tables.map((t) => (typeof t === "string" ? [t, null] : [t.name, t.sql || ""])));
+  const has = (sql, expr) => sql === null || new RegExp(`\\b${/[a-z_]+(?=\)?$)/.exec(expr)[0]}\\b`).test(sql);
   const parts = Object.entries(CRITICAL)
-    .filter(([t]) => tables.includes(t))
-    .map(([t, c]) => `SELECT '${t}' AS t, ${c.key} AS k, ${c.cols.map((x) => `quote(${x})`).join(" || '|' || ")} AS f FROM "${t}"`);
+    .filter(([t]) => schema.has(t))
+    .map(([t, c]) => {
+      const cols = c.cols.filter((x) => has(schema.get(t), x));
+      return `SELECT '${t}' AS t, ${c.key} AS k, ${cols.map((x) => `quote(${x})`).join(" || '|' || ")} AS f FROM "${t}"`;
+    });
   return parts.join(" UNION ALL ") || "SELECT 'none' AS t, '' AS k, '' AS f";
 }
 
@@ -93,10 +108,8 @@ export function verifyDump(sql, { expect = null, before = null, after = null, mi
   if (integrity.join() !== "ok") problems.push(`integrity_check: ${integrity.slice(0, 5).join("; ")}`);
   const fk = db.prepare("PRAGMA foreign_key_check").all();
   if (fk.length) problems.push(`foreign_key_check: ${fk.length} violation(s), first in ${fk[0].table}`);
-  const names = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name")
-    .all()
-    .map((r) => r.name);
+  const schema = db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all();
+  const names = schema.map((r) => r.name);
   const tables = {};
   for (const n of names) tables[n] = db.prepare(`SELECT COUNT(*) AS n FROM "${n.replace(/"/g, '""')}"`).get().n;
   for (const t of REQUIRED_TABLES) if (!(t in tables)) problems.push(`required table missing: ${t}`);
@@ -108,7 +121,7 @@ export function verifyDump(sql, { expect = null, before = null, after = null, mi
     else {
       let dumped = {};
       try {
-        dumped = fingerprints(db.prepare(criticalSql(names)).all());
+        dumped = fingerprints(db.prepare(criticalSql(schema)).all());
       } catch (e) {
         problems.push(`critical records cannot be read from the backup: ${e.message}`);
       }
@@ -164,7 +177,7 @@ export function verifyDump(sql, { expect = null, before = null, after = null, mi
   let dumpFingerprints = null;
   if (emitFingerprints) {
     try {
-      dumpFingerprints = fingerprints(db.prepare(criticalSql(names)).all());
+      dumpFingerprints = fingerprints(db.prepare(criticalSql(schema)).all());
     } catch (e) {
       problems.push(`critical records cannot be read from the backup: ${e.message}`);
     }

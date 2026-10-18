@@ -44,7 +44,7 @@ $WRANGLER d1 execute "$NEW_DB" --remote --file "$WORK/backup.sql" --yes >/dev/nu
 
 echo "==> Checking the restored database matches the backup exactly"
 q() { $WRANGLER d1 execute "$NEW_DB" --remote --json --command "$1"; }
-TABLES="$(q "SELECT name FROM sqlite_master WHERE type = 'table' AND name <> 'd1_migrations' ORDER BY name")"
+TABLES="$(q "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name <> 'd1_migrations' ORDER BY name")"
 q "$(printf '%s' "$TABLES" | $H counts-sql)" | $H counts-json | $H same-json "$WORK/dump-counts.json" >/dev/null || {
   echo "Restored row counts differ from the backup; do not use ${NEW_DB}." >&2; exit 1; }
 q "$(printf '%s' "$TABLES" | $H critical-sql)" | $H critical-json | $H same-json "$WORK/dump-critical.json" >/dev/null || {

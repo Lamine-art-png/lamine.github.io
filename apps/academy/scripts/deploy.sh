@@ -83,7 +83,7 @@ test -n "$DB_ID" || { echo "Could not resolve D1 database id" >&2; exit 1; }
 $H set-db-id "$DB_NAME" "$DB_ID" < wrangler.toml > wrangler.generated.toml
 
 echo "==> Backing up ${DB_NAME} before migrations"
-TABLES_JSON="$(d1 "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")" || { echo "::error::Could not read the database schema; refusing to continue." >&2; exit 1; }
+TABLES_JSON="$(d1 "SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name")" || { echo "::error::Could not read the database schema; refusing to continue." >&2; exit 1; }
 if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
   COUNTS_SQL="$(printf '%s' "$TABLES_JSON" | $H counts-sql)"
   CRITICAL_SQL="$(printf '%s' "$TABLES_JSON" | $H critical-sql)"

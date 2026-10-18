@@ -131,9 +131,10 @@ export async function publishCourse(env, courseId) {
 
 /** Test shortcut: publish a course's current draft as a revision without the readiness gate. */
 export async function publishDraftUnchecked(env, courseId) {
-  const { publishDraft } = await import("../src/services/drafts.js");
+  const { publishDraft, draftVersion } = await import("../src/services/drafts.js");
   const { courseContentHash } = await import("../src/services/readiness.js");
-  return publishDraft(env, { id: courseId }, { hash: await courseContentHash(env, courseId), by: "test" });
+  const version = await draftVersion(env);
+  return publishDraft(env, { id: courseId }, { hash: await courseContentHash(env, courseId), version, by: "test" });
 }
 
 export const A1_SLUG = "introduction-to-ai-in-agriculture";

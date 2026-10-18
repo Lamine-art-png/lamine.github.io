@@ -56,7 +56,6 @@ test("the staging integration test passes end to end over HTTP", async () => {
   // A1 is not published (its normal pre-launch state): the write path still runs fully.
   const { env, server, base } = await stagingEnv();
   const r = await runStaging(base, TOKEN);
-  server.close();
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /✔ register a synthetic learner/);
   assert.match(r.out, /✔ staging probe course is published through the revision path/);
@@ -64,7 +63,12 @@ test("the staging integration test passes end to end over HTTP", async () => {
   assert.match(r.out, /✔ certification exam attempt, grading and certificate issuance — AGA-/);
   assert.match(r.out, /✔ public verification recomputes the certificate signature/);
   assert.doesNotMatch(r.out, /skipped/);
-  assert.equal((await env.DB.prepare("SELECT number FROM course_revisions WHERE course_id = 'crs_staging_probe'").first()).number, 1);
+  assert.equal((await env.DB.prepare("SELECT MAX(number) AS n FROM course_revisions WHERE course_id = 'crs_staging_probe'").first()).n, 2, "two revisions published in one run");
+  // The next deploy's run publishes again.
+  const again = await runStaging(base, TOKEN);
+  assert.equal(again.code, 0, again.out);
+  assert.match(again.out, /✔ staging probe course is published through the revision path — revision 4/);
+  server.close();
   assert.match(r.out, /✔ password reset email and new password/);
   assert.match(r.out, /✔ delete the synthetic learner/);
   const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE email LIKE '%@academy-staging-test.invalid'").first();
@@ -89,8 +93,8 @@ test("the staging probe endpoint exists only on staging with the token", async (
   assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST" })).status, 404);
   assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${"x".repeat(40)}` } })).status, 404);
   assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).status, 200);
-  assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).status, 200, "idempotent");
-  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM course_revisions WHERE course_id = 'crs_staging_probe'").first()).n, 1);
+  assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).status, 200, "repeatable");
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM course_revisions WHERE course_id = 'crs_staging_probe'").first()).n, 2, "each call publishes a new revision");
   server.close();
   ({ env, server, base } = await stagingEnv({ ENVIRONMENT: "production" }));
   assert.equal((await fetch(`${base}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).status, 404);

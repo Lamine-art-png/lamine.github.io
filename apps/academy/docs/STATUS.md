@@ -55,10 +55,25 @@ Instructor video production is **not complete**: no approved Joshua video assets
 | 7 | Settings changed during an active exam | Covered by the snapshots, and end to end through the admin path: edit threshold (100%), time limit (1 min) and feedback (full), review, publish during an open exam → deadline, 80% threshold and correctness-only feedback unchanged. | `course-drafts.test.js` "publishing new exam settings while an exam is open…" |
 | 8 | Preserve safeguards | Signature verification, Unicode PDFs, reviews, localization and environment isolation untouched and still tested. | full suite below |
 
+### Codex re-review of `0370e10` (4 × P1, 2 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 review hash omitted course fields/relations | Fingerprint covers every draft course field, instructors, prerequisites, and linked video assets, transcripts and captions | `course-drafts` "every published course field…" |
+| P1 backup fingerprints omitted attempt snapshots | Attempts: layout, locale, policy snapshot, deadline, grading times and points; answers: question snapshot, review state. Columns are chosen from the live schema, so older schemas still verify | `deploy-script` "strip-attempt-snapshot" |
+| P1 quiz completion followed a moved assessment | The quiz lessons an attempt completes, and the course's quiz rule, are frozen in its snapshot | `course-drafts` "an attempt completes the quiz lesson it started for…" |
+| P1 a draft edit could race into a publication | Every draft write bumps `draft_state.version` (triggers, migration 0007); readiness reads it before hashing and the publication batch aborts atomically if it moved | `course-drafts` "a draft edit between the readiness check and publication…" |
+| P2 captions/media of live videos editable in place | Videos shown by a released course are locked (media, transcript, captions); changes go through a new asset linked in the draft, which voids reviews | `course-drafts` "a video shown by a released course…", `publication-readiness` |
+| P2 probe published only once | Each staging run changes the probe draft and publishes a new revision; the test asserts the revision number increases and learners see the new marker | `staging-harness` |
+
+CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
+fail through network latency and a stale paused state after a seek. Fixed with a latency margin
+(documented bound 2.7×) and a client fix; regression test added.
+
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **132/132 pass**.
-- Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass**, including video watch-to-complete at 2×.
+- `npm test` (unit, integration, deploy): **137/137 pass**.
+- Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
 - axe-core is not installable in the offline sandbox; the WCAG scan runs in Academy CI.

@@ -103,6 +103,11 @@ test("required instructor videos must be approved, playable and captioned", asyn
   await env.DB.prepare("UPDATE video_assets SET status = 'retired' WHERE id = ?").bind(one).run();
   assert.ok(blocked(await publish(admin)));
   await env.DB.prepare("UPDATE video_assets SET status = 'approved' WHERE id = ?").bind(one).run();
+  // The captions changed after the reviews were recorded, so those approvals no longer apply.
+  r = await admin.get("/admin/courses/crs_a1");
+  assert.match(r.text, /no longer applies — the content changed afterwards/);
+  assert.ok(blocked(await publish(admin)));
+  await approveReviews(admin, "crs_a1");
   assert.ok(!blocked(await publish(admin)));
 });
 

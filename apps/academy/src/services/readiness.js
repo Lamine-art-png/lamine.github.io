@@ -2,7 +2,7 @@
 // published or scheduled, including mandatory reviews and approved media.
 import { newId, nowIso, parseJson, sha256Hex } from "../lib/util.js";
 import { auditStmt } from "../lib/security.js";
-import { draftCourse } from "./drafts.js";
+import { draftCourse, draftVersion } from "./drafts.js";
 
 /** Reviews every course needs, each recorded against the exact content reviewed. */
 export const MANDATORY_REVIEWS = [
@@ -17,28 +17,40 @@ const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(O
 
 /**
  * Fingerprint of everything reviewers sign off on in the course draft (the
- * content that the next publication would make live): course description,
- * modules, lessons, resources, assessments, draw rules and questions. Any
- * edit after an approval changes the fingerprint and voids that approval.
- * Video files are approved separately on their own asset records.
+ * content that the next publication would make live): every course field,
+ * instructors, prerequisites, modules, lessons, resources, assessments, draw
+ * rules, questions, and the linked video assets and captions. Any edit after
+ * an approval changes the fingerprint and voids that approval.
  */
 export async function courseContentHash(env, courseId) {
   const all = async (sql, ...args) => (await env.DB.prepare(sql).bind(...args).all()).results.map((r) => strip(r));
-  const course = await env.DB.prepare(
-    "SELECT id, title, subtitle, description, objectives_json, level, source_locale, certificate_enabled, passing_score, require_all_lessons, require_quizzes_pass FROM draft_courses WHERE id = ?",
-  )
-    .bind(courseId)
-    .first();
+  // Every draft field and relation that publication copies live is included.
+  const courseRow = await env.DB.prepare("SELECT * FROM draft_courses WHERE id = ?").bind(courseId).first();
+  const course = courseRow ? strip(courseRow, ["updated_at", "updated_by"]) : null;
   const assessments = await all("SELECT * FROM draft_assessments WHERE course_id = ? ORDER BY id", courseId);
   const ids = assessments.map((a) => a.id);
   const rules = ids.length ? await all(`SELECT * FROM draft_assessment_rules WHERE assessment_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids) : [];
   const bankIds = [...new Set(rules.map((r) => r.bank_id))];
   const inBanks = (table, order = "id") =>
     bankIds.length ? all(`SELECT * FROM draft_${table} WHERE bank_id IN (${bankIds.map(() => "?").join(",")}) ORDER BY ${order}`, ...bankIds) : [];
+  const lessons = await all("SELECT * FROM draft_lessons WHERE course_id = ? ORDER BY id", courseId);
+  // Media the lessons link to: the asset record and its captions (content
+  // fingerprinted). Replacing a video or caption voids earlier approvals.
+  const videoIds = [...new Set(lessons.map((l) => l.video_id).filter(Boolean))];
+  const inVideos = (sql) => (videoIds.length ? all(sql.replace("(?)", `(${videoIds.map(() => "?").join(",")})`), ...videoIds) : []);
+  const videos = await inVideos("SELECT id, status, hls_url, mp4_url, duration_seconds, poster_url, script_md FROM video_assets WHERE id IN (?) ORDER BY id");
+  const captions = [];
+  for (const { vtt, ...cap } of await inVideos("SELECT id, video_id, locale, label, status, vtt FROM video_captions WHERE video_id IN (?) ORDER BY id")) {
+    captions.push({ ...cap, vtt: await sha256Hex(vtt || "") });
+  }
   const doc = {
     course,
+    instructors: await all("SELECT instructor_id, sort_order FROM draft_course_instructors WHERE course_id = ? ORDER BY instructor_id", courseId),
+    prerequisites: await all("SELECT prerequisite_course_id, is_required FROM draft_course_prerequisites WHERE course_id = ? ORDER BY prerequisite_course_id", courseId),
+    videos,
+    captions,
     modules: await all("SELECT * FROM draft_modules WHERE course_id = ? ORDER BY id", courseId),
-    lessons: await all("SELECT * FROM draft_lessons WHERE course_id = ? ORDER BY id", courseId),
+    lessons,
     resources: await all("SELECT r.* FROM draft_lesson_resources r JOIN draft_lessons l ON l.id = r.lesson_id WHERE l.course_id = ? ORDER BY r.id", courseId),
     assessments,
     rules,
@@ -90,6 +102,8 @@ const playable = (v) => v.video_status === "approved" && Boolean(v.hls_url || v.
  * live course record.
  */
 export async function publishReadiness(env, liveCourse) {
+  // The version is read before the fingerprint: publication binds to both.
+  const version = await draftVersion(env);
   const course = (await draftCourse(env, liveCourse.id)) || liveCourse;
   const checks = [];
   const hash = await courseContentHash(env, course.id);
@@ -172,5 +186,5 @@ export async function publishReadiness(env, liveCourse) {
     checks.push({ ok: r.state === "approved", label, review: r.type });
   }
   checks.push({ ok: true, warn: Boolean(course.content_review_note), label: course.content_review_note ? `Review note: ${course.content_review_note}` : "No outstanding review note" });
-  return { checks, ok: checks.every((x) => x.ok), reviews, hash };
+  return { checks, ok: checks.every((x) => x.ok), reviews, hash, version };
 }
