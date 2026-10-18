@@ -329,10 +329,13 @@ export async function setCourseStatus(c) {
   // Scheduling an update of a live course keeps the live revision published
   // (enrollment stays open); the scheduler publishes the reviewed draft later.
   const nextStatus = status === "scheduled" && course.status === "published" ? "published" : status;
-  await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?").bind(nextStatus, scheduledAt, now, course.id),
-    auditStmt(c.env, c.user.id, `course.status.${status}`, "course", course.id, { from: course.status, scheduled_at: scheduledAt }),
-  ]);
+  // Only if the status is still the one the permission check above saw: a
+  // concurrent publication makes this request fail instead of overriding it.
+  const res = await c.env.DB.prepare("UPDATE courses SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ? AND status = ?")
+    .bind(nextStatus, scheduledAt, now, course.id, course.status)
+    .run();
+  if (!res.meta.changes) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent("The course changed while you were saving. Review its status and try again.")}`);
+  await auditStmt(c.env, c.user.id, `course.status.${status}`, "course", course.id, { from: course.status, scheduled_at: scheduledAt }).run();
   return redirect(`/admin/courses/${course.id}?ok=saved`);
 }
 

@@ -82,17 +82,28 @@ Instructor video production is **not complete**: no approved Joshua video assets
 | P1 a linked, not-yet-live video or instructor could change between readiness and publication | Video assets, captions and instructor profiles also bump `draft_state.version` (triggers), so such an edit aborts the publication | `course-drafts` "an edit to a linked, not-yet-live video…" |
 | P1 scheduling an update made the live course "upcoming" and closed enrollment | A scheduled update keeps the course `published` with `scheduled_at`; the scheduler publishes the reviewed draft, or drops the schedule (live revision kept) if readiness fails | `course-drafts` "scheduling an update keeps the live revision…" |
 
+### Codex review of `c1241ee` (2 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 the availability permission check used a stale status (a concurrent publication could be undone by an editor) | The status write is conditional on the status the check saw; otherwise the request fails | `course-drafts` "a status change is refused if the course was published after the permission check" |
+| P1 the scheduler acted on a stale due row (could reopen an archived course or erase a new schedule) | Publication is bound atomically to the selected status and `scheduled_at`; the blocked path clears only that schedule | `course-drafts` "the scheduler skips a course whose schedule changed…" |
+
+Both tests inject the competing write at the exact point of the guarded statement and fail without the fix.
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **143/143 pass**.
+- `npm test` (unit, integration, deploy): **145/145 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
 - axe-core is not installable in the offline sandbox; the WCAG scan runs in Academy CI.
+- Unrelated CI flakiness: two Enterprise Portal browser tests (`figma-enterprise-v4`, not touched
+  by this PR) failed once each on different commits and passed elsewhere; documented on the PR.
 
 ### Outstanding issues (honest list)
 

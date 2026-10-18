@@ -418,3 +418,82 @@ test("scheduling an update keeps the live revision published and enrollable", as
   assert.equal(c.scheduled_at, null);
   assert.equal((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Scheduled update text.");
 });
+
+/** Run `before` (once) just before the first statement whose SQL starts with `prefix` executes. */
+function interleave(env, prefix, before) {
+  const orig = env.DB;
+  let done = false;
+  const fire = async () => {
+    if (!done) {
+      done = true;
+      await before(orig);
+    }
+  };
+  const marked = new WeakSet();
+  env.DB = new Proxy(orig, {
+    get(target, prop) {
+      if (prop === "batch") {
+        return async (stmts) => {
+          if (stmts.some((x) => marked.has(x))) await fire();
+          return target.batch(stmts);
+        };
+      }
+      if (prop !== "prepare") return typeof target[prop] === "function" ? target[prop].bind(target) : target[prop];
+      return (sql) => {
+        const stmt = target.prepare(sql);
+        if (!sql.trimStart().startsWith(prefix)) return stmt;
+        // Patch the real statement so batch() can still execute it.
+        const patch = (st) => {
+          marked.add(st);
+          const { bind, run, first, all } = st;
+          st.bind = (...a) => patch(bind.apply(st, a));
+          st.run = async (...a) => (await fire(), run.apply(st, a));
+          st.first = async (...a) => (await fire(), first.apply(st, a));
+          st.all = async (...a) => (await fire(), all.apply(st, a));
+          return st;
+        };
+        return patch(stmt);
+      };
+    },
+  });
+  return () => (env.DB = orig);
+}
+
+test("a status change is refused if the course was published after the permission check", async () => {
+  const env = makeEnv();
+  await registeredLearner(env, { email: "founder@academy.test", name: "Founder" });
+  const editor = await registeredLearner(env, { email: "editor3@academy.test" });
+  const eid = (await live(env, "SELECT id FROM users WHERE email = 'editor3@academy.test'")).id;
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'content_editor', ?)").bind(eid, new Date().toISOString()).run();
+  assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "review");
+  // A publisher publishes A1 between the editor's permission check and the write.
+  const restore = interleave(env, "UPDATE courses SET status = ?, scheduled_at = ?", (db) => db.prepare("UPDATE courses SET status = 'published', published_at = ? WHERE id = 'crs_a1'").bind(new Date().toISOString()).run());
+  const r = await editor.post("/admin/courses/crs_a1/status", { status: "draft" });
+  restore();
+  assert.match(decodeURIComponent(r.location), /changed while you were saving/);
+  assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "published");
+});
+
+test("the scheduler skips a course whose schedule changed after it was selected", async () => {
+  const { env, admin } = await released();
+  const { runScheduled } = await import("../../src/services/jobs.js");
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Scheduled text." }));
+  await approveReviews(admin, "crs_a1");
+  await env.DB.prepare("UPDATE courses SET scheduled_at = ? WHERE id = 'crs_a1'").bind(new Date(Date.now() - 60000).toISOString()).run();
+  // The course is archived after the scheduler selected it, before publication.
+  let restore = interleave(env, "INSERT INTO course_revisions", (db) => db.prepare("UPDATE courses SET status = 'archived', scheduled_at = NULL WHERE id = 'crs_a1'").run());
+  let report = await runScheduled(env, "*/15 * * * *");
+  restore();
+  assert.equal(report.published, 0);
+  assert.equal((await live(env, "SELECT status FROM courses WHERE id = 'crs_a1'")).status, "archived", "not reopened");
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Scheduled text.");
+  // A failing re-check does not erase a schedule that replaced the selected one.
+  await env.DB.prepare("UPDATE courses SET status = 'published', scheduled_at = ? WHERE id = 'crs_a1'").bind(new Date(Date.now() - 60000).toISOString()).run();
+  await env.DB.prepare("UPDATE draft_lessons SET body_md = 'Unreviewed.' WHERE id = 'les_a1_welcome'").run();
+  const replacement = "2031-01-01T00:00:00.000Z";
+  restore = interleave(env, "UPDATE courses SET status = CASE", (db) => db.prepare("UPDATE courses SET scheduled_at = ? WHERE id = 'crs_a1'").bind(replacement).run());
+  report = await runScheduled(env, "*/15 * * * *");
+  restore();
+  assert.equal(report.publicationBlocked, 0);
+  assert.equal((await live(env, "SELECT scheduled_at FROM courses WHERE id = 'crs_a1'")).scheduled_at, replacement);
+});

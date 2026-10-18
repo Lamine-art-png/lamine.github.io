@@ -26,10 +26,11 @@ export async function runScheduled(env, cron = "") {
     const readiness = await publishReadiness(env, c);
     if (readiness.ok) {
       try {
-        await publishDraft(env, c, { hash: readiness.hash, version: readiness.version, by: "schedule" });
+        // Bound to the due row: a cancelled, archived or rescheduled course is skipped.
+        await publishDraft(env, c, { hash: readiness.hash, version: readiness.version, by: "schedule", expect: { status: c.status, scheduled_at: c.scheduled_at } });
         report.published++;
       } catch (e) {
-        // A draft edit raced the check: stay scheduled; the next run re-checks.
+        // The draft or the schedule changed after the check: skip; the next run re-checks.
         if (!(e instanceof DraftChangedError)) throw e;
       }
     } else {
@@ -37,8 +38,14 @@ export async function runScheduled(env, cron = "") {
       const publishers = (
         await env.DB.prepare("SELECT DISTINCT user_id FROM user_roles WHERE role IN ('super_admin','academy_admin')").all()
       ).results;
+      // Only the schedule this run selected is cleared; a replacement schedule stays.
+      const res = await env.DB.prepare(
+        "UPDATE courses SET status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, scheduled_at = NULL, updated_at = ? WHERE id = ? AND status = ? AND scheduled_at = ?",
+      )
+        .bind(now, c.id, c.status, c.scheduled_at)
+        .run();
+      if (!res.meta.changes) continue;
       await env.DB.batch([
-        env.DB.prepare("UPDATE courses SET status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, scheduled_at = NULL, updated_at = ? WHERE id = ?").bind(now, c.id),
         auditStmt(env, null, "course.schedule.blocked", "course", c.id, { failed }),
         ...publishers.map((p) => notifyStmt(env, p.user_id, { kind: "admin", title: `Scheduled publication stopped: ${c.title}`, body: failed.join(" · ").slice(0, 400), url: `/admin/courses/${c.id}` })),
       ]);
