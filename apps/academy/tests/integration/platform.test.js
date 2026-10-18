@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import manifest from "../../../../shared/supported-locales.json" with { type: "json" };
 import worker from "../../src/index.js";
-import { makeEnv, Client, registeredLearner, publishCourse, correctResponses } from "../helpers.js";
+import { makeEnv, Client, registeredLearner, publishCourse, correctResponses, approveA1Videos, approveReviews } from "../helpers.js";
 
 test("language inventory matches the Enterprise Portal and supports RTL", async () => {
   const env = makeEnv();
@@ -124,6 +124,9 @@ test("manual grading: pending review, reviewer grade, then final result", async 
 
 test("scheduled jobs publish courses and auto-submit expired exams", async () => {
   const env = makeEnv();
+  const admin = await registeredLearner(env, { email: "founder@academy.test" });
+  await approveA1Videos(env, admin);
+  await approveReviews(admin, "crs_a1");
   const past = new Date(Date.now() - 60_000).toISOString();
   await env.DB.prepare("UPDATE courses SET status='scheduled', scheduled_at=? WHERE id='crs_a1'").bind(past).run();
   await worker.scheduled({ cron: "*/15 * * * *" }, env, { waitUntil: (p) => p });
@@ -152,6 +155,10 @@ test("publishing is blocked until readiness checks pass", async () => {
   let r = await admin.post("/admin/courses/crs_b1/status", { status: "published" });
   assert.match(decodeURIComponent(r.location), /Readiness checks must pass/);
   assert.equal((await env.DB.prepare("SELECT status FROM courses WHERE id='crs_b1'").first()).status, "draft");
+  r = await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2026-10-29T15:00" });
+  assert.match(decodeURIComponent(r.location), /Readiness checks must pass/, "A1 cannot be scheduled before reviews and videos");
+  await approveA1Videos(env, admin);
+  await approveReviews(admin, "crs_a1");
   r = await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2026-10-29T15:00" });
   const c = await env.DB.prepare("SELECT status, scheduled_at FROM courses WHERE id='crs_a1'").first();
   assert.equal(c.status, "scheduled");

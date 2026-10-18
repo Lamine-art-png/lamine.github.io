@@ -78,7 +78,7 @@ function messageFor(code) {
 }
 
 export const statusBadge = (s) => {
-  const cls = { published: "badge-green", active: "badge-green", approved: "badge-green", graded: "badge-green", sent: "badge-green", reviewed: "badge-green", scheduled: "badge-lime", review: "badge-lime", in_review: "badge-lime", machine: "badge-lime", draft: "badge-warn", pending_review: "badge-warn", pending: "badge-warn", open: "badge-warn", planned: "badge-warn", scripted: "badge-warn", unconfigured: "badge-warn", archived: "", retired: "", revoked: "badge-danger", failed: "badge-danger", disabled: "badge-danger" }[s] ?? "";
+  const cls = { published: "badge-green", active: "badge-green", approved: "badge-green", graded: "badge-green", sent: "badge-green", reviewed: "badge-green", scheduled: "badge-lime", review: "badge-lime", in_review: "badge-lime", machine: "badge-lime", draft: "badge-warn", pending_review: "badge-warn", pending: "badge-warn", open: "badge-warn", planned: "badge-warn", scripted: "badge-warn", unconfigured: "badge-warn", archived: "", retired: "", revoked: "badge-danger", failed: "badge-danger", outdated: "badge-danger", changes_requested: "badge-danger", disabled: "badge-danger" }[s] ?? "";
   return html`<span class="badge ${cls} status-pill">${String(s || "").replace(/_/g, " ")}</span>`;
 };
 

@@ -771,5 +771,6 @@
   "email.reminder.cta": "Seguir aprendiendo",
   "verify.unavailable": "Verificación no disponible temporalmente",
   "verify.unavailable_body": "No podemos confirmar esta credencial en este momento, por lo que no debe considerarse válida. Inténtalo más tarde o contacta con AGRO-AI Academy.",
-  "cert.reason.signing_unavailable": "La emisión de certificados está pausada temporalmente. Tu progreso está guardado; vuelve a solicitar tu certificado más tarde."
+  "cert.reason.signing_unavailable": "La emisión de certificados está pausada temporalmente. Tu progreso está guardado; vuelve a solicitar tu certificado más tarde.",
+  "notify.admin": "{title}"
 }

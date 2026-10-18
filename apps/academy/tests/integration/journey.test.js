@@ -3,7 +3,7 @@
 // Quizzes → Exam (fail, then pass) → Certificate → PDF → Verify → LinkedIn.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeEnv, Client, registeredLearner, lastEmail, tokenFrom, correctResponses, ORIGIN } from "../helpers.js";
+import { makeEnv, Client, registeredLearner, lastEmail, tokenFrom, correctResponses, ORIGIN, approveA1Videos, approveReviews } from "../helpers.js";
 
 const COURSE = "introduction-to-ai-in-agriculture";
 
@@ -22,9 +22,15 @@ test("critical learner journey with persistent backend data", async () => {
   assert.match(r.text, /Opens Oct 29, 2026/);
   assert.doesNotMatch(r.text, /action="\/courses\/[^"]+\/enroll"/);
 
-  // Admin publishes through the console after the readiness checks pass.
+  // Publication is blocked until mandatory reviews and instructor videos are approved.
   r = await admin.get("/admin/courses/crs_a1");
   assert.equal(r.status, 200);
+  assert.match(r.text, /❌/, "A1 is not publishable before reviews and videos");
+  r = await admin.post("/admin/courses/crs_a1/status", { status: "published" });
+  assert.match(decodeURIComponent(r.location), /Readiness checks must pass/);
+  assert.equal(await approveA1Videos(env, admin), 14, "every scripted lesson video approved with reviewed captions");
+  await approveReviews(admin, "crs_a1");
+  r = await admin.get("/admin/courses/crs_a1");
   assert.doesNotMatch(r.text, /❌/, "all readiness checks pass for A1");
   r = await admin.post("/admin/courses/crs_a1/status", { status: "published" });
   assert.equal(r.status, 303);

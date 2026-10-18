@@ -4,6 +4,8 @@ import { nowIso, addSeconds } from "../lib/util.js";
 import { auditStmt } from "../lib/security.js";
 import { flushOutbox, queueEmail } from "./email.js";
 import { submitAttempt } from "./assessments.js";
+import { publishReadiness } from "./readiness.js";
+import { notifyStmt } from "./activity.js";
 
 export async function runScheduled(env, cron = "") {
   const cfg = config(env, new URL(env.APP_ORIGIN || "http://localhost"));
@@ -12,15 +14,33 @@ export async function runScheduled(env, cron = "") {
   const now = nowIso();
   const report = {};
 
-  // 1. Publish courses whose scheduled time has arrived.
-  const due = (await env.DB.prepare("SELECT id FROM courses WHERE status = 'scheduled' AND scheduled_at <= ?").bind(now).all()).results;
+  // 1. Publish courses whose scheduled time has arrived — only if they still
+  // pass every readiness check (content may have changed since scheduling).
+  // A course that no longer qualifies returns to review (shown as upcoming).
+  const due = (await env.DB.prepare("SELECT * FROM courses WHERE status = 'scheduled' AND scheduled_at <= ?").bind(now).all()).results;
+  report.published = 0;
+  report.publicationBlocked = 0;
   for (const c of due) {
-    await env.DB.batch([
-      env.DB.prepare("UPDATE courses SET status = 'published', published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, now, c.id),
-      auditStmt(env, null, "course.status.published", "course", c.id, { by: "schedule" }),
-    ]);
+    const readiness = await publishReadiness(env, c);
+    if (readiness.ok) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE courses SET status = 'published', published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, now, c.id),
+        auditStmt(env, null, "course.status.published", "course", c.id, { by: "schedule" }),
+      ]);
+      report.published++;
+    } else {
+      const failed = readiness.checks.filter((x) => !x.ok).map((x) => x.label);
+      const publishers = (
+        await env.DB.prepare("SELECT DISTINCT user_id FROM user_roles WHERE role IN ('super_admin','academy_admin')").all()
+      ).results;
+      await env.DB.batch([
+        env.DB.prepare("UPDATE courses SET status = 'review', scheduled_at = NULL, updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, c.id),
+        auditStmt(env, null, "course.schedule.blocked", "course", c.id, { failed }),
+        ...publishers.map((p) => notifyStmt(env, p.user_id, { kind: "admin", title: `Scheduled publication stopped: ${c.title}`, body: failed.join(" · ").slice(0, 400), url: `/admin/courses/${c.id}` })),
+      ]);
+      report.publicationBlocked++;
+    }
   }
-  report.published = due.length;
 
   // 2. Auto-submit timed attempts that ran past their deadline (graded on autosaved answers).
   const expired = (await env.DB.prepare("SELECT * FROM attempts WHERE status = 'in_progress' AND deadline_at IS NOT NULL AND deadline_at < ? LIMIT 100").bind(addSeconds(now, -120)).all()).results;

@@ -802,5 +802,6 @@
   "email.reminder.cta": "Continue learning",
   "verify.unavailable": "Verification temporarily unavailable",
   "verify.unavailable_body": "We can't confirm this credential right now, so it must not be treated as valid. Please try again later or contact AGRO-AI Academy.",
-  "cert.reason.signing_unavailable": "Certificate issuing is temporarily paused. Your progress is saved; claim your certificate again later."
+  "cert.reason.signing_unavailable": "Certificate issuing is temporarily paused. Your progress is saved; claim your certificate again later.",
+  "notify.admin": "{title}"
 }

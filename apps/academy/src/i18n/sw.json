@@ -771,5 +771,6 @@
   "email.reminder.cta": "Endelea kujifunza",
   "verify.unavailable": "Uthibitishaji haupatikani kwa muda",
   "verify.unavailable_body": "Hatuwezi kuthibitisha cheti hiki sasa hivi, kwa hiyo kisichukuliwe kuwa halali. Tafadhali jaribu tena baadaye au wasiliana na AGRO-AI Academy.",
-  "cert.reason.signing_unavailable": "Utoaji wa vyeti umesitishwa kwa muda. Maendeleo yako yamehifadhiwa; omba cheti chako tena baadaye."
+  "cert.reason.signing_unavailable": "Utoaji wa vyeti umesitishwa kwa muda. Maendeleo yako yamehifadhiwa; omba cheti chako tena baadaye.",
+  "notify.admin": "{title}"
 }

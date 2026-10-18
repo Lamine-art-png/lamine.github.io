@@ -155,10 +155,10 @@ export async function audit(c, action, entityType, entityId, detail) {
 export const ROLE_PERMISSIONS = {
   super_admin: ["*"],
   academy_admin: [
-    "admin.access", "courses.edit", "courses.publish", "assessments.edit", "grading", "learners.view", "learners.manage",
+    "admin.access", "courses.edit", "courses.publish", "courses.review", "assessments.edit", "grading", "learners.view", "learners.manage",
     "certificates.manage", "translations.edit", "analytics.view", "feedback.view", "support.manage", "audit.view", "instructors.edit",
   ],
-  instructor: ["admin.access", "courses.edit", "assessments.edit", "grading", "learners.view", "analytics.view", "feedback.view"],
+  instructor: ["admin.access", "courses.edit", "courses.review", "assessments.edit", "grading", "learners.view", "analytics.view", "feedback.view"],
   content_editor: ["admin.access", "courses.edit", "assessments.edit", "translations.edit"],
   learner: [],
 };

@@ -9,6 +9,9 @@ import { adminPage, table, statusBadge, hidden, input, textarea, select, checkbo
 import { TOPICS } from "../public.js";
 import { PROFESSIONAL_ROLES } from "../../services/users.js";
 import { LOCALES } from "../../lib/i18n.js";
+import { publishReadiness, recordReview, REVIEW_TYPES, REVIEW_DECISIONS } from "../../services/readiness.js";
+
+export { publishReadiness };
 
 const LESSON_TYPES = ["video", "text", "interactive", "reading", "resource", "exercise", "quiz", "case_study", "assignment"];
 const COURSE_STATUSES = ["draft", "review", "scheduled", "published", "archived"];
@@ -68,40 +71,6 @@ export async function createCourse(c) {
   return redirect(`/admin/courses/${id}?ok=created`);
 }
 
-/** Checks that must pass before a course can be published or scheduled. */
-export async function publishReadiness(env, course) {
-  const checks = [];
-  const lessons = (await env.DB.prepare("SELECT l.*, v.status AS video_status FROM lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ?").bind(course.id).all()).results;
-  const ready = lessons.filter((l) => l.status === "ready");
-  checks.push({ ok: ready.length > 0, label: `At least one ready lesson (${ready.length} ready of ${lessons.length})` });
-  const emptyLessons = ready.filter((l) => !l.body_md.trim() && !(l.video_id && l.video_status === "approved") && l.type !== "quiz");
-  checks.push({ ok: emptyLessons.length === 0, label: emptyLessons.length ? `Lessons without content: ${emptyLessons.map((l) => l.title).join(", ")}` : "Every ready lesson has instructional content" });
-  const unapprovedVideos = ready.filter((l) => l.video_id && l.video_status !== "approved");
-  checks.push({
-    ok: true,
-    warn: unapprovedVideos.length > 0,
-    label: unapprovedVideos.length ? `${unapprovedVideos.length} lesson video(s) not yet approved — learners will see an “in production” notice` : "All attached videos are approved",
-  });
-  const brokenQuiz = ready.filter((l) => l.type === "quiz" && !l.assessment_id);
-  checks.push({ ok: brokenQuiz.length === 0, label: brokenQuiz.length ? `Quiz lessons without an assessment: ${brokenQuiz.map((l) => l.title).join(", ")}` : "Quiz lessons are linked to assessments" });
-  if (course.certificate_enabled) {
-    const exam = await env.DB.prepare("SELECT * FROM assessments WHERE course_id = ? AND kind = 'exam' AND is_certification = 1 AND status = 'active'").bind(course.id).first();
-    checks.push({ ok: Boolean(exam), label: exam ? "Active certification exam" : "Certificates are enabled but there is no active certification exam" });
-    if (exam) {
-      const rules = (await env.DB.prepare("SELECT * FROM assessment_rules WHERE assessment_id = ?").bind(exam.id).all()).results;
-      let short = 0;
-      for (const r of rules) {
-        const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
-        if (n.n < r.draw_count) short++;
-      }
-      checks.push({ ok: rules.length > 0 && short === 0, label: rules.length ? (short ? `${short} draw rule(s) need more active questions` : "Question banks can satisfy every draw rule") : "Exam has no question draw rules" });
-    }
-  }
-  checks.push({ ok: Boolean(course.description?.trim() && parseJson(course.objectives_json, []).length), label: "Description and learning objectives present" });
-  checks.push({ ok: true, warn: Boolean(course.content_review_note), label: course.content_review_note ? `Review note: ${course.content_review_note}` : "No outstanding review note" });
-  return { checks, ok: checks.every((x) => x.ok) };
-}
-
 export async function editCourse(c) {
   const course = await c.env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(c.params.id).first();
   if (!course) throw new HttpError(404, "not_found");
@@ -137,6 +106,30 @@ export async function editCourse(c) {
     <p class="tiny muted mt-1">Publishing and scheduling require every check above to pass. “Review” shows the course as upcoming without opening enrollment.</p>
   </section>
 
+  <section class="form-card mt-3" id="reviews"><h2 class="h2">Mandatory reviews</h2>
+    <p class="small muted">Each decision is recorded against the exact course content at that moment. Editing lessons, assessments or questions afterwards voids earlier approvals until they are recorded again.</p>
+    ${table(
+      ["Review", "Current state", "History"],
+      readiness.reviews.map(
+        (r) => html`<tr><td class="wrap-cell">${r.label}</td><td>${statusBadge(r.state)}</td>
+          <td class="wrap-cell tiny">${r.history.length
+            ? r.history.slice(0, 3).map((h) => html`<div>${h.created_at.slice(0, 16).replace("T", " ")} · ${h.decision.replace("_", " ")} · ${h.reviewer_name || h.reviewer_display || "unknown"}${h.notes ? html` — ${h.notes}` : ""}</div>`)
+            : "—"}</td></tr>`,
+      ),
+    )}
+    ${c.can("courses.review")
+      ? html`<form method="post" action="/admin/courses/${course.id}/reviews" class="mt-2">${hidden(c)}
+        <div class="grid-2">
+          ${select("review_type", "Review", readiness.reviews.map((r) => [r.type, r.label]), "")}
+          ${select("decision", "Decision", [["approved", "Approve the current content"], ["changes_requested", "Request changes"]], "approved")}
+          ${input("reviewer_name", "Reviewer (name and role, if different from your account)", "", { hint: "For example an external faculty member whose review you are recording." })}
+        </div>
+        ${textarea("notes", "Notes", "", { rows: 3, hint: "Required when requesting changes." })}
+        ${checkbox("confirm", "I confirm this review covered the course content as it is now", false)}
+        <button class="btn btn-secondary btn-sm">Record review decision</button></form>`
+      : html`<p class="small muted">Recording review decisions requires the reviewer permission (super admin, academy admin or instructor).</p>`}
+  </section>
+
   <form class="form-card mt-3" method="post" action="/admin/courses/${course.id}">${hidden(c)}
     <h2 class="h2">Course details</h2>
     <div class="grid-2">${input("title", "Title", course.title, { required: true })}${input("slug", "URL slug", course.slug, { required: true, hint: "Lowercase letters, numbers and hyphens." })}</div>
@@ -164,6 +157,10 @@ export async function editCourse(c) {
       ${checkbox("require_all_lessons", "Require all required lessons before the final exam", course.require_all_lessons)}
       ${checkbox("require_quizzes_pass", "Require passing every required quiz", course.require_quizzes_pass)}
       ${input("passing_score", "Default passing score (%)", course.passing_score, { type: "number", attrs: 'min="1" max="100"', hint: "Applied to new assessments; each assessment can override it." })}
+    </fieldset>
+    <fieldset><legend>Instructor video</legend>
+      ${select("video_requirement", "Video policy", [["required", "Required — every planned lesson video must be approved, playable and captioned before publication"], ["optional", "Optional — publish with text lessons while videos are produced"]], course.video_requirement || "required")}
+      ${textarea("video_waiver_reason", "Reason videos are optional (required when optional)", course.video_waiver_reason, { rows: 2, hint: "Recorded in the audit log and shown in the readiness checks." })}
     </fieldset>
     ${textarea("content_review_note", "Content review note (internal)", course.content_review_note, { rows: 2, hint: "Shown in the readiness checklist until cleared." })}
     <button class="btn btn-primary">Save course</button>
@@ -226,10 +223,15 @@ export async function saveCourse(c) {
   const required = new Set(list(b.prereq_required));
   const now = nowIso();
   const passing = Math.min(100, Math.max(1, intOrNull(b.passing_score) || 80));
+  const before = await c.env.DB.prepare("SELECT video_requirement, video_waiver_reason FROM courses WHERE id = ?").bind(id).first();
+  const videoRequirement = b.video_requirement === "optional" ? "optional" : "required";
+  const videoWaiver = videoRequirement === "optional" ? str(b.video_waiver_reason, 500) || null : null;
+  if (videoRequirement === "optional" && !videoWaiver) return redirect(`/admin/courses/${id}?err=${encodeURIComponent("Record why instructor video is optional for this course.")}`);
+  const policyChanged = before && (before.video_requirement !== videoRequirement || (before.video_waiver_reason || null) !== videoWaiver);
   await c.env.DB.batch([
     c.env.DB.prepare(
       `UPDATE courses SET title=?, slug=?, subtitle=?, description=?, objectives_json=?, program_id=?, level=?, duration_minutes=?, source_locale=?, planned_release_date=?, sort_order=?,
-         thumbnail_url=?, prerequisites_text=?, audience_json=?, topics_json=?, certificate_enabled=?, require_all_lessons=?, require_quizzes_pass=?, passing_score=?, content_review_note=?, updated_at=? WHERE id=?`,
+         thumbnail_url=?, prerequisites_text=?, audience_json=?, topics_json=?, certificate_enabled=?, require_all_lessons=?, require_quizzes_pass=?, passing_score=?, content_review_note=?, video_requirement=?, video_waiver_reason=?, updated_at=? WHERE id=?`,
     ).bind(
       str(b.title, 200),
       slug,
@@ -251,6 +253,8 @@ export async function saveCourse(c) {
       bool(b.require_quizzes_pass),
       passing,
       str(b.content_review_note, 1000) || null,
+      videoRequirement,
+      videoWaiver,
       now,
       id,
     ),
@@ -259,6 +263,7 @@ export async function saveCourse(c) {
     c.env.DB.prepare("DELETE FROM course_prerequisites WHERE course_id = ?").bind(id),
     ...prereq.map((pid) => c.env.DB.prepare("INSERT OR IGNORE INTO course_prerequisites (course_id, prerequisite_course_id, is_required) VALUES (?,?,?)").bind(id, pid, required.has(pid) ? 1 : 0)),
     auditStmt(c.env, c.user.id, "course.update", "course", id, { slug }),
+    ...(policyChanged ? [auditStmt(c.env, c.user.id, "course.video_policy", "course", id, { video_requirement: videoRequirement, reason: videoWaiver })] : []),
   ]);
   return redirect(`/admin/courses/${id}?ok=saved`);
 }
@@ -292,6 +297,19 @@ export async function setCourseStatus(c) {
     auditStmt(c.env, c.user.id, `course.status.${status}`, "course", course.id, { from: course.status, scheduled_at: scheduledAt }),
   ]);
   return redirect(`/admin/courses/${course.id}?ok=${status === "published" ? "published" : "saved"}`);
+}
+
+export async function saveReview(c) {
+  const b = await c.readBody();
+  const course = await c.env.DB.prepare("SELECT id FROM courses WHERE id = ?").bind(c.params.id).first();
+  if (!course) throw new HttpError(404, "not_found");
+  const back = (q) => redirect(`/admin/courses/${course.id}?${q}#reviews`);
+  if (!REVIEW_TYPES.includes(b.review_type) || !REVIEW_DECISIONS.includes(b.decision)) return back(`err=${encodeURIComponent("Choose a review and a decision.")}`);
+  if (!bool(b.confirm)) return back(`err=${encodeURIComponent("Confirm that the review covered the current content.")}`);
+  const notes = str(b.notes, 2000);
+  if (b.decision === "changes_requested" && !notes) return back(`err=${encodeURIComponent("Describe the changes requested.")}`);
+  await recordReview(c.env, { courseId: course.id, type: b.review_type, decision: b.decision, notes, reviewerId: c.user.id, reviewerName: str(b.reviewer_name, 200) });
+  return back("ok=saved");
 }
 
 export async function addModule(c) {

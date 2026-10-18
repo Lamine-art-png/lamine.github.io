@@ -156,3 +156,29 @@ export function withSettings(env, overrides) {
   for (const [k, v] of Object.entries(overrides)) if (v === undefined) delete next[k];
   return next;
 }
+
+/** Minimal valid WebVTT for synthetic test captions. */
+export const TEST_VTT = "WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nSynthetic test caption.\n";
+
+/** Approve every planned A1 video through the admin console (synthetic media URLs). */
+export async function approveA1Videos(env, admin, { mediaBase = "https://media.academy.test/a1" } = {}) {
+  const videos = (await env.DB.prepare("SELECT v.* FROM video_assets v JOIN lessons l ON l.video_id = v.id WHERE l.course_id = 'crs_a1'").all()).results;
+  for (const v of videos) {
+    let r = await admin.post(`/admin/videos/${v.id}/captions`, { locale: "en", status: "reviewed", vtt: TEST_VTT });
+    if (r.status !== 303) throw new Error(`captions ${v.id}: ${r.status}`);
+    r = await admin.post(`/admin/videos/${v.id}`, {
+      title: v.title, provider: "r2", status: "approved", instructor_id: v.instructor_id || "", duration_seconds: "12",
+      hls_url: "", mp4_url: `${mediaBase}/${v.id}.webm`, poster_url: "", provider_ref: "", script_md: v.script_md,
+    });
+    if (r.status !== 303 || /err=/.test(r.location || "")) throw new Error(`approve ${v.id}: ${r.status} ${r.location}`);
+  }
+  return videos.length;
+}
+
+/** Record the three mandatory review approvals through the admin console. */
+export async function approveReviews(admin, courseId, reviewer = "Synthetic Test Faculty") {
+  for (const type of ["academic", "assessment", "accessibility"]) {
+    const r = await admin.post(`/admin/courses/${courseId}/reviews`, { review_type: type, decision: "approved", confirm: "1", reviewer_name: reviewer, notes: "" });
+    if (r.status !== 303 || /err=/.test(r.location || "")) throw new Error(`review ${type}: ${r.status} ${r.location}`);
+  }
+}
