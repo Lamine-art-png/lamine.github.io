@@ -49,7 +49,9 @@ const prepared = cases.map((c) => {
   return { ...c, fontKeys: [...used], glyphs, width: shaped.width, unsupported: shaped.unsupported };
 });
 
-const browser = await chromium.launch();
+// Unhinted outlines and fractional advances, so the browser lays out glyphs
+// exactly as the font specifies (Linux CI otherwise rounds advances to pixels).
+const browser = await chromium.launch({ args: ["--font-render-hinting=none"] });
 const page = await browser.newPage({ viewport: { width: 1400, height: 400 } });
 await page.route("https://oracle.test/**", (route) => {
   const u = new URL(route.request().url());
