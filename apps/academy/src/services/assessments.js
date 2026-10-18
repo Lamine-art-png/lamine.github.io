@@ -350,6 +350,14 @@ export async function submitAttempt(c, attempt, { responses = null, auto = false
   const { env } = c;
   if (attempt.status !== "in_progress") return attempt;
   if (responses && !deadlinePassed(attempt)) await saveResponses(env, attempt, responses);
+  let now = nowIso();
+  // An expired attempt closed at its deadline, whenever it is auto-submitted;
+  // cooldowns are measured from that moment.
+  if (auto && attempt.deadline_at && attempt.deadline_at < now) now = attempt.deadline_at;
+  // Close the attempt to writes before reading the answers: an autosave still
+  // in flight is rejected by saveResponses' submitted_at guard from here on,
+  // so the responses graded below are exactly the final ones.
+  await env.DB.prepare("UPDATE attempts SET submitted_at = COALESCE(submitted_at, ?) WHERE id = ? AND status = 'in_progress'").bind(now, attempt.id).run();
   const snap = await attemptSnapshot(env, attempt);
   const rows = (await env.DB.prepare("SELECT question_id, response_json, max_points FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results.map((r) => {
     const q = snap.get(r.question_id);
@@ -375,13 +383,9 @@ export async function submitAttempt(c, attempt, { responses = null, auto = false
       );
     }
   }
-  let now = nowIso();
-  // An expired attempt closed at its deadline, whenever it is auto-submitted;
-  // cooldowns are measured from that moment.
-  if (auto && attempt.deadline_at && attempt.deadline_at < now) now = attempt.deadline_at;
   // The status guard makes concurrent submissions harmless: only one wins.
   stmts.push(
-    env.DB.prepare("UPDATE attempts SET status = ?, submitted_at = ? WHERE id = ? AND status = 'in_progress'").bind(pending ? "pending_review" : "in_progress", now, attempt.id),
+    env.DB.prepare("UPDATE attempts SET status = ?, submitted_at = COALESCE(submitted_at, ?) WHERE id = ? AND status = 'in_progress'").bind(pending ? "pending_review" : "in_progress", now, attempt.id),
   );
   await env.DB.batch(stmts);
   if (pending) {

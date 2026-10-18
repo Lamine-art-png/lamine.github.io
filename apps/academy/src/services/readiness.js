@@ -24,7 +24,8 @@ const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(O
  */
 export async function courseContentHash(env, courseId) {
   const all = async (sql, ...args) => (await env.DB.prepare(sql).bind(...args).all()).results.map((r) => strip(r));
-  // Every draft field and relation that publication copies live is included.
+  // Every draft field and relation that publication copies live is included,
+  // with the linked instructor profiles.
   const courseRow = await env.DB.prepare("SELECT * FROM draft_courses WHERE id = ?").bind(courseId).first();
   const course = courseRow ? strip(courseRow, ["updated_at", "updated_by"]) : null;
   const assessments = await all("SELECT * FROM draft_assessments WHERE course_id = ? ORDER BY id", courseId);
@@ -45,7 +46,11 @@ export async function courseContentHash(env, courseId) {
   }
   const doc = {
     course,
-    instructors: await all("SELECT instructor_id, sort_order FROM draft_course_instructors WHERE course_id = ? ORDER BY instructor_id", courseId),
+    instructors: await all(
+      `SELECT ci.instructor_id, ci.sort_order, i.name, i.title, i.bio, i.avatar_url, i.is_ai_avatar, i.disclosure, i.status
+         FROM draft_course_instructors ci LEFT JOIN instructors i ON i.id = ci.instructor_id WHERE ci.course_id = ? ORDER BY ci.instructor_id`,
+      courseId,
+    ),
     prerequisites: await all("SELECT prerequisite_course_id, is_required FROM draft_course_prerequisites WHERE course_id = ? ORDER BY prerequisite_course_id", courseId),
     videos,
     captions,

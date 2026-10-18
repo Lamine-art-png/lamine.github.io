@@ -743,6 +743,18 @@ export async function saveInstructor(c) {
   const now = nowIso();
   const vals = [name, str(b.title, 200), str(b.bio, 3000), avatar || null, bool(b.is_ai_avatar), str(b.disclosure, 500) || null, intOrNull(b.sort_order) || 0, b.status === "hidden" ? "hidden" : "active"];
   if (b.id) {
+    // Like videos, a profile shown by a released course is part of its reviewed
+    // revision: change it by linking a new profile in the course draft.
+    const lock = await c.env.DB.prepare(
+      "SELECT c.title FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = ? AND c.published_at IS NOT NULL LIMIT 1",
+    )
+      .bind(b.id)
+      .first();
+    if (lock) {
+      return redirect(
+        `/admin/instructors?err=${encodeURIComponent(`This profile is shown by “${lock.title}”. Create a new instructor profile, link it in the course draft, record the reviews and publish the revision.`)}`,
+      );
+    }
     await c.env.DB.prepare("UPDATE instructors SET name=?, title=?, bio=?, avatar_url=?, is_ai_avatar=?, disclosure=?, sort_order=?, status=?, updated_at=? WHERE id=?").bind(...vals, now, b.id).run();
   } else {
     let slug = slugify(name);

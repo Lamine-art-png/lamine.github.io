@@ -1,5 +1,5 @@
 // Curriculum queries and the content-translation overlay.
-import { parseJson } from "../lib/util.js";
+import { parseJson, sha256Hex } from "../lib/util.js";
 import { HttpError } from "../lib/http.js";
 
 export const VISIBLE_STATUSES = ["published", "scheduled", "review"];
@@ -7,7 +7,10 @@ export const VISIBLE_STATUSES = ["published", "scheduled", "review"];
 /**
  * Overlay translated fields onto rows. For certification-grade content
  * (requireReviewed) only reviewed translations are used; everything else may
- * use clearly labelled machine drafts. Each row gets a `_tr` descriptor.
+ * use clearly labelled machine drafts. A translation whose source changed
+ * since it was written (recorded source hash no longer matches) is stale and
+ * is not used; neither is a translated JSON field whose ids differ from the
+ * source (e.g. options of an edited question). Each row gets a `_tr` descriptor.
  */
 export async function localize(env, entityType, rows, fields, locale, { requireReviewed = false, sourceLocale = "en" } = {}) {
   const list = Array.isArray(rows) ? rows : [rows];
@@ -20,7 +23,7 @@ export async function localize(env, entityType, rows, fields, locale, { requireR
   const found = new Map();
   for (let i = 0; i < ids.length; i += 90) {
     const slice = ids.slice(i, i + 90);
-    const q = `SELECT entity_id, field, value, status FROM content_translations WHERE entity_type = ? AND locale = ? AND entity_id IN (${slice.map(() => "?").join(",")})`;
+    const q = `SELECT entity_id, field, value, status, source_hash FROM content_translations WHERE entity_type = ? AND locale = ? AND entity_id IN (${slice.map(() => "?").join(",")})`;
     const res = await env.DB.prepare(q).bind(entityType, locale, ...slice).all();
     for (const t of res.results) {
       if (requireReviewed && t.status !== "reviewed") continue;
@@ -35,7 +38,7 @@ export async function localize(env, entityType, rows, fields, locale, { requireR
     let any = false;
     let machine = false;
     for (const f of fields) {
-      if (tr[f]) {
+      if (tr[f] && (await currentFor(tr[f], r[f], f))) {
         r[f] = tr[f].value;
         any = true;
         if (tr[f].status === "machine") machine = true;
@@ -44,6 +47,20 @@ export async function localize(env, entityType, rows, fields, locale, { requireR
     r._tr = { status: any ? (machine ? "machine" : "reviewed") : "missing", fallback: !any };
   }
   return rows;
+}
+
+const jsonIds = (o) => (Array.isArray(o) ? o.flatMap(jsonIds) : o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => (k === "id" ? [String(v)] : jsonIds(v))) : []);
+
+/** Whether a stored translation still matches the current source value. */
+async function currentFor(t, source, field) {
+  if (source === undefined) return false;
+  if (t.source_hash && t.source_hash !== (await sha256Hex(String(source ?? "")))) return false;
+  if (field.endsWith("_json")) {
+    const a = parseJson(source, null);
+    const b = parseJson(t.value, null);
+    if (!b || JSON.stringify(jsonIds(a).sort()) !== JSON.stringify(jsonIds(b).sort())) return false;
+  }
+  return true;
 }
 
 export const COURSE_FIELDS = ["title", "subtitle", "description", "objectives_json", "prerequisites_text"];

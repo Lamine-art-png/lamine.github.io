@@ -115,3 +115,42 @@ test("manual grading after a policy change uses the attempt's threshold", async 
   assert.equal(a.passed, 1, "the 80% threshold applies, not the later 100%");
   void layout;
 });
+
+test("an autosave in flight during submission cannot change the graded answers", async () => {
+  const { env, learner, attemptId } = await examInProgress();
+  // The learner's final answers are all correct and autosaved.
+  assert.equal((await save(learner, attemptId, await correctResponses(env, attemptId))).status, 200);
+  const { saveResponses, submitAttempt } = await import("../../src/services/assessments.js");
+  const stale = await env.DB.prepare("SELECT * FROM attempts WHERE id = ?").bind(attemptId).first();
+  // A slower, earlier autosave carries valid but wrong options for every single-choice question.
+  const wrong = {};
+  for (const r of (await env.DB.prepare("SELECT question_id, question_json FROM attempt_answers WHERE attempt_id = ?").bind(attemptId).all()).results) {
+    const q = JSON.parse(r.question_json);
+    if (q.type !== "single") continue;
+    const right = JSON.parse(q.answer_json).correct[0];
+    wrong[r.question_id] = JSON.parse(q.data_json).options.find((o) => o.id !== right).id;
+  }
+  assert.ok(Object.keys(wrong).length > 0);
+  // It lands exactly while the submission reads the answers to grade them.
+  let injected = false;
+  const DB = new Proxy(env.DB, {
+    get(target, prop) {
+      if (prop !== "prepare") return typeof target[prop] === "function" ? target[prop].bind(target) : target[prop];
+      return (sql) => {
+        if (!injected && sql.startsWith("SELECT question_id, response_json, max_points FROM attempt_answers")) {
+          injected = true;
+          return { bind: (...args) => ({ all: async () => (await saveResponses(env, stale, wrong), target.prepare(sql).bind(...args).all()) }) };
+        }
+        return target.prepare(sql);
+      };
+    },
+  });
+  const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(stale.user_id).first();
+  const { config } = await import("../../src/app.js");
+  const c = { env: { ...env, DB }, user, cfg: config(env, new URL(env.APP_ORIGIN)), defer: () => {}, locale: "en" };
+  await submitAttempt(c, stale);
+  assert.ok(injected, "the race was exercised");
+  const graded = await env.DB.prepare("SELECT status, score_pct FROM attempts WHERE id = ?").bind(attemptId).first();
+  assert.equal(graded.status, "graded");
+  assert.equal(graded.score_pct, 100, "graded on the final answers; the late autosave was rejected");
+});

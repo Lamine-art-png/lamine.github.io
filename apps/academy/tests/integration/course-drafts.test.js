@@ -346,3 +346,17 @@ test("a video shown by a released course cannot be changed in place", async () =
   r = await admin.post(`/admin/videos/${id}/captions`, { locale: "en", status: "reviewed", vtt: "WEBVTT\n" });
   assert.match(r.location, /ok=saved/);
 });
+
+test("an instructor profile shown by a released course cannot be changed in place", async () => {
+  const { env, admin } = await released();
+  const ins = await live(env, "SELECT i.* FROM instructors i JOIN course_instructors ci ON ci.instructor_id = i.id WHERE ci.course_id = 'crs_a1' LIMIT 1");
+  assert.ok(ins, "A1 has an instructor");
+  const r = await admin.post("/admin/instructors", { id: ins.id, name: "Renamed Synthetic", title: ins.title, bio: "Changed", status: "active" });
+  assert.match(decodeURIComponent(r.location), /This profile is shown by/);
+  assert.deepEqual(await live(env, "SELECT * FROM instructors WHERE id = ?", ins.id), ins);
+  // Profile fields of linked instructors are part of the reviewed fingerprint.
+  const { courseContentHash } = await import("../../src/services/readiness.js");
+  const before = await courseContentHash(env, "crs_a1");
+  await env.DB.prepare("UPDATE instructors SET bio = bio || ' x' WHERE id = ?").bind(ins.id).run();
+  assert.notEqual(await courseContentHash(env, "crs_a1"), before);
+});

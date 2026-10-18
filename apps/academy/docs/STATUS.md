@@ -66,13 +66,21 @@ Instructor video production is **not complete**: no approved Joshua video assets
 | P2 captions/media of live videos editable in place | Videos shown by a released course are locked (media, transcript, captions); changes go through a new asset linked in the draft, which voids reviews | `course-drafts` "a video shown by a released course…", `publication-readiness` |
 | P2 probe published only once | Each staging run changes the probe draft and publishes a new revision; the test asserts the revision number increases and learners see the new marker | `staging-harness` |
 
+### Codex review of `ac510a9` (2 × P1, 1 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 stale reviewed translations still overlaid (an edited question's old translated options against its new key) | `localize` uses a translation only while its recorded source hash matches the current source, and translated JSON only with the source's ids | `tests/unit/localize-stale.test.js` |
+| P1 an in-flight autosave could change answers during grading | Submission closes the attempt to writes (`submitted_at`) atomically before reading answers; the autosave guard then rejects late saves | `attempt-snapshots` "an autosave in flight during submission…" (fails without the fix) |
+| P2 instructor profile edits bypassed revisions | Profiles shown by a released course are locked; linked profiles' fields are in the reviewed fingerprint | `course-drafts` "an instructor profile shown by a released course…" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **137/137 pass**.
+- `npm test` (unit, integration, deploy): **140/140 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
