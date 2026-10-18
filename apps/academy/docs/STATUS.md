@@ -114,6 +114,12 @@ Both tests inject the competing write at the exact point of the guarded statemen
 | P2 no way to cancel a scheduled update | "Cancel scheduled publication" (publish permission) clears the schedule; the live revision stays | `course-drafts` "a scheduled update can be cancelled…" |
 | P2 overlapping progress reports could move the resume position back | The newest client time wins inside the upsert, not from a separate read | `course-drafts` "overlapping progress reports…" |
 
+### Codex review of `45be673` (1 × P2, no P1) — fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P2 cancelling a schedule could clear a replacement made meanwhile | The cancel form carries the displayed `scheduled_at` and the update requires it | `course-drafts` "a scheduled update can be cancelled…" (stale form cancels nothing) |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.

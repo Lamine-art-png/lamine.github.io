@@ -564,7 +564,12 @@ test("a scheduled update can be cancelled without publishing or taking the cours
   await approveReviews(admin, "crs_a1");
   await admin.post("/admin/courses/crs_a1/status", { status: "scheduled", scheduled_at: "2030-01-01T09:00" });
   assert.match((await admin.get("/admin/courses/crs_a1")).text, /Cancel scheduled publication/);
-  const r = await admin.post("/admin/courses/crs_a1/unschedule", {});
+  const shown = (await live(env, "SELECT scheduled_at FROM courses WHERE id = 'crs_a1'")).scheduled_at;
+  // A stale form (another publisher rescheduled meanwhile) cancels nothing.
+  let r = await admin.post("/admin/courses/crs_a1/unschedule", { scheduled_at: "2029-12-31T00:00:00.000Z" });
+  assert.match(decodeURIComponent(r.location), /schedule changed since this page was loaded/);
+  assert.equal((await live(env, "SELECT scheduled_at FROM courses WHERE id = 'crs_a1'")).scheduled_at, shown);
+  r = await admin.post("/admin/courses/crs_a1/unschedule", { scheduled_at: shown });
   assert.match(r.location, /ok=saved/);
   const c = await live(env, "SELECT status, scheduled_at FROM courses WHERE id = 'crs_a1'");
   assert.equal(c.status, "published");
@@ -573,7 +578,7 @@ test("a scheduled update can be cancelled without publishing or taking the cours
   const editor = await registeredLearner(env, { email: "editor4@academy.test" });
   const eid = (await live(env, "SELECT id FROM users WHERE email = 'editor4@academy.test'")).id;
   await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'content_editor', ?)").bind(eid, new Date().toISOString()).run();
-  assert.equal((await editor.post("/admin/courses/crs_a1/unschedule", {})).status, 403);
+  assert.equal((await editor.post("/admin/courses/crs_a1/unschedule", { scheduled_at: shown })).status, 403);
 });
 
 test("overlapping progress reports never move the resume position backwards", async () => {

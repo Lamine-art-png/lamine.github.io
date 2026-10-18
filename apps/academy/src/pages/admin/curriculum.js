@@ -130,7 +130,7 @@ export async function editCourse(c) {
       <label for="sched" class="mb-0">Publish at (UTC, for “scheduled”)</label><input id="sched" type="datetime-local" name="scheduled_at" value="${(course.scheduled_at || "").slice(0, 16)}">
       <button class="btn btn-primary btn-sm">Apply</button></form>
     ${course.scheduled_at && c.can("courses.publish")
-      ? html`<form method="post" action="/admin/courses/${course.id}/unschedule" class="mt-1">${hidden(c)}<button class="btn btn-quiet btn-sm">Cancel scheduled publication${course.status === "published" ? " (the live revision stays as it is)" : ""}</button></form>`
+      ? html`<form method="post" action="/admin/courses/${course.id}/unschedule" class="mt-1">${hidden(c)}<input type="hidden" name="scheduled_at" value="${course.scheduled_at}"><button class="btn btn-quiet btn-sm">Cancel scheduled publication${course.status === "published" ? " (the live revision stays as it is)" : ""}</button></form>`
       : ""}
     <p class="tiny muted mt-1">Publishing and scheduling require every check above to pass. “Review” shows the course as upcoming without opening enrollment.</p>
   </section>
@@ -347,12 +347,15 @@ export async function setCourseStatus(c) {
 /** Cancel a pending scheduled publication without publishing or taking the live course offline. */
 export async function cancelSchedule(c) {
   if (!c.can("courses.publish")) throw new HttpError(403, "forbidden");
+  const b = await c.readBody();
+  // Only the schedule the publisher saw is cancelled; a replacement made in the meantime stays.
   const res = await c.env.DB.prepare(
-    "UPDATE courses SET scheduled_at = NULL, status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, updated_at = ? WHERE id = ? AND scheduled_at IS NOT NULL",
+    "UPDATE courses SET scheduled_at = NULL, status = CASE WHEN status = 'scheduled' THEN 'review' ELSE status END, updated_at = ? WHERE id = ? AND scheduled_at = ?",
   )
-    .bind(nowIso(), c.params.id)
+    .bind(nowIso(), c.params.id, String(b.scheduled_at || ""))
     .run();
-  if (res.meta.changes) await auditStmt(c.env, c.user.id, "course.schedule.cancelled", "course", c.params.id, {}).run();
+  if (!res.meta.changes) return redirect(`/admin/courses/${c.params.id}?err=${encodeURIComponent("The schedule changed since this page was loaded; nothing was cancelled.")}`);
+  await auditStmt(c.env, c.user.id, "course.schedule.cancelled", "course", c.params.id, { scheduled_at: b.scheduled_at }).run();
   return redirect(`/admin/courses/${c.params.id}?ok=saved`);
 }
 
