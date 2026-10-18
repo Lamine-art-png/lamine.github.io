@@ -10,6 +10,52 @@ import { lessonCompletion } from "./certificates.js";
 import { queueEmail, deliverById } from "./email.js";
 
 const GRACE_SECONDS = 30;
+
+// ───────────── Attempt snapshots ─────────────
+// An attempt stores the policy and every question exactly as it started, so
+// edits to the assessment, its questions or their translations never change
+// what a learner saw, how they are scored, or the threshold they must reach.
+
+const POLICY_FIELDS = ["kind", "passing_score", "time_limit_seconds", "feedback_policy", "is_certification"];
+
+/** The assessment policy an attempt is held to (its snapshot, or live for legacy attempts). */
+export function attemptPolicy(attempt, assessment) {
+  const snap = parseJson(attempt?.policy_json, null);
+  return snap ? { ...assessment, ...snap } : assessment;
+}
+
+async function snapshotQuestions(env, ids, locale, certification) {
+  const rows = (
+    await env.DB.prepare(
+      `SELECT q.id, q.type, q.prompt, q.data_json, q.answer_json, q.explanation, q.rubric, q.grading, q.points, q.lesson_id,
+              qc.title AS case_title, qc.body_md AS case_body
+         FROM questions q LEFT JOIN question_cases qc ON qc.id = q.case_id WHERE q.id IN (${ids.map(() => "?").join(",")})`,
+    )
+      .bind(...ids)
+      .all()
+  ).results;
+  // Learner-visible text in the attempt's language (reviewed translations only for certification).
+  await localize(env, "question", rows, ["prompt", "data_json", "explanation"], locale, { requireReviewed: Boolean(certification) });
+  return new Map(rows.map(({ _tr, id, ...q }) => [id, { ...q, translation: _tr || null }]));
+}
+
+/** Map question id → question as frozen in the attempt (falls back to live rows for legacy attempts). */
+async function attemptSnapshot(env, attempt, extraLive = []) {
+  const rows = (await env.DB.prepare("SELECT question_id, question_json FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results;
+  const out = new Map();
+  const missing = [];
+  for (const r of rows) {
+    const q = parseJson(r.question_json, null);
+    if (q) out.set(r.question_id, q);
+    else missing.push(r.question_id);
+  }
+  for (const id of extraLive) if (!out.has(id)) missing.push(id);
+  if (missing.length) {
+    const certification = parseJson(attempt.policy_json, null)?.is_certification ?? (await env.DB.prepare("SELECT is_certification FROM assessments WHERE id = ?").bind(attempt.assessment_id).first())?.is_certification;
+    for (const [id, q] of await snapshotQuestions(env, missing, attempt.locale, certification)) out.set(id, q);
+  }
+  return out;
+}
 export const QUESTION_TYPES = ["single", "multiple", "true_false", "matching", "ordering", "short_answer"];
 
 export async function getAssessment(env, id) {
@@ -113,15 +159,11 @@ export async function startAttempt(c, assessment, course) {
   if (!gate.ok) throw new HttpError(409, "attempt_not_allowed", gate.reason, { reason: gate.reason });
   const questions = await drawQuestions(env, assessment.id);
   const layout = buildLayout(questions, assessment);
-  const points = new Map(
-    (
-      await env.DB.prepare(`SELECT id, points FROM questions WHERE id IN (${questions.map(() => "?").join(",")})`)
-        .bind(...questions.map((q) => q.id))
-        .all()
-    ).results.map((r) => [r.id, r.points]),
-  );
+  const snapshot = await snapshotQuestions(env, questions.map((q) => q.id), c.locale, assessment.is_certification);
+  const policy = Object.fromEntries(POLICY_FIELDS.map((k) => [k, assessment[k] ?? null]));
   const now = nowIso();
   const attempt = {
+    policy_json: JSON.stringify(policy),
     id: newId("att_"),
     user_id: user.id,
     assessment_id: assessment.id,
@@ -136,9 +178,11 @@ export async function startAttempt(c, assessment, course) {
   try {
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, locale, layout_json, started_at, deadline_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      ).bind(attempt.id, attempt.user_id, attempt.assessment_id, attempt.course_id, attempt.attempt_no, attempt.status, attempt.locale, attempt.layout_json, attempt.started_at, attempt.deadline_at),
-      ...layout.map((l) => env.DB.prepare("INSERT INTO attempt_answers (attempt_id, question_id, max_points) VALUES (?,?,?)").bind(attempt.id, l.q, points.get(l.q) || 1)),
+        "INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, locale, layout_json, started_at, deadline_at, policy_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      ).bind(attempt.id, attempt.user_id, attempt.assessment_id, attempt.course_id, attempt.attempt_no, attempt.status, attempt.locale, attempt.layout_json, attempt.started_at, attempt.deadline_at, JSON.stringify(policy)),
+      ...layout.map((l) =>
+        env.DB.prepare("INSERT INTO attempt_answers (attempt_id, question_id, max_points, question_json) VALUES (?,?,?,?)").bind(attempt.id, l.q, snapshot.get(l.q).points || 1, JSON.stringify(snapshot.get(l.q))),
+      ),
       eventStmt(env, { userId: user.id, event: `${assessment.kind}_started`, courseId: assessment.course_id, locale: c.locale }),
     ]);
   } catch (e) {
@@ -158,21 +202,11 @@ export async function getOwnAttempt(env, userId, attemptId) {
   return a;
 }
 
-/** Learner-safe question payload for an attempt, in the attempt's layout order. */
-export async function attemptQuestions(env, attempt, assessment) {
+/** Learner-safe question payload for an attempt, in the attempt's layout order (from its snapshot). */
+export async function attemptQuestions(env, attempt) {
   const layout = parseJson(attempt.layout_json, []);
-  const ids = layout.map((l) => l.q);
-  if (!ids.length) return [];
-  const rows = (
-    await env.DB.prepare(
-      `SELECT q.id, q.type, q.prompt, q.data_json, q.case_id, q.points, q.grading, qc.title AS case_title, qc.body_md AS case_body
-         FROM questions q LEFT JOIN question_cases qc ON qc.id = q.case_id WHERE q.id IN (${ids.map(() => "?").join(",")})`,
-    )
-      .bind(...ids)
-      .all()
-  ).results;
-  await localize(env, "question", rows, ["prompt", "data_json"], attempt.locale, { requireReviewed: Boolean(assessment.is_certification) });
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  if (!layout.length) return [];
+  const snap = await attemptSnapshot(env, attempt);
   const answers = new Map(
     (await env.DB.prepare("SELECT question_id, response_json FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results.map((a) => [
       a.question_id,
@@ -180,13 +214,13 @@ export async function attemptQuestions(env, attempt, assessment) {
     ]),
   );
   return layout.map((l, i) => {
-    const q = byId.get(l.q);
+    const q = snap.get(l.q);
     const d = parseJson(q.data_json, {});
     const pick = (list, order) => {
       const m = new Map((list || []).map((o) => [o.id, o]));
       return (order || []).map((id) => m.get(id)).filter(Boolean).map((o) => ({ id: o.id, text: o.text }));
     };
-    const out = { id: q.id, n: i + 1, type: q.type, prompt: q.prompt, points: q.points, caseTitle: q.case_title, caseBody: q.case_body, response: answers.get(q.id), translation: q._tr };
+    const out = { id: l.q, n: i + 1, type: q.type, prompt: q.prompt, points: q.points, caseTitle: q.case_title, caseBody: q.case_body, response: answers.get(l.q), translation: q.translation };
     if (q.type === "single" || q.type === "multiple") out.options = pick(d.options, l.opts);
     if (q.type === "matching") {
       out.left = (d.left || []).map((o) => ({ id: o.id, text: o.text }));
@@ -294,12 +328,7 @@ export async function saveResponses(env, attempt, responses) {
   const layoutIds = new Set(parseJson(attempt.layout_json, []).map((l) => l.q));
   const entries = Object.entries(responses || {}).filter(([qid]) => layoutIds.has(qid));
   if (!entries.length) return 0;
-  const qs = (
-    await env.DB.prepare(`SELECT id, type, data_json FROM questions WHERE id IN (${entries.map(() => "?").join(",")})`)
-      .bind(...entries.map(([k]) => k))
-      .all()
-  ).results;
-  const byId = new Map(qs.map((q) => [q.id, q]));
+  const byId = await attemptSnapshot(env, attempt);
   const now = nowIso();
   const stmts = entries.map(([qid, raw]) => {
     const v = normalizeResponse(byId.get(qid), raw);
@@ -317,14 +346,11 @@ export async function submitAttempt(c, attempt, { responses = null, auto = false
   const { env } = c;
   if (attempt.status !== "in_progress") return attempt;
   if (responses && !deadlinePassed(attempt)) await saveResponses(env, attempt, responses);
-  const rows = (
-    await env.DB.prepare(
-      `SELECT aa.question_id, aa.response_json, aa.max_points, q.type, q.grading, q.answer_json, q.data_json
-         FROM attempt_answers aa JOIN questions q ON q.id = aa.question_id WHERE aa.attempt_id = ?`,
-    )
-      .bind(attempt.id)
-      .all()
-  ).results;
+  const snap = await attemptSnapshot(env, attempt);
+  const rows = (await env.DB.prepare("SELECT question_id, response_json, max_points FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results.map((r) => {
+    const q = snap.get(r.question_id);
+    return { ...r, type: q.type, grading: q.grading, answer_json: q.answer_json, data_json: q.data_json };
+  });
   let pending = false;
   const stmts = [];
   for (const r of rows) {
@@ -372,7 +398,8 @@ export async function finalizeAttempt(c, attemptId, { auto = false } = {}) {
     .bind(attemptId)
     .first();
   if (agg.open_reviews > 0) return attempt;
-  const assessment = await getAssessment(env, attempt.assessment_id);
+  // The threshold is the one in force when the attempt started.
+  const assessment = attemptPolicy(attempt, await getAssessment(env, attempt.assessment_id));
   const pct = agg.maxp ? Math.round((agg.pts / agg.maxp) * 10000) / 100 : 0;
   const passed = pct >= assessment.passing_score ? 1 : 0;
   const now = nowIso();
@@ -412,21 +439,22 @@ export async function finalizeAttempt(c, attemptId, { auto = false } = {}) {
 
 /** Post-submission review, filtered by the assessment's feedback policy. */
 export async function attemptReview(env, attempt, assessment) {
-  const rows = (
-    await env.DB.prepare(
-      `SELECT aa.*, q.type, q.prompt, q.data_json, q.answer_json, q.explanation, q.lesson_id, l.slug AS lesson_slug, l.title AS lesson_title
-         FROM attempt_answers aa JOIN questions q ON q.id = aa.question_id LEFT JOIN lessons l ON l.id = q.lesson_id
-        WHERE aa.attempt_id = ?`,
-    )
-      .bind(attempt.id)
-      .all()
-  ).results;
-  await localize(env, "question", rows.map((r) => Object.assign(r, { id: r.question_id })), ["prompt", "data_json", "explanation"], attempt.locale, {
-    requireReviewed: Boolean(assessment.is_certification),
+  const snap = await attemptSnapshot(env, attempt);
+  const answers = (await env.DB.prepare("SELECT * FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results;
+  const lessonIds = [...new Set([...snap.values()].map((q) => q.lesson_id).filter(Boolean))];
+  const lessons = new Map(
+    lessonIds.length
+      ? (await env.DB.prepare(`SELECT id, slug, title FROM lessons WHERE id IN (${lessonIds.map(() => "?").join(",")})`).bind(...lessonIds).all()).results.map((l) => [l.id, l])
+      : [],
+  );
+  const rows = answers.map((a) => {
+    const q = snap.get(a.question_id);
+    const l = lessons.get(q.lesson_id);
+    return { ...a, type: q.type, prompt: q.prompt, data_json: q.data_json, answer_json: q.answer_json, explanation: q.explanation, grading: q.grading, lesson_slug: l?.slug, lesson_title: l?.title };
   });
   const order = parseJson(attempt.layout_json, []).map((l) => l.q);
   rows.sort((a, b) => order.indexOf(a.question_id) - order.indexOf(b.question_id));
-  const policy = assessment.feedback_policy;
+  const policy = attemptPolicy(attempt, assessment).feedback_policy;
   const review = rows.map((r, i) => {
     const item = { n: i + 1, status: r.needs_review ? "pending" : r.is_correct ? "correct" : r.points_awarded > 0 ? "partial" : "incorrect", points: r.points_awarded, max: r.max_points };
     if (policy === "score") return item;

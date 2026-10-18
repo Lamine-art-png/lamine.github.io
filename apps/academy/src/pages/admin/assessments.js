@@ -368,7 +368,11 @@ export async function gradeAttemptPage(c) {
   if (!attempt) throw new HttpError(404, "not_found");
   const items = (
     await c.env.DB.prepare(
-      "SELECT aa.*, q.prompt, q.rubric, q.type FROM attempt_answers aa JOIN questions q ON q.id = aa.question_id WHERE aa.attempt_id = ? AND (aa.needs_review = 1 OR q.grading = 'manual')",
+      // The question, rubric and grading mode as frozen in the attempt (live row only for legacy attempts).
+      `SELECT aa.*, COALESCE(json_extract(aa.question_json, '$.prompt'), q.prompt) AS prompt, COALESCE(json_extract(aa.question_json, '$.rubric'), q.rubric) AS rubric,
+              COALESCE(json_extract(aa.question_json, '$.type'), q.type) AS type
+         FROM attempt_answers aa JOIN questions q ON q.id = aa.question_id
+        WHERE aa.attempt_id = ? AND (aa.needs_review = 1 OR COALESCE(json_extract(aa.question_json, '$.grading'), q.grading) = 'manual')`,
     )
       .bind(attempt.id)
       .all()

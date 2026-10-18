@@ -37,19 +37,29 @@ test("content translations: machine drafts are labelled, exams use reviewed only
   let r = await c.get("/courses/introduction-to-ai-in-agriculture?lang=es");
   assert.match(r.text, /Introducción a la IA en la agricultura/);
   assert.match(r.text, /Machine-translated|automática|traduc/i);
-  // Certification exams never show unreviewed translations.
+  // Certification exams never show unreviewed translations, and an open attempt
+  // keeps the wording it started with.
   const u = await registeredLearner(env);
   await u.get("/?lang=es");
   await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
   await env.DB.prepare("UPDATE lessons SET is_required = 0 WHERE course_id = 'crs_a1'").run();
+  const examQs = (await env.DB.prepare("SELECT DISTINCT q.id FROM questions q JOIN assessment_rules r ON r.bank_id = q.bank_id WHERE r.assessment_id = 'asm_a1_exam'").all()).results.map((x) => x.id);
+  for (const id of examQs) await env.DB.prepare("INSERT OR REPLACE INTO content_translations (entity_type, entity_id, field, locale, value, status, updated_at) VALUES ('question',?,'prompt','es','PREGUNTA SIN REVISAR','machine',?)").bind(id, now).run();
   r = await u.post("/assessments/asm_a1_exam/start", {});
-  const attemptId = r.location.split("/").pop();
-  await env.DB.prepare("UPDATE attempts SET layout_json = ? WHERE id = ?").bind(JSON.stringify([{ q: qid }]), attemptId).run();
+  let attemptId = r.location.split("/").pop();
   r = await u.get(`/attempts/${attemptId}`);
   assert.doesNotMatch(r.text, /PREGUNTA SIN REVISAR/);
-  await env.DB.prepare("UPDATE content_translations SET status = 'reviewed', value = 'PREGUNTA REVISADA' WHERE entity_id = ?").bind(qid).run();
+  await u.post(`/attempts/${attemptId}/submit`, {});
+  await env.DB.prepare("UPDATE attempts SET submitted_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").bind(attemptId).run();
+  await env.DB.prepare("UPDATE content_translations SET status = 'reviewed', value = 'PREGUNTA REVISADA' WHERE entity_type = 'question'").run();
+  r = await u.post("/assessments/asm_a1_exam/start", {});
+  attemptId = r.location.split("/").pop();
   r = await u.get(`/attempts/${attemptId}`);
   assert.match(r.text, /PREGUNTA REVISADA/);
+  await env.DB.prepare("UPDATE content_translations SET value = 'PREGUNTA CAMBIADA' WHERE entity_type = 'question'").run();
+  r = await u.get(`/attempts/${attemptId}`);
+  assert.match(r.text, /PREGUNTA REVISADA/, "translation edits during an attempt do not change it");
+  assert.doesNotMatch(r.text, /PREGUNTA CAMBIADA/);
 });
 
 test("approved videos render a player and auto-complete at 90% watched", async () => {

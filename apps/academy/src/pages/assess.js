@@ -7,7 +7,7 @@ import { md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
 import { csrfField, alert, ring, breadcrumbs, emptyState } from "../views/components.js";
 import { localize } from "../services/content.js";
-import { getAssessment, attemptGate, settleExpiredAttempt, startAttempt, getOwnAttempt, attemptQuestions, saveResponses, submitAttempt, attemptReview, attemptHistory } from "../services/assessments.js";
+import { getAssessment, attemptGate, attemptPolicy, settleExpiredAttempt, startAttempt, getOwnAttempt, attemptQuestions, saveResponses, submitAttempt, attemptReview, attemptHistory } from "../services/assessments.js";
 import { activeCertificate } from "../services/certificates.js";
 
 async function courseOf(env, id) {
@@ -135,8 +135,10 @@ function questionBlock(c, q) {
 export async function attemptPage(c) {
   const t = c.t;
   const attempt = await getOwnAttempt(c.env, c.user.id, c.params.id);
-  const a = await getAssessment(c.env, attempt.assessment_id);
-  await localize(c.env, "assessment", a, ["title", "instructions"], attempt.locale);
+  const live = await getAssessment(c.env, attempt.assessment_id);
+  await localize(c.env, "assessment", live, ["title", "instructions"], attempt.locale);
+  // The attempt is shown and judged under the policy it started with.
+  const a = attemptPolicy(attempt, live);
   const course = await courseOf(c.env, a.course_id);
 
   if (attempt.status === "in_progress") {
@@ -144,7 +146,7 @@ export async function attemptPage(c) {
       await submitAttempt(c, attempt, { auto: true });
       return redirect(`/attempts/${attempt.id}?expired=1`);
     }
-    const questions = await attemptQuestions(c.env, attempt, a);
+    const questions = await attemptQuestions(c.env, attempt);
     const anyEnglish = c.locale !== "en" && questions.some((q) => q.translation?.status === "missing");
     const body = html`<div class="exam-shell" data-exam data-attempt="${attempt.id}" data-server-now="${new Date().toISOString()}" ${attempt.deadline_at ? raw(`data-deadline="${attempt.deadline_at}"`) : ""}>
       <div class="exam-status"><div class="row-between">
@@ -167,7 +169,7 @@ export async function attemptPage(c) {
   // Results.
   const review = await attemptReview(c.env, attempt, a);
   const cert = a.is_certification && attempt.passed ? await activeCertificate(c.env, c.user.id, course.id) : null;
-  const gate = await attemptGate(c.env, c.user, a, course);
+  const gate = await attemptGate(c.env, c.user, live, course);
   const pending = attempt.status === "pending_review";
   const body = html`<div class="exam-shell">
     ${breadcrumbs([[course.title, `/learn/${course.slug}`], [a.title, `/assessments/${a.id}`], [t("assess.attempt_n", { n: attempt.attempt_no })]])}
