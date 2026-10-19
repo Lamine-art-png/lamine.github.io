@@ -345,6 +345,7 @@ def create_api_checkout(
         if not customer_id:
             customer = stripe.Customer.create(
                 name=ctx.organization.name,
+                email=ctx.user.email,
                 metadata={"organization_id": ctx.organization.id, "agroai_customer": "shared"},
                 idempotency_key=f"agroai-api-customer-{ctx.organization.id}",
             )
@@ -391,6 +392,7 @@ def create_api_checkout(
             "client_reference_id": ctx.organization.id,
             "metadata": metadata,
             "subscription_data": {"metadata": metadata},
+            "after_expiration": {"recovery": {"enabled": True}},
             "automatic_tax": {"enabled": bool(settings.PLATFORM_API_STRIPE_TAX_ENABLED)},
             "idempotency_key": stripe_checkout_idempotency_key(
                 organization_id=ctx.organization.id,
