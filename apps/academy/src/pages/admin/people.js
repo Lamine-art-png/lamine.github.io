@@ -108,7 +108,7 @@ export async function setRoles(c) {
   const wanted = new Set([].concat(b.roles ?? []).filter((r) => ROLES.includes(r)));
   wanted.add("learner");
   if (c.params.id === c.user.id && !wanted.has("super_admin")) {
-    const others = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles WHERE role = 'super_admin' AND user_id != ?").bind(c.user.id).first();
+    const others = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.role = 'super_admin' AND u.status = 'active' AND r.user_id != ?").bind(c.user.id).first();
     if (!others.n) return redirect(`/admin/learners/${c.params.id}?err=${encodeURIComponent("You are the only super administrator.")}`);
   }
   const now = nowIso();

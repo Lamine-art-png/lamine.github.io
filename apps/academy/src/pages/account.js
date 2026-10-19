@@ -182,7 +182,7 @@ export async function deleteAccountAction(c) {
   const row = await c.env.DB.prepare("SELECT password_hash FROM users WHERE id = ?").bind(c.user.id).first();
   if (row.password_hash && !(await verifyPassword(String(b.password || ""), row.password_hash))) return accountPage(c, { errors: { delete: "auth.error.current_password" } });
   if (c.roles.includes("super_admin")) {
-    const others = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles WHERE role = 'super_admin' AND user_id != ?").bind(c.user.id).first();
+    const others = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.role = 'super_admin' AND u.status = 'active' AND r.user_id != ?").bind(c.user.id).first();
     if (!others.n) throw new HttpError(409, "last_super_admin");
   }
   // Queue the confirmation before personal data is erased; the outbox row is

@@ -22,16 +22,26 @@ const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(O
  * rules, questions, and the linked video assets and captions. Any edit after
  * an approval changes the fingerprint and voids that approval.
  */
-/** Why an assessment cannot draw its questions (no rules, or too few active questions), or null. */
+/**
+ * Why an assessment cannot draw its questions (no rules, or too few active
+ * questions), or null. Rules draw in order and a question is drawn at most
+ * once (drawQuestions), so earlier rules may use up questions a later rule
+ * could also draw: each rule must still have enough left in the worst case.
+ */
 async function drawProblem(env, assessmentId) {
-  const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ?").bind(assessmentId).all()).results;
+  const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ? ORDER BY sort_order").bind(assessmentId).all()).results;
   if (!rules.length) return "no question draw rules";
   let short = 0;
+  const earlier = new Set();
+  let drawnBefore = 0;
   for (const r of rules) {
-    const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
-    if (n.n < r.draw_count) short++;
+    const pool = (await env.DB.prepare(`SELECT id FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).all()).results.map((q) => q.id);
+    const shared = pool.filter((id) => earlier.has(id)).length;
+    if (pool.length - Math.min(drawnBefore, shared) < r.draw_count) short++;
+    for (const id of pool) earlier.add(id);
+    drawnBefore += r.draw_count;
   }
-  return short ? `${short} draw rule(s) need more active questions` : null;
+  return short ? `${short} draw rule(s) need more active questions (rules drawing from the same questions share them)` : null;
 }
 
 export async function courseContentHash(env, courseId) {

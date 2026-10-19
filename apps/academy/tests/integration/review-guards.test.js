@@ -122,3 +122,46 @@ test("graders can only score answers awaiting manual review", async () => {
   r = await grader.post(`/admin/grading/${attemptId}/q_m`, { points: "0", comment: "" });
   assert.equal(r.status, 404);
 });
+
+test("overlapping draw rules are checked as one pool, as the runtime draws them", async () => {
+  const env = makeEnv();
+  const course = await env.DB.prepare("SELECT * FROM courses WHERE id = 'crs_a1'").first();
+  const quizCheck = async () => (await publishReadiness(env, course)).checks.find((c) => /linked quiz|cannot take/.test(c.label));
+  const rule = await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = 'asm_a1_q1' ORDER BY sort_order LIMIT 1").first();
+  const pool = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM draft_questions WHERE bank_id = ? AND status = 'active' ${rule.difficulty ? "AND difficulty = ?" : ""}`).bind(...(rule.difficulty ? [rule.bank_id, rule.difficulty] : [rule.bank_id])).first()).n;
+  // Two rules over the same questions, each satisfiable alone, together needing one more than exist.
+  const half = Math.ceil(pool / 2);
+  await env.DB.prepare("DELETE FROM draft_assessment_rules WHERE assessment_id = 'asm_a1_q1'").run();
+  await env.DB.batch(
+    [1, 2].map((n) =>
+      env.DB.prepare("INSERT INTO draft_assessment_rules (id, assessment_id, bank_id, difficulty, draw_count, sort_order) VALUES (?, 'asm_a1_q1', ?, ?, ?, ?)").bind(`rul_overlap_${n}`, rule.bank_id, rule.difficulty, n === 1 ? half : pool - half + 1, n),
+    ),
+  );
+  const check = await quizCheck();
+  assert.equal(check.ok, false, `${half} + ${pool - half + 1} from ${pool} questions`);
+  assert.match(check.label, /need more active questions/);
+  await env.DB.prepare("UPDATE draft_assessment_rules SET draw_count = ? WHERE id = 'rul_overlap_2'").bind(pool - half).run();
+  assert.equal((await quizCheck()).ok, true, "exactly enough questions for both rules");
+});
+
+test("disabled super administrators do not count as the remaining one", async () => {
+  const env = makeEnv();
+  const founder = await registeredLearner(env, { email: "founder@academy.test" });
+  await registeredLearner(env, { email: "other@academy.test" });
+  const ids = Object.fromEntries((await env.DB.prepare("SELECT id, email FROM users").all()).results.map((x) => [x.email, x.id]));
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'super_admin', ?)").bind(ids["other@academy.test"], new Date().toISOString()).run();
+  await env.DB.prepare("UPDATE users SET status = 'disabled' WHERE id = ?").bind(ids["other@academy.test"]).run();
+  // Dropping their own role is refused...
+  let r = await founder.post(`/admin/learners/${ids["founder@academy.test"]}/roles`, { roles: ["academy_admin"] });
+  assert.match(decodeURIComponent(r.location), /only super administrator/);
+  assert.ok(await env.DB.prepare("SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'super_admin'").bind(ids["founder@academy.test"]).first());
+  // ...and so is deleting their account.
+  await founder.get("/account");
+  r = await founder.post("/account/delete", { confirm: "DELETE", password: founder.password });
+  assert.equal(r.status, 409);
+  assert.ok(await env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(ids["founder@academy.test"]).first());
+  // With the other super administrator active again, both are allowed.
+  await env.DB.prepare("UPDATE users SET status = 'active' WHERE id = ?").bind(ids["other@academy.test"]).run();
+  r = await founder.post(`/admin/learners/${ids["founder@academy.test"]}/roles`, { roles: ["academy_admin"] });
+  assert.doesNotMatch(decodeURIComponent(r.location), /only super administrator/);
+});

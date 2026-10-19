@@ -145,13 +145,20 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 readiness only checked that a quiz lesson had an assessment id | Every linked quiz must be this course's, active, have draw rules and enough active questions (the exam's check, now shared) | `review-guards` "readiness refuses quiz lessons whose assessment learners cannot take" |
 | P1 a grader could rewrite automatically scored answers | Only manually graded answers of an attempt still awaiting grading are writable (checked in the update itself); the grading page hides the save button once graded | `review-guards` "graders can only score answers awaiting manual review" |
 
+### Codex review of `04da406` (2 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 overlapping draw rules passed readiness one by one but failed at runtime, which never draws a question twice | Rules are checked in draw order against the worst case: each must still have enough questions after earlier rules take as many shared ones as they can | `review-guards` "overlapping draw rules are checked as one pool, as the runtime draws them" |
+| P1 a disabled super administrator counted as the remaining one, so the last active one could delete their account or drop the role | Account deletion and self-demotion count only active super administrators | `review-guards` "disabled super administrators do not count as the remaining one" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **161/161 pass**.
+- `npm test` (unit, integration, deploy): **163/163 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
