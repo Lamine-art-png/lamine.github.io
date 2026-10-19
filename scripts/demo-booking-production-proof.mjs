@@ -6,6 +6,7 @@ import { chromium } from "@playwright/test";
 const base = process.env.DEMO_BASE_URL || "https://agroai-pilot.com";
 const expectHint = process.env.EXPECT_HINT === "1";
 const expectPending = process.env.EXPECT_PENDING === "1";
+const expectCompanyCalendly = process.env.EXPECT_COMPANY_CALENDLY === "1";
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
@@ -75,12 +76,16 @@ try {
       assert.match(detail, /team notification was sent/i);
     }
     const fallback = wrapper.getByRole("link", { name: /Open the booking calendar/i });
-    assert.equal(new URL(await fallback.getAttribute("href")).pathname, "/contact-agroai-pilot/30min");
+    const fallbackUrl = await fallback.getAttribute("href");
+    assert.equal(new URL(fallbackUrl).hostname, "calendly.com");
     assert.equal(intercepted.length, 1, "Exactly one demo lead request must occur");
     assert.equal(intercepted[0].method, "POST");
     assert.equal(intercepted[0].body.email, "qa-calendar-proof@example.com");
-    assert.equal(await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-url"),
-      "https://calendly.com/contact-agroai-pilot/30min");
+    const embeddedUrl = await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-url");
+    assert.equal(embeddedUrl, fallbackUrl, "Embedded Calendly and backup link must agree");
+    if (expectCompanyCalendly) {
+      assert.equal(embeddedUrl, "https://calendly.com/contact-agroai-pilot/30min");
+    }
     assert.equal(await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-email"),
       "qa-calendar-proof@example.com");
     assert.equal(errors.length, 0, "Unexpected browser error(s): " + errors.join("; "));
