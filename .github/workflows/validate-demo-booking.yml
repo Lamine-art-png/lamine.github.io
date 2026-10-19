@@ -1,0 +1,24 @@
+name: Validate Demo Booking
+on:
+  pull_request:
+    paths:
+      - "cloudflare/form-page-runtime/**"
+      - "scripts/check-demo-booking.mjs"
+      - ".github/workflows/validate-demo-booking.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Parse Cloudflare Worker
+        run: node --check cloudflare/form-page-runtime/src/index.js
+      - name: Validate browser runtime and original form invariants
+        run: node scripts/check-demo-booking.mjs
