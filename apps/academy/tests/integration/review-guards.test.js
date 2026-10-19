@@ -237,3 +237,70 @@ test("two super administrators disabling each other at once never leave none", a
   assert.match(decodeURIComponent(r.location), /only active super administrator/);
   assert.equal((await env.DB.prepare("SELECT status FROM users WHERE id = ?").bind(ids["other@academy.test"]).first()).status, "active", "one super administrator stays active");
 });
+
+test("an enrollment racing an archive is refused, including re-enrolling after withdrawal", async () => {
+  const env = makeEnv();
+  await publishCourse(env, "crs_a1");
+  const archive = () => env.DB.prepare("UPDATE courses SET status = 'archived' WHERE id = 'crs_a1'").run();
+  const u = await registeredLearner(env);
+  // The course is archived after the request's status check, before its insert.
+  const orig = env.DB.prepare.bind(env.DB);
+  env.DB.prepare = (sql) => {
+    if (/INSERT INTO enrollments/.test(sql)) {
+      env.DB.prepare = orig;
+      const st = orig(sql);
+      const bind = st.bind.bind(st);
+      st.bind = (...a) => {
+        const b = bind(...a);
+        const run = b.run.bind(b);
+        b.run = async () => (await archive(), run());
+        return b;
+      };
+      return st;
+    }
+    return orig(sql);
+  };
+  await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
+  assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM enrollments WHERE course_id = 'crs_a1'").first().then((x) => x.n), 0, "no enrollment in an archived course");
+  assert.equal((await u.get("/learn/introduction-to-ai-in-agriculture/welcome")).status, 404, "no classroom access");
+  // Withdrawn learners cannot re-activate once the course is archived either.
+  await env.DB.prepare("UPDATE courses SET status = 'published' WHERE id = 'crs_a1'").run();
+  await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
+  await env.DB.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE course_id = 'crs_a1'").run();
+  const { enroll } = await import("../../src/services/progress.js");
+  const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(u.email).first();
+  const course = await env.DB.prepare("SELECT * FROM courses WHERE id = 'crs_a1'").first(); // loaded while still published
+  await archive();
+  await assert.rejects(enroll({ env, user, cfg: {}, locale: "en", defer: () => {} }, course), /course_not_open/);
+  assert.equal((await env.DB.prepare("SELECT status FROM enrollments WHERE course_id = 'crs_a1'").first()).status, "withdrawn");
+});
+
+test("a promotion racing a status change keeps a lower role from disabling the new super administrator", async () => {
+  const env = makeEnv();
+  await registeredLearner(env, { email: "founder@academy.test" });
+  const staff = await registeredLearner(env, { email: "staff@academy.test" });
+  const target = await registeredLearner(env, { email: "target@academy.test" });
+  const ids = Object.fromEntries((await env.DB.prepare("SELECT id, email FROM users").all()).results.map((x) => [x.email, x.id]));
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'academy_admin', ?)").bind(ids["staff@academy.test"], new Date().toISOString()).run();
+  // The target is promoted after the staff member's role check, before the write.
+  beforeNextBatch(env, () => env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'super_admin', ?)").bind(ids["target@academy.test"], new Date().toISOString()).run());
+  const r = await staff.post(`/admin/learners/${ids["target@academy.test"]}/status`, { status: "disabled" });
+  assert.equal(r.status, 403);
+  assert.equal((await env.DB.prepare("SELECT status FROM users WHERE id = ?").bind(ids["target@academy.test"]).first()).status, "active");
+  assert.equal((await target.get("/dashboard")).status, 200, "the new super administrator stays signed in");
+});
+
+test("a poster URL cannot inject markup into the lesson page", async () => {
+  const env = makeEnv();
+  await publishCourse(env, "crs_a1");
+  await env.DB.prepare("UPDATE video_assets SET status='approved', duration_seconds=200, mp4_url='https://media.example/a1.mp4', poster_url=? WHERE id='vid_a1_data'")
+    .bind('https://media.example/p.jpg"><meta http-equiv="refresh" content="0;url=https://evil.example">')
+    .run();
+  await env.DB.prepare("UPDATE lessons SET type='video' WHERE id='les_a1_data'").run();
+  const u = await registeredLearner(env);
+  await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
+  const page = await u.get("/learn/introduction-to-ai-in-agriculture/data-the-raw-material");
+  assert.equal(page.status, 200);
+  assert.doesNotMatch(page.text, /<meta http-equiv="refresh"/);
+  assert.match(page.text, /poster="https:\/\/media\.example\/p\.jpg&quot;&gt;&lt;meta/);
+});

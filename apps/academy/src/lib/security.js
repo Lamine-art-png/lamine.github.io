@@ -161,7 +161,15 @@ export function superAdminRemainsStmt(env, actorId, userId, action) {
   ).bind(newId("aud_"), actorId ?? null, action, userId, nowIso());
 }
 
-/** True when a batch was rolled back by superAdminRemainsStmt. */
+/** Like superAdminRemainsStmt: rolls the batch back if `userId` is a super administrator at write time. */
+export function notSuperAdminStmt(env, actorId, userId, action) {
+  return env.DB.prepare(
+    `INSERT INTO audit_log (id, actor_id, action, entity_type, entity_id, created_at)
+     VALUES (?1, ?2, (SELECT ?3 WHERE NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ?4 AND role = 'super_admin')), 'user', ?4, ?5)`,
+  ).bind(newId("aud_"), actorId ?? null, action, userId, nowIso());
+}
+
+/** True when a batch was rolled back by superAdminRemainsStmt or notSuperAdminStmt. */
 export const isLastSuperAdmin = (e) => /NOT NULL/i.test(String(e?.message)) && /audit_log/i.test(String(e?.message));
 
 export async function audit(c, action, entityType, entityId, detail) {

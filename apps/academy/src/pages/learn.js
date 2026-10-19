@@ -63,7 +63,7 @@ function videoBlock(c, lesson, video, progress) {
   if (video?.playable) {
     const start = progress?.status !== "completed" ? Math.floor(progress?.position_seconds || 0) : 0;
     return html`<div class="player" data-player data-lesson="${lesson.id}" data-start="${start}">
-        <video controls playsinline preload="metadata" ${video.poster_url ? raw(`poster="${safeUrl(video.poster_url)}"`) : ""} aria-label="${lesson.title}">
+        <video controls playsinline preload="metadata" ${video.poster_url ? html`poster="${safeUrl(video.poster_url)}"` : ""} aria-label="${lesson.title}">
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
           ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="${fileVideoType(video.mp4_url)}">` : ""}
           ${video.captions.map((cap, i) => html`<track kind="captions" src="/captions/${cap.id}.vtt" srclang="${cap.locale}" label="${cap.label}" ${cap.locale === c.locale || (i === 0 && !video.captions.some((x) => x.locale === c.locale)) ? raw("default") : ""}>`)}

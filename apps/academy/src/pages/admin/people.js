@@ -2,7 +2,7 @@
 import { html, raw } from "../../lib/html.js";
 import { redirect, HttpError } from "../../lib/http.js";
 import { newId, nowIso, credentialId } from "../../lib/util.js";
-import { auditStmt, audit, revokeAllSessions, superAdminRemainsStmt, isLastSuperAdmin } from "../../lib/security.js";
+import { auditStmt, audit, revokeAllSessions, superAdminRemainsStmt, notSuperAdminStmt, isLastSuperAdmin } from "../../lib/security.js";
 import { adminPage, table, statusBadge, hidden, input, select, str } from "./shell.js";
 import { issueToken } from "../../services/users.js";
 import { sendEmail } from "../../services/email.js";
@@ -92,18 +92,22 @@ export async function setStatus(c) {
   if (c.params.id === c.user.id) throw new HttpError(409, "cannot_change_self");
   const status = b.status === "disabled" ? "disabled" : "active";
   // Only a super administrator may change the status of a super administrator.
-  const superTarget = await c.env.DB.prepare("SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'super_admin'").bind(c.params.id).first();
-  if (superTarget && !c.roles.includes("super_admin")) throw new HttpError(403, "forbidden");
+  const actorIsSuper = c.roles.includes("super_admin");
+  const isSuperTarget = async () => Boolean(await c.env.DB.prepare("SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'super_admin'").bind(c.params.id).first());
+  if (!actorIsSuper && (await isSuperTarget())) throw new HttpError(403, "forbidden");
   try {
     await c.env.DB.batch([
+      // The same rule, enforced again at write time in case the target was promoted meanwhile.
+      ...(actorIsSuper ? [] : [notSuperAdminStmt(c.env, c.user.id, c.params.id, `learner.${status}_check`)]),
       // Disabling never leaves no active super administrator (atomic with the change).
       ...(status === "disabled" ? [superAdminRemainsStmt(c.env, c.user.id, c.params.id, "learner.disable_check")] : []),
       c.env.DB.prepare("UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND status != 'deleted'").bind(status, nowIso(), c.params.id),
       auditStmt(c.env, c.user.id, `learner.${status}`, "user", c.params.id),
     ]);
   } catch (e) {
-    if (isLastSuperAdmin(e)) return redirect(`/admin/learners/${c.params.id}?err=${encodeURIComponent("This is the only active super administrator.")}`);
-    throw e;
+    if (!isLastSuperAdmin(e)) throw e;
+    if (!actorIsSuper && (await isSuperTarget())) throw new HttpError(403, "forbidden");
+    return redirect(`/admin/learners/${c.params.id}?err=${encodeURIComponent("This is the only active super administrator.")}`);
   }
   if (status === "disabled") await revokeAllSessions(c.env, c.params.id);
   return redirect(`/admin/learners/${c.params.id}?ok=saved`);

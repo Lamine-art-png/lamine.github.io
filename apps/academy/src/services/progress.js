@@ -30,21 +30,30 @@ export async function enroll(c, course) {
   if (unmet.length) throw new HttpError(409, "prerequisites_unmet", "Prerequisites not completed", { prerequisites: unmet.map((u) => u.slug) });
   const existing = await getEnrollment(env, user.id, course.id);
   const now = nowIso();
+  // Both writes apply only while the course is still published, so a request
+  // racing an archive or unpublish cannot open access afterwards.
+  const open = "EXISTS (SELECT 1 FROM courses WHERE id = ?3 AND status = 'published')";
   if (existing) {
     if (existing.status === "withdrawn") {
-      await env.DB.prepare("UPDATE enrollments SET status = 'active', last_activity_at = ? WHERE id = ?").bind(now, existing.id).run();
+      const res = await env.DB.prepare(`UPDATE enrollments SET status = 'active', last_activity_at = ?1 WHERE id = ?2 AND status = 'withdrawn' AND ${open}`).bind(now, existing.id, course.id).run();
+      if (!res.meta.changes) throw new HttpError(409, "course_not_open");
       return { ...existing, status: "active", created: false };
     }
     return { ...existing, created: false };
   }
   const id = newId("enr_");
   const res = await env.DB.prepare(
-    `INSERT INTO enrollments (id, user_id, course_id, status, progress_pct, enrolled_at, last_activity_at) VALUES (?,?,?,'active',0,?,?)
+    `INSERT INTO enrollments (id, user_id, course_id, status, progress_pct, enrolled_at, last_activity_at)
+     SELECT ?1, ?2, ?3, 'active', 0, ?4, ?4 WHERE ${open}
      ON CONFLICT(user_id, course_id) DO NOTHING`,
   )
-    .bind(id, user.id, course.id, now, now)
+    .bind(id, user.id, course.id, now)
     .run();
-  if (!res.meta.changes) return { ...(await getEnrollment(env, user.id, course.id)), created: false };
+  if (!res.meta.changes) {
+    const current = await getEnrollment(env, user.id, course.id);
+    if (!current) throw new HttpError(409, "course_not_open");
+    return { ...current, created: false };
+  }
   await env.DB.batch([
     eventStmt(env, { userId: user.id, event: "enrolled", courseId: course.id, locale: c.locale }),
     notifyStmt(env, user.id, { kind: "enrollment", title: course.title, url: `/learn/${course.slug}` }),

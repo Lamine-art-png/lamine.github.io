@@ -165,6 +165,14 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 |---|---|---|
 | P1 two super administrators disabling each other concurrently could leave none active | Disabling an account carries the same atomic last-active-super-administrator guard as deletion and demotion | `review-guards` "two super administrators disabling each other at once never leave none" |
 
+### Codex review of `7a6a839` (2 × P1, 1 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 an enrollment racing an archive (or a withdrawn learner re-enrolling) could still open access | The enrollment insert and the re-activation apply only while the course row is still `published` | `review-guards` "an enrollment racing an archive is refused…" |
+| P1 a lower role's status change used a role check read before the write | The "target is not a super administrator" rule is also enforced inside the status batch | `review-guards` "a promotion racing a status change…" |
+| P2 the video poster URL was inserted unescaped | Rendered through the escaping template | `review-guards` "a poster URL cannot inject markup into the lesson page" |
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -177,7 +185,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **166/166 pass**.
+- `npm test` (unit, integration, deploy): **169/169 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
