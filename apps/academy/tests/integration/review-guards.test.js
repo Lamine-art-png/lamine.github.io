@@ -224,3 +224,16 @@ test("draws from unrelated banks do not count against a pool", async () => {
   await env.DB.prepare("UPDATE draft_assessment_rules SET draw_count = 3 WHERE id = 'r3'").run();
   assert.equal((await publishReadiness(env, course)).checks.find((c) => /linked quiz|cannot take/.test(c.label)).ok, false, "3 of A after 1 drawn is too many");
 });
+
+test("two super administrators disabling each other at once never leave none", async () => {
+  const env = makeEnv();
+  const founder = await registeredLearner(env, { email: "founder@academy.test" });
+  await registeredLearner(env, { email: "other@academy.test" });
+  const ids = Object.fromEntries((await env.DB.prepare("SELECT id, email FROM users").all()).results.map((x) => [x.email, x.id]));
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'super_admin', ?)").bind(ids["other@academy.test"], new Date().toISOString()).run();
+  // The other super administrator disables the founder between the founder's check and write.
+  beforeNextBatch(env, () => env.DB.prepare("UPDATE users SET status = 'disabled' WHERE id = ?").bind(ids["founder@academy.test"]).run());
+  const r = await founder.post(`/admin/learners/${ids["other@academy.test"]}/status`, { status: "disabled" });
+  assert.match(decodeURIComponent(r.location), /only active super administrator/);
+  assert.equal((await env.DB.prepare("SELECT status FROM users WHERE id = ?").bind(ids["other@academy.test"]).first()).status, "active", "one super administrator stays active");
+});

@@ -159,6 +159,12 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 two super administrators removing themselves concurrently could both pass the check | The last-active-super-administrator invariant is enforced inside the deletion and demotion batches (a guarded first statement rolls the batch back), so the check and the removal are atomic | `review-guards` "two super administrators removing themselves at once never leave none" |
 | P2 the draw-rule bound counted draws from unrelated banks against a pool | Each earlier rule counts only up to what it can take from the questions it shares with the pool | `review-guards` "draws from unrelated banks do not count against a pool" |
 
+### Codex review of `90a20c2` (1 × P1) — fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 two super administrators disabling each other concurrently could leave none active | Disabling an account carries the same atomic last-active-super-administrator guard as deletion and demotion | `review-guards` "two super administrators disabling each other at once never leave none" |
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -171,7 +177,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **165/165 pass**.
+- `npm test` (unit, integration, deploy): **166/166 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
