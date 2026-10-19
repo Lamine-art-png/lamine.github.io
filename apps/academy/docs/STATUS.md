@@ -152,6 +152,12 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 overlapping draw rules passed readiness one by one but failed at runtime, which never draws a question twice | Rules are checked in draw order against the worst case: each must still have enough questions after earlier rules take as many shared ones as they can | `review-guards` "overlapping draw rules are checked as one pool, as the runtime draws them" |
 | P1 a disabled super administrator counted as the remaining one, so the last active one could delete their account or drop the role | Account deletion and self-demotion count only active super administrators | `review-guards` "disabled super administrators do not count as the remaining one" |
 
+CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
+when cached media loaded its metadata before the player script ran, and the resume jump itself reported
+position 0, overwriting the saved position until the page closed. Both are fixed in
+`public/static/js/academy.js`; the e2e step now delays the script to reproduce the first case
+deterministically and checks the saved position after resuming (each fix alone fails it).
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.

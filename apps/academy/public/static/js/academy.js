@@ -191,9 +191,14 @@
     const now = () => (video ? video.currentTime : 0);
     if (video) {
       const start = Number(player.dataset.start) || 0;
-      video.addEventListener("loadedmetadata", () => {
-        if (start > 5 && start < video.duration - 5) video.currentTime = start;
-      });
+      // Position before the current seek; the resume jump starts from the saved position, not 0.
+      let before = 0;
+      const resume = () => {
+        if (start > 5 && start < video.duration - 5) video.currentTime = before = start;
+      };
+      // Cached media can load its metadata before this script runs (e.g. on reload).
+      if (video.readyState >= 1) resume();
+      else video.addEventListener("loadedmetadata", resume, { once: true });
       video.addEventListener("error", () => ($("[data-video-error]").hidden = false), true);
       $("[data-speed]")?.addEventListener("change", (e) => (video.playbackRate = Number(e.target.value)));
       const captions = () => {
@@ -229,7 +234,6 @@
         // was possible between two beats, so beats go out every few seconds
         // while playing and at every play, pause, seek and end.
         let last = 0;
-        let before = 0;
         const report = (playing, position = video.currentTime, opts) => {
           last = Date.now();
           return sendProgress({ lessonId, position, duration: video.duration || null, playing }, opts);

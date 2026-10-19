@@ -314,6 +314,25 @@ try {
       setTimeout(() => res(v.currentTime), 4000);
     }));
     assert.ok(resumed >= 9 && resumed <= 11, `resumed at ${resumed}`);
+    // Regression (CI): when the media's metadata loads before the player script
+    // runs (cached media on reload), playback must still resume.
+    const slowScript = async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    };
+    await lp.route("**/static/js/academy.js*", slowScript);
+    await lp.reload();
+    const late = await lp.locator("[data-player] video").evaluate((v) => new Promise((res) => {
+      const t0 = Date.now();
+      const check = () => (v.currentTime > 0 || Date.now() - t0 > 4000 ? res({ t: v.currentTime }) : setTimeout(check, 50));
+      check();
+    }));
+    await lp.unroute("**/static/js/academy.js*", slowScript);
+    // The resume jump itself never reports position 0 to the server.
+    await lp.waitForTimeout(500);
+    const kept = db.prepare("SELECT position_seconds FROM lesson_progress WHERE user_id = ? AND lesson_id = 'les_a1_welcome'").get(userId);
+    assert.ok(kept.position_seconds >= 9, `saved position after resuming: ${kept.position_seconds}`);
+    assert.ok(late.t >= 9 && late.t <= 11, `resumed at ${late.t} when the script ran after the metadata loaded`);
     await shot(lp, "lesson-video");
   });
 
