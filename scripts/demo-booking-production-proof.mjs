@@ -33,7 +33,7 @@ try {
       await route.fulfill({
         status: 200,
         contentType: "application/javascript",
-        body: 'window.Calendly={initInlineWidget:function(args){args.parentElement.setAttribute("data-proof-calendly-loaded","true");args.parentElement.setAttribute("data-proof-email",args.prefill.email);}};',
+        body: 'window.Calendly={initInlineWidget:function(args){args.parentElement.setAttribute("data-proof-calendly-loaded","true");args.parentElement.setAttribute("data-proof-email",args.prefill.email);args.parentElement.setAttribute("data-proof-url",args.url);}};',
       });
     });
     const page = await context.newPage();
@@ -75,10 +75,12 @@ try {
       assert.match(detail, /team notification was sent/i);
     }
     const fallback = wrapper.getByRole("link", { name: /Open the booking calendar/i });
-    assert.equal(new URL(await fallback.getAttribute("href")).pathname, "/agroaicontact/30min");
+    assert.equal(new URL(await fallback.getAttribute("href")).pathname, "/contact-agroai-pilot/30min");
     assert.equal(intercepted.length, 1, "Exactly one demo lead request must occur");
     assert.equal(intercepted[0].method, "POST");
     assert.equal(intercepted[0].body.email, "qa-calendar-proof@example.com");
+    assert.equal(await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-url"),
+      "https://calendly.com/contact-agroai-pilot/30min");
     assert.equal(await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-email"),
       "qa-calendar-proof@example.com");
     assert.equal(errors.length, 0, "Unexpected browser error(s): " + errors.join("; "));
