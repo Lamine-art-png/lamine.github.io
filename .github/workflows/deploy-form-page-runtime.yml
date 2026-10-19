@@ -89,4 +89,9 @@ jobs:
           npm install --no-save --no-package-lock @playwright/test@1.55.0
           npx playwright install --with-deps chromium
           node scripts/demo-booking-production-proof.mjs
-
+      - name: Verify saved demo booking when inbox email is pending
+        shell: bash
+        env:
+          EXPECT_HINT: "1"
+          EXPECT_PENDING: "1"
+        run: node scripts/demo-booking-production-proof.mjs

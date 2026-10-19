@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - "cloudflare/form-page-runtime/**"
+      - "cloudflare/form-notification-gateway/**"
+      - "scripts/check-demo-gateway-contract.mjs"
+      - "scripts/demo-booking-production-proof.mjs"
       - "scripts/check-demo-booking.mjs"
       - ".github/workflows/validate-demo-booking.yml"
   workflow_dispatch:
@@ -22,6 +25,8 @@ jobs:
         run: node --check cloudflare/form-page-runtime/src/index.js
       - name: Validate browser runtime and original form invariants
         run: node scripts/check-demo-booking.mjs
+      - name: Verify backend notification schema and saved lead gateway contract
+        run: node scripts/check-demo-gateway-contract.mjs
 
   live-booking-journey:
     runs-on: ubuntu-latest

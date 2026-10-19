@@ -5,6 +5,7 @@ import { chromium } from "@playwright/test";
 
 const base = process.env.DEMO_BASE_URL || "https://agroai-pilot.com";
 const expectHint = process.env.EXPECT_HINT === "1";
+const expectPending = process.env.EXPECT_PENDING === "1";
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
@@ -14,10 +15,18 @@ try {
       const request = route.request();
       intercepted.push({ method: request.method(), body: request.postDataJSON() });
       await route.fulfill({
-        status: 201,
+        status: expectPending ? 202 : 201,
         contentType: "application/json",
-        headers: { "x-agroai-notification": "delivered" },
-        body: JSON.stringify({ id: "browser-proof-only", ok: true, status: "received" }),
+        headers: {
+          "x-agroai-notification": expectPending ? "pending" : "delivered",
+          ...(expectPending ? { "x-agroai-lead-persisted": "true" } : {}),
+        },
+        body: JSON.stringify({
+          id: "browser-proof-only",
+          ok: true,
+          status: "received",
+          ...(expectPending ? { saved: true, notification_status: "pending" } : {}),
+        }),
       });
     });
     await context.route("https://assets.calendly.com/assets/external/widget.js", async (route) => {
@@ -59,6 +68,12 @@ try {
     await wrapper.waitFor({ state: "visible", timeout: 20000 });
     await wrapper.locator('[data-agroai-calendar][data-proof-calendly-loaded="true"]')
       .waitFor({ state: "attached", timeout: 20000 });
+    const detail = await wrapper.innerText();
+    if (expectPending) {
+      assert.match(detail, /team email notification is delayed/i);
+    } else {
+      assert.match(detail, /team notification was sent/i);
+    }
     const fallback = wrapper.getByRole("link", { name: /Open the booking calendar/i });
     assert.equal(new URL(await fallback.getAttribute("href")).pathname, "/agroaicontact/30min");
     assert.equal(intercepted.length, 1, "Exactly one demo lead request must occur");
@@ -67,7 +82,9 @@ try {
     assert.equal(await wrapper.locator('[data-agroai-calendar]').getAttribute("data-proof-email"),
       "qa-calendar-proof@example.com");
     assert.equal(errors.length, 0, "Unexpected browser error(s): " + errors.join("; "));
-    console.log("PASS live demo form + Calendly UI, viewport " + viewport.width);
+    console.log("PASS live demo form + Calendly UI, " +
+      (expectPending ? "persisted/no-email" : "email-delivered") +
+      ", viewport " + viewport.width);
     await context.close();
   }
 } finally {

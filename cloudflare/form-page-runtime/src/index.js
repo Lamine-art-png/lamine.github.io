@@ -143,7 +143,7 @@ const runtimeSource = String.raw`(() => {
     wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  // The existing demo notification must succeed before scheduling is offered.
+  // The demo lead must be durably accepted before scheduling is offered.
   // Calendly owns availability, meeting creation, invites, and time zones.
   const DEMO_CALENDLY_URL = "https://calendly.com/agroaicontact/30min";
 
@@ -158,8 +158,9 @@ const runtimeSource = String.raw`(() => {
     heading.textContent = "Demo request received";
     heading.style.cssText = "font-size:26px;line-height:1.2;font-weight:800;color:#14532d;margin:0 0 12px";
     const intro = document.createElement("p");
-    intro.textContent =
-      "Your details reached the AGRO-AI team. Choose an available 30-minute slot below to confirm your demo immediately.";
+    intro.textContent = details.notificationPending
+      ? "Your demo request is saved. The team email notification is delayed, but you can select your 30-minute meeting now."
+      : "Your demo request was saved and the team notification was sent. Choose an available 30-minute slot below to confirm your demo immediately.";
     intro.style.cssText = "font-size:16px;line-height:1.6;color:#365314;margin:0 0 16px";
     const status = document.createElement("p");
     status.setAttribute("role", "status");
@@ -457,16 +458,26 @@ const runtimeSource = String.raw`(() => {
           credentials: "same-origin",
         });
         const result = await parseJson(response);
-        if (!response.ok || response.headers.get("x-agroai-notification") !== "delivered") {
+        const notificationState = response.headers.get("x-agroai-notification");
+        const requestId = clean(
+          result.id || response.headers.get("x-agroai-notification-request-id") || "",
+        );
+        const saved = response.ok && !!requestId &&
+          (notificationState === "delivered" ||
+            (notificationState === "pending" &&
+              response.headers.get("x-agroai-lead-persisted") === "true" &&
+              result.saved === true));
+        if (!saved) {
           throw new Error(
             clean(result.message || result.error) ||
-              "Demo request delivery could not be confirmed.",
+              "The demo request could not be confirmed as saved.",
           );
         }
         showDemoScheduling(form, {
           fullName,
           email,
-          requestId: result.id || response.headers.get("x-agroai-notification-request-id") || "",
+          requestId,
+          notificationPending: notificationState === "pending",
         });
       } catch (error) {
         delete form.dataset.agroaiSubmitting;

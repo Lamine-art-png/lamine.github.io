@@ -19,11 +19,12 @@ assert.match(runtime, /fetch\("\/api\/apply"/);
 assert.match(runtime, /fetch\("\/api\/demo-request"/);
 assert.match(runtime, /"Application received"/);
 assert.match(runtime, /"Demo request received"/);
-assert.match(runtime, /response\.headers\.get\("x-agroai-notification"\) !== "delivered"/);
+assert.match(runtime, /"x-agroai-lead-persisted"/);
+assert.match(runtime, /result\.saved === true/);
 
 // Calendar never substitutes for the original lead capture and confirmation.
 const confirmedSubmission = runtime.indexOf('const result = await parseJson(response);', runtime.indexOf('fetch("/api/demo-request"'));
-const deliveryCheck = runtime.indexOf('response.headers.get("x-agroai-notification") !== "delivered"', confirmedSubmission);
+const deliveryCheck = runtime.indexOf('const saved = response.ok && !!requestId', confirmedSubmission);
 const calendarCall = runtime.indexOf("showDemoScheduling(form,", deliveryCheck);
 assert.ok(confirmedSubmission >= 0 && deliveryCheck > confirmedSubmission && calendarCall > deliveryCheck);
 
