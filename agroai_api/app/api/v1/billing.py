@@ -251,10 +251,15 @@ def _offer_config(offer: str) -> dict:
     return config
 
 
-def _create_customer(org: Organization) -> str:
+def _create_customer(org: Organization, user: User) -> str:
     _stripe_ready()
     try:
-        customer = stripe.Customer.create(name=org.name, metadata={"organization_id": org.id}, idempotency_key=f"aep-customer-{org.id}")
+        customer = stripe.Customer.create(
+            name=org.name,
+            email=user.email,
+            metadata={"organization_id": org.id},
+            idempotency_key=f"aep-customer-{org.id}",
+        )
     except stripe.error.StripeError:
         raise _billing_unavailable()
     return customer["id"]
@@ -306,7 +311,7 @@ def create_checkout_session(
         logger.info("checkout_session_reused org_id=%s offer=%s", org.id, offer)
         return {"checkout_url": previous["checkout_url"], "offer": offer, "mode": offer_config["mode"]}
     sequence = int(previous.get("sequence") or 0) + (1 if previous.get("session_id") else 0)
-    customer_id = org.stripe_customer_id or _create_customer(org)
+    customer_id = org.stripe_customer_id or _create_customer(org, user)
     if not org.stripe_customer_id:
         org.stripe_customer_id = customer_id
         db.flush()
@@ -325,6 +330,9 @@ def create_checkout_session(
             "client_reference_id": org.id,
             "metadata": metadata,
             "locale": stripe_locale,
+            # Recovery URL is created by Stripe if this hosted Checkout expires.
+            # No automatic emails are sent by enabling this option alone.
+            "after_expiration": {"recovery": {"enabled": True}},
         }
         if offer_config["mode"] == "subscription":
             session_kwargs["subscription_data"] = {"metadata": metadata}
