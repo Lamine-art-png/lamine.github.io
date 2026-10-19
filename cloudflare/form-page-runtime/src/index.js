@@ -145,7 +145,7 @@ const runtimeSource = String.raw`(() => {
 
   // The demo lead must be durably accepted before scheduling is offered.
   // Calendly owns availability, meeting creation, invites, and time zones.
-  const DEMO_CALENDLY_URL = "https://calendly.com/agroaicontact/30min";
+  const DEMO_CALENDLY_URL = "https://calendly.com/contact-agroai-pilot/30min";
 
   const showDemoScheduling = (form, details) => {
     const wrapper = document.createElement("section");
