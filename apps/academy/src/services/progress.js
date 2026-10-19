@@ -270,8 +270,14 @@ export async function recomputeCourse(c, courseId) {
   if (!enr) return { progressPct: pct, courseComplete: false };
   const now = nowIso();
   let certificate = null;
-  if (complete && enr.status !== "completed") {
-    await env.DB.prepare("UPDATE enrollments SET status='completed', completed_at=COALESCE(completed_at, ?), progress_pct=100, last_activity_at=? WHERE id=?").bind(now, now, enr.id).run();
+  // Only an active enrollment completes (checked in the write), and the
+  // completion side effects run only when this request made that transition:
+  // a withdrawn learner whose pending answer is graded later stays withdrawn.
+  const completed =
+    complete &&
+    enr.status === "active" &&
+    (await env.DB.prepare("UPDATE enrollments SET status='completed', completed_at=COALESCE(completed_at, ?), progress_pct=100, last_activity_at=? WHERE id=? AND status='active'").bind(now, now, enr.id).run()).meta.changes > 0;
+  if (completed) {
     const course = await env.DB.prepare("SELECT * FROM courses WHERE id = ?").bind(courseId).first();
     await env.DB.batch([
       eventStmt(env, { userId: user.id, event: "course_completed", courseId, locale: c.locale }),
@@ -282,7 +288,7 @@ export async function recomputeCourse(c, courseId) {
     c.defer(deliverById(env, c.cfg, mailId));
     certificate = (await issueIfEligible(env, c.cfg, user, course, { defer: c.defer })).certificate;
   } else if (enr.progress_pct !== pct && enr.status !== "completed") {
-    await env.DB.prepare("UPDATE enrollments SET progress_pct = ? WHERE id = ?").bind(pct, enr.id).run();
+    await env.DB.prepare("UPDATE enrollments SET progress_pct = ? WHERE id = ? AND status != 'completed'").bind(pct, enr.id).run();
   }
-  return { progressPct: complete ? 100 : pct, courseComplete: complete, certificate };
+  return { progressPct: complete ? 100 : pct, courseComplete: complete && enr.status !== "withdrawn", certificate };
 }

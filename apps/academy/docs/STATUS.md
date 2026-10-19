@@ -173,6 +173,13 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 a lower role's status change used a role check read before the write | The "target is not a super administrator" rule is also enforced inside the status batch | `review-guards` "a promotion racing a status change…" |
 | P2 the video poster URL was inserted unescaped | Rendered through the escaping template | `review-guards` "a poster URL cannot inject markup into the lesson page" |
 
+### Codex review of `e9a6809` (2 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 grading a pending answer after withdrawal (or completion racing withdrawal) re-completed the enrollment and issued the certificate | Only an active enrollment completes (checked in the write); completion side effects run only when that transition succeeded | `review-guards` "grading a pending answer after the learner withdrew never completes the enrollment" |
+| P1 in-progress attempts stayed usable after withdrawal | Learner access to an in-progress attempt requires a current enrollment; autosave writes require it too | `review-guards` "an in-progress attempt cannot be viewed, saved or submitted after withdrawal" |
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -185,7 +192,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **169/169 pass**.
+- `npm test` (unit, integration, deploy): **171/171 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

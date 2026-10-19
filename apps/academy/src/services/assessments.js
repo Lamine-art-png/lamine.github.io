@@ -200,9 +200,14 @@ export async function startAttempt(c, assessment, course) {
   return attempt;
 }
 
+/** The learner's own attempt; an attempt still in progress also needs a current (not withdrawn) enrollment. */
 export async function getOwnAttempt(env, userId, attemptId) {
   const a = await env.DB.prepare("SELECT * FROM attempts WHERE id = ?").bind(attemptId).first();
   if (!a || a.user_id !== userId) throw new HttpError(404, "not_found");
+  if (a.status === "in_progress") {
+    const e = await env.DB.prepare("SELECT status FROM enrollments WHERE user_id = ? AND course_id = ?").bind(userId, a.course_id).first();
+    if (!e || e.status === "withdrawn") throw new HttpError(403, "not_enrolled");
+  }
   return a;
 }
 
@@ -338,7 +343,8 @@ export async function saveResponses(env, attempt, responses) {
     const v = normalizeResponse(byId.get(qid), raw);
     return env.DB.prepare(
       `UPDATE attempt_answers SET response_json = ?, saved_at = ? WHERE attempt_id = ? AND question_id = ?
-         AND EXISTS (SELECT 1 FROM attempts WHERE id = ? AND status = 'in_progress' AND submitted_at IS NULL)`,
+         AND EXISTS (SELECT 1 FROM attempts t JOIN enrollments e ON e.user_id = t.user_id AND e.course_id = t.course_id
+                      WHERE t.id = ? AND t.status = 'in_progress' AND t.submitted_at IS NULL AND e.status != 'withdrawn')`,
     ).bind(v == null ? null : JSON.stringify(v), now, attempt.id, qid, attempt.id);
   });
   await env.DB.batch(stmts);

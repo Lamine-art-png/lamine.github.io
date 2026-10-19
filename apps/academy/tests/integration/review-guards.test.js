@@ -304,3 +304,53 @@ test("a poster URL cannot inject markup into the lesson page", async () => {
   assert.doesNotMatch(page.text, /<meta http-equiv="refresh"/);
   assert.match(page.text, /poster="https:\/\/media\.example\/p\.jpg&quot;&gt;&lt;meta/);
 });
+
+/** A1 with an extra manually graded quiz; returns the learner and a started attempt of it. */
+async function manualQuizSetup() {
+  const env = makeEnv();
+  await publishCourse(env, "crs_a1");
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO question_banks (id, course_id, title, created_at, updated_at) VALUES ('bnk_m','crs_a1','manual',?,?)").bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO questions (id, bank_id, type, difficulty, prompt, data_json, answer_json, grading, points, rubric, status, created_at, updated_at) VALUES ('q_m','bnk_m','short_answer','medium','Explain drift.','{\"max_length\":600}','{\"accepted\":[]}','manual',2,'Mentions changing conditions','active',?,?)",
+    ).bind(now, now),
+    env.DB.prepare("INSERT INTO assessments (id, course_id, kind, title, passing_score, feedback_policy, status, created_at, updated_at) VALUES ('asm_m','crs_a1','quiz','Manual quiz',50,'full','active',?,?)").bind(now, now),
+    env.DB.prepare("INSERT INTO assessment_rules (id, assessment_id, bank_id, draw_count) VALUES ('rul_m','asm_m','bnk_m',1)"),
+  ]);
+  const u = await registeredLearner(env);
+  await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
+  const r = await u.post("/assessments/asm_m/start", {});
+  return { env, u, attemptId: r.location.split("/").pop() };
+}
+
+test("grading a pending answer after the learner withdrew never completes the enrollment", async () => {
+  const { env, u, attemptId } = await manualQuizSetup();
+  await u.post(`/attempts/${attemptId}/submit`, { "q[q_m]": "Conditions change." });
+  // Everything else in the course is done; only the manual answer is pending.
+  const { completeA1 } = await import("../helpers.js");
+  await completeA1(env, u);
+  await env.DB.prepare("UPDATE enrollments SET status = 'withdrawn', completed_at = NULL WHERE course_id = 'crs_a1'").run();
+  await env.DB.prepare("DELETE FROM certificates").run();
+  const grader = await registeredLearner(env, { email: "founder@academy.test" });
+  await grader.post(`/admin/grading/${attemptId}/q_m`, { points: "2", comment: "Good." });
+  const e = await env.DB.prepare("SELECT status FROM enrollments WHERE course_id = 'crs_a1'").first();
+  assert.equal(e.status, "withdrawn", "withdrawal is not undone");
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM certificates").first()).n, 0, "no certificate issued");
+});
+
+test("an in-progress attempt cannot be viewed, saved or submitted after withdrawal", async () => {
+  const { env, u, attemptId } = await manualQuizSetup();
+  await u.post("/courses/introduction-to-ai-in-agriculture/withdraw", {});
+  assert.equal((await env.DB.prepare("SELECT status FROM enrollments WHERE course_id = 'crs_a1'").first()).status, "withdrawn");
+  assert.equal((await u.get(`/attempts/${attemptId}`)).status, 403);
+  assert.equal((await u.postJson(`/api/attempts/${attemptId}/save`, { responses: { q_m: "late" } })).status, 403);
+  assert.equal((await u.post(`/attempts/${attemptId}/submit`, { "q[q_m]": "late" })).status, 403);
+  const a = await env.DB.prepare("SELECT status, submitted_at FROM attempts WHERE id = ?").bind(attemptId).first();
+  assert.deepEqual({ ...a }, { status: "in_progress", submitted_at: null });
+  // A save racing the withdrawal is rejected by the write itself.
+  const { saveResponses } = await import("../../src/services/assessments.js");
+  const attempt = await env.DB.prepare("SELECT * FROM attempts WHERE id = ?").bind(attemptId).first();
+  await saveResponses(env, attempt, { q_m: "raced" });
+  assert.equal((await env.DB.prepare("SELECT response_json FROM attempt_answers WHERE attempt_id = ?").bind(attemptId).first()).response_json, null);
+});
