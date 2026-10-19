@@ -189,6 +189,14 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 
 Also hardened proactively in the same pass: starting an attempt re-checks the enrollment inside the insert, so a start racing a withdrawal is refused (`review-guards` "an attempt cannot be started by a request racing the learner's withdrawal"). Withdrawal is now enforced at write time on every path that can advance a learner: enrollment, attempt start, autosave, submission, scheduled grading, course completion and certificate issuance.
 
+### Codex review of `1269005` (3 × P2, no P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P2 password-reset throttling revealed which addresses have accounts | Every address has its own limit; reaching it only suppresses the mail, the response is identical | `review-guards` "password-reset throttling looks the same for existing and unknown addresses" |
+| P2 a withdrawal racing the expiry job aborted the whole scheduled run | The job catches that refusal and continues | `review-guards` "a withdrawal racing the expiry job does not stop the rest of the scheduled run" |
+| P2 the account-deleted email was sent before the deletion succeeded | Sent only after deletion; delivered at once and its outbox row removed | `integrations` "the account-deleted confirmation is sent after the deletion…"; `review-guards` (refused deletion sends nothing) |
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -201,7 +209,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **174/174 pass**.
+- `npm test` (unit, integration, deploy): **177/177 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

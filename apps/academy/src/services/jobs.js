@@ -65,7 +65,13 @@ export async function runScheduled(env, cron = "") {
   ).results;
   for (const a of expired) {
     const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(a.user_id).first();
-    if (user) await submitAttempt({ ...ctx, user }, a, { auto: true });
+    if (!user) continue;
+    try {
+      await submitAttempt({ ...ctx, user }, a, { auto: true });
+    } catch (e) {
+      // The learner withdrew after this attempt was selected: leave it and carry on.
+      if (e?.code !== "not_enrolled") throw e;
+    }
   }
   report.autoSubmitted = expired.length;
 

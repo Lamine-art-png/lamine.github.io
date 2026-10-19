@@ -265,8 +265,18 @@ export async function forgot(c) {
   const email = normalizeEmail(b.email);
   // The response is identical whether or not the account exists.
   const user = validEmail(email) ? await findUserByEmail(c.env, email) : null;
-  if (user && user.status === "active") {
-    await rateLimit(c, "forgot-account", { limit: 3, windowSeconds: 3600, key: user.id });
+  // Every address has its own limit, and hitting it only suppresses the mail,
+  // so throttling never reveals whether an account exists.
+  let withinLimit = true;
+  if (validEmail(email)) {
+    try {
+      await rateLimit(c, "forgot-account", { limit: 3, windowSeconds: 3600, key: (await sha256Hex(email)).slice(0, 32) });
+    } catch (e) {
+      if (e?.status !== 429) throw e;
+      withinLimit = false;
+    }
+  }
+  if (withinLimit && user && user.status === "active") {
     const token = await issueToken(c.env, user.id, "reset_password");
     await sendEmail(c, { user, template: "password_reset", vars: { url: `${c.cfg.origin}/reset-password?token=${token}` } });
   }

@@ -360,3 +360,18 @@ test("R2: uploads are unavailable when no bucket is bound", async () => {
   const r = await upload(admin, "les_a1_data", { name: "w.pdf", type: "application/pdf", bytes: new TextEncoder().encode("%PDF-1.4"), title: "W" });
   assert.equal(r.status, 404);
 });
+
+test("Resend: the account-deleted confirmation is sent after the deletion and leaves no outbox row", async () => {
+  const calls = fakeInternet({ "https://api.resend.com/emails": () => json({ id: "resend-deleted-1" }) });
+  const env = makeEnv(RESEND);
+  const u = await registeredLearner(env, { email: "leaving@academy.test" });
+  await u.get("/account");
+  const r = await u.post("/account/delete", { confirm: "DELETE", password: u.password });
+  assert.equal(r.status, 303);
+  assert.equal(await env.DB.prepare("SELECT 1 FROM users WHERE email = 'leaving@academy.test'").first(), null, "account deleted");
+  const sent = calls.filter((x) => x.url === "https://api.resend.com/emails").map((x) => JSON.parse(x.body));
+  const confirmation = sent.find((b) => b.tags?.some((t) => t.name === "template" && t.value === "account_deleted"));
+  assert.ok(confirmation, "confirmation delivered");
+  assert.deepEqual(confirmation.to, ["leaving@academy.test"]);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM email_outbox WHERE to_email = 'leaving@academy.test'").first()).n, 0, "no personal data left in the outbox");
+});

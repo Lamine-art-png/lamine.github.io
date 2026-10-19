@@ -197,6 +197,7 @@ test("two super administrators removing themselves at once never leave none", as
   r = await founder.post("/account/delete", { confirm: "DELETE", password: founder.password });
   assert.equal(r.status, 409);
   assert.ok(await env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(ids["founder@academy.test"]).first(), "the account was not deleted");
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM email_outbox WHERE template = 'account_deleted'").first()).n, 0, "no deletion confirmation for a deletion that did not happen");
   assert.equal(await activeSupers(), 1);
   // Without a concurrent removal, demotion with another active super administrator still works.
   await grant();
@@ -406,4 +407,41 @@ test("an attempt cannot be started by a request racing the learner's withdrawal"
   const r = await u.post("/assessments/asm_m/start", {});
   assert.equal(r.status, 403);
   assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM attempts").first()).n, 0);
+});
+
+test("password-reset throttling looks the same for existing and unknown addresses", async () => {
+  const statuses = async (email, register) => {
+    const env = makeEnv();
+    if (register) await registeredLearner(env, { email });
+    const c = new Client(env);
+    await c.get("/forgot-password");
+    const out = [];
+    for (let i = 0; i < 4; i++) out.push((await c.post("/forgot-password", { email })).status);
+    const mails = (await env.DB.prepare("SELECT COUNT(*) AS n FROM email_outbox WHERE template = 'password_reset'").first()).n;
+    return { out, mails };
+  };
+  const known = await statuses("known@academy.test", true);
+  const unknown = await statuses("nobody@academy.test", false);
+  assert.deepEqual(known.out, unknown.out, "same responses either way");
+  assert.ok(known.out.every((s) => s === 200));
+  assert.equal(known.mails, 3, "mail stops after the per-address limit");
+  assert.equal(unknown.mails, 0);
+});
+
+test("a withdrawal racing the expiry job does not stop the rest of the scheduled run", async () => {
+  const { env, attemptId } = await manualQuizSetup();
+  await env.DB.prepare("UPDATE attempts SET deadline_at = ? WHERE id = ?").bind(new Date(Date.now() - 3600_000).toISOString(), attemptId).run();
+  // The learner withdraws after the job selected the attempt, before it closes it.
+  const orig = env.DB.prepare.bind(env.DB);
+  env.DB.prepare = (sql) => {
+    if (sql.trimStart().startsWith("UPDATE attempts SET submitted_at")) {
+      env.DB.prepare = orig;
+      orig("UPDATE enrollments SET status = 'withdrawn' WHERE course_id = 'crs_a1'").run();
+    }
+    return orig(sql);
+  };
+  const { runScheduled } = await import("../../src/services/jobs.js");
+  const report = await runScheduled(env);
+  assert.ok(report && "emailsSent" in report, "the run completed its later steps");
+  assert.equal((await env.DB.prepare("SELECT status FROM attempts WHERE id = ?").bind(attemptId).first()).status, "in_progress");
 });

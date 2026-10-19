@@ -185,12 +185,16 @@ export async function deleteAccountAction(c) {
     const others = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.role = 'super_admin' AND u.status = 'active' AND r.user_id != ?").bind(c.user.id).first();
     if (!others.n) throw new HttpError(409, "last_super_admin");
   }
-  // Queue the confirmation before personal data is erased; the outbox row is
-  // removed with the account, so deliver it immediately.
   const user = { ...c.user };
-  const mailId = await queueEmail(c.env, c.cfg, { user, template: "account_deleted", vars: {} });
-  if (mailId) await deliverById(c.env, c.cfg, mailId);
   await deleteAccount(c.env, user.id, user.id);
+  // Confirm only once the deletion succeeded. The address is kept in memory
+  // only; the message is delivered immediately and its outbox row removed, so
+  // no personal data outlives the account.
+  const mailId = await queueEmail(c.env, c.cfg, { user: { ...user, id: null }, template: "account_deleted", vars: {} });
+  if (mailId) {
+    await deliverById(c.env, c.cfg, mailId);
+    await c.env.DB.prepare("DELETE FROM email_outbox WHERE id = ?").bind(mailId).run();
+  }
   c.setCookie(serializeCookie(cookieNames(c.cfg).session, "", { maxAge: 0, secure: c.cfg.secure }));
   return redirect("/login?deleted=1");
 }
