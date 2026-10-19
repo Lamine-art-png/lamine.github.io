@@ -27,6 +27,23 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           node --check cloudflare/academy-early-access-worker/src/index.js
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path(".")
+          registry=json.loads((root/"shared/supported-locales.json").read_text())
+          actual=json.loads((root/"cloudflare/academy-early-access-worker/src/academy-locales.json").read_text())
+          source=json.loads((root/"cloudflare/academy-early-access-worker/academy-source.json").read_text())["english"]
+          expected=set(registry["enabledUiLocales"])-{"auto"}
+          assert actual["registryVersion"]==registry["version"]
+          assert set(actual["catalogs"])==expected, "Academy catalog coverage differs from AEP"
+          assert {x["code"] for x in actual["options"]}==expected|{"auto"}
+          assert len(actual["options"])==len(expected)+1
+          for locale, translations in actual["catalogs"].items():
+              assert set(translations)==set(source), f"{locale}: incomplete registration translations"
+              assert all(isinstance(value,str) and value.strip() for value in translations.values())
+          print(f"ACADEMY_AEP_LOCALE_PARITY_VERIFIED: {len(expected)} languages")
+          PY
           grep -F 'agroai-pilot.com/academy/early-access' cloudflare/academy-early-access-worker/wrangler.toml
           ! grep -F 'agroai-pilot.com/*' cloudflare/academy-early-access-worker/wrangler.toml
       - name: Deploy scoped registration Worker
@@ -48,6 +65,8 @@ jobs:
             echo "attempt=$attempt page=$page_code bad=$bad_code news=$news_code article=$article_code"
             if [ "$page_code" = 200 ] && [ "$bad_code" = 422 ] && [ "$news_code" = 200 ] && [ "$article_code" = 200 ] && \
                grep -Fq 'Register for free early access' page.html && \
+               grep -Fq 'Cadastre-se gratuitamente' page.html && \
+               grep -Fq 'academy_ui_locale_v1' page.html && \
                grep -Fq 'invalid_fields' bad.json && \
                grep -Fq 'Closing the AI Knowledge Gap in Agriculture' article.html; then
               ready=1
