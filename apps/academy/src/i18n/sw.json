@@ -650,6 +650,7 @@
   "cert.reason.quizzes": "Faulu majaribio yote ya lazima.",
   "cert.reason.no_exam": "Tathmini ya mwisho ya kozi hii bado haipatikani.",
   "cert.reason.exam": "Faulu tathmini ya mwisho.",
+  "cert.reason.enrollment": "Jiandikishe tena kwenye kozi ili upate cheti chako.",
   "verify.eyebrow": "Uthibitisho wa vyeti",
   "verify.title": "Thibitisha cheti",
   "verify.lead": "Angalia kama cheti cha AGRO-AI Academy ni halisi na bado ni halali.",

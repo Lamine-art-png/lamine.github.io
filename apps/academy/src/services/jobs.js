@@ -54,7 +54,15 @@ export async function runScheduled(env, cron = "") {
   }
 
   // 2. Auto-submit timed attempts that ran past their deadline (graded on autosaved answers).
-  const expired = (await env.DB.prepare("SELECT * FROM attempts WHERE status = 'in_progress' AND deadline_at IS NOT NULL AND deadline_at < ? LIMIT 100").bind(addSeconds(now, -120)).all()).results;
+  // Attempts of withdrawn learners are left as they are (submitAttempt also refuses them).
+  const expired = (
+    await env.DB.prepare(
+      `SELECT t.* FROM attempts t JOIN enrollments e ON e.user_id = t.user_id AND e.course_id = t.course_id
+        WHERE t.status = 'in_progress' AND t.deadline_at IS NOT NULL AND t.deadline_at < ? AND e.status != 'withdrawn' LIMIT 100`,
+    )
+      .bind(addSeconds(now, -120))
+      .all()
+  ).results;
   for (const a of expired) {
     const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(a.user_id).first();
     if (user) await submitAttempt({ ...ctx, user }, a, { auto: true });

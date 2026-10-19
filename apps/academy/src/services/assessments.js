@@ -182,7 +182,9 @@ export async function startAttempt(c, assessment, course) {
   try {
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, locale, layout_json, started_at, deadline_at, policy_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        // user_id is NULL (NOT NULL violation, batch rolled back) unless the enrollment is still current.
+        `INSERT INTO attempts (id, user_id, assessment_id, course_id, attempt_no, status, locale, layout_json, started_at, deadline_at, policy_json)
+         VALUES (?1, (SELECT ?2 WHERE EXISTS (SELECT 1 FROM enrollments WHERE user_id = ?2 AND course_id = ?4 AND status != 'withdrawn')), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
       ).bind(attempt.id, attempt.user_id, attempt.assessment_id, attempt.course_id, attempt.attempt_no, attempt.status, attempt.locale, attempt.layout_json, attempt.started_at, attempt.deadline_at, JSON.stringify(policy)),
       ...layout.map((l) =>
         env.DB.prepare("INSERT INTO attempt_answers (attempt_id, question_id, max_points, question_json) VALUES (?,?,?,?)").bind(attempt.id, l.q, snapshot.get(l.q).points || 1, JSON.stringify(snapshot.get(l.q))),
@@ -195,6 +197,7 @@ export async function startAttempt(c, assessment, course) {
       const open = await env.DB.prepare("SELECT * FROM attempts WHERE user_id = ? AND assessment_id = ? AND status = 'in_progress'").bind(user.id, assessment.id).first();
       if (open) return open;
     }
+    if (/NOT NULL/i.test(String(e?.message)) && /attempts\.user_id/i.test(String(e?.message))) throw new HttpError(403, "not_enrolled");
     throw e;
   }
   return attempt;
@@ -363,7 +366,18 @@ export async function submitAttempt(c, attempt, { responses = null, auto = false
   // Close the attempt to writes before reading the answers: an autosave still
   // in flight is rejected by saveResponses' submitted_at guard from here on,
   // so the responses graded below are exactly the final ones.
-  await env.DB.prepare("UPDATE attempts SET submitted_at = COALESCE(submitted_at, ?) WHERE id = ? AND status = 'in_progress'").bind(now, attempt.id).run();
+  // Only while the learner's enrollment is current: a withdrawn learner's attempt is never graded.
+  const closed = await env.DB.prepare(
+    `UPDATE attempts SET submitted_at = COALESCE(submitted_at, ?) WHERE id = ? AND status = 'in_progress'
+       AND EXISTS (SELECT 1 FROM enrollments e WHERE e.user_id = attempts.user_id AND e.course_id = attempts.course_id AND e.status != 'withdrawn')`,
+  )
+    .bind(now, attempt.id)
+    .run();
+  if (!closed.meta.changes) {
+    const current = await env.DB.prepare("SELECT * FROM attempts WHERE id = ?").bind(attempt.id).first();
+    if (current.status === "in_progress") throw new HttpError(403, "not_enrolled");
+    return current;
+  }
   const snap = await attemptSnapshot(env, attempt);
   const rows = (await env.DB.prepare("SELECT question_id, response_json, max_points FROM attempt_answers WHERE attempt_id = ?").bind(attempt.id).all()).results.map((r) => {
     const q = snap.get(r.question_id);

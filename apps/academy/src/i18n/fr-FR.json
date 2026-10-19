@@ -650,6 +650,7 @@
   "cert.reason.quizzes": "Réussissez tous les quiz obligatoires.",
   "cert.reason.no_exam": "L’évaluation finale de ce cours n’est pas encore disponible.",
   "cert.reason.exam": "Réussissez l’évaluation finale.",
+  "cert.reason.enrollment": "Réinscrivez-vous au cours pour recevoir votre certificat.",
   "verify.eyebrow": "Vérification de certification",
   "verify.title": "Vérifier un certificat",
   "verify.lead": "Vérifiez si un certificat AGRO-AI Academy est authentique et en cours de validité.",

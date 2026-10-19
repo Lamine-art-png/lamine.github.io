@@ -650,6 +650,7 @@
   "cert.reason.quizzes": "Aprueba todos los cuestionarios obligatorios.",
   "cert.reason.no_exam": "La evaluación final de este curso aún no está disponible.",
   "cert.reason.exam": "Aprueba la evaluación final.",
+  "cert.reason.enrollment": "Vuelve a inscribirte en el curso para recibir tu certificado.",
   "verify.eyebrow": "Verificación de credenciales",
   "verify.title": "Verificar un certificado",
   "verify.lead": "Comprueba si un certificado de AGRO-AI Academy es auténtico y está vigente.",

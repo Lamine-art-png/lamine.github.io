@@ -180,6 +180,15 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 grading a pending answer after withdrawal (or completion racing withdrawal) re-completed the enrollment and issued the certificate | Only an active enrollment completes (checked in the write); completion side effects run only when that transition succeeded | `review-guards` "grading a pending answer after the learner withdrew never completes the enrollment" |
 | P1 in-progress attempts stayed usable after withdrawal | Learner access to an in-progress attempt requires a current enrollment; autosave writes require it too | `review-guards` "an in-progress attempt cannot be viewed, saved or submitted after withdrawal" |
 
+### Codex review of `5cc9ad2` (2 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 a withdrawn learner could still claim the certificate after a late grade | Eligibility requires a current enrollment (new learner-facing reason in all six locales); the certificate insert re-checks it atomically | `review-guards` "a withdrawn learner cannot claim the certificate, even if withdrawal races issuance" |
+| P1 the scheduled job auto-submitted withdrawn learners' expired attempts | The job skips them, and closing an attempt requires a current enrollment in the write | `review-guards` "the scheduled job never grades a withdrawn learner's expired attempt" |
+
+Also hardened proactively in the same pass: starting an attempt re-checks the enrollment inside the insert, so a start racing a withdrawal is refused (`review-guards` "an attempt cannot be started by a request racing the learner's withdrawal"). Withdrawal is now enforced at write time on every path that can advance a learner: enrollment, attempt start, autosave, submission, scheduled grading, course completion and certificate issuance.
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -192,7 +201,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **171/171 pass**.
+- `npm test` (unit, integration, deploy): **174/174 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

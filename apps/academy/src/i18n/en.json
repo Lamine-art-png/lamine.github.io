@@ -677,6 +677,7 @@
   "cert.reason.quizzes": "Pass all required quizzes.",
   "cert.reason.no_exam": "The final assessment for this course isn't available yet.",
   "cert.reason.exam": "Pass the final assessment.",
+  "cert.reason.enrollment": "Enroll in the course again to receive your certificate.",
 
   "verify.eyebrow": "Credential verification",
   "verify.title": "Verify a certificate",

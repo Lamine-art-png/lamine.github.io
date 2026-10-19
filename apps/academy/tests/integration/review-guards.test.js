@@ -354,3 +354,56 @@ test("an in-progress attempt cannot be viewed, saved or submitted after withdraw
   await saveResponses(env, attempt, { q_m: "raced" });
   assert.equal((await env.DB.prepare("SELECT response_json FROM attempt_answers WHERE attempt_id = ?").bind(attemptId).first()).response_json, null);
 });
+
+test("a withdrawn learner cannot claim the certificate, even if withdrawal races issuance", async () => {
+  const env = makeEnv();
+  await publishCourse(env, "crs_a1");
+  const u = await registeredLearner(env);
+  await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
+  const { completeA1 } = await import("../helpers.js");
+  await completeA1(env, u);
+  // Learner finished everything but holds no certificate (e.g. issued later after grading), then withdraws.
+  await env.DB.prepare("DELETE FROM certificate_events").run();
+  await env.DB.prepare("DELETE FROM certificates").run();
+  await env.DB.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE course_id = 'crs_a1'").run();
+  const r = await u.post("/certificates/claim/introduction-to-ai-in-agriculture", {});
+  assert.match(r.location, /missing=cert\.reason\.enrollment/);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM certificates").first()).n, 0);
+  // Eligible at check time, withdrawn before the insert: the insert itself refuses.
+  await env.DB.prepare("UPDATE enrollments SET status = 'completed' WHERE course_id = 'crs_a1'").run();
+  beforeNextBatch(env, () => env.DB.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE course_id = 'crs_a1'").run());
+  const { issueIfEligible } = await import("../../src/services/certificates.js");
+  const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(u.email).first();
+  const course = await env.DB.prepare("SELECT * FROM courses WHERE id = 'crs_a1'").first();
+  const out = await issueIfEligible(env, { certSecret: "synthetic-test-secret", origin: "https://academy.test" }, user, course);
+  assert.equal(out.certificate, null);
+  assert.deepEqual(out.reasons, ["cert.reason.enrollment"]);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM certificates").first()).n, 0);
+});
+
+test("the scheduled job never grades a withdrawn learner's expired attempt", async () => {
+  const { env, u, attemptId } = await manualQuizSetup();
+  await env.DB.prepare("UPDATE attempts SET deadline_at = ? WHERE id = ?").bind(new Date(Date.now() - 3600_000).toISOString(), attemptId).run();
+  await u.post("/courses/introduction-to-ai-in-agriculture/withdraw", {});
+  const { runScheduled } = await import("../../src/services/jobs.js");
+  await runScheduled(env);
+  let a = await env.DB.prepare("SELECT status, submitted_at FROM attempts WHERE id = ?").bind(attemptId).first();
+  assert.deepEqual({ ...a }, { status: "in_progress", submitted_at: null }, "left untouched while withdrawn");
+  // Closing it directly is refused by the write itself.
+  const { submitAttempt } = await import("../../src/services/assessments.js");
+  const attempt = await env.DB.prepare("SELECT * FROM attempts WHERE id = ?").bind(attemptId).first();
+  const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(attempt.user_id).first();
+  await assert.rejects(submitAttempt({ env, user, cfg: {}, defer: () => {} }, attempt, { auto: true }), /not_enrolled/);
+  a = await env.DB.prepare("SELECT status FROM attempts WHERE id = ?").bind(attemptId).first();
+  assert.equal(a.status, "in_progress");
+});
+
+test("an attempt cannot be started by a request racing the learner's withdrawal", async () => {
+  const { env, u } = await manualQuizSetup();
+  await env.DB.prepare("DELETE FROM attempt_answers").run();
+  await env.DB.prepare("DELETE FROM attempts").run();
+  beforeNextBatch(env, () => env.DB.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE course_id = 'crs_a1'").run());
+  const r = await u.post("/assessments/asm_m/start", {});
+  assert.equal(r.status, 403);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM attempts").first()).n, 0);
+});

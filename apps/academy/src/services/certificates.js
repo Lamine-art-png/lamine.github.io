@@ -37,6 +37,9 @@ export async function bestPassedAttempt(env, userId, assessmentId) {
 export async function checkEligibility(env, user, course) {
   const reasons = [];
   if (!course.certificate_enabled) reasons.push("cert.reason.disabled");
+  // A withdrawn (or missing) enrollment is not eligible; issuance re-checks this when it writes.
+  const enr = await env.DB.prepare("SELECT status FROM enrollments WHERE user_id = ? AND course_id = ?").bind(user.id, course.id).first();
+  if (!enr || enr.status === "withdrawn") reasons.push("cert.reason.enrollment");
   if (!user.email_verified_at) reasons.push("cert.reason.verify_email");
   const lessons = await lessonCompletion(env, user.id, course.id);
   if (course.require_all_lessons && lessons.done < lessons.required) reasons.push("cert.reason.lessons");
@@ -126,9 +129,11 @@ export async function issueIfEligible(env, cfg, user, course, { actorId = null, 
   try {
     await env.DB.batch([
       env.DB.prepare(
+        // The credential id is NULL (NOT NULL violation, whole batch rolled back)
+        // unless the enrollment is still current when the certificate is written.
         `INSERT INTO certificates (id, credential_id, user_id, course_id, attempt_id, credential_name, course_title, program_title, score_pct, issued_at, status, signature, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?, 'active', ?, ?)`,
-      ).bind(cert.id, cert.credential_id, cert.user_id, cert.course_id, cert.attempt_id, cert.credential_name, cert.course_title, cert.program_title, cert.score_pct, cert.issued_at, cert.signature, cert.issued_at),
+         VALUES (?1, (SELECT ?2 WHERE EXISTS (SELECT 1 FROM enrollments WHERE user_id = ?3 AND course_id = ?4 AND status != 'withdrawn')), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'active', ?11, ?10)`,
+      ).bind(cert.id, cert.credential_id, cert.user_id, cert.course_id, cert.attempt_id, cert.credential_name, cert.course_title, cert.program_title, cert.score_pct, cert.issued_at, cert.signature),
       env.DB.prepare("INSERT INTO certificate_events (id, certificate_id, event, actor_id, detail, created_at) VALUES (?,?,?,?,?,?)").bind(
         newId("ce_"),
         cert.id,
@@ -146,6 +151,7 @@ export async function issueIfEligible(env, cfg, user, course, { actorId = null, 
       const again = await activeCertificate(env, user.id, course.id);
       if (again) return { certificate: again, created: false };
     }
+    if (/NOT NULL/i.test(String(e?.message)) && /credential_id/i.test(String(e?.message))) return { certificate: null, created: false, reasons: ["cert.reason.enrollment"] };
     throw e;
   }
   await grantAchievement(env, user.id, "first_certificate", cert.credential_id);
