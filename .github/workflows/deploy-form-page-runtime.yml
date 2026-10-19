@@ -84,6 +84,7 @@ jobs:
         shell: bash
         env:
           EXPECT_HINT: "1"
+          EXPECT_COMPANY_CALENDLY: "1"
         run: |
           set -euo pipefail
           npm install --no-save --no-package-lock @playwright/test@1.55.0
@@ -94,4 +95,5 @@ jobs:
         env:
           EXPECT_HINT: "1"
           EXPECT_PENDING: "1"
+          EXPECT_COMPANY_CALENDLY: "1"
         run: node scripts/demo-booking-production-proof.mjs
