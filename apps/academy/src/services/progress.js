@@ -195,6 +195,10 @@ export async function recordWatchBeat(env, userId, lesson, { position, playing, 
   // this one re-reads and merges again, so no credited span is ever lost.
   for (let attempt = 0; attempt < 5; attempt++) {
     const prev = await env.DB.prepare("SELECT * FROM video_watch WHERE user_id = ? AND lesson_id = ?").bind(userId, lesson.id).first();
+    if (prev && Date.parse(now) < Date.parse(prev.last_beat_at)) {
+      // An older heartbeat that lost the race to a newer one: dropped, never replaces the newer anchor.
+      return { complete: total > 0 && prev.watched_seconds >= total * WATCH_SHARE, watched: prev.watched_seconds, total };
+    }
     if (prev && prev.playing && isPlaying && (Date.parse(now) - Date.parse(prev.last_beat_at)) / 1000 < MIN_GAP_SECONDS) {
       // Too soon after the previous heartbeat: ignored; the run stays anchored there.
       return { complete: total > 0 && prev.watched_seconds >= total * WATCH_SHARE, watched: prev.watched_seconds, total };
@@ -205,7 +209,7 @@ export async function recordWatchBeat(env, userId, lesson, { position, playing, 
     const res = prev
       ? await env.DB.prepare(
           `UPDATE video_watch SET last_position = ?3, last_beat_at = ?4, playing = ?5, segments_json = ?6, watched_seconds = ?7, beats = beats + 1, rejected = rejected + ?8
-            WHERE user_id = ?1 AND lesson_id = ?2 AND beats = ?9`,
+            WHERE user_id = ?1 AND lesson_id = ?2 AND beats = ?9 AND last_beat_at <= ?4`,
         )
           .bind(userId, lesson.id, pos, now, isPlaying ? 1 : 0, JSON.stringify(merged.segments), merged.total, rejected, prev.beats)
           .run()

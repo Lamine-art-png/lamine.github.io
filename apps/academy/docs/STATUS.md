@@ -128,13 +128,21 @@ Both tests inject the competing write at the exact point of the guarded statemen
 | P2 a video-policy change after the readiness check was not caught | Publication requires the video policy readiness used to be unchanged (guarded revision insert) | `course-drafts` "a video-policy change after the readiness check aborts the publication" |
 | P2 overlapping heartbeats could overwrite each other's credited spans | Watch updates are a compare-and-swap on the beat counter with re-merge on conflict | `video-watch` "overlapping heartbeats never lose a credited span" |
 
+### Codex review of `17c366e` (1 × P2, no P1) — fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P2 a delayed older heartbeat could replace a newer anchor after losing the compare-and-swap | Heartbeats older than the stored one are dropped; the write also requires `last_beat_at <= now` | `video-watch` "a delayed older heartbeat never replaces a newer anchor" |
+
+Also fixed: the WCAG scan script still verified its admin by GET (CI caught it); it now confirms with the button like the e2e journey.
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **155/155 pass**.
+- `npm test` (unit, integration, deploy): **156/156 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

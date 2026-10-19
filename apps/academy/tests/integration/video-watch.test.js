@@ -194,3 +194,21 @@ test("overlapping heartbeats never lose a credited span", async () => {
   assert.deepEqual(JSON.parse(s.watch.segments_json), [[0, 20], [150, 160]], "both writers' spans are kept");
   assert.equal(s.watch.watched_seconds, 30);
 });
+
+test("a delayed older heartbeat never replaces a newer anchor", async () => {
+  const { env, beat, state } = await setup();
+  const { recordWatchBeat } = await import("../../src/services/progress.js");
+  await beat(0);
+  await beat(10, { after: 5 });
+  const before = await state();
+  const lesson = await env.DB.prepare("SELECT * FROM lessons WHERE id = ?").bind(LESSON).first();
+  lesson.video = await env.DB.prepare("SELECT * FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
+  // A pause sent earlier arrives after the newer playing heartbeat was stored.
+  const stale = new Date(Date.parse(before.watch.last_beat_at) - 3000).toISOString();
+  await recordWatchBeat(env, before.watch.user_id, lesson, { position: 4, playing: false, now: stale });
+  const after = await state();
+  assert.equal(after.watch.playing, 1, "still playing");
+  assert.equal(after.watch.last_position, before.watch.last_position);
+  assert.equal(after.watch.last_beat_at, before.watch.last_beat_at);
+  assert.equal(after.watch.beats, before.watch.beats);
+});
