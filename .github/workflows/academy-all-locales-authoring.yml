@@ -1,0 +1,30 @@
+name: Author Academy AEP Language Catalogs
+on:
+  push:
+    branches: ["academy-aep-all-locales-2026-10-19"]
+    paths:
+      - ".github/workflows/academy-all-locales-authoring.yml"
+permissions:
+  contents: write
+jobs:
+  author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate validated static catalogs for all AEP enabled languages
+        run: python3 -u scripts/generate-academy-locales.py
+      - name: Commit complete translation artifact to feature branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cloudflare/academy-early-access-worker/src/academy-locales.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Author complete static Academy localization catalogs"
+          git push origin HEAD:academy-aep-all-locales-2026-10-19
