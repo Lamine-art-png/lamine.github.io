@@ -133,14 +133,17 @@ async function notify(payload) {
       body: JSON.stringify(payload),
     });
     const result = await response.json().catch(() => ({}));
-    const delivered =
-      response.ok &&
-      result.status === "received" &&
-      typeof result.notification_status === "string" &&
-      result.notification_status.startsWith("emailed:");
+    // /v1/sales/contact returns "emailed" after provider acceptance.
+    // Older producers used "emailed:<recipient>"; allow both formats.
+    const requestId = bounded(result.request_id || "", 120);
+    const stored = response.ok && result.status === "received" && !!requestId;
+    const emailStatus = bounded(result.notification_status || "", 240);
+    const delivered = stored &&
+      (emailStatus === "emailed" || emailStatus.startsWith("emailed:"));
     return {
       delivered,
-      requestId: bounded(result.request_id || "", 120),
+      stored,
+      requestId,
       reason: delivered
         ? "delivered"
         : bounded(result.notification_status || result.detail || `http_${response.status}`, 240),
@@ -148,6 +151,7 @@ async function notify(payload) {
   } catch (error) {
     return {
       delivered: false,
+      stored: false,
       requestId: "",
       reason: bounded(error instanceof Error ? error.message : "notification_network_error", 240),
     };
@@ -250,7 +254,28 @@ export default {
 
     if (kind === "demo_request") {
       const notification = await notify(payload);
-      if (!notification.delivered) return notificationFailure(false, notification.reason);
+      if (!notification.delivered) {
+        if (!notification.stored) return notificationFailure(false, notification.reason);
+        // The lead is durably stored in the sales API. Allow scheduling
+        // even if the independent inbox email delivery is pending/failed.
+        // Keep the original request ID; do not make the visitor resubmit.
+        return json(
+          {
+            id: notification.requestId,
+            ok: true,
+            saved: true,
+            status: "received",
+            message: "Demo request saved. Continue to book your meeting.",
+            notification_status: "pending",
+          },
+          202,
+          {
+            "x-agroai-notification": "pending",
+            "x-agroai-lead-persisted": "true",
+            "x-agroai-notification-request-id": notification.requestId,
+          },
+        );
+      }
       return json(
         {
           id: notification.requestId,
