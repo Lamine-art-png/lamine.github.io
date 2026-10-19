@@ -30,6 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/form-notification-gateway/src/index.js
+          node scripts/check-demo-gateway-contract.mjs
           grep -F 'agroai-pilot.com/api/apply"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
           grep -F 'agroai-pilot.com/api/consultation-requests"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
           grep -F 'agroai-pilot.com/api/demo-request"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
