@@ -91,6 +91,9 @@ export async function setStatus(c) {
   const b = await c.readBody();
   if (c.params.id === c.user.id) throw new HttpError(409, "cannot_change_self");
   const status = b.status === "disabled" ? "disabled" : "active";
+  // Only a super administrator may change the status of a super administrator.
+  const superTarget = await c.env.DB.prepare("SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'super_admin'").bind(c.params.id).first();
+  if (superTarget && !c.roles.includes("super_admin")) throw new HttpError(403, "forbidden");
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND status != 'deleted'").bind(status, nowIso(), c.params.id),
     auditStmt(c.env, c.user.id, `learner.${status}`, "user", c.params.id),

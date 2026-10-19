@@ -547,16 +547,19 @@ function describeResponse(r) {
   }
 }
 
+// Only manually graded answers (awaiting review, or already reviewed) of an
+// attempt still awaiting grading; automatically scored answers are never writable.
+const GRADABLE = "attempt_id = ? AND question_id = ? AND (needs_review = 1 OR reviewer_id IS NOT NULL) AND EXISTS (SELECT 1 FROM attempts WHERE id = attempt_id AND status = 'pending_review')";
+
 /** Reviewer grading for manually scored answers. */
 export async function gradeAnswer(c, attemptId, questionId, points, comment) {
-  const row = await c.env.DB.prepare("SELECT max_points FROM attempt_answers WHERE attempt_id = ? AND question_id = ?").bind(attemptId, questionId).first();
+  const row = await c.env.DB.prepare(`SELECT max_points FROM attempt_answers WHERE ${GRADABLE}`).bind(attemptId, questionId).first();
   if (!row) throw new HttpError(404, "not_found");
   const p = Math.max(0, Math.min(row.max_points, Number(points) || 0));
-  await c.env.DB.prepare(
-    "UPDATE attempt_answers SET points_awarded = ?, is_correct = ?, needs_review = 0, reviewer_id = ?, reviewer_comment = ? WHERE attempt_id = ? AND question_id = ?",
-  )
+  const res = await c.env.DB.prepare(`UPDATE attempt_answers SET points_awarded = ?, is_correct = ?, needs_review = 0, reviewer_id = ?, reviewer_comment = ? WHERE ${GRADABLE}`)
     .bind(p, p >= row.max_points ? 1 : 0, c.user.id, String(comment || "").slice(0, 2000), attemptId, questionId)
     .run();
+  if (!res.meta.changes) throw new HttpError(409, "already_graded");
   return finalizeAttempt(c, attemptId);
 }
 

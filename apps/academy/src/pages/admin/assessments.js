@@ -421,7 +421,7 @@ export async function gradeAttemptPage(c) {
       ${it.rubric ? html`<div class="panel small"><strong>Rubric:</strong> ${it.rubric}</div>` : ""}
       <p class="mt-2"><strong>Response:</strong></p><blockquote class="panel">${parseJson(it.response_json, "") || html`<em>No answer</em>`}</blockquote>
       <div class="row">${input("points", `Points (max ${it.max_points})`, it.points_awarded ?? "", { type: "number", attrs: `min="0" max="${it.max_points}" step="0.5" required` })}
-        ${input("comment", "Comment for the learner", it.reviewer_comment || "")}<button class="btn btn-primary btn-sm">Save grade</button></div></form>`,
+        ${input("comment", "Comment for the learner", it.reviewer_comment || "")}${attempt.status === "pending_review" ? html`<button class="btn btn-primary btn-sm">Save grade</button>` : ""}</div></form>`,
   )}`;
   return adminPage(c, { title: "Grade attempt", active: "/admin/grading", body });
 }

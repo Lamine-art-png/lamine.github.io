@@ -22,6 +22,18 @@ const strip = (row, drop = ["created_at", "updated_at"]) => Object.fromEntries(O
  * rules, questions, and the linked video assets and captions. Any edit after
  * an approval changes the fingerprint and voids that approval.
  */
+/** Why an assessment cannot draw its questions (no rules, or too few active questions), or null. */
+async function drawProblem(env, assessmentId) {
+  const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ?").bind(assessmentId).all()).results;
+  if (!rules.length) return "no question draw rules";
+  let short = 0;
+  for (const r of rules) {
+    const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
+    if (n.n < r.draw_count) short++;
+  }
+  return short ? `${short} draw rule(s) need more active questions` : null;
+}
+
 export async function courseContentHash(env, courseId) {
   const all = async (sql, ...args) => (await env.DB.prepare(sql).bind(...args).all()).results.map((r) => strip(r));
   // Every draft field and relation that publication copies live is included,
@@ -155,6 +167,14 @@ export async function publishReadiness(env, liveCourse) {
 
   const brokenQuiz = ready.filter((l) => l.type === "quiz" && !l.assessment_id);
   checks.push({ ok: brokenQuiz.length === 0, label: brokenQuiz.length ? `Quiz lessons without an assessment: ${brokenQuiz.map((l) => l.title).join(", ")}` : "Quiz lessons are linked to assessments" });
+  // Every linked assessment must be this course's, active, and able to draw its questions.
+  const unusable = [];
+  for (const l of ready.filter((x) => x.type === "quiz" && x.assessment_id)) {
+    const a = await env.DB.prepare("SELECT * FROM draft_assessments WHERE id = ? AND course_id = ?").bind(l.assessment_id, course.id).first();
+    const problem = !a ? "missing" : a.status !== "active" ? `assessment is ${a.status}` : await drawProblem(env, a.id);
+    if (problem) unusable.push(`${l.title} (${problem})`);
+  }
+  checks.push({ ok: unusable.length === 0, label: unusable.length ? `Quiz lessons whose assessment learners cannot take: ${unusable.join(", ")}` : "Every linked quiz is active and can draw its questions" });
   // A bank is published with the course that owns it, so draws from another
   // course's (or an unassigned) bank would let one publication change another.
   const foreign = await env.DB.prepare(
@@ -168,13 +188,8 @@ export async function publishReadiness(env, liveCourse) {
     const exam = await env.DB.prepare("SELECT * FROM draft_assessments WHERE course_id = ? AND kind = 'exam' AND is_certification = 1 AND status = 'active'").bind(course.id).first();
     checks.push({ ok: Boolean(exam), label: exam ? "Active certification exam" : "Certificates are enabled but there is no active certification exam" });
     if (exam) {
-      const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ?").bind(exam.id).all()).results;
-      let short = 0;
-      for (const r of rules) {
-        const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).first();
-        if (n.n < r.draw_count) short++;
-      }
-      checks.push({ ok: rules.length > 0 && short === 0, label: rules.length ? (short ? `${short} draw rule(s) need more active questions` : "Question banks can satisfy every draw rule") : "Exam has no question draw rules" });
+      const problem = await drawProblem(env, exam.id);
+      checks.push({ ok: !problem, label: problem ? `Exam: ${problem}` : "Question banks can satisfy every draw rule" });
     }
   }
   checks.push({ ok: Boolean(course.description?.trim() && parseJson(course.objectives_json, []).length), label: "Description and learning objectives present" });

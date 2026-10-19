@@ -215,14 +215,27 @@ export async function verifyEmail(c) {
   const userId = await consumeToken(c.env, String(b.token || ""), "verify_email");
   if (!userId) return verifyFailed(c);
   const now = nowIso();
-  await c.env.DB.prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?").bind(now, now, userId).run();
+  // Whoever chose the password of an unverified account may not own the
+  // address (pre-account hijacking). Proving the mailbox signs out every other
+  // session; unless the confirmation comes from the registrant's own signed-in
+  // session, the password is cleared too and the mailbox owner sets a new one.
+  const own = c.user?.id === userId;
+  const unverified = "EXISTS (SELECT 1 FROM users WHERE id = ?3 AND email_verified_at IS NULL)";
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE sessions SET revoked_at = ?1 WHERE user_id = ?3 AND revoked_at IS NULL AND id_hash IS NOT ?2 AND ${unverified}`).bind(now, own ? c.session.idHash : null, userId),
+    ...(own ? [] : [c.env.DB.prepare(`UPDATE users SET password_hash = NULL, updated_at = ?1 WHERE id = ?2 AND email_verified_at IS NULL AND password_hash IS NOT NULL`).bind(now, userId)]),
+    c.env.DB.prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?1), updated_at = ?1 WHERE id = ?2").bind(now, userId),
+  ]);
+  const cleared = !own && results[1].meta.changes > 0;
+  if (cleared) await audit({ ...c, user: { id: userId } }, "account.unverified_password_cleared", "user", userId, { via: "email_verification" });
   const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
   await applyBootstrapRoles(c.env, c.cfg, user);
   await sendEmail(c, { user, template: "welcome", vars: { url: `${c.cfg.origin}/courses` } });
   // Learners who finished a course before verifying receive their credentials now.
   const done = (await c.env.DB.prepare("SELECT c.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE e.user_id = ? AND e.status = 'completed'").bind(userId).all()).results;
   for (const course of done) await issueIfEligible(c.env, c.cfg, user, course, { defer: c.defer });
-  return redirect(c.user ? "/dashboard?verified=1" : "/login?verified=1");
+  if (cleared) return redirect(`/reset-password?token=${await issueToken(c.env, userId, "reset_password")}`);
+  return redirect(own ? "/dashboard?verified=1" : "/login?verified=1");
 }
 
 export async function resendVerification(c) {

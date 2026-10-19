@@ -136,13 +136,22 @@ Both tests inject the competing write at the exact point of the guarded statemen
 
 Also fixed: the WCAG scan script still verified its admin by GET (CI caught it); it now confirms with the button like the e2e journey.
 
+### Codex review of `f8dcc66` (4 × P1) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 confirming an address registered by someone else left that person's session and password valid (pre-account hijacking) | Verifying an unverified address revokes every other session in the same batch. Unless the confirmation comes from the registrant's own signed-in session, the pre-verification password is cleared and the mailbox owner is sent to set a new one (as Google linking already did) | `review-guards` (2 tests) |
+| P1 an academy administrator could disable a super administrator | Status changes to a super-administrator account require a super administrator | `review-guards` "an academy administrator cannot disable a super administrator" |
+| P1 readiness only checked that a quiz lesson had an assessment id | Every linked quiz must be this course's, active, have draw rules and enough active questions (the exam's check, now shared) | `review-guards` "readiness refuses quiz lessons whose assessment learners cannot take" |
+| P1 a grader could rewrite automatically scored answers | Only manually graded answers of an attempt still awaiting grading are writable (checked in the update itself); the grading page hides the save button once graded | `review-guards` "graders can only score answers awaiting manual review" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **156/156 pass**.
+- `npm test` (unit, integration, deploy): **161/161 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
