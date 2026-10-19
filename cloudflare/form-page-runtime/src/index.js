@@ -182,7 +182,7 @@ const runtimeSource = String.raw`(() => {
     link.style.cssText = "color:#176b45;font-weight:700;text-decoration:underline";
     fallback.appendChild(link);
 
-    wrapper.append(heading, intro, status, calendar, fallback);
+    wrapper.append(heading, intro, status, fallback, calendar);
     form.replaceWith(wrapper);
     wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -198,7 +198,7 @@ const runtimeSource = String.raw`(() => {
 
     const startCalendar = () => {
       if (!window.Calendly || typeof window.Calendly.initInlineWidget !== "function") {
-        status.textContent = "The calendar could not load here. Use the booking link below.";
+        status.textContent = "The calendar could not load here. Use the booking link above.";
         return;
       }
       try {
@@ -217,7 +217,7 @@ const runtimeSource = String.raw`(() => {
           },
         });
       } catch {
-        status.textContent = "The calendar could not load here. Use the booking link below.";
+        status.textContent = "The calendar could not load here. Use the booking link above.";
       }
     };
 
@@ -229,7 +229,7 @@ const runtimeSource = String.raw`(() => {
       script.async = true;
       script.onload = startCalendar;
       script.onerror = () => {
-        status.textContent = "The calendar could not load here. Use the booking link below.";
+        status.textContent = "The calendar could not load here. Use the booking link above.";
       };
       document.head.appendChild(script);
     }
