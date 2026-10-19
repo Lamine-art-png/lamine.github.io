@@ -597,3 +597,36 @@ test("overlapping progress reports never move the resume position backwards", as
   assert.equal(p.position_seconds, 100);
   assert.equal(p.client_updated_at, newer);
 });
+
+test("a video-policy change after the readiness check aborts the publication", async () => {
+  const { env, admin } = await released();
+  await admin.post("/admin/lessons/les_a1_welcome", await lessonForm(env, "les_a1_welcome", { body_md: "Published under the optional policy?" }));
+  await approveReviews(admin, "crs_a1");
+  // Readiness passes with videos optional; the policy turns to required before the batch runs.
+  const restore = interleave(env, "INSERT INTO course_revisions", (db) => db.prepare("UPDATE courses SET video_requirement = 'required' WHERE id = 'crs_a1'").run());
+  const r = await publish(admin);
+  restore();
+  assert.match(decodeURIComponent(r.location), /changed while it was being published/);
+  assert.notEqual((await live(env, "SELECT body_md FROM lessons WHERE id = 'les_a1_welcome'")).body_md, "Published under the optional policy?");
+});
+
+test("an emailed verification link is never consumed by a GET", async () => {
+  const env = makeEnv();
+  const u = await registeredLearner(env, { email: "scan@academy.test", verify: false });
+  const { lastEmail, tokenFrom } = await import("../helpers.js");
+  const tok = tokenFrom(await lastEmail(env, "scan@academy.test", "verify_email"), "/verify-email");
+  // A mail scanner (no session, no CSRF cookie) follows the link.
+  let r = await new Client(env).get(`/verify-email?token=${tok}`);
+  assert.equal(r.status, 200);
+  r = await new Client(env).get(`/verify-email?token=${tok}`);
+  assert.equal(r.status, 200, "still valid: the GET consumed nothing");
+  assert.equal((await live(env, "SELECT email_verified_at FROM users WHERE email = 'scan@academy.test'")).email_verified_at, null);
+  // A cross-site POST without the CSRF token is refused.
+  r = await new Client(env).post("/verify-email", { token: tok, _csrf: "forged" });
+  assert.equal(r.status, 403);
+  // The owner's confirmation verifies the address.
+  await u.get(`/verify-email?token=${tok}`);
+  r = await u.post("/verify-email", { token: tok });
+  assert.equal(r.status, 303);
+  assert.ok((await live(env, "SELECT email_verified_at FROM users WHERE email = 'scan@academy.test'")).email_verified_at);
+});

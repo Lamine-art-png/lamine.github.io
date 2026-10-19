@@ -55,7 +55,9 @@ test("Resend: verification email is sent with the documented request shape", asy
   assert.equal(row.status, "sent");
   assert.equal(row.provider_id, "resend-message-1");
   // The link in the delivered email verifies the account.
-  const v = await c.get(new URL(/https:\/\/\S+verify-email\?token=\S+/.exec(body.text)[0]).pathname + new URL(/https:\/\/\S+verify-email\?token=\S+/.exec(body.text)[0]).search);
+  const link = new URL(/https:\/\/\S+verify-email\?token=\S+/.exec(body.text)[0]);
+  assert.equal((await c.get(link.pathname + link.search)).status, 200, "the link shows a confirmation page");
+  const v = await c.post("/verify-email", { token: link.searchParams.get("token") });
   assert.equal(v.status, 303);
   assert.ok((await env.DB.prepare("SELECT email_verified_at FROM users WHERE email = 'grace@academy.test'").first()).email_verified_at);
 });

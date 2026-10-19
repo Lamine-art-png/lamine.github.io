@@ -103,6 +103,7 @@ export async function registeredLearner(env, { email = `learner${Math.random().t
     const mail = await lastEmail(env, email, "verify_email");
     const tok = tokenFrom(mail, "/verify-email");
     await c.get(`/verify-email?token=${tok}`);
+    await c.post("/verify-email", { token: tok });
   }
   return Object.assign(c, { email, password, name });
 }

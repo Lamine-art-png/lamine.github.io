@@ -191,5 +191,6 @@ export async function publishReadiness(env, liveCourse) {
     checks.push({ ok: r.state === "approved", label, review: r.type });
   }
   checks.push({ ok: true, warn: Boolean(course.content_review_note), label: course.content_review_note ? `Review note: ${course.content_review_note}` : "No outstanding review note" });
-  return { checks, ok: checks.every((x) => x.ok), reviews, hash, version };
+  // The video policy the checks used: publication requires it to be unchanged.
+  return { checks, ok: checks.every((x) => x.ok), reviews, hash, version, videoRequirement: course.video_requirement || "required" };
 }

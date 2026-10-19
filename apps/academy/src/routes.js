@@ -45,7 +45,8 @@ export function registerRoutes(r) {
   r.get("/login", (c) => auth.loginPage(c));
   r.post("/login", auth.login);
   r.post("/logout", auth.logout, AUTH);
-  r.get("/verify-email", auth.verifyEmail);
+  r.get("/verify-email", auth.verifyEmailPage);
+  r.post("/verify-email", auth.verifyEmail);
   r.post("/verify-email/resend", auth.resendVerification, AUTH);
   r.get("/forgot-password", (c) => auth.forgotPage(c));
   r.post("/forgot-password", auth.forgot);

@@ -150,7 +150,12 @@ test("critical learner journey with persistent backend data", async () => {
 
   // ── Verifying the email issues the pending credential automatically.
   const tok = tokenFrom(verifyMail, "/verify-email");
+  // Opening the link (as a mail scanner would) only shows a confirmation button.
   r = await learner.get(`/verify-email?token=${tok}`);
+  assert.equal(r.status, 200);
+  assert.match(r.text, /<form method="post" action="\/verify-email"/);
+  assert.equal((await env.DB.prepare("SELECT email_verified_at FROM users WHERE id = ?").bind(user.id).first()).email_verified_at, null, "a GET never verifies");
+  r = await learner.post("/verify-email", { token: tok });
   assert.equal(r.status, 303);
   const cert = await env.DB.prepare("SELECT * FROM certificates WHERE user_id = ?").bind(user.id).first();
   assert.ok(cert, "certificate issued after verification");

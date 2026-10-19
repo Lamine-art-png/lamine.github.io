@@ -141,8 +141,9 @@ export async function draftVersion(env) {
 /**
  * Publish the draft: copy it live, record the revision and the status,
  * atomically. `hash` must be the fingerprint taken at draft version
- * `version`; with `expect` ({status, scheduled_at}) the course row must also
- * still be in that state (the scheduler's due row). If anything changed, the
+ * `version`; with `expect` ({status, scheduled_at, video_requirement}) the
+ * course row must also still be in that state (the loaded or due row, and the
+ * video policy readiness checked against). If anything changed, the
  * revision insert (first in the batch) gets a NULL hash, violates NOT NULL
  * and the whole batch rolls back.
  */
@@ -163,8 +164,9 @@ export async function publishDraft(env, course, { actorId = null, hash, version,
       env.DB.prepare(
         `INSERT INTO course_revisions (id, course_id, number, content_hash, published_by, published_at, summary_json)
          VALUES (?1, ?2, ?3, (SELECT ?4 FROM draft_state WHERE id = 1 AND version = ?5
-                               AND (?8 IS NULL OR EXISTS (SELECT 1 FROM courses WHERE id = ?2 AND status = ?8 AND scheduled_at IS ?9))), ?6, ?7, ?10)`,
-      ).bind(newId("rev_"), course.id, number, hash, version, actorId, now, expect?.status ?? null, expect?.scheduled_at ?? null, JSON.stringify({ ...counts, by })),
+                               AND (?8 IS NULL OR EXISTS (SELECT 1 FROM courses WHERE id = ?2 AND status = ?8 AND scheduled_at IS ?9))
+                               AND (?11 IS NULL OR EXISTS (SELECT 1 FROM courses WHERE id = ?2 AND COALESCE(video_requirement, 'required') = ?11))), ?6, ?7, ?10)`,
+      ).bind(newId("rev_"), course.id, number, hash, version, actorId, now, expect?.status ?? null, expect?.scheduled_at ?? null, JSON.stringify({ ...counts, by }), expect?.video_requirement ?? null),
       ...draftToLiveStatements(env, course.id),
       env.DB.prepare("UPDATE courses SET status = 'published', scheduled_at = NULL, published_at = COALESCE(published_at, ?), updated_at = ? WHERE id = ?").bind(now, now, course.id),
       auditStmt(env, actorId, "course.revision.published", "course", course.id, { number, content_hash: hash, by }),

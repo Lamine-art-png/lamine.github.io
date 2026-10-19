@@ -120,19 +120,27 @@ Both tests inject the competing write at the exact point of the guarded statemen
 |---|---|---|
 | P2 cancelling a schedule could clear a replacement made meanwhile | The cancel form carries the displayed `scheduled_at` and the update requires it | `course-drafts` "a scheduled update can be cancelled…" (stale form cancels nothing) |
 
+### Codex review of `c00206d` (1 × P1, 2 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 a mail scanner following the verification link verified the address (pre-registration takeover) | The emailed link shows a confirmation page; only the person's CSRF-protected POST consumes the token | `course-drafts` "an emailed verification link is never consumed by a GET"; journey, integration, staging and e2e flows updated |
+| P2 a video-policy change after the readiness check was not caught | Publication requires the video policy readiness used to be unchanged (guarded revision insert) | `course-drafts` "a video-policy change after the readiness check aborts the publication" |
+| P2 overlapping heartbeats could overwrite each other's credited spans | Watch updates are a compare-and-swap on the beat counter with re-merge on conflict | `video-watch` "overlapping heartbeats never lose a credited span" |
+
 CI also caught a real defect (not a flake) in the first heartbeat rule: honest 2× playback could
 fail through network latency and a stale paused state after a seek. Fixed with a latency margin
 (documented bound 2.7×) and a client fix; regression test added.
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **152/152 pass**.
+- `npm test` (unit, integration, deploy): **155/155 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.
 - axe-core is not installable in the offline sandbox; the WCAG scan runs in Academy CI.
-- Unrelated CI flakiness: two Enterprise Portal browser tests (`figma-enterprise-v4`, not touched
-  by this PR) failed once each on different commits and passed elsewhere; documented on the PR.
+- Unrelated CI flakiness: three different Enterprise Portal browser tests (`figma-enterprise-v4`, not
+  touched by this PR) failed once each on different commits and passed on re-run; documented on the PR.
 
 ### Outstanding issues (honest list)
 

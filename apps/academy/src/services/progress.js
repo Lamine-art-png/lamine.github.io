@@ -190,22 +190,36 @@ export async function recordWatchBeat(env, userId, lesson, { position, playing, 
   const total = Number(lesson.video?.duration_seconds) || 0;
   const pos = total ? Math.min(position, total) : position;
   const isPlaying = playing === true || playing === 1 || playing === "1";
-  const prev = await env.DB.prepare("SELECT * FROM video_watch WHERE user_id = ? AND lesson_id = ?").bind(userId, lesson.id).first();
-  if (prev && prev.playing && isPlaying && (Date.parse(now) - Date.parse(prev.last_beat_at)) / 1000 < MIN_GAP_SECONDS) {
-    // Too soon after the previous heartbeat: ignored; the run stays anchored there.
-    return { complete: total > 0 && prev.watched_seconds >= total * WATCH_SHARE, watched: prev.watched_seconds, total };
+  // Read, merge and write as a compare-and-swap on the beat counter: if an
+  // overlapping heartbeat for the same learner and lesson wrote in between,
+  // this one re-reads and merges again, so no credited span is ever lost.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const prev = await env.DB.prepare("SELECT * FROM video_watch WHERE user_id = ? AND lesson_id = ?").bind(userId, lesson.id).first();
+    if (prev && prev.playing && isPlaying && (Date.parse(now) - Date.parse(prev.last_beat_at)) / 1000 < MIN_GAP_SECONDS) {
+      // Too soon after the previous heartbeat: ignored; the run stays anchored there.
+      return { complete: total > 0 && prev.watched_seconds >= total * WATCH_SHARE, watched: prev.watched_seconds, total };
+    }
+    const span = creditFor(prev, { position: pos, at: now, playing: isPlaying });
+    const merged = mergeSegments([...JSON.parse(prev?.segments_json || "[]"), ...(span ? [span] : [])]);
+    const rejected = prev && prev.playing && !span ? 1 : 0;
+    const res = prev
+      ? await env.DB.prepare(
+          `UPDATE video_watch SET last_position = ?3, last_beat_at = ?4, playing = ?5, segments_json = ?6, watched_seconds = ?7, beats = beats + 1, rejected = rejected + ?8
+            WHERE user_id = ?1 AND lesson_id = ?2 AND beats = ?9`,
+        )
+          .bind(userId, lesson.id, pos, now, isPlaying ? 1 : 0, JSON.stringify(merged.segments), merged.total, rejected, prev.beats)
+          .run()
+      : await env.DB.prepare(
+          `INSERT INTO video_watch (user_id, lesson_id, last_position, last_beat_at, playing, segments_json, watched_seconds, beats, rejected, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 0, ?4) ON CONFLICT(user_id, lesson_id) DO NOTHING`,
+        )
+          .bind(userId, lesson.id, pos, now, isPlaying ? 1 : 0, JSON.stringify(merged.segments), merged.total)
+          .run();
+    if (res.meta.changes) return { complete: total > 0 && merged.total >= total * WATCH_SHARE, watched: merged.total, total };
   }
-  const span = creditFor(prev, { position: pos, at: now, playing: isPlaying });
-  const merged = mergeSegments([...JSON.parse(prev?.segments_json || "[]"), ...(span ? [span] : [])]);
-  await env.DB.prepare(
-    `INSERT INTO video_watch (user_id, lesson_id, last_position, last_beat_at, playing, segments_json, watched_seconds, beats, rejected, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?4)
-     ON CONFLICT(user_id, lesson_id) DO UPDATE SET last_position = ?3, last_beat_at = ?4, playing = ?5, segments_json = ?6, watched_seconds = ?7,
-       beats = beats + 1, rejected = rejected + ?8`,
-  )
-    .bind(userId, lesson.id, pos, now, isPlaying ? 1 : 0, JSON.stringify(merged.segments), merged.total, prev && prev.playing && !span ? 1 : 0)
-    .run();
-  return { complete: total > 0 && merged.total >= total * WATCH_SHARE, watched: merged.total, total };
+  // Persistent contention: this heartbeat is dropped (the next one continues the run).
+  const cur = await env.DB.prepare("SELECT watched_seconds FROM video_watch WHERE user_id = ? AND lesson_id = ?").bind(userId, lesson.id).first();
+  return { complete: total > 0 && (cur?.watched_seconds || 0) >= total * WATCH_SHARE, watched: cur?.watched_seconds || 0, total };
 }
 
 export async function markQuizLessonComplete(env, userId, lessonId, courseId) {

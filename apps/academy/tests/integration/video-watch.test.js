@@ -151,3 +151,46 @@ test("legitimate: 2× speed completes; skipping a middle part does not", async (
   assert.equal(s.watch.watched_seconds, 200);
   assert.equal(s.progress, "completed");
 });
+
+test("overlapping heartbeats never lose a credited span", async () => {
+  const { env, beat, state } = await setup();
+  const { recordWatchBeat } = await import("../../src/services/progress.js");
+  await beat(0);
+  await beat(10, { after: 5 });
+  // Another heartbeat's write lands between this one's read and its write.
+  const lesson = await env.DB.prepare("SELECT * FROM lessons WHERE id = ?").bind(LESSON).first();
+  lesson.video = await env.DB.prepare("SELECT * FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
+  const user = await env.DB.prepare("SELECT user_id FROM video_watch WHERE lesson_id = ?").bind(LESSON).first();
+  const w = await env.DB.prepare("SELECT last_beat_at FROM video_watch WHERE lesson_id = ?").bind(LESSON).first();
+  await env.DB.prepare("UPDATE video_watch SET last_beat_at = ? WHERE lesson_id = ?").bind(new Date(Date.parse(w.last_beat_at) - 5000).toISOString(), LESSON).run();
+  let injected = false;
+  const orig = env.DB;
+  const DB = new Proxy(orig, {
+    get(t, prop) {
+      if (prop !== "prepare") return typeof t[prop] === "function" ? t[prop].bind(t) : t[prop];
+      return (sql) => {
+        const st = t.prepare(sql);
+        if (injected || !sql.trimStart().startsWith("UPDATE video_watch SET last_position")) return st;
+        injected = true;
+        const run = st.run.bind(st);
+        const bind = st.bind.bind(st);
+        st.bind = (...a) => {
+          const b = bind(...a);
+          const r2 = b.run.bind(b);
+          b.run = async () => {
+            await orig.prepare("UPDATE video_watch SET segments_json = '[[0,10],[150,160]]', watched_seconds = 20, beats = beats + 1 WHERE lesson_id = ?").bind(LESSON).run();
+            return r2();
+          };
+          return b;
+        };
+        st.run = run;
+        return st;
+      };
+    },
+  });
+  await recordWatchBeat({ ...env, DB }, user.user_id, lesson, { position: 20, playing: true, now: new Date().toISOString() });
+  assert.ok(injected, "the race was exercised");
+  const s = await state();
+  assert.deepEqual(JSON.parse(s.watch.segments_json), [[0, 20], [150, 160]], "both writers' spans are kept");
+  assert.equal(s.watch.watched_seconds, 30);
+});

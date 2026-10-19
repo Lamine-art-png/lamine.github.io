@@ -182,17 +182,38 @@ export async function logout(c) {
 
 // ───────────── Email verification ─────────────
 
+function verifyFailed(c) {
+  return c.page({
+    title: c.t("auth.verify_failed_title"),
+    noindex: true,
+    status: 400,
+    body: html`<section class="wrap narrow error-page"><h1 class="display-sm">${c.t("auth.verify_failed_title")}</h1><p class="lead">${c.t("auth.verify_failed_body")}</p>
+      <div class="actions"><a class="btn btn-primary" href="${c.user ? "/dashboard" : "/login"}">${c.user ? c.t("nav.dashboard") : c.t("nav.sign_in")}</a></div></section>`,
+  });
+}
+
+/**
+ * The emailed link only shows a confirmation button. Mail scanners and link
+ * previews follow GET links automatically, so the token is consumed only by
+ * the person's own (CSRF-protected) POST; a scanner can never verify an
+ * address on someone else's behalf.
+ */
+export async function verifyEmailPage(c) {
+  const token = String(c.url.searchParams.get("token") || "");
+  if (!(await peekToken(c.env, token, "verify_email"))) return verifyFailed(c);
+  return c.page({
+    title: c.t("auth.verify_confirm_title"),
+    noindex: true,
+    body: html`<section class="wrap narrow section"><h1 class="display-sm">${c.t("auth.verify_confirm_title")}</h1><p class="lead">${c.t("auth.verify_confirm_body")}</p>
+      <form method="post" action="/verify-email" class="actions">${csrfField(c)}<input type="hidden" name="token" value="${token}">
+        <button class="btn btn-primary" type="submit">${c.t("auth.verify_confirm_button")}</button></form></section>`,
+  });
+}
+
 export async function verifyEmail(c) {
-  const userId = await consumeToken(c.env, c.url.searchParams.get("token"), "verify_email");
-  if (!userId) {
-    return c.page({
-      title: c.t("auth.verify_failed_title"),
-      noindex: true,
-      status: 400,
-      body: html`<section class="wrap narrow error-page"><h1 class="display-sm">${c.t("auth.verify_failed_title")}</h1><p class="lead">${c.t("auth.verify_failed_body")}</p>
-        <div class="actions"><a class="btn btn-primary" href="${c.user ? "/dashboard" : "/login"}">${c.user ? c.t("nav.dashboard") : c.t("nav.sign_in")}</a></div></section>`,
-    });
-  }
+  const b = await c.readBody();
+  const userId = await consumeToken(c.env, String(b.token || ""), "verify_email");
+  if (!userId) return verifyFailed(c);
   const now = nowIso();
   await c.env.DB.prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?").bind(now, now, userId).run();
   const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();

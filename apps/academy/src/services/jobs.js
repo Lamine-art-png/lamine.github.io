@@ -27,7 +27,7 @@ export async function runScheduled(env, cron = "") {
     if (readiness.ok) {
       try {
         // Bound to the due row: a cancelled, archived or rescheduled course is skipped.
-        await publishDraft(env, c, { hash: readiness.hash, version: readiness.version, by: "schedule", expect: { status: c.status, scheduled_at: c.scheduled_at } });
+        await publishDraft(env, c, { hash: readiness.hash, version: readiness.version, by: "schedule", expect: { status: c.status, scheduled_at: c.scheduled_at, video_requirement: readiness.videoRequirement } });
         report.published++;
       } catch (e) {
         // The draft or the schedule changed after the check: skip; the next run re-checks.

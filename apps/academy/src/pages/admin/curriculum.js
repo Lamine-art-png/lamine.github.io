@@ -317,7 +317,7 @@ export async function setCourseStatus(c) {
     // Copy the reviewed draft live as a new revision, atomically with the status.
     try {
       // Bound to the status and schedule loaded above: an archive or cancellation in between wins.
-      await publishDraft(c.env, course, { actorId: c.user.id, hash: readiness.hash, version: readiness.version, expect: { status: course.status, scheduled_at: course.scheduled_at ?? null } });
+      await publishDraft(c.env, course, { actorId: c.user.id, hash: readiness.hash, version: readiness.version, expect: { status: course.status, scheduled_at: course.scheduled_at ?? null, video_requirement: readiness.videoRequirement } });
     } catch (e) {
       if (e instanceof DraftChangedError) return redirect(`/admin/courses/${course.id}?err=${encodeURIComponent(e.message + " Check the readiness list and publish again.")}`);
       throw e;

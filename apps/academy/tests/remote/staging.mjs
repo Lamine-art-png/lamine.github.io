@@ -120,7 +120,9 @@ async function main() {
     expect(msg.status === "suppressed", `test mail status ${msg.status}`);
     const tok = tokenIn(msg.text, "/verify-email");
     expect(tok, "no verification link");
-    const r = await learner.get(`/verify-email?token=${tok}`);
+    let r = await learner.get(`/verify-email?token=${tok}`);
+    expect(r.status === 200, `verification page returned ${r.status}`);
+    r = await learner.post("/verify-email", { token: tok });
     expect(r.status === 303, `verify returned ${r.status}`);
   });
 

@@ -183,6 +183,8 @@ try {
     await page.waitForURL(/\/dashboard\?welcome=1/);
     const m = await mail("founder@academy.test", "verify_email");
     await page.goto(/https?:\/\/\S+verify-email\?token=\S+/.exec(m.text)[0]);
+    await page.click('button:has-text("Confirm my email address")');
+    await page.waitForURL(/verified=1/);
     await page.goto(`${base}/admin/courses/crs_a1`);
     await shot(page, "admin-course-not-ready");
     assert.ok((await page.locator("text=❌").count()) > 0, "A1 is blocked before reviews and videos");
@@ -256,6 +258,7 @@ try {
     await lp.waitForURL(/\/courses\/introduction-to-ai-in-agriculture/);
     const m = await mail("amina@academy.test", "verify_email");
     await lp.goto(/https?:\/\/\S+verify-email\?token=\S+/.exec(m.text)[0]);
+    await lp.click('button:has-text("Confirm my email address")');
     await lp.waitForURL(/verified=1/);
   });
 
