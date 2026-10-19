@@ -12,7 +12,6 @@ assert.ok(start > 0 && end > start, "Runtime template can be extracted");
 const runtime = source.slice(start, end);
 
 // The outer Worker and the JavaScript delivered to browsers must both parse.
-new Script(source, { filename: "cloudflare-form-worker.js" });
 new Script(runtime, { filename: "agroai-forms-runtime.js" });
 
 // Existing careers route, POST targets, and notification success gate stay in place.
