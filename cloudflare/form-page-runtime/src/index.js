@@ -258,11 +258,63 @@ const runtimeSource = String.raw`(() => {
     );
   };
 
+  // Make the new instant-booking flow visible before visitors submit anything.
+  // Qualification and notification remain in the original form; no direct
+  // Calendly bypass is offered because it would lose the CRM lead details.
+  const ensureDemoBookingSteps = (form) => {
+    if (form.querySelector('[data-agroai-booking-steps="true"]')) return;
+    const panel = document.createElement("section");
+    panel.setAttribute("data-agroai-booking-steps", "true");
+    panel.setAttribute("aria-label", "Instant demo booking process");
+    panel.style.cssText =
+      "box-sizing:border-box;width:100%;margin:0 0 24px;padding:22px 20px;" +
+      "border:1px solid #bbdfbd;border-radius:16px;background:#f4faf4;" +
+      "color:#153e2a;text-align:left";
+
+    const eyebrow = document.createElement("div");
+    eyebrow.textContent = "LIVE CALENDAR BOOKING";
+    eyebrow.style.cssText =
+      "font-size:11px;font-weight:800;letter-spacing:.12em;color:#26714b;margin-bottom:8px";
+    const heading = document.createElement("h2");
+    heading.textContent = "Choose your demo time immediately";
+    heading.style.cssText =
+      "font-size:clamp(19px,2.5vw,24px);font-weight:800;line-height:1.25;" +
+      "color:#123b29;margin:0 0 12px";
+    const description = document.createElement("p");
+    description.textContent =
+      "A 30-minute meeting with AGRO-AI, booked directly on this page. No waiting for us to email you available dates.";
+    description.style.cssText =
+      "margin:0 0 14px;font-size:14px;line-height:1.6;color:#315b43";
+
+    const steps = document.createElement("div");
+    steps.style.cssText =
+      "display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px";
+    for (const [number, title, detail] of [
+      ["01", "Tell us about your operation", "Complete the short form below."],
+      ["02", "Pick a live calendar slot", "Select your exact date and time immediately after submitting."],
+    ]) {
+      const item = document.createElement("div");
+      item.style.cssText =
+        "background:#fff;border:1px solid #dbe9dd;border-radius:11px;padding:12px";
+      const strong = document.createElement("strong");
+      strong.textContent = number + "  " + title;
+      strong.style.cssText = "display:block;font-size:13px;color:#154c31;margin-bottom:4px";
+      const sub = document.createElement("span");
+      sub.textContent = detail;
+      sub.style.cssText = "font-size:12px;line-height:1.5;color:#4b6556";
+      item.append(strong, sub);
+      steps.appendChild(item);
+    }
+    panel.append(eyebrow, heading, description, steps);
+    form.insertBefore(panel, form.firstChild);
+  };
+
   const prepareForms = () => {
     document.querySelectorAll("form").forEach((form) => {
       if (isTargetForm(form)) {
         form.noValidate = true;
         form.setAttribute("data-agroai-authoritative-form", isDemo ? "demo" : "careers");
+        if (isDemo) ensureDemoBookingSteps(form);
       }
     });
   };

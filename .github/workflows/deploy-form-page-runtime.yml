@@ -59,7 +59,9 @@ jobs:
                ! grep -Fi 'x-agroai-forms-runtime: active' runtime.headers >/dev/null || \
                ! grep -F 'runtimeVersion: "2026-08-03.3"' runtime.js >/dev/null || \
                ! grep -F 'fetch("/api/apply"' runtime.js >/dev/null || \
-               ! grep -F 'fetch("/api/demo-request"' runtime.js >/dev/null; then
+               ! grep -F 'fetch("/api/demo-request"' runtime.js >/dev/null || \
+               ! grep -F 'Choose your demo time immediately' runtime.js >/dev/null || \
+               ! grep -F 'showDemoScheduling(form' runtime.js >/dev/null; then
               all_ready=0
             fi
             if [ "$all_ready" = "1" ]; then
@@ -77,3 +79,14 @@ jobs:
             cat runtime.headers || true
             exit 1
           fi
+
+      - name: Browser-verify visible demo scheduling in production (no real submissions)
+        shell: bash
+        env:
+          EXPECT_HINT: "1"
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+          node scripts/demo-booking-production-proof.mjs
+

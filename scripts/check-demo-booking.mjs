@@ -36,6 +36,12 @@ assert.match(runtime, /prefill:\s*\{[\s\S]*?name:[\s\S]*?email:/);
 assert.match(runtime, /target = "_blank"/);
 assert.match(runtime, /rel = "noopener noreferrer"/);
 
+// The initial page must visibly advertise immediate booking without bypassing lead qualification.
+assert.match(runtime, /data-agroai-booking-steps/);
+assert.match(runtime, /Choose your demo time immediately/);
+assert.match(runtime, /Pick a live calendar slot/);
+assert.match(runtime, /ensureDemoBookingSteps\(form\)/);
+
 // Calendly or iframe failure must not hide the direct scheduling fallback.
 assert.match(runtime, /wrapper\.append\(heading, intro, status, fallback, calendar\)/);
 assert.match(runtime, /script\.onerror/);
