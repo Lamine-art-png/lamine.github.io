@@ -143,6 +143,98 @@ const runtimeSource = String.raw`(() => {
     wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
+  // The existing demo notification must succeed before scheduling is offered.
+  // Calendly owns availability, meeting creation, invites, and time zones.
+  const DEMO_CALENDLY_URL = "https://calendly.com/agroaicontact/30min";
+
+  const showDemoScheduling = (form, details) => {
+    const wrapper = document.createElement("section");
+    wrapper.setAttribute("data-agroai-form-success", "true");
+    wrapper.setAttribute("data-agroai-demo-scheduling", "true");
+    wrapper.style.cssText =
+      "padding:24px 16px;border:1px solid #bbf7d0;border-radius:20px;background:#f6fdf7;max-width:100%;box-sizing:border-box";
+
+    const heading = document.createElement("h2");
+    heading.textContent = "Demo request received";
+    heading.style.cssText = "font-size:26px;line-height:1.2;font-weight:800;color:#14532d;margin:0 0 12px";
+    const intro = document.createElement("p");
+    intro.textContent =
+      "Your details reached the AGRO-AI team. Choose an available 30-minute slot below to confirm your demo immediately.";
+    intro.style.cssText = "font-size:16px;line-height:1.6;color:#365314;margin:0 0 16px";
+    const status = document.createElement("p");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.textContent = "Step 2 of 2: Select your date and time.";
+    status.style.cssText = "font-size:14px;font-weight:700;color:#14532d;margin:0 0 12px";
+
+    const calendar = document.createElement("div");
+    calendar.setAttribute("data-agroai-calendar", "true");
+    calendar.style.cssText =
+      "width:100%;min-width:0;height:730px;min-height:730px;background:#fff;border-radius:12px;overflow:hidden";
+
+    const fallback = document.createElement("p");
+    fallback.style.cssText = "font-size:14px;line-height:1.5;text-align:center;margin:12px 0 0";
+    const link = document.createElement("a");
+    link.href = DEMO_CALENDLY_URL;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Open the booking calendar in a new tab";
+    link.style.cssText = "color:#176b45;font-weight:700;text-decoration:underline";
+    fallback.appendChild(link);
+
+    wrapper.append(heading, intro, status, calendar, fallback);
+    form.replaceWith(wrapper);
+    wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const onBooking = (event) => {
+      if (event.origin !== "https://calendly.com") return;
+      if (!event.data || event.data.event !== "calendly.event_scheduled") return;
+      status.textContent =
+        "Your demo is booked. Please check your inbox for the calendar invitation and meeting details.";
+      wrapper.setAttribute("data-agroai-demo-booked", "true");
+      window.removeEventListener("message", onBooking);
+    };
+    window.addEventListener("message", onBooking);
+
+    const startCalendar = () => {
+      if (!window.Calendly || typeof window.Calendly.initInlineWidget !== "function") {
+        status.textContent = "The calendar could not load here. Use the booking link below.";
+        return;
+      }
+      try {
+        window.Calendly.initInlineWidget({
+          url: DEMO_CALENDLY_URL,
+          parentElement: calendar,
+          prefill: {
+            name: clean(details.fullName).slice(0, 180),
+            email: clean(details.email).slice(0, 240),
+          },
+          utm: {
+            utmSource: "agroai-website",
+            utmMedium: "demo-form",
+            utmCampaign: "instant-demo-booking",
+            utmContent: clean(details.requestId).slice(0, 100),
+          },
+        });
+      } catch {
+        status.textContent = "The calendar could not load here. Use the booking link below.";
+      }
+    };
+
+    if (window.Calendly && typeof window.Calendly.initInlineWidget === "function") {
+      startCalendar();
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://assets.calendly.com/assets/external/widget.js";
+      script.async = true;
+      script.onload = startCalendar;
+      script.onerror = () => {
+        status.textContent = "The calendar could not load here. Use the booking link below.";
+      };
+      document.head.appendChild(script);
+    }
+  };
+
   const parseJson = async (response) => {
     const text = await response.text();
     if (!text) return {};
@@ -319,11 +411,11 @@ const runtimeSource = String.raw`(() => {
               "Demo request delivery could not be confirmed.",
           );
         }
-        showSuccess(
-          form,
-          "Demo request received",
-          "Your request was received, and the AGRO-AI team notification was confirmed. We will follow up directly.",
-        );
+        showDemoScheduling(form, {
+          fullName,
+          email,
+          requestId: result.id || response.headers.get("x-agroai-notification-request-id") || "",
+        });
       } catch (error) {
         delete form.dataset.agroaiSubmitting;
         setBusy(form, false);
