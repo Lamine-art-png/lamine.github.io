@@ -29,8 +29,9 @@ const calendarCall = runtime.indexOf("showDemoScheduling(form,", deliveryCheck);
 assert.ok(confirmedSubmission >= 0 && deliveryCheck > confirmedSubmission && calendarCall > deliveryCheck);
 
 // One scheduling provider owns availability/conflicts/confirmation.
-assert.match(runtime, /https:\/\/calendly\.com\/agroaicontact\/30min/);
+assert.match(runtime, /https:\/\/calendly\.com\/contact-agroai-pilot\/30min/);
 assert.match(runtime, /Calendly\.initInlineWidget/);
+assert.doesNotMatch(runtime, /calendly\.com\/agroaicontact\/30min/);
 assert.match(runtime, /https:\/\/assets\.calendly\.com\/assets\/external\/widget\.js/);
 assert.match(runtime, /calendly\.event_scheduled/);
 assert.match(runtime, /prefill:\s*\{[\s\S]*?name:[\s\S]*?email:/);
