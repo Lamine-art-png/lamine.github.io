@@ -1,6 +1,8 @@
+import ACADEMY_LOCALES from "./academy-locales.json";
+const LANGUAGE_OPTIONS=ACADEMY_LOCALES.options.map(o=>'<option value="'+o.code+'">'+o.nativeName+"</option>").join("");
 const PATH="/academy/early-access";
 const API="https://api.agroai-pilot.com/v1/sales/contact";
-const LANGS=new Set(["en","pt-BR","fr","es","other"]);
+const LANGS=new Set([...ACADEMY_LOCALES.options.map(o=>o.code).filter(c=>c!=="auto"),"other"]);
 const ROLES=new Set(["grower","operator","manager","developer","student","other"]);
 const PAGE=`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -22,23 +24,23 @@ h2{margin:0 0 8px}form p,.note{color:#596b5c;line-height:1.55;font-size:15px}
 label{display:block;font-size:14px;font-weight:700;margin:15px 0 7px}input,select{font:inherit;width:100%;min-height:47px;border:1px solid #bfcfc0;border-radius:9px;padding:10px;color:#18351e;background:white}
 .consent{display:flex;gap:10px;align-items:start;margin:22px 0}.consent input{width:17px;min-height:17px;flex-shrink:0;margin:3px 0 0}.consent label{font-weight:400;margin:0;line-height:1.5}
 button{background:#234224;color:white;font:inherit;font-weight:700;padding:16px;width:100%;border:0;border-radius:9px;cursor:pointer}button:disabled{opacity:.6}
-.nav-actions{display:flex;align-items:center;gap:22px}.ui-locale{display:flex;align-items:center;gap:9px;white-space:nowrap}.ui-locale label{margin:0;font-size:13px;font-weight:700}.ui-locale select{width:auto;max-width:185px;min-height:38px;padding:5px 9px;font-size:14px}.website{display:none}.message{margin-top:16px;font-size:15px;color:#255e32}.error{color:#a33}
+#email{direction:ltr;text-align:start}.nav-actions{display:flex;align-items:center;gap:22px}.ui-locale{display:flex;align-items:center;gap:9px;white-space:nowrap}.ui-locale label{margin:0;font-size:13px;font-weight:700}.ui-locale select{width:auto;max-width:185px;min-height:38px;padding:5px 9px;font-size:14px}.website{display:none}.message{margin-top:16px;font-size:15px;color:#255e32}.error{color:#a33}
 @media(max-width:800px){nav{flex-wrap:wrap}.nav-actions{width:100%;justify-content:space-between;flex-wrap:wrap;gap:14px}main{grid-template-columns:1fr;margin:45px auto 60px;gap:36px}form{padding:24px}}
-</style></head><body><header><nav><a class="brand" href="https://agroai-pilot.com">AGRO-AI Academy</a><div class="nav-actions"><a id="announcement" href="https://agroai-pilot.com/news/introducing-agro-ai-academy">Our announcement ↗</a><div class="ui-locale"><label id="locale-label" for="site-language">Language</label><select id="site-language" aria-label="Website language"><option value="en">English</option><option value="pt-BR">Português (Brasil)</option><option value="es">Español</option><option value="fr">Français</option></select></div></div></nav></header>
+</style></head><body><header><nav><a class="brand" href="https://agroai-pilot.com">AGRO-AI Academy</a><div class="nav-actions"><a id="announcement" href="https://agroai-pilot.com/news/introducing-agro-ai-academy">Our announcement ↗</a><div class="ui-locale"><label id="locale-label" for="site-language">Language</label><select id="site-language" aria-label="Website language">${LANGUAGE_OPTIONS}</select></div></div></nav></header>
 <main><section><span class="eyebrow">Free agricultural AI education</span><h1>Be first to learn with AGRO-AI Academy.</h1><p class="lead">Practical AI lessons for growers, operators, agricultural managers and developers. Join our early-access list to hear when the first courses are ready.</p><span class="tag">Free · No purchase required</span>
 <div class="cover"><img src="https://agroai-pilot.com/news/introducing-agro-ai-academy/cover.svg" alt="AGRO-AI Academy official cover" width="1920" height="1080"/></div>
 <p class="note">First Enterprise Portal lessons planned for October 29, 2026, followed by additional agricultural AI and Platform API learning resources.</p></section>
 <form id="form"><h2>Register for free early access</h2><p>We'll email you about course availability and related Academy updates.</p>
 <label for="name">Full name</label><input name="name" id="name" autocomplete="name" minlength="2" maxlength="120" required/>
 <label for="email">Email</label><input name="email" id="email" type="email" autocomplete="email" maxlength="240" required/>
-<label for="language">Preferred language</label><select name="language" id="language" required><option value="en">English</option><option value="pt-BR">Português (Brasil)</option><option value="fr">Français</option><option value="es">Español</option><option value="other">Other</option></select>
+<label for="language">Preferred language</label><select name="language" id="language" required>${ACADEMY_LOCALES.options.filter(o=>o.code!=="auto").map(o=>'<option value="'+o.code+'">'+o.nativeName+"</option>").join("")}<option value="other">Other</option></select>
 <label for="role">Your work</label><select name="role" id="role"><option value="grower">Farmer / grower</option><option value="operator">Field operator</option><option value="manager">Agricultural manager</option><option value="developer">Developer / integrator</option><option value="student">Student / researcher</option><option value="other">Other</option></select>
 <div class="website"><input name="website" tabindex="-1" autocomplete="off" aria-hidden="true"/></div>
 <div class="consent"><input type="checkbox" name="consent" value="yes" id="consent" required/><label for="consent">I agree to receive AGRO-AI Academy course updates by email. I can unsubscribe at any time.</label></div>
 <button type="submit" id="submit">Register free</button><div role="status" aria-live="polite" id="status" class="message"></div><p class="note">Registration is free and does not change your AGRO-AI software subscription.</p></form></main>
 <script>
 (()=>{
-const TRANSLATIONS={"pt-BR":{"announcement":"Nosso anúncio ↗","localeLabel":"Idioma","eyebrow":"Educação gratuita em IA para a agricultura","heading":"Seja um dos primeiros a aprender com a AGRO-AI Academy.","lead":"Aulas práticas de inteligência artificial para produtores rurais, equipes de campo, gestores agrícolas e desenvolvedores. Cadastre-se para saber quando os primeiros cursos estiverem disponíveis.","tag":"Gratuito · Sem necessidade de compra","leftNote":"As primeiras aulas sobre o Enterprise Portal estão previstas para 29 de outubro de 2026. Depois, teremos mais conteúdos sobre IA na agricultura e a Platform API.","formTitle":"Cadastre-se gratuitamente para acesso antecipado","intro":"Enviaremos um e-mail quando os cursos estiverem disponíveis e com outras novidades da Academy.","name":"Nome completo","email":"E-mail","preferred":"Idioma de preferência","work":"Sua área de atuação","consent":"Concordo em receber por e-mail novidades sobre os cursos da AGRO-AI Academy. Posso cancelar a inscrição a qualquer momento.","rightNote":"O cadastro é gratuito e não altera sua assinatura dos softwares da AGRO-AI.","grower":"Produtor(a) rural","operator":"Profissional de campo","manager":"Gestor(a) agrícola","developer":"Desenvolvedor(a) / integrador(a)","student":"Estudante / pesquisador(a)","other":"Outro","submit":"Cadastrar gratuitamente","registered":"Cadastro realizado","registering":"Enviando cadastro…","success":"Cadastro realizado! Enviaremos um e-mail quando as aulas da Academy estiverem disponíveis.","failure":"O cadastro está temporariamente indisponível. Tente novamente.","validation":"Confira os campos obrigatórios e informe dados válidos.","title":"AGRO-AI Academy | Acesso antecipado gratuito","meta":"Cadastre-se gratuitamente para ter acesso antecipado aos cursos da AGRO-AI Academy.","coverAlt":"Imagem oficial da AGRO-AI Academy"},"es":{"announcement":"Nuestro anuncio ↗","localeLabel":"Idioma","eyebrow":"Educación gratuita en IA para la agricultura","heading":"Sé de los primeros en aprender con AGRO-AI Academy.","lead":"Lecciones prácticas de inteligencia artificial para productores, trabajadores de campo, responsables agrícolas y desarrolladores. Inscríbete para saber cuándo estarán disponibles los primeros cursos.","tag":"Gratis · No es necesario comprar","leftNote":"Las primeras clases sobre Enterprise Portal están previstas para el 29 de octubre de 2026. Después habrá más contenidos sobre IA agrícola y Platform API.","formTitle":"Inscríbete gratis para obtener acceso anticipado","intro":"Te enviaremos un correo cuando los cursos estén disponibles y con otras novedades de Academy.","name":"Nombre completo","email":"Correo electrónico","preferred":"Idioma preferido","work":"Tu actividad","consent":"Acepto recibir por correo electrónico novedades sobre los cursos de AGRO-AI Academy. Puedo darme de baja en cualquier momento.","rightNote":"La inscripción es gratuita y no modifica tu suscripción al software de AGRO-AI.","grower":"Agricultor / productor","operator":"Operador de campo","manager":"Responsable agrícola","developer":"Desarrollador / integrador","student":"Estudiante / investigador","other":"Otro","submit":"Inscribirme gratis","registered":"Inscripción completada","registering":"Registrando…","success":"¡Ya estás inscrito! Te enviaremos un correo cuando estén disponibles las clases de Academy.","failure":"El registro no está disponible temporalmente. Inténtalo de nuevo.","validation":"Comprueba los campos obligatorios e introduce datos válidos.","title":"AGRO-AI Academy | Acceso anticipado gratis","meta":"Inscríbete gratis para acceder anticipadamente a los cursos de AGRO-AI Academy.","coverAlt":"Imagen oficial de AGRO-AI Academy"},"fr":{"announcement":"Notre annonce ↗","localeLabel":"Langue","eyebrow":"Formation gratuite à l’IA agricole","heading":"Soyez parmi les premiers à apprendre avec AGRO-AI Academy.","lead":"Des cours pratiques sur l’intelligence artificielle pour les agriculteurs, les équipes de terrain, les responsables agricoles et les développeurs. Inscrivez-vous pour être informé de l’ouverture des premiers cours.","tag":"Gratuit · Aucun achat nécessaire","leftNote":"Les premiers cours sur l’Enterprise Portal sont prévus pour le 29 octobre 2026. D’autres ressources sur l’IA agricole et la Platform API suivront.","formTitle":"Inscrivez-vous gratuitement pour un accès anticipé","intro":"Nous vous informerons par e-mail de la disponibilité des cours et des actualités de l’Academy.","name":"Nom complet","email":"Adresse e-mail","preferred":"Langue préférée","work":"Votre activité","consent":"J’accepte de recevoir par e-mail les actualités des cours d’AGRO-AI Academy. Je peux me désabonner à tout moment.","rightNote":"L’inscription est gratuite et ne modifie pas votre abonnement aux logiciels AGRO-AI.","grower":"Agriculteur / exploitant","operator":"Opérateur de terrain","manager":"Responsable agricole","developer":"Développeur / intégrateur","student":"Étudiant / chercheur","other":"Autre","submit":"M’inscrire gratuitement","registered":"Inscription confirmée","registering":"Inscription en cours…","success":"Votre inscription est confirmée. Nous vous écrirons lorsque les cours de l’Academy seront disponibles.","failure":"L’inscription est temporairement indisponible. Veuillez réessayer.","validation":"Vérifiez les champs obligatoires et saisissez des informations valides.","title":"AGRO-AI Academy | Accès anticipé gratuit","meta":"Inscrivez-vous gratuitement pour accéder en avant-première aux cours d’AGRO-AI Academy.","coverAlt":"Visuel officiel d’AGRO-AI Academy"}};
+const TRANSLATIONS=${JSON.stringify(ACADEMY_LOCALES.catalogs)};
 const f=document.getElementById("form"),b=document.getElementById("submit"),msg=document.getElementById("status");
 const ui=document.getElementById("site-language"),preferred=document.getElementById("language");
 const selectors={announcement:"#announcement",localeLabel:"#locale-label",eyebrow:".eyebrow",heading:"h1",lead:".lead",tag:".tag",leftNote:"section > .note",formTitle:"#form h2",intro:"#form > p:not(.note)",name:"label[for=name]",email:"label[for=email]",preferred:"label[for=language]",work:"label[for=role]",consent:".consent label",rightNote:"form > .note"};
@@ -46,29 +48,51 @@ const roles=["grower","operator","manager","developer","student","other"];
 const EN={};
 for(const [key,selector] of Object.entries(selectors))EN[key]=document.querySelector(selector).textContent;
 for(const role of roles)EN[role]=f.querySelector('#role option[value="'+role+'"]').textContent;
-Object.assign(EN,{submit:"Register free",registered:"Registered",registering:"Registering…",success:"You're registered. We'll email you when the Academy lessons are available.",failure:"Registration is temporarily unavailable. Please try again.",validation:"Please check the required fields and enter valid information.",title:document.title,meta:document.querySelector('meta[name="description"]').content,coverAlt:document.querySelector(".cover img").alt});
+Object.assign(EN,{submit:"Register free",registered:"Registered",registering:"Registering…",success:"You're registered. We'll email you when the Academy lessons are available.",failure:"Registration is temporarily unavailable. Please try again.",validation:"Please check the required fields and enter valid information.",title:document.title,meta:document.querySelector('meta[name="description"]').content,coverAlt:document.querySelector(".cover img").alt,auto:"Automatic (browser language)"});
 const C={en:EN,...TRANSLATIONS};
-const normalize=x=>{const s=String(x||"").toLowerCase();return s.startsWith("pt")?"pt-BR":s.startsWith("es")?"es":s.startsWith("fr")?"fr":"en"};
+const RTL=${JSON.stringify(ACADEMY_LOCALES.rtl)};
+const AVAILABLE=new Set(Object.keys(C));
+const normalize=x=>{
+ const raw=String(x||"").trim(),lower=raw.toLowerCase();
+ if(AVAILABLE.has(raw))return raw;
+ if(lower==="pt"||lower.startsWith("pt-"))return "pt-BR";
+ if(lower==="fr"||lower.startsWith("fr-"))return "fr-FR";
+ for(const code of AVAILABLE)if(code.toLowerCase()===lower)return code;
+ const root=lower.split(/[-_]/)[0];
+ if(AVAILABLE.has(root))return root;
+ return "en";
+};
+const browser=()=>{
+ for(const locale of navigator.languages||[navigator.language]){const normalized=normalize(locale);if(normalized!=="en"||String(locale||"").toLowerCase().startsWith("en"))return normalized;}
+ return "en";
+};
 let stored="";try{stored=localStorage.getItem("academy_ui_locale_v1")||""}catch{}
 const query=new URLSearchParams(location.search).get("lang");
-let current=normalize(query||stored||navigator.language||"en");
+let choice=query||stored||"auto";
+let current=choice==="auto"?browser():normalize(choice);
 let manuallyChosenPreferred=false,registered=false,pending=false,hasError=false;
-const apply=locale=>{
-current=locale;const t=C[locale];document.documentElement.lang=locale;ui.value=locale;
-for(const [key,selector] of Object.entries(selectors))document.querySelector(selector).textContent=t[key];
-for(const role of roles)f.querySelector('#role option[value="'+role+'"]').textContent=t[role];
-preferred.querySelector('option[value="other"]').textContent=t.other;
-document.title=t.title;document.querySelector('meta[name="description"]').content=t.meta;document.querySelector(".cover img").alt=t.coverAlt;
-b.textContent=registered?t.registered:pending?t.registering:t.submit;
-if(registered)msg.textContent=t.success;else if(hasError)msg.textContent=t.failure;else if(pending)msg.textContent=t.registering;
+const apply=(locale,selected=locale)=>{
+ current=locale;const t=C[locale];document.documentElement.lang=locale;
+ document.documentElement.dir=RTL.includes(locale)?"rtl":"ltr";
+ ui.value=selected;ui.setAttribute("aria-label",t.localeLabel);
+ for(const [key,selector] of Object.entries(selectors))document.querySelector(selector).textContent=t[key];
+ for(const role of roles)f.querySelector('#role option[value="'+role+'"]').textContent=t[role];
+ preferred.querySelector('option[value="other"]').textContent=t.other;
+ const autoOption=ui.querySelector('option[value="auto"]');if(autoOption)autoOption.textContent=t.auto;
+ document.title=t.title;document.querySelector('meta[name="description"]').content=t.meta;document.querySelector(".cover img").alt=t.coverAlt;
+ b.textContent=registered?t.registered:pending?t.registering:t.submit;
+ if(registered)msg.textContent=t.success;else if(hasError)msg.textContent=t.failure;else if(pending)msg.textContent=t.registering;
 };
 preferred.value=current;
 preferred.addEventListener("change",()=>{manuallyChosenPreferred=true});
 ui.addEventListener("change",()=>{
-const old=current,next=ui.value;if(!manuallyChosenPreferred||preferred.value===old)preferred.value=next;
-apply(next);try{localStorage.setItem("academy_ui_locale_v1",next)}catch{}
+ const old=current,selected=ui.value,next=selected==="auto"?browser():normalize(selected);
+ if(!manuallyChosenPreferred||preferred.value===old)preferred.value=next;
+ choice=selected;apply(next,selected);
+ try{localStorage.setItem("academy_ui_locale_v1",selected)}catch{}
+ const u=new URL(location.href);u.searchParams.set("lang",selected);history.replaceState(null,"",u.toString());
 });
-apply(current);
+apply(current,choice==="auto"?"auto":current);
 f.addEventListener("invalid",e=>{e.preventDefault();if(!pending&&!registered){msg.className="message error";msg.textContent=C[current].validation;}},true);
 f.addEventListener("input",()=>{if(!hasError&&!pending&&!registered)msg.textContent="";});
 f.addEventListener("submit",async e=>{
