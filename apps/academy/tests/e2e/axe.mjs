@@ -56,6 +56,9 @@ async function signUp(email, name) {
   await page.waitForURL(/dashboard/);
   const m = await mail(email);
   await page.goto(/https?:\/\/\S+verify-email\?token=\S+/.exec(m.text)[0]);
+  // The emailed link shows a confirmation page; the person confirms with a POST.
+  await page.click('button:has-text("Confirm my email address")');
+  await page.waitForURL(/verified=1/);
 }
 
 const results = [];
