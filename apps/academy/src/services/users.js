@@ -1,7 +1,7 @@
 // Account lifecycle: creation, role bootstrap, tokens, and deletion.
 import { newId, nowIso, addSeconds, randomToken, sha256Hex } from "../lib/util.js";
 import { HttpError } from "../lib/http.js";
-import { hashPassword, auditStmt, revokeAllSessions } from "../lib/security.js";
+import { hashPassword, auditStmt, revokeAllSessions, superAdminRemainsStmt, isLastSuperAdmin } from "../lib/security.js";
 import { eventStmt } from "./activity.js";
 
 export const PROFESSIONAL_ROLES = ["grower", "agronomist", "farm_manager", "operator", "student", "researcher", "developer", "advisor", "other"];
@@ -97,6 +97,8 @@ export async function deleteAccount(env, userId, actorId) {
   const now = nowIso();
   const certs = (await env.DB.prepare("SELECT id FROM certificates WHERE user_id = ?").bind(userId).all()).results;
   await env.DB.batch([
+    // Never removes the last active super administrator (atomic with the deletion).
+    superAdminRemainsStmt(env, actorId, userId, "user.delete.requested"),
     ...certs.flatMap((c) => [
       env.DB.prepare(
         "UPDATE certificates SET status='revoked', revoked_at=COALESCE(revoked_at, ?), revoked_reason='holder_account_deleted', credential_name='Former learner', user_id=NULL WHERE id=?",
@@ -114,7 +116,9 @@ export async function deleteAccount(env, userId, actorId) {
     // bookmarks, lesson feedback, achievements, attempts and notifications.
     env.DB.prepare("DELETE FROM users WHERE id = ?").bind(userId),
     auditStmt(env, actorId, "user.delete", "user", userId, { certificates_revoked: certs.length }),
-  ]);
+  ]).catch((e) => {
+    throw isLastSuperAdmin(e) ? new HttpError(409, "last_super_admin") : e;
+  });
 }
 
 export async function setPassword(env, userId, password, keepSessionHash = null) {

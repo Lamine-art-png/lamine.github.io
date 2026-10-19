@@ -2,7 +2,7 @@
 import { html, raw } from "../../lib/html.js";
 import { redirect, HttpError } from "../../lib/http.js";
 import { newId, nowIso, credentialId } from "../../lib/util.js";
-import { auditStmt, audit, revokeAllSessions } from "../../lib/security.js";
+import { auditStmt, audit, revokeAllSessions, superAdminRemainsStmt, isLastSuperAdmin } from "../../lib/security.js";
 import { adminPage, table, statusBadge, hidden, input, select, str } from "./shell.js";
 import { issueToken } from "../../services/users.js";
 import { sendEmail } from "../../services/email.js";
@@ -112,11 +112,18 @@ export async function setRoles(c) {
     if (!others.n) return redirect(`/admin/learners/${c.params.id}?err=${encodeURIComponent("You are the only super administrator.")}`);
   }
   const now = nowIso();
-  await c.env.DB.batch([
-    c.env.DB.prepare("DELETE FROM user_roles WHERE user_id = ?").bind(c.params.id),
-    ...[...wanted].map((r) => c.env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_by, granted_at) VALUES (?,?,?,?)").bind(c.params.id, r, c.user.id, now)),
-    auditStmt(c.env, c.user.id, "roles.set", "user", c.params.id, { roles: [...wanted] }),
-  ]);
+  try {
+    await c.env.DB.batch([
+      // Removing the super_admin role never leaves no active super administrator (atomic with the change).
+      ...(wanted.has("super_admin") ? [] : [superAdminRemainsStmt(c.env, c.user.id, c.params.id, "roles.remove_check")]),
+      c.env.DB.prepare("DELETE FROM user_roles WHERE user_id = ?").bind(c.params.id),
+      ...[...wanted].map((r) => c.env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_by, granted_at) VALUES (?,?,?,?)").bind(c.params.id, r, c.user.id, now)),
+      auditStmt(c.env, c.user.id, "roles.set", "user", c.params.id, { roles: [...wanted] }),
+    ]);
+  } catch (e) {
+    if (isLastSuperAdmin(e)) return redirect(`/admin/learners/${c.params.id}?err=${encodeURIComponent("You are the only super administrator.")}`);
+    throw e;
+  }
   return redirect(`/admin/learners/${c.params.id}?ok=saved`);
 }
 

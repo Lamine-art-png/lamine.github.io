@@ -165,3 +165,62 @@ test("disabled super administrators do not count as the remaining one", async ()
   r = await founder.post(`/admin/learners/${ids["founder@academy.test"]}/roles`, { roles: ["academy_admin"] });
   assert.doesNotMatch(decodeURIComponent(r.location), /only super administrator/);
 });
+
+/** Run `other` once, just before the next batch: a concurrent request that landed between the check and the write. */
+function beforeNextBatch(env, other) {
+  const orig = env.DB.batch.bind(env.DB);
+  env.DB.batch = async (stmts) => {
+    env.DB.batch = orig;
+    await other();
+    return orig(stmts);
+  };
+}
+
+test("two super administrators removing themselves at once never leave none", async () => {
+  const env = makeEnv();
+  const founder = await registeredLearner(env, { email: "founder@academy.test" });
+  await registeredLearner(env, { email: "other@academy.test" });
+  const ids = Object.fromEntries((await env.DB.prepare("SELECT id, email FROM users").all()).results.map((x) => [x.email, x.id]));
+  const grant = () => env.DB.prepare("INSERT OR IGNORE INTO user_roles (user_id, role, granted_at) VALUES (?, 'super_admin', ?)").bind(ids["other@academy.test"], new Date().toISOString()).run();
+  const otherLeaves = () => env.DB.prepare("DELETE FROM user_roles WHERE user_id = ? AND role = 'super_admin'").bind(ids["other@academy.test"]).run();
+  const activeSupers = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.role = 'super_admin' AND u.status = 'active'").first()).n;
+  // Self-demotion: the check sees the other super administrator, who leaves before the write.
+  await grant();
+  beforeNextBatch(env, otherLeaves);
+  let r = await founder.post(`/admin/learners/${ids["founder@academy.test"]}/roles`, { roles: ["academy_admin"] });
+  assert.match(decodeURIComponent(r.location), /only super administrator/);
+  assert.equal(await activeSupers(), 1, "the founder kept the role");
+  // Account deletion, same race.
+  await grant();
+  await founder.get("/account");
+  beforeNextBatch(env, otherLeaves);
+  r = await founder.post("/account/delete", { confirm: "DELETE", password: founder.password });
+  assert.equal(r.status, 409);
+  assert.ok(await env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(ids["founder@academy.test"]).first(), "the account was not deleted");
+  assert.equal(await activeSupers(), 1);
+  // Without a concurrent removal, demotion with another active super administrator still works.
+  await grant();
+  r = await founder.post(`/admin/learners/${ids["founder@academy.test"]}/roles`, { roles: ["academy_admin"] });
+  assert.doesNotMatch(decodeURIComponent(r.location), /only super administrator/);
+  assert.equal(await activeSupers(), 1, "the other super administrator remains");
+});
+
+test("draws from unrelated banks do not count against a pool", async () => {
+  const env = makeEnv();
+  const course = await env.DB.prepare("SELECT * FROM courses WHERE id = 'crs_a1'").first();
+  const now = new Date().toISOString();
+  const q = (id, bank, difficulty) =>
+    env.DB.prepare("INSERT INTO draft_questions (id, bank_id, type, difficulty, prompt, data_json, answer_json, grading, points, status, created_at, updated_at) VALUES (?, ?, 'true_false', ?, 'Synthetic', '{}', '{\"correct\":true}', 'auto', 1, 'active', ?, ?)").bind(id, bank, difficulty, now, now);
+  const rule = (id, bank, difficulty, draw, order) => env.DB.prepare("INSERT INTO draft_assessment_rules (id, assessment_id, bank_id, difficulty, draw_count, sort_order) VALUES (?, 'asm_a1_q1', ?, ?, ?, ?)").bind(id, bank, difficulty, draw, order);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO draft_question_banks (id, course_id, title, created_at, updated_at) VALUES ('bnk_A','crs_a1','A',?,?), ('bnk_B','crs_a1','B',?,?)").bind(now, now, now, now),
+    q("qa1", "bnk_A", "easy"), q("qa2", "bnk_A", "easy"), q("qa3", "bnk_A", "hard"), q("qb1", "bnk_B", "easy"), q("qb2", "bnk_B", "easy"),
+    env.DB.prepare("DELETE FROM draft_assessment_rules WHERE assessment_id = 'asm_a1_q1'"),
+    // 1 of A's 2 easy, then 2 of B, then 2 of A's 3: at most 1 of A's questions is gone, so 2 remain.
+    rule("r1", "bnk_A", "easy", 1, 1), rule("r2", "bnk_B", null, 2, 2), rule("r3", "bnk_A", null, 2, 3),
+  ]);
+  const check = (await publishReadiness(env, course)).checks.find((c) => /linked quiz|cannot take/.test(c.label));
+  assert.equal(check.ok, true, check.label);
+  await env.DB.prepare("UPDATE draft_assessment_rules SET draw_count = 3 WHERE id = 'r3'").run();
+  assert.equal((await publishReadiness(env, course)).checks.find((c) => /linked quiz|cannot take/.test(c.label)).ok, false, "3 of A after 1 drawn is too many");
+});

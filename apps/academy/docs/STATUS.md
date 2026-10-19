@@ -152,6 +152,13 @@ Also fixed: the WCAG scan script still verified its admin by GET (CI caught it);
 | P1 overlapping draw rules passed readiness one by one but failed at runtime, which never draws a question twice | Rules are checked in draw order against the worst case: each must still have enough questions after earlier rules take as many shared ones as they can | `review-guards` "overlapping draw rules are checked as one pool, as the runtime draws them" |
 | P1 a disabled super administrator counted as the remaining one, so the last active one could delete their account or drop the role | Account deletion and self-demotion count only active super administrators | `review-guards` "disabled super administrators do not count as the remaining one" |
 
+### Codex review of `3021b8d` (1 × P1, 1 × P2) — all fixed
+
+| Finding | Fix | Test |
+|---|---|---|
+| P1 two super administrators removing themselves concurrently could both pass the check | The last-active-super-administrator invariant is enforced inside the deletion and demotion batches (a guarded first statement rolls the batch back), so the check and the removal are atomic | `review-guards` "two super administrators removing themselves at once never leave none" |
+| P2 the draw-rule bound counted draws from unrelated banks against a pool | Each earlier rule counts only up to what it can take from the questions it shares with the pool | `review-guards` "draws from unrelated banks do not count against a pool" |
+
 CI then caught a real player defect in the e2e "resume" step (not a flake): playback did not resume
 when cached media loaded its metadata before the player script ran, and the resume jump itself reported
 position 0, overwriting the saved position until the page closed. Both are fixed in
@@ -164,7 +171,7 @@ fail through network latency and a stale paused state after a seek. Fixed with a
 
 ### Results of this pass (local, commit noted in the PR)
 
-- `npm test` (unit, integration, deploy): **163/163 pass**.
+- `npm test` (unit, integration, deploy): **165/165 pass**.
 - Browser e2e (`tests/e2e/run.mjs`, Chromium): **12/12 steps pass** (repeated runs), including video watch-to-complete at 2×.
 - Shaping oracle: **117/117** names match Chromium/HarfBuzz. Poppler: **11/11** PDFs render and extract.
 - Seed and i18n index regenerate with no diff. Repository secret scan passes.

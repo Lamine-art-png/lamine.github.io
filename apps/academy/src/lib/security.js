@@ -146,6 +146,24 @@ export function auditStmt(env, actorId, action, entityType, entityId, detail) {
   );
 }
 
+/**
+ * First statement of a batch that removes a super administrator (account
+ * deletion or self-demotion). It records `action` only while another active
+ * super administrator remains; otherwise its action is NULL, violates NOT NULL
+ * and the whole batch rolls back, so the check and the removal are one atomic
+ * operation and two concurrent removals cannot both succeed.
+ */
+export function superAdminRemainsStmt(env, actorId, userId, action) {
+  return env.DB.prepare(
+    `INSERT INTO audit_log (id, actor_id, action, entity_type, entity_id, created_at)
+     VALUES (?1, ?2, (SELECT ?3 WHERE NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ?4 AND role = 'super_admin')
+                         OR EXISTS (SELECT 1 FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.role = 'super_admin' AND u.status = 'active' AND r.user_id != ?4)), 'user', ?4, ?5)`,
+  ).bind(newId("aud_"), actorId ?? null, action, userId, nowIso());
+}
+
+/** True when a batch was rolled back by superAdminRemainsStmt. */
+export const isLastSuperAdmin = (e) => /NOT NULL/i.test(String(e?.message)) && /audit_log/i.test(String(e?.message));
+
 export async function audit(c, action, entityType, entityId, detail) {
   await auditStmt(c.env, c.user?.id, action, entityType, entityId, detail).run();
 }

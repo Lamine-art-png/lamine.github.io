@@ -32,14 +32,14 @@ async function drawProblem(env, assessmentId) {
   const rules = (await env.DB.prepare("SELECT * FROM draft_assessment_rules WHERE assessment_id = ? ORDER BY sort_order").bind(assessmentId).all()).results;
   if (!rules.length) return "no question draw rules";
   let short = 0;
-  const earlier = new Set();
-  let drawnBefore = 0;
+  const earlier = []; // { pool: Set, draw } of the rules already drawn
   for (const r of rules) {
     const pool = (await env.DB.prepare(`SELECT id FROM draft_questions WHERE bank_id = ? AND status = 'active' ${r.difficulty ? "AND difficulty = ?" : ""}`).bind(...(r.difficulty ? [r.bank_id, r.difficulty] : [r.bank_id])).all()).results.map((q) => q.id);
-    const shared = pool.filter((id) => earlier.has(id)).length;
-    if (pool.length - Math.min(drawnBefore, shared) < r.draw_count) short++;
-    for (const id of pool) earlier.add(id);
-    drawnBefore += r.draw_count;
+    // An earlier rule can take at most its own draw count, and only from the questions it shares with this pool.
+    const shared = new Set(pool.filter((id) => earlier.some((e) => e.pool.has(id))));
+    const taken = Math.min(shared.size, earlier.reduce((n, e) => n + Math.min(e.draw, pool.filter((id) => e.pool.has(id)).length), 0));
+    if (pool.length - taken < r.draw_count) short++;
+    earlier.push({ pool: new Set(pool), draw: r.draw_count });
   }
   return short ? `${short} draw rule(s) need more active questions (rules drawing from the same questions share them)` : null;
 }
