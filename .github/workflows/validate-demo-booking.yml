@@ -22,3 +22,19 @@ jobs:
         run: node --check cloudflare/form-page-runtime/src/index.js
       - name: Validate browser runtime and original form invariants
         run: node scripts/check-demo-booking.mjs
+
+  live-booking-journey:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install real browser
+        run: |
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Verify current production demo submission to Calendly path
+        env:
+          EXPECT_HINT: "0"
+        run: node scripts/demo-booking-production-proof.mjs
