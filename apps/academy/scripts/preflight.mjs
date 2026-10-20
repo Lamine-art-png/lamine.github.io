@@ -92,9 +92,9 @@ async function cloudflare() {
   }
 }
 
-// Read-only inventory of staging accounts for cleanup planning. No address,
-// name or other personal field is selected; only whether the address is a
-// synthetic test address (*.invalid) is computed inside the database.
+// Read-only inventory of staging accounts for cleanup planning. No identifier,
+// address, name or other personal field is selected, and only synthetic test
+// accounts (*.invalid, filtered inside the database) are read row by row.
 async function d1Query(uuid, sql) {
   try {
     const r = await fetch(`${CF}/accounts/${ACCOUNT}/d1/database/${uuid}/query`, {
@@ -114,19 +114,24 @@ async function stagingAccounts() {
   const dbs = await cf(`/accounts/${ACCOUNT}/d1/database?name=agroai-academy-staging`);
   const db = dbs.ok && dbs.result?.find((d) => d.name === "agroai-academy-staging");
   if (!db) return out(`- Staging database not readable (HTTP ${dbs.status} ${dbs.errors})`);
-  const rows = await d1Query(db.uuid, `SELECT u.id, lower(u.email) LIKE '%.invalid' AS synthetic, u.status, u.created_at,
+  const totals = await d1Query(db.uuid, "SELECT COUNT(*) AS total FROM users");
+  const rows = await d1Query(db.uuid, `SELECT u.status, u.created_at,
       u.email_verified_at IS NOT NULL AS verified,
       (SELECT GROUP_CONCAT(role) FROM user_roles r WHERE r.user_id = u.id) AS roles,
       (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id) AS enrollments,
       (SELECT COUNT(*) FROM certificates x WHERE x.user_id = u.id) AS certificates,
       (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
-    FROM users u ORDER BY u.created_at`);
-  if (!Array.isArray(rows)) return out(`- Query refused (${rows})`);
-  out(`- Accounts: ${rows.length} total, ${rows.filter((u) => u.synthetic).length} synthetic (*.invalid), ${rows.filter((u) => !u.synthetic).length} other`);
+    FROM users u WHERE lower(u.email) LIKE '%.invalid' ORDER BY u.created_at`);
+  if (!Array.isArray(rows) || !Array.isArray(totals)) return out(`- Query refused (${Array.isArray(rows) ? totals : rows})`);
+  // Only synthetic accounts are read row by row, without an identifier: logs and
+  // job summaries never carry a real person's account record, only a count.
+  const synthetic = rows;
+  const total = Number(totals[0].total);
+  out(`- Accounts: ${total} total, ${synthetic.length} synthetic (*.invalid), ${total - synthetic.length} other (count only)`);
   out("");
-  out("| Account id | Synthetic | Status | Created | Verified | Roles | Enrollments | Certificates | Sessions |");
-  out("|---|---|---|---|---|---|---|---|---|");
-  for (const u of rows) out(`| ${u.id} | ${u.synthetic ? "yes" : "**no**"} | ${u.status} | ${u.created_at} | ${u.verified ? "yes" : "no"} | ${u.roles || "-"} | ${u.enrollments} | ${u.certificates} | ${u.sessions} |`);
+  out("| Synthetic account | Status | Created | Verified | Roles | Enrollments | Certificates | Sessions |");
+  out("|---|---|---|---|---|---|---|---|");
+  synthetic.forEach((u, i) => out(`| #${i + 1} | ${u.status} | ${u.created_at} | ${u.verified ? "yes" : "no"} | ${u.roles || "-"} | ${u.enrollments} | ${u.certificates} | ${u.sessions} |`));
   const certs = await d1Query(db.uuid, "SELECT status, user_id IS NULL AS orphaned, COUNT(*) AS n FROM certificates GROUP BY 1, 2");
   if (Array.isArray(certs)) out(`- Certificates by status: ${certs.map((c) => `${c.status}${c.orphaned ? " (holder deleted)" : ""}=${c.n}`).join(", ") || "none"}`);
 }
