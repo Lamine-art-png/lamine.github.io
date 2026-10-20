@@ -49,9 +49,13 @@ async function repository() {
   out("## Repository-level secrets");
   presence();
   out("");
+  await cloudflare();
+}
+
+async function cloudflare() {
   out("## Cloudflare (read-only)");
   if (!process.env.CLOUDFLARE_API_TOKEN || !ACCOUNT) {
-    out("- Cloudflare token or account id is not available at repository level; inventory skipped.");
+    out("- Cloudflare token or account id is not available here; inventory skipped.");
   } else {
     let v = await cf(`/accounts/${ACCOUNT}/tokens/verify`);
     if (!v.ok) v = await cf("/user/tokens/verify");
@@ -85,6 +89,9 @@ async function repository() {
       out(`- R2 buckets (${buckets.length}): ${buckets.join(", ") || "none"}`);
     } else out(`- R2: unreadable with this token (HTTP ${r2.status} ${r2.errors})`);
   }
+}
+
+async function endpoints() {
   out("");
   out("## Live endpoints");
   for (const [label, url] of [
@@ -103,11 +110,17 @@ async function repository() {
   }
 }
 
-if (mode === "repository") await repository();
+if (mode === "repository") {
+  await repository();
+  await endpoints();
+}
 else if (mode === "environment") {
   out(`## GitHub environment \`${envName}\``);
   out("- The job started inside this environment, so it exists and this branch may use it.");
   presence();
+  out("");
+  out("Cloudflare access with the token this environment's deploy job receives:");
+  await cloudflare();
 } else {
   console.error("usage: preflight.mjs repository | environment <name>");
   process.exit(2);
