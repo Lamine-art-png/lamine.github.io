@@ -47,6 +47,12 @@ if (group === "d1" && sub === "list") {
     db.close();
     process.stdout.write(JSON.stringify([{ results: [], success: true, meta: {} }]));
   } else {
+    // Cloudflare D1 rejects compound SELECTs beyond a few terms (seen live: 11 terms failed).
+    if ((flag("--command").match(/\bUNION\b/gi) || []).length >= 4) {
+      db.close();
+      process.stdout.write(JSON.stringify({ error: { text: "A request to the Cloudflare API failed.", notes: [{ text: "too many terms in compound SELECT: SQLITE_ERROR [code: 7500]" }] } }));
+      process.exit(1);
+    }
     const results = db.prepare(flag("--command")).all();
     db.close();
     process.stdout.write(JSON.stringify([{ results, success: true, meta: {} }]));

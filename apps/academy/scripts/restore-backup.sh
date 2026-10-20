@@ -44,10 +44,20 @@ $WRANGLER d1 execute "$NEW_DB" --remote --file "$WORK/backup.sql" --yes >/dev/nu
 
 echo "==> Checking the restored database matches the backup exactly"
 q() { $WRANGLER d1 execute "$NEW_DB" --remote --json --command "$1"; }
+# One query per line, rows merged (D1 rejects large compound SELECTs).
+q_each() {
+  local i=0 line files=()
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    q "$line" > "$WORK/q-$i.json"; files+=("$WORK/q-$i.json"); i=$((i + 1))
+  done
+  $H merge-d1 "${files[@]}" </dev/null
+}
 TABLES="$(q "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name <> 'd1_migrations' ORDER BY name")"
-q "$(printf '%s' "$TABLES" | $H counts-sql)" | $H counts-json | $H same-json "$WORK/dump-counts.json" >/dev/null || {
-  echo "Restored row counts differ from the backup; do not use ${NEW_DB}." >&2; exit 1; }
-q "$(printf '%s' "$TABLES" | $H critical-sql)" | $H critical-json | $H same-json "$WORK/dump-critical.json" >/dev/null || {
+printf '%s' "$TABLES" | $H counts-queries | q_each | $H counts-json > "$WORK/restored-counts.json"
+$H same-json "$WORK/dump-counts.json" < "$WORK/restored-counts.json" >/dev/null || {
+  echo "Restored row counts differ from the backup; do not use ${NEW_DB}: $(node -e 'const [a,b]=process.argv.slice(1).map(f=>require(f));console.log(Object.keys({...a,...b}).filter(k=>a[k]!==b[k]).map(k=>`${k} backup=${b[k]} restored=${a[k]}`).join(", "))' "$WORK/restored-counts.json" "$WORK/dump-counts.json")" >&2; exit 1; }
+printf '%s' "$TABLES" | $H critical-queries | q_each | $H critical-json | $H same-json "$WORK/dump-critical.json" >/dev/null || {
   echo "Restored learner, exam or certificate records differ from the backup; do not use ${NEW_DB}." >&2; exit 1; }
 echo "    Every table's row count and every critical record match the backup."
 echo "==> Restored into ${NEW_DB}. The live database was not modified."
