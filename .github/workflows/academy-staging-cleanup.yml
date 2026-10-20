@@ -1,0 +1,85 @@
+name: Academy Staging Cleanup (manual)
+
+# One-off, manual removal of synthetic accounts left by failed staging test
+# runs. Never scheduled, never runs on push, staging only. The Worker checks
+# every named account (synthetic test address, created in the given window,
+# test roles only, no early-access record, no ownership of content, reviews,
+# support requests or linked sign-ins) and deletes only if all pass, through
+# the normal account-deletion service. Reports never contain addresses.
+on:
+  workflow_dispatch:
+    inputs:
+      account_ids:
+        description: "Comma-separated account ids (usr_...), at most 10"
+        required: true
+      created_from:
+        description: "Earliest creation time allowed (ISO, e.g. 2026-10-20T06:30:00.000Z)"
+        required: true
+      created_to:
+        description: "Latest creation time allowed (ISO)"
+        required: true
+      mode:
+        description: "check (report only) or delete"
+        type: choice
+        options: [check, delete]
+        default: check
+      confirm:
+        description: 'For delete, type exactly: delete synthetic staging accounts'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: academy-staging
+    concurrency:
+      group: agroai-academy-staging
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IDS: ${{ inputs.account_ids }}
+      FROM: ${{ inputs.created_from }}
+      TO: ${{ inputs.created_to }}
+      MODE: ${{ inputs.mode }}
+      CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: Require the confirmation phrase for deletion
+        run: |
+          if [ "$MODE" = "delete" ] && [ "$CONFIRM" != "delete synthetic staging accounts" ]; then
+            echo "::error::Deletion needs the exact confirmation phrase."; exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Fresh, masked token for this run, set on the staging Worker only. The
+      # next staging deploy replaces it again.
+      - name: Rotate the staging test token
+        run: |
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          echo "STAGING_TOKEN=$token" >> "$GITHUB_ENV"
+          printf '%s' "$token" | npx --yes wrangler@4.107.0 secret put STAGING_TEST_TOKEN --name agroai-academy-staging >/dev/null
+          sleep 5
+      - name: Run the cleanup (${{ inputs.mode }})
+        run: |
+          body="$(node -e 'const [ids, from, to, mode] = process.argv.slice(1); console.log(JSON.stringify({ ids: ids.split(",").map((s) => s.trim()).filter(Boolean), from, to, mode }))' "$IDS" "$FROM" "$TO" "$MODE")"
+          code="$(curl -sS -o report.json -w '%{http_code}' -X POST https://academy-staging.agroai-pilot.com/__staging/cleanup \
+            -H "authorization: Bearer ${STAGING_TOKEN}" -H 'content-type: application/json' --data "$body")"
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("report.json", "utf8"));
+            const out = [];
+            out.push(`### Staging cleanup: mode=${r.mode}, deleted=${r.deleted}${r.refused ? ", REFUSED (nothing deleted)" : ""}`, "");
+            out.push("| Account | Created | Roles | Enrollments | Certificates | Sessions | Auth tokens | Eligible | Failed checks |", "|---|---|---|---|---|---|---|---|---|");
+            for (const a of r.accounts) out.push(`| ${a.id} | ${a.created_at || "-"} | ${(a.roles || []).join(",") || "-"} | ${a.enrollments ?? "-"} | ${a.certificates ?? "-"} | ${a.sessions ?? "-"} | ${a.auth_tokens ?? "-"} | ${a.eligible ? "yes" : "**no**"} | ${a.failed.join(", ") || "-"} |`);
+            const t = (x) => `users=${x.users}, synthetic=${x.synthetic_users}, sessions=${x.sessions}, auth_tokens=${x.auth_tokens}, early_access=${x.early_access_registrants}, certificates: ${x.certificates.map((c) => `${c.status}${c.holder_deleted ? " (holder deleted)" : ""}=${c.n}`).join(", ") || "none"}`;
+            out.push("", `Before: ${t(r.before)}`);
+            if (r.after) out.push(`After: ${t(r.after)}`);
+            if (r.remaining) out.push(`Deleted accounts remaining (account+sessions+tokens+certificates held): ${r.remaining.map((x) => x.account + x.sessions + x.auth_tokens + x.certificates_held).join(", ")}`);
+            console.log(out.join("\n"));
+            if (process.env.GITHUB_STEP_SUMMARY) require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, out.join("\n") + "\n");
+          ' || { echo "::error::Unexpected response (HTTP $code)"; exit 1; }
+          [ "$code" = "200" ] || { echo "::error::Cleanup returned HTTP $code"; exit 1; }

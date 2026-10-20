@@ -40,6 +40,7 @@ export function registerRoutes(r) {
   // Bearer-token authenticated (no cookies), so no CSRF token; 404 outside staging.
   r.post("/__staging/probe-course", pub.stagingProbeCourse, { csrf: false });
   r.post("/__staging/staff", pub.stagingStaff, { csrf: false });
+  r.post("/__staging/cleanup", pub.stagingCleanup, { csrf: false });
 
   // Authentication
   r.get("/register", (c) => auth.registerPage(c));
