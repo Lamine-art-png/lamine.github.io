@@ -57,12 +57,24 @@ jobs:
       GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_SECRET }}
       CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_STAGING_CERT_SIGNING_SECRET }}
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE }}
-      STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
+      CONFIGURED_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The staging write-path test needs a token shared by the staging Worker
+      # and the test. Unless one is configured, each run generates a fresh one
+      # (deploy.sh sets it on the Worker), so it rotates on every deploy.
+      - name: Staging test token (configured, or generated for this run)
+        run: |
+          token="${CONFIGURED_STAGING_TEST_INBOX_TOKEN:-}"
+          if [ -z "$token" ]; then
+            token="$(openssl rand -hex 32)"
+            echo "Generated a staging test token for this run only."
+          fi
+          echo "::add-mask::$token"
+          echo "STAGING_TEST_INBOX_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Require staging test credentials (release gate)
         run: |
           if [ "${#STAGING_TEST_INBOX_TOKEN}" -lt 32 ]; then

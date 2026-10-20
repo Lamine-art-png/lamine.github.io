@@ -21,7 +21,9 @@ test("production deploys only after the staging job, which runs the write-path t
   const production = job("production");
   assert.match(production, /needs: staging/);
   assert.match(staging, /run: node tests\/remote\/staging\.mjs https:\/\/academy-staging\.agroai-pilot\.com/);
-  assert.match(staging, /STAGING_TEST_INBOX_TOKEN: \$\{\{ secrets\.ACADEMY_STAGING_TEST_INBOX_TOKEN \}\}/);
+  // A configured token is used; otherwise the run generates one. Either way the test must run.
+  assert.match(staging, /CONFIGURED_STAGING_TEST_INBOX_TOKEN: \$\{\{ secrets\.ACADEMY_STAGING_TEST_INBOX_TOKEN \}\}/);
+  assert.match(staging, /openssl rand -hex 32[\s\S]*::add-mask::[\s\S]*STAGING_TEST_INBOX_TOKEN=\$token" >> "\$GITHUB_ENV"/);
   assert.match(staging, /Require staging test credentials[\s\S]*exit 1/);
   for (const j of [staging, production]) {
     assert.doesNotMatch(j, /continue-on-error/, "no soft-failing steps");
