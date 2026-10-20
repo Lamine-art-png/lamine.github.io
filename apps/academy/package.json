@@ -1,0 +1,17 @@
+{
+  "name": "agroai-academy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AGRO-AI Academy — free agricultural AI courses and verifiable certificates.",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "dev": "node dev/server.js",
+    "dev:fresh": "node dev/server.js --fresh",
+    "test": "node --test --test-reporter=spec tests/unit/*.test.js tests/integration/*.test.js tests/deploy/*.test.js",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "test:staging": "node tests/remote/staging.mjs",
+    "seed:generate": "node scripts/generate-seed.mjs",
+    "i18n:index": "node scripts/build-i18n-index.mjs"
+  }
+}

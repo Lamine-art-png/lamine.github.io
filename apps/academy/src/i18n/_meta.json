@@ -1,0 +1,8 @@
+{
+  "en": { "provenance": "source", "reviewed": true },
+  "pt-BR": { "provenance": "machine-prepared", "reviewed": false },
+  "es": { "provenance": "machine-prepared", "reviewed": false },
+  "fr-FR": { "provenance": "machine-prepared", "reviewed": false },
+  "ar": { "provenance": "machine-prepared", "reviewed": false },
+  "sw": { "provenance": "machine-prepared", "reviewed": false }
+}

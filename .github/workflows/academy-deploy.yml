@@ -1,0 +1,129 @@
+name: Academy Deploy
+
+# Deploys AGRO-AI Academy as its own Worker + D1 database. Staging and
+# production are separate Workers, databases, backup buckets, GitHub
+# environments and secrets:
+#   staging    → https://academy-staging.agroai-pilot.com  (every push to main)
+#   production → https://academy.agroai-pilot.com          (manual only, see below)
+# Production runs only from a manual dispatch on main with target=production
+# and the confirmation phrase, after staging deploys and passes its checks in
+# the same run, and after any reviewers required by the `academy-production`
+# environment approve. It never edits existing DNS records, other Workers or
+# other services.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "apps/academy/**"
+      - "shared/supported-locales.json"
+      - "shared/registries/countries.json"
+      - ".github/workflows/academy-ci.yml"
+      - ".github/workflows/academy-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "staging, or production (deploys staging first)"
+        type: choice
+        options: [staging, production]
+        default: staging
+      confirm:
+        description: "For production, type: deploy academy production"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/academy-ci.yml
+
+  staging:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment:
+      name: academy-staging
+      url: https://academy-staging.agroai-pilot.com
+    concurrency:
+      group: agroai-academy-staging
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS }}
+      RESEND_API_KEY: ${{ secrets.ACADEMY_STAGING_RESEND_API_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_SECRET }}
+      CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_STAGING_CERT_SIGNING_SECRET }}
+      BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE }}
+      CONFIGURED_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The staging write-path test needs a token shared by the staging Worker
+      # and the test. Unless one is configured, each run generates a fresh one
+      # (deploy.sh sets it on the Worker), so it rotates on every deploy.
+      - name: Staging test token (configured, or generated for this run)
+        run: |
+          token="${CONFIGURED_STAGING_TEST_INBOX_TOKEN:-}"
+          if [ -z "$token" ]; then
+            token="$(openssl rand -hex 32)"
+            echo "Generated a staging test token for this run only."
+          fi
+          echo "::add-mask::$token"
+          echo "STAGING_TEST_INBOX_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Require staging test credentials (release gate)
+        run: |
+          if [ "${#STAGING_TEST_INBOX_TOKEN}" -lt 32 ]; then
+            echo "::error::ACADEMY_STAGING_TEST_INBOX_TOKEN (32+ characters) is required: the staging write-path test is mandatory before production."
+            exit 1
+          fi
+      - name: Deploy staging
+        working-directory: apps/academy
+        run: bash scripts/deploy.sh staging
+      - name: Smoke test staging (read-only)
+        working-directory: apps/academy
+        run: bash scripts/smoke.sh https://academy-staging.agroai-pilot.com
+      # Mandatory: production (needs: staging) runs only if this passes.
+      - name: Staging integration test against Cloudflare D1 over HTTP
+        working-directory: apps/academy
+        run: node tests/remote/staging.mjs https://academy-staging.agroai-pilot.com
+
+  production:
+    needs: staging
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.target == 'production' &&
+      inputs.confirm == 'deploy academy production' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: academy-production
+      url: https://academy.agroai-pilot.com
+    concurrency:
+      group: agroai-academy-production
+      cancel-in-progress: false
+    env:
+      ACADEMY_DEPLOY_CONFIRM: production
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS }}
+      RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET }}
+      CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET }}
+      BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy production (verified backup before migrations)
+        working-directory: apps/academy
+        run: bash scripts/deploy.sh production
+      - name: Smoke test production (read-only)
+        working-directory: apps/academy
+        run: bash scripts/smoke.sh https://academy.agroai-pilot.com

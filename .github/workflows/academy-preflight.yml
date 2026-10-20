@@ -1,0 +1,86 @@
+name: Academy Preflight
+
+# Read-only inventory of what an Academy deployment needs. It never creates,
+# changes or deletes anything and never prints a secret value: secrets are
+# reported only as present/absent, Cloudflare resources by name and type.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/academy-preflight.yml"
+      - "apps/academy/scripts/preflight.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    name: Repository secrets, Cloudflare inventory, live endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PRESENT_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      PRESENT_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      PRESENT_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY != '' }}
+      PRESENT_FROM_EMAIL: ${{ secrets.FROM_EMAIL != '' }}
+      PRESENT_ACADEMY_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN != '' }}
+      PRESENT_ACADEMY_STAGING_RESEND_API_KEY: ${{ secrets.ACADEMY_STAGING_RESEND_API_KEY != '' }}
+      PRESENT_ACADEMY_PRODUCTION_RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Inventory (read-only)
+        run: node apps/academy/scripts/preflight.mjs repository
+
+  staging-environment:
+    name: academy-staging environment secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: academy-staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PRESENT_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      PRESENT_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      PRESENT_ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS != '' }}
+      PRESENT_ACADEMY_STAGING_RESEND_API_KEY: ${{ secrets.ACADEMY_STAGING_RESEND_API_KEY != '' }}
+      PRESENT_ACADEMY_STAGING_GOOGLE_CLIENT_ID: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_ID != '' }}
+      PRESENT_ACADEMY_STAGING_GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_SECRET != '' }}
+      PRESENT_ACADEMY_STAGING_CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_STAGING_CERT_SIGNING_SECRET != '' }}
+      PRESENT_ACADEMY_STAGING_BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE != '' }}
+      PRESENT_ACADEMY_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Secret presence (values are never printed)
+        run: node apps/academy/scripts/preflight.mjs environment academy-staging
+
+  production-environment:
+    name: academy-production environment secrets
+    # Manual runs only: a protected environment would otherwise hold every PR run for approval.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: academy-production
+    env:
+      PRESENT_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      PRESENT_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      PRESENT_ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS != '' }}
+      PRESENT_ACADEMY_PRODUCTION_RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY != '' }}
+      PRESENT_ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID != '' }}
+      PRESENT_ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET != '' }}
+      PRESENT_ACADEMY_PRODUCTION_CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET != '' }}
+      PRESENT_ACADEMY_PRODUCTION_BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Secret presence (values are never printed)
+        run: node apps/academy/scripts/preflight.mjs environment academy-production

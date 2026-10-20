@@ -1,0 +1,6 @@
+dev/.data/
+node_modules/
+.wrangler/
+test-results/
+*.sqlite
+wrangler.generated.toml

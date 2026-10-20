@@ -1,0 +1,76 @@
+name: Academy CI
+
+# Tests the standalone AGRO-AI Academy Worker. Runs without any credentials.
+on:
+  push:
+    paths:
+      - "apps/academy/**"
+      - "shared/supported-locales.json"
+      - "shared/registries/countries.json"
+      - ".github/workflows/academy-ci.yml"
+      - ".github/workflows/academy-deploy.yml"
+  pull_request:
+    paths:
+      - "apps/academy/**"
+      - "shared/supported-locales.json"
+      - "shared/registries/countries.json"
+      - ".github/workflows/academy-ci.yml"
+      - ".github/workflows/academy-deploy.yml"
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/academy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Seed migration is up to date with the curriculum source
+        run: |
+          set -euo pipefail
+          node scripts/generate-seed.mjs
+          node scripts/build-i18n-index.mjs
+          git diff --exit-code -- migrations src/i18n/index.js
+
+      - name: Bundle the Worker exactly as Cloudflare will (dry run, no credentials)
+        run: npx --yes wrangler@4.107.0 deploy --dry-run --outdir dist --config wrangler.toml
+
+      - name: Install Playwright Chromium and axe-core
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1 axe-core@4.10.2
+          npx playwright install --with-deps chromium
+
+      - name: Certificate-name shaping matches Chromium (HarfBuzz) for 100+ names
+        run: node tests/e2e/shaping-oracle.mjs
+
+      - name: Certificate PDFs render and extract correctly in Poppler
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
+          node tests/e2e/pdf-poppler.mjs
+
+      - name: Automated WCAG 2.2 AA scan (axe-core) of public, learner and admin pages
+        run: node tests/e2e/axe.mjs
+
+      - name: Browser end-to-end journey with accessibility checks
+        run: node tests/e2e/run.mjs --shots e2e-artifacts
+
+      - name: Keep e2e evidence private to the workflow run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: academy-e2e-evidence
+          path: apps/academy/e2e-artifacts
+          retention-days: 3
+          if-no-files-found: ignore
