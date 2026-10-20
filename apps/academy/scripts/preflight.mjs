@@ -1,6 +1,7 @@
 // Read-only deployment preflight, run by .github/workflows/academy-preflight.yml.
 //   node scripts/preflight.mjs repository            secrets, Cloudflare inventory, live endpoints
 //   node scripts/preflight.mjs environment <name>    secret presence inside a GitHub environment
+//                                                    (academy-staging: also a read-only account inventory)
 // Never creates, changes or deletes anything. Secrets are reported only as
 // present/absent (from PRESENT_* variables the workflow derives); Cloudflare
 // resources only by name, type and status.
@@ -91,6 +92,45 @@ async function cloudflare() {
   }
 }
 
+// Read-only inventory of staging accounts for cleanup planning. No address,
+// name or other personal field is selected; only whether the address is a
+// synthetic test address (*.invalid) is computed inside the database.
+async function d1Query(uuid, sql) {
+  try {
+    const r = await fetch(`${CF}/accounts/${ACCOUNT}/d1/database/${uuid}/query`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sql }),
+    });
+    const j = await r.json();
+    return r.ok && j.success ? j.result[0].results : `HTTP ${r.status} ${(j.errors || []).map((e) => e.code).join(",")}`;
+  } catch (e) {
+    return String(e.message).slice(0, 80);
+  }
+}
+async function stagingAccounts() {
+  out("");
+  out("## Staging accounts (read-only, no addresses)");
+  const dbs = await cf(`/accounts/${ACCOUNT}/d1/database?name=agroai-academy-staging`);
+  const db = dbs.ok && dbs.result?.find((d) => d.name === "agroai-academy-staging");
+  if (!db) return out(`- Staging database not readable (HTTP ${dbs.status} ${dbs.errors})`);
+  const rows = await d1Query(db.uuid, `SELECT u.id, lower(u.email) LIKE '%.invalid' AS synthetic, u.status, u.created_at,
+      u.email_verified_at IS NOT NULL AS verified,
+      (SELECT GROUP_CONCAT(role) FROM user_roles r WHERE r.user_id = u.id) AS roles,
+      (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id) AS enrollments,
+      (SELECT COUNT(*) FROM certificates x WHERE x.user_id = u.id) AS certificates,
+      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
+    FROM users u ORDER BY u.created_at`);
+  if (!Array.isArray(rows)) return out(`- Query refused (${rows})`);
+  out(`- Accounts: ${rows.length} total, ${rows.filter((u) => u.synthetic).length} synthetic (*.invalid), ${rows.filter((u) => !u.synthetic).length} other`);
+  out("");
+  out("| Account id | Synthetic | Status | Created | Verified | Roles | Enrollments | Certificates | Sessions |");
+  out("|---|---|---|---|---|---|---|---|---|");
+  for (const u of rows) out(`| ${u.id} | ${u.synthetic ? "yes" : "**no**"} | ${u.status} | ${u.created_at} | ${u.verified ? "yes" : "no"} | ${u.roles || "-"} | ${u.enrollments} | ${u.certificates} | ${u.sessions} |`);
+  const certs = await d1Query(db.uuid, "SELECT status, user_id IS NULL AS orphaned, COUNT(*) AS n FROM certificates GROUP BY 1, 2");
+  if (Array.isArray(certs)) out(`- Certificates by status: ${certs.map((c) => `${c.status}${c.orphaned ? " (holder deleted)" : ""}=${c.n}`).join(", ") || "none"}`);
+}
+
 async function endpoints() {
   out("");
   out("## Live endpoints");
@@ -121,6 +161,7 @@ else if (mode === "environment") {
   out("");
   out("Cloudflare access with the token this environment's deploy job receives:");
   await cloudflare();
+  if (envName === "academy-staging" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await stagingAccounts();
 } else {
   console.error("usage: preflight.mjs repository | environment <name>");
   process.exit(2);
