@@ -67,8 +67,12 @@ jobs:
       - name: Run the cleanup (${{ inputs.mode }})
         run: |
           body="$(node -e 'const [ids, from, to, mode] = process.argv.slice(1); console.log(JSON.stringify({ ids: ids.split(",").map((s) => s.trim()).filter(Boolean), from, to, mode }))' "$IDS" "$FROM" "$TO" "$MODE")"
+          # The token goes to curl through a private header file, never on its command line.
+          hdr="$(mktemp)"; chmod 600 "$hdr"
+          printf 'authorization: Bearer %s\n' "$STAGING_TOKEN" > "$hdr"
           code="$(curl -sS -o report.json -w '%{http_code}' -X POST https://academy-staging.agroai-pilot.com/__staging/cleanup \
-            -H "authorization: Bearer ${STAGING_TOKEN}" -H 'content-type: application/json' --data "$body")"
+            -H @"$hdr" -H 'content-type: application/json' --data "$body")"
+          rm -f "$hdr"
           node -e '
             const r = JSON.parse(require("fs").readFileSync("report.json", "utf8"));
             const out = [];
