@@ -22,6 +22,11 @@ class Statement {
     return new Statement(this.db, this.sql, normalize(values));
   }
   _stmt() {
+    // Cloudflare D1 caps LIKE/GLOB patterns at 50 bytes; fail here as it does live
+    // (bound wildcard patterns only: literal patterns in the SQL are short).
+    if (/\b(LIKE|GLOB)\b/i.test(this.sql) && this.params.some((v) => typeof v === "string" && /^%|%$/.test(v) && Buffer.byteLength(v) > 50)) {
+      throw new Error("D1_ERROR: LIKE or GLOB pattern too complex: SQLITE_ERROR");
+    }
     return this.db.sqlite.prepare(this.sql);
   }
   async first(column) {

@@ -445,3 +445,19 @@ test("a withdrawal racing the expiry job does not stop the rest of the scheduled
   assert.ok(report && "emailsSent" in report, "the run completed its later steps");
   assert.equal((await env.DB.prepare("SELECT status FROM attempts WHERE id = ?").bind(attemptId).first()).status, "in_progress");
 });
+
+test("admin searches accept full-length addresses and phrases (live D1 rejects long LIKE patterns)", async () => {
+  const env = makeEnv();
+  const founder = await registeredLearner(env, { email: "founder@academy.test", name: "Founder" });
+  const long = "staging-learner-1234567890abcdef@academy-staging-test.invalid";
+  await registeredLearner(env, { email: long, name: "Long Address" });
+  let r = await founder.get(`/admin/learners?q=${encodeURIComponent(long.toUpperCase())}`);
+  assert.equal(r.status, 200);
+  assert.ok(r.text.includes(long), "found case-insensitively");
+  r = await founder.get(`/admin/certificates?q=${encodeURIComponent(long)}`);
+  assert.equal(r.status, 200);
+  r = await founder.get(`/admin/audit?q=${encodeURIComponent("a".repeat(70))}`);
+  assert.equal(r.status, 200);
+  r = await founder.get(`/courses?q=${encodeURIComponent("water balance and irrigation scheduling for smallholder farms")}`);
+  assert.equal(r.status, 200);
+});

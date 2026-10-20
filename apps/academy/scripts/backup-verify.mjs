@@ -57,15 +57,23 @@ export const CRITICAL = {
  * added it) is fingerprinted the same way live and in the dump.
  */
 export function criticalSql(tables) {
+  return criticalQueries(tables).join(" UNION ALL ") || "SELECT 'none' AS t, '' AS k, '' AS f";
+}
+
+/**
+ * The same, as one query per critical table: Cloudflare D1 rejects compound
+ * SELECTs with more than a few terms ("too many terms in compound SELECT"),
+ * so remote databases are read table by table and the rows merged.
+ */
+export function criticalQueries(tables) {
   const schema = new Map(tables.map((t) => (typeof t === "string" ? [t, null] : [t.name, t.sql || ""])));
   const has = (sql, expr) => sql === null || new RegExp(`\\b${/[a-z_]+(?=\)?$)/.exec(expr)[0]}\\b`).test(sql);
-  const parts = Object.entries(CRITICAL)
+  return Object.entries(CRITICAL)
     .filter(([t]) => schema.has(t))
     .map(([t, c]) => {
       const cols = c.cols.filter((x) => has(schema.get(t), x));
       return `SELECT '${t}' AS t, ${c.key} AS k, ${cols.map((x) => `quote(${x})`).join(" || '|' || ")} AS f FROM "${t}"`;
     });
-  return parts.join(" UNION ALL ") || "SELECT 'none' AS t, '' AS k, '' AS f";
 }
 
 /** {table: {key: fingerprint-hash}} from (t, k, f) rows. */

@@ -51,7 +51,25 @@ trap cleanup EXIT
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 api() { curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "${CF_API}$1"; }
-d1() { $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --json --command "$1"; }
+# A failed query's JSON error (SQL or schema message, no row data) is shown instead of being swallowed by the parser.
+d1() {
+  local out
+  if ! out="$($WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --json --command "$1")"; then
+    echo "::error::D1 query failed: $(printf '%s' "$out" | tr '\n' ' ' | head -c 800)" >&2
+    return 1
+  fi
+  printf '%s' "$out"
+}
+# Run one query per input line and merge the rows (D1 rejects large compound SELECTs).
+d1_each() {
+  local i=0 q files=()
+  while IFS= read -r q || [ -n "$q" ]; do
+    [ -n "$q" ] || continue
+    d1 "$q" > "$WORK/q-$i.json" || return 1
+    files+=("$WORK/q-$i.json"); i=$((i + 1))
+  done
+  $H merge-d1 "${files[@]}" </dev/null
+}
 
 echo "==> Target ${TARGET}: Worker ${SERVICE}, database ${DB_NAME}, https://${HOST}"
 summary "### Academy ${TARGET} deployment" "- Worker \`${SERVICE}\`, D1 \`${DB_NAME}\`, https://${HOST}"
@@ -101,13 +119,13 @@ $H set-db-id "$DB_NAME" "$DB_ID" < wrangler.toml > wrangler.generated.toml
 echo "==> Backing up ${DB_NAME} before migrations"
 TABLES_JSON="$(d1 "SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name")" || { echo "::error::Could not read the database schema; refusing to continue." >&2; exit 1; }
 if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
-  COUNTS_SQL="$(printf '%s' "$TABLES_JSON" | $H counts-sql)"
-  CRITICAL_SQL="$(printf '%s' "$TABLES_JSON" | $H critical-sql)"
+  COUNTS_QUERIES="$(printf '%s' "$TABLES_JSON" | $H counts-queries)"
+  CRITICAL_QUERIES="$(printf '%s' "$TABLES_JSON" | $H critical-queries)"
   # Critical records (learners, enrollments, attempts, certificates, reviews) are
   # fingerprinted before and after the export; every record unchanged across the
   # export window must be in the backup exactly (no tolerance).
-  d1 "$CRITICAL_SQL" | $H critical-json > "$WORK/critical-before.json" || { echo "::error::Could not fingerprint critical records." >&2; exit 1; }
-  d1 "$COUNTS_SQL" | $H counts-json > "$WORK/live-counts.json" || { echo "::error::Could not count live rows." >&2; exit 1; }
+  printf '%s\n' "$CRITICAL_QUERIES" | d1_each | $H critical-json > "$WORK/critical-before.json" || { echo "::error::Could not fingerprint critical records." >&2; exit 1; }
+  printf '%s\n' "$COUNTS_QUERIES" | d1_each | $H counts-json > "$WORK/live-counts.json" || { echo "::error::Could not count live rows." >&2; exit 1; }
   echo "    Live rows: $(cat "$WORK/live-counts.json")"
   STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
   KEY="d1/${DB_NAME}/${STAMP}-${GITHUB_SHA:-manual}.sql.gz"
@@ -122,7 +140,7 @@ if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
 
   $WRANGLER d1 export "$DB_NAME" --remote "${CONFIG[@]}" --output "$WORK/backup.sql" >/dev/null || { echo "::error::Database export failed; refusing to migrate." >&2; exit 1; }
   test -s "$WORK/backup.sql" || { echo "::error::Database export is empty; refusing to migrate." >&2; exit 1; }
-  d1 "$CRITICAL_SQL" | $H critical-json > "$WORK/critical-after.json" || { echo "::error::Could not fingerprint critical records after the export." >&2; exit 1; }
+  printf '%s\n' "$CRITICAL_QUERIES" | d1_each | $H critical-json > "$WORK/critical-after.json" || { echo "::error::Could not fingerprint critical records after the export." >&2; exit 1; }
   echo "==> Verifying the export: completeness, integrity, restore and migration rehearsal"
   node "${HERE}/backup-verify.mjs" "$WORK/backup.sql" --expect "$WORK/live-counts.json" \
     --before "$WORK/critical-before.json" --after "$WORK/critical-after.json" --migrations migrations > "$WORK/verify.json" || {

@@ -107,11 +107,13 @@ export async function listCourses(env, locale, { q = "", topic = "", level = "",
     binds.push(language, language);
   }
   if (q) {
-    const like = `%${q.replace(/[%_]/g, "").slice(0, 80)}%`;
+    // instr, not LIKE: Cloudflare D1 rejects long LIKE patterns ("pattern too complex").
+    const needle = q.slice(0, 80).toLowerCase();
+    const has = (col) => `instr(lower(${col}), ?) > 0`;
     where.push(
-      "(c.title LIKE ? OR c.subtitle LIKE ? OR c.description LIKE ? OR c.topics_json LIKE ? OR EXISTS (SELECT 1 FROM content_translations t WHERE t.entity_type='course' AND t.entity_id=c.id AND t.value LIKE ?))",
+      `(${has("c.title")} OR ${has("c.subtitle")} OR ${has("c.description")} OR ${has("c.topics_json")} OR EXISTS (SELECT 1 FROM content_translations t WHERE t.entity_type='course' AND t.entity_id=c.id AND ${has("t.value")}))`,
     );
-    binds.push(like, like, like, like, like);
+    binds.push(needle, needle, needle, needle, needle);
   }
   const sql = `SELECT c.*, p.title AS program_title, p.slug AS program_slug, p.code AS program_code,
       (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id AND l.status='ready') AS lesson_count

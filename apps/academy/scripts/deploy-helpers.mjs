@@ -4,9 +4,10 @@
 //   has-row-name <name>   → "yes"/"no": whether a result row has name = <name>
 //   rows                  → JSON array of result rows from `wrangler d1 execute --json`
 //   scalar <column>       → first row's <column> from `wrangler d1 execute --json`
-//   counts-sql            → SELECT statement counting rows of every table in `rows` output
+//   counts-queries        → one-row queries (one per line) counting rows of every table in `rows` output
 //   counts-json           → {table: n} from the counts query output
-//   critical-sql          → query fingerprinting critical records, from a table listing
+//   critical-queries      → one query per line fingerprinting critical records, from a table listing
+//   merge-d1 <file>...    → one d1 JSON result holding the rows of every d1 JSON result file given
 //   critical-json         → {table: {key: hash}} from the critical query output
 //   same-json <file>      → "same"/"different" (exit 1) comparing stdin JSON with a file
 //   has-secret <name>     → "yes"/"no" from `wrangler secret list --format json`
@@ -16,10 +17,10 @@
 //   domain-owned <service>→ "yes"/"no" from the Workers custom domains API
 //   set-db-id <name> <id> → wrangler.toml on stdin with only <name>'s database_id replaced
 import { readFileSync } from "node:fs";
-import { criticalSql, fingerprints } from "./backup-verify.mjs";
+import { criticalQueries, fingerprints } from "./backup-verify.mjs";
 
 const [cmd, ...args] = process.argv.slice(2);
-const input = readFileSync(0, "utf8");
+const input = cmd === "merge-d1" ? "" : readFileSync(0, "utf8");
 const jsonFrom = (s) => {
   const start = s.search(/[[{]/);
   if (start < 0) throw new Error("no JSON in input");
@@ -51,15 +52,22 @@ switch (cmd) {
     out(row && row[args[0]] != null ? String(row[args[0]]) : "");
     break;
   }
-  case "counts-sql": {
+  case "counts-queries": {
+    // No compound SELECTs (Cloudflare D1 limits them): each line is one row of
+    // scalar subqueries, at most 40 tables wide.
     const names = d1Rows(input)
       .map((r) => r.name)
       .filter((n) => /^[A-Za-z0-9_]+$/.test(n) && !n.startsWith("_cf_") && !n.startsWith("sqlite_"));
-    out(names.map((n) => `SELECT '${n}' AS t, COUNT(*) AS n FROM "${n}"`).join(" UNION ALL ") || "SELECT 'none' AS t, 0 AS n");
+    const lines = [];
+    for (let i = 0; i < names.length; i += 40) lines.push(`SELECT ${names.slice(i, i + 40).map((n) => `(SELECT COUNT(*) FROM "${n}") AS "${n}"`).join(", ")}`);
+    out(lines.join("\n"));
     break;
   }
-  case "critical-sql":
-    out(criticalSql(d1Rows(input).map((r) => ({ name: r.name, sql: r.sql ?? null }))));
+  case "critical-queries":
+    out(criticalQueries(d1Rows(input).map((r) => ({ name: r.name, sql: r.sql ?? null }))).join("\n"));
+    break;
+  case "merge-d1":
+    out([{ results: args.flatMap((f) => d1Rows(readFileSync(f, "utf8"))), success: true }]);
     break;
   case "critical-json":
     out(fingerprints(d1Rows(input)));
@@ -72,7 +80,8 @@ switch (cmd) {
     break;
   }
   case "counts-json":
-    out(Object.fromEntries(d1Rows(input).filter((r) => r.t !== "none").map((r) => [r.t, Number(r.n)])));
+    // Rows of {table: count} columns (counts-queries).
+    out(Object.fromEntries(d1Rows(input).flatMap((r) => Object.entries(r)).map(([t, n]) => [t, Number(n)])));
     break;
   case "has-secret": {
     const list = jsonFrom(input);

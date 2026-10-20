@@ -20,9 +20,9 @@ export async function learners(c) {
               (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id) AS enrollments,
               (SELECT COUNT(*) FROM certificates x WHERE x.user_id = u.id AND x.status = 'active') AS certs,
               (SELECT GROUP_CONCAT(role) FROM user_roles r WHERE r.user_id = u.id AND r.role != 'learner') AS staff_roles
-         FROM users u ${q ? "WHERE u.email LIKE ? OR u.display_name LIKE ?" : ""} ORDER BY u.created_at DESC LIMIT 200`,
+         FROM users u ${q ? "WHERE instr(lower(u.email), lower(?1)) > 0 OR instr(lower(u.display_name), lower(?1)) > 0" : ""} ORDER BY u.created_at DESC LIMIT 200`,
     )
-      .bind(...(q ? [`%${q}%`, `%${q}%`] : []))
+      .bind(...(q ? [q] : []))
       .all()
   ).results;
   const body = html`<form method="get" class="search-bar"><label class="sr-only" for="lq">Search</label><input id="lq" name="q" value="${q}" placeholder="Search by name or email"><button class="btn btn-secondary">Search</button></form>
@@ -160,9 +160,9 @@ export async function certificates(c) {
   const rows = (
     await c.env.DB.prepare(
       `SELECT x.*, u.email FROM certificates x LEFT JOIN users u ON u.id = x.user_id
-        ${q ? "WHERE x.credential_id = ? OR x.credential_name LIKE ? OR u.email LIKE ?" : ""} ORDER BY x.issued_at DESC LIMIT 200`,
+        ${q ? "WHERE x.credential_id = ?1 OR instr(lower(x.credential_name), lower(?2)) > 0 OR instr(lower(u.email), lower(?2)) > 0" : ""} ORDER BY x.issued_at DESC LIMIT 200`,
     )
-      .bind(...(q ? [q.toUpperCase(), `%${q}%`, `%${q}%`] : []))
+      .bind(...(q ? [q.toUpperCase(), q] : []))
       .all()
   ).results;
   const courses = (await c.env.DB.prepare("SELECT id, title FROM courses WHERE certificate_enabled = 1 ORDER BY title").all()).results;

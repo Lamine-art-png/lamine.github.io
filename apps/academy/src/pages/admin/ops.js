@@ -145,9 +145,9 @@ export async function auditLog(c) {
   const rows = (
     await c.env.DB.prepare(
       `SELECT a.*, u.email AS actor_email FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
-        ${q ? "WHERE a.action LIKE ? OR a.entity_id = ? OR a.entity_type = ?" : ""} ORDER BY a.created_at DESC LIMIT 300`,
+        ${q ? "WHERE instr(lower(a.action), lower(?1)) > 0 OR a.entity_id = ?1 OR a.entity_type = ?1" : ""} ORDER BY a.created_at DESC LIMIT 300`,
     )
-      .bind(...(q ? [`%${q}%`, q, q] : []))
+      .bind(...(q ? [q] : []))
       .all()
   ).results;
   const body = html`<form method="get" class="search-bar"><label class="sr-only" for="aq">Filter</label><input id="aq" name="q" value="${q}" placeholder="Filter by action, entity type or ID"><button class="btn btn-secondary">Filter</button></form>
