@@ -13,6 +13,7 @@ import { listCourses, listPrograms, listPaths, localize } from "../services/cont
 import { validEmail } from "../services/users.js";
 import { isStagingTestAddress } from "../services/email.js";
 import { ensureProbeCourse } from "../services/staging-probe.js";
+import { cleanup as stagingCleanupRun } from "../services/staging-cleanup.js";
 import { LEGAL } from "../content/legal.js";
 import { qrSvg } from "../lib/qr.js";
 
@@ -496,6 +497,26 @@ export async function stagingStaff(c) {
   if (!user) throw new HttpError(404, "not_found");
   await c.env.DB.prepare("INSERT OR IGNORE INTO user_roles (user_id, role, granted_by, granted_at) VALUES (?, ?, 'staging-test', ?)").bind(user.id, role, nowIso()).run();
   return json({ ok: true, user_id: user.id, role });
+}
+
+/**
+ * One-off removal of synthetic accounts left by failed staging runs (manual,
+ * token-protected, staging only). Accounts are named explicitly; "check"
+ * reports, "delete" deletes only if every account passes every check.
+ */
+export async function stagingCleanup(c) {
+  const token = String(c.env.STAGING_TEST_TOKEN || "");
+  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
+  const b = await c.readBody();
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String))];
+  const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+  const mode = b.mode === "delete" ? "delete" : b.mode === "check" ? "check" : null;
+  if (!mode || ids.length < 1 || ids.length > 10 || !ids.every((id) => /^usr_[A-Za-z0-9_-]{8,40}$/.test(id)) || !iso.test(b.from || "") || !iso.test(b.to || "") || b.from > b.to) {
+    throw new HttpError(400, "invalid_request");
+  }
+  const report = await stagingCleanupRun(c.env, { ids, from: b.from, to: b.to, mode });
+  return json(report, report.refused ? 409 : 200);
 }
 
 /** Public language-support page: what is translated, reviewed or English-only, per language. */
