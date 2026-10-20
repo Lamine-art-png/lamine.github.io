@@ -51,7 +51,15 @@ trap cleanup EXIT
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 api() { curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "${CF_API}$1"; }
-d1() { $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --json --command "$1"; }
+# A failed query's JSON error (SQL or schema message, no row data) is shown instead of being swallowed by the parser.
+d1() {
+  local out
+  if ! out="$($WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --json --command "$1")"; then
+    echo "::error::D1 query failed: $(printf '%s' "$out" | tr '\n' ' ' | head -c 800)" >&2
+    return 1
+  fi
+  printf '%s' "$out"
+}
 
 echo "==> Target ${TARGET}: Worker ${SERVICE}, database ${DB_NAME}, https://${HOST}"
 summary "### Academy ${TARGET} deployment" "- Worker \`${SERVICE}\`, D1 \`${DB_NAME}\`, https://${HOST}"
