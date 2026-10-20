@@ -15,7 +15,7 @@ Actions tab (after merge) or by re-running the PR check.
 | Cloudflare API token (repository secret) | Present, valid, active. Zone `agroai-pilot.com` accessible (Free plan). |
 | Workers / custom domains | Readable; the same token already deploys Workers on custom domains (`faep`, `signal`). |
 | R2 | Readable (3 company buckets). Academy buckets are created by `deploy.sh`. |
-| **D1** | **HTTP 401: the token has no D1 permission. Blocks any Academy deploy.** |
+| **D1** | Repository token: HTTP 401 (no D1). Resolved with a dedicated Academy token in the `academy-staging` environment (D1 and DNS readable). `academy-production` still needs its own. |
 | DNS records | HTTP 403 (no DNS read). `deploy.sh` now falls back to public DNS for the ownership check; Cloudflare also refuses to attach a custom domain over an existing record. |
 | Academy hostnames | `academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com` do not resolve: no records, nothing to collide with. |
 | Existing Academy resources | None (no Academy Worker, D1 database or bucket yet). |
@@ -94,6 +94,39 @@ over real HTTP, Cloudflare D1 and R2. Production depends on that job passing.
 
 Results are recorded per run in the workflow log and job summary. A check is
 reported PASS only from a run against the deployed staging host.
+
+### Results — 2026-10-20, run 39384703436 (commit 50c178d, branch code)
+
+Deploy: verified backup of the live staging D1 to the private backup bucket
+(read back intact, restore rehearsed), no pending migrations, Worker deployed
+to `academy-staging.agroai-pilot.com`. Smoke test: PASS (10 routes).
+
+| Check | Result |
+|---|---|
+| Health, D1, signing, 60-language inventory | PASS |
+| Security headers | PASS |
+| Public pages read from D1 | PASS |
+| Languages pt-BR, fr-FR, es, ar (RTL) | PASS |
+| HTTPS only (http → 308), mobile viewport | PASS |
+| Staging inbox closed without the token | PASS |
+| Probe course published through the revision path | PASS |
+| Registration, email verification (suppressed outbox), sign-out/sign-in | PASS |
+| Enrollment, progress, lesson completion | PASS |
+| Exam, grading, certificate issuance, public verification | PASS |
+| Certificate PDF download, LinkedIn link | PASS |
+| Admin closed to learners; staff admin access and role restrictions | PASS |
+| Course A1 publication refused without approvals | PASS |
+| R2 upload, learner download, anonymous refusal, removal | PASS |
+| Password reset, learner deletion, staff deletion | PASS |
+| Real email delivery to a real inbox | NOT TESTED (no `ACADEMY_STAGING_RESEND_API_KEY`) |
+| Google sign-in | NOT TESTED (no staging OAuth client) |
+| Admin console sign-in for the founder | NOT TESTED (no `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS`) |
+| Backup encryption | NOT CONFIGURED on staging (no passphrase; bucket is private) |
+
+Live-only defects found and fixed on the way (local SQLite does not have these
+D1 limits; the test doubles now enforce them): compound SELECT term limit in the
+pre-migration backup fingerprint (6fabf15), and the 50-byte LIKE pattern cap
+that made admin searches return HTTP 500 (50c178d).
 
 ## 4. Existing early-access registrants
 
