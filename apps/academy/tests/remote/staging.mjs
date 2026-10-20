@@ -232,7 +232,11 @@ async function main() {
     expect(r.status === 403, `academy_admin opened super-admin tools (${r.status})`);
     const list = await staff.get(`/admin/learners?q=${encodeURIComponent(email)}`);
     const learnerId = /href="\/admin\/learners\/(usr_[^"]+)"/.exec(list.text)?.[1];
-    expect(learnerId, "learner not found in the admin list");
+    if (!learnerId) {
+      // Synthetic accounts only: safe to describe what the page returned.
+      const table = (/<tbody>([\s\S]*?)<\/tbody>/.exec(list.text || "")?.[1] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+      throw new Error(`learner not found in the admin list (HTTP ${list.status}, page mentions the address: ${String(list.text || "").includes(email)}, rows: "${table}")`);
+    }
     r = await staff.post(`/admin/learners/${learnerId}/roles`, { roles: ["academy_admin"] });
     expect(r.status === 403, `academy_admin changed roles (${r.status})`);
   });
