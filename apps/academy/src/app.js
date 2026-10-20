@@ -61,6 +61,10 @@ const THEME_COOKIE = "aca_theme";
 export async function handle(req, env, ctx) {
   const url = new URL(req.url);
   const cfg = config(env, url);
+  // HTTPS only on the deployed hostname, whatever the zone's settings.
+  if (cfg.secure && url.protocol === "http:" && url.host === new URL(cfg.origin).host) {
+    return new Response(null, { status: 308, headers: { location: `https://${url.host}${url.pathname}${url.search}` } });
+  }
   const setCookies = [];
   const deferred = [];
   const c = {

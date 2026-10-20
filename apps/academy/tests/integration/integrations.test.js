@@ -5,7 +5,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { makeEnv, Client, registeredLearner, publishCourse, publishDraftUnchecked, completeA1, ORIGIN, tokenFrom } from "../helpers.js";
+import { makeEnv, Client, fakeR2, registeredLearner, publishCourse, publishDraftUnchecked, completeA1, ORIGIN, tokenFrom } from "../helpers.js";
 import { runScheduled } from "../../src/services/jobs.js";
 
 const realFetch = globalThis.fetch;
@@ -269,25 +269,6 @@ test("certificate links use the production origin: verification URL, QR code, Li
 // ───────────── R2 file resources ─────────────
 
 /** In-memory R2 binding that, like R2, refuses streams of unknown length. */
-function fakeR2() {
-  const store = new Map();
-  return {
-    store,
-    async put(key, value, opts) {
-      if (value instanceof ReadableStream) throw new TypeError("Provided readable stream must have a known length (request/response body or readable half of FixedLengthStream)");
-      const bytes = new Uint8Array(value instanceof Blob ? await value.arrayBuffer() : value);
-      store.set(key, { bytes, opts });
-      return { key, size: bytes.length };
-    },
-    async get(key) {
-      const o = store.get(key);
-      return o ? { body: new Blob([o.bytes]).stream(), httpMetadata: o.opts?.httpMetadata, size: o.bytes.length } : null;
-    },
-    async delete(key) {
-      store.delete(key);
-    },
-  };
-}
 
 async function upload(admin, lessonId, { name, type, bytes, title }) {
   const form = new FormData();

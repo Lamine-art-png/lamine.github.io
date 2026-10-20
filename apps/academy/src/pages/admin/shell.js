@@ -25,6 +25,7 @@ const NAV = [
     "People",
     [
       ["/admin/learners", "user", "Learners", "learners.view"],
+      ["/admin/early-access", "mail", "Early access", "early_access.manage"],
       ["/admin/certificates", "award", "Certificates", "certificates.manage"],
       ["/admin/feedback", "star", "Feedback", "feedback.view"],
       ["/admin/support", "help", "Support", "support.manage"],
@@ -62,6 +63,9 @@ export function adminPage(c, { title, active, body, actions = "", status = 200, 
 }
 
 function messageFor(code) {
+  const [kind, a, b] = String(code).split(":");
+  if (kind === "imported") return `Imported ${Number(a) || 0} registrant(s); ${Number(b) || 0} linked to existing verified accounts. No email was sent.`;
+  if (kind === "invited") return `${Number(a) || 0} invitation(s) queued for delivery.`;
   return (
     {
       saved: "Changes saved.",

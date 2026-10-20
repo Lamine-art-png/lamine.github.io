@@ -109,6 +109,8 @@ export async function deleteAccount(env, userId, actorId) {
     env.DB.prepare("DELETE FROM auth_tokens WHERE user_id = ?").bind(userId),
     env.DB.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").bind(userId),
     env.DB.prepare("DELETE FROM email_outbox WHERE user_id = ?").bind(userId),
+    // The early-access registration with this address is personal data too.
+    env.DB.prepare("DELETE FROM early_access_registrants WHERE activated_user_id = ?1 OR email = (SELECT email FROM users WHERE id = ?1)").bind(userId),
     env.DB.prepare("UPDATE learning_events SET user_id = NULL, country = NULL WHERE user_id = ?").bind(userId),
     env.DB.prepare("UPDATE course_feedback SET user_id = NULL WHERE user_id = ?").bind(userId),
     env.DB.prepare("UPDATE support_requests SET user_id = NULL, name = 'Deleted user', email = 'deleted@invalid' WHERE user_id = ?").bind(userId),

@@ -80,6 +80,24 @@ async function main() {
     }
   });
 
+  await step("language selection: Portuguese, French, Spanish and Arabic (right-to-left)", async () => {
+    for (const [q, lang, dir] of [["pt-BR", "pt-BR", "ltr"], ["fr", "fr-FR", "ltr"], ["es", "es", "ltr"], ["ar", "ar", "rtl"]]) {
+      const r = await new RemoteClient(BASE).get(`/courses?lang=${q}`);
+      expect(r.status === 200, `/courses?lang=${q} returned ${r.status}`);
+      expect(new RegExp(`<html lang="${lang}" dir="${dir}"`).test(r.text), `/courses?lang=${q} did not render lang="${lang}" dir="${dir}"`);
+    }
+  });
+
+  await step("HTTPS only, and pages sized for mobile screens", async () => {
+    const r = await anon.get("/");
+    expect(/<meta name="viewport" content="width=device-width/.test(r.text), "no responsive viewport");
+    if (!BASE.startsWith("https://")) return "plain-HTTP harness: redirect not applicable";
+    const plain = await fetch(BASE.replace(/^https:/, "http:") + "/courses?x=1", { redirect: "manual" });
+    const to = plain.headers.get("location") || "";
+    expect([301, 302, 307, 308].includes(plain.status) && to.startsWith(`${BASE}/courses`), `http:// returned ${plain.status} ${to}`);
+    return `http → ${plain.status} https`;
+  });
+
   await step("staging test inbox is closed without the token", async () => {
     const r = await fetch(`${BASE}/__staging/inbox?to=probe@academy-staging-test.invalid`);
     expect(r.status === 404, `inbox returned ${r.status}`);
@@ -178,6 +196,75 @@ async function main() {
     expect(/data-verify-state="valid"/.test(r.text), "verification page does not report a valid signature");
   });
 
+  await step("certificate PDF download and LinkedIn sharing", async () => {
+    const pdf = await learner.bytes(`/certificates/${credential}/pdf`);
+    expect(pdf.status === 200 && pdf.type.includes("application/pdf"), `PDF returned ${pdf.status} ${pdf.type}`);
+    expect(new TextDecoder().decode(pdf.body.slice(0, 5)) === "%PDF-", "the download is not a PDF");
+    const page = await learner.get(`/certificates/${credential}`);
+    expect(/href="https:\/\/www\.linkedin\.com\/profile\/add\?[^"]*startTask=CERTIFICATION_NAME/.test(page.text), "no LinkedIn add-to-profile link");
+    expect(page.text.includes(`/verify/${credential}`), "the share link does not point to public verification");
+    return `${pdf.body.length} bytes`;
+  });
+
+  await step("administration is closed to learners", async () => {
+    const r = await learner.get("/admin");
+    expect(r.status === 403, `a learner opened /admin (${r.status})`);
+  });
+
+  const staff = new RemoteClient(BASE);
+  const staffEmail = email.replace("staging-", "staging-staff-");
+  const staffPassword = `staging staff ${Math.random().toString(36).slice(2)} passphrase`;
+  await step("staff account: admin access and role restrictions", async () => {
+    await staff.get("/register");
+    let r = await staff.post("/register", { display_name: "Staging Test Staff", email: staffEmail, password: staffPassword, locale: "en", accept_terms: "1" });
+    expect(r.status === 303, `staff register returned ${r.status}`);
+    const msg = await inbox(staffEmail, "verify_email");
+    const tok = tokenIn(msg.text, "/verify-email");
+    await staff.get(`/verify-email?token=${tok}`);
+    r = await staff.post("/verify-email", { token: tok });
+    expect(r.status === 303, `staff verify returned ${r.status}`);
+    const grant = await fetch(`${BASE}/__staging/staff`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" }, body: JSON.stringify({ email: staffEmail, role: "academy_admin" }) });
+    expect(grant.status === 200, `staff role grant returned ${grant.status}`);
+    expect((await fetch(`${BASE}/__staging/staff`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" }, body: JSON.stringify({ email: staffEmail, role: "super_admin" }) })).status === 400, "super_admin must never be grantable");
+    r = await staff.get("/admin");
+    expect(r.status === 200, `academy_admin could not open /admin (${r.status})`);
+    r = await staff.get("/admin/early-access");
+    expect(r.status === 403, `academy_admin opened super-admin tools (${r.status})`);
+    const list = await staff.get(`/admin/learners?q=${encodeURIComponent(email)}`);
+    const learnerId = /href="\/admin\/learners\/(usr_[^"]+)"/.exec(list.text)?.[1];
+    expect(learnerId, "learner not found in the admin list");
+    r = await staff.post(`/admin/learners/${learnerId}/roles`, { roles: ["academy_admin"] });
+    expect(r.status === 403, `academy_admin changed roles (${r.status})`);
+  });
+
+  await step("publication requires the academic approvals (Course A1 stays unpublished)", async () => {
+    const r = await staff.post("/admin/courses/crs_a1/status", { status: "published" });
+    expect(r.status === 303 && /Readiness checks must pass/.test(decodeURIComponent(r.location || "")), `publishing A1 without approvals was not refused (${r.status} ${r.location || ""})`);
+    const e = await learner.post(`/courses/${A1}/enroll`, {});
+    expect(e.status === 303 && /error=course_not_open/.test(e.location || ""), `A1 accepted an enrollment (${e.status} ${e.location || ""})`);
+  });
+
+  await step("R2: staff upload, learner download, anonymous refusal, removal", async () => {
+    const content = `Synthetic staging file ${probe.marker} ${Date.now()}`;
+    let r = await staff.upload(`/admin/lessons/les_staging_probe/upload`, { title: `Staging probe file ${probe.marker}` }, { name: "probe.txt", type: "text/plain", bytes: new TextEncoder().encode(content) });
+    expect(r.status === 303 && /ok=saved/.test(r.location || ""), `upload returned ${r.status} ${r.location || ""}`);
+    const publish = () => fetch(`${BASE}/__staging/probe-course`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } }).then((x) => x.json());
+    await publish();
+    const page = await learner.get(`/learn/${probe.slug}/${probe.lessonSlug}`);
+    const id = /href="\/resources\/(res_[^"]+)"[^>]*>Staging probe file/.exec(page.text)?.[1];
+    expect(id, "the uploaded file is not listed on the published lesson");
+    const got = await learner.bytes(`/resources/${id}`);
+    expect(got.status === 200 && new TextDecoder().decode(got.body) === content, `download returned ${got.status} with different content`);
+    const anonymous = await new RemoteClient(BASE).bytes(`/resources/${id}`);
+    expect(anonymous.status === 303 || anonymous.status === 401 || anonymous.status === 403, `anonymous download returned ${anonymous.status}`);
+    r = await staff.post(`/admin/resources/${id}/delete`, {});
+    expect(r.status === 303, `delete returned ${r.status}`);
+    await publish();
+    const gone = await learner.bytes(`/resources/${id}`);
+    expect(gone.status === 404, `removed file still downloads (${gone.status})`);
+    return `${content.length} bytes round-tripped through R2`;
+  });
+
   await step("password reset email and new password", async () => {
     const other = new RemoteClient(BASE);
     await other.get("/forgot-password");
@@ -207,6 +294,12 @@ async function main() {
     expect(r.status !== 303 || !(r.location || "").includes("dashboard"), "deleted account can still sign in");
     const v = await new RemoteClient(BASE).get(`/verify/${credential}`);
     expect(/data-verify-state="revoked"/.test(v.text), "the deleted learner's certificate is not reported as revoked");
+  });
+
+  await step("delete the synthetic staff account", async () => {
+    await staff.get("/account");
+    const r = await staff.post("/account/delete", { password: staffPassword, confirm: "DELETE" });
+    expect(r.status === 303, `staff delete returned ${r.status}`);
   });
 }
 

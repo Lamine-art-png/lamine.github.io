@@ -47,6 +47,7 @@ export const CRITICAL = {
   certificate_events: { key: "id", cols: ["certificate_id", "event", "created_at"], appendOnly: true },
   course_reviews: { key: "id", cols: ["course_id", "review_type", "decision", "content_hash", "created_at"], appendOnly: true },
   course_revisions: { key: "id", cols: ["course_id", "number", "content_hash", "published_at"], appendOnly: true },
+  early_access_registrants: { key: "id", cols: ["email", "email_opt_in", "registered_at", "status", "invited_at", "activated_user_id"] },
 };
 
 /**

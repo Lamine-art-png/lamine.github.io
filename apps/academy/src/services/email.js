@@ -11,6 +11,7 @@ const TEMPLATES = {
   password_changed: { category: "security", cta: "email.reset.cta" },
   account_deleted: { category: "security" },
   welcome: { category: "transactional", cta: "email.welcome.cta" },
+  early_access_invite: { category: "transactional", cta: "email.early_access_invite.cta" },
   enrollment: { category: "transactional", cta: "email.enrollment.cta", pref: "notify_course_updates" },
   course_complete: { category: "transactional", cta: "email.course_complete.cta", pref: "notify_course_updates" },
   exam_passed: { category: "transactional", cta: "email.exam_result.cta" },

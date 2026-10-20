@@ -15,11 +15,24 @@ import { DatabaseSync } from "node:sqlite";
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const FAKE = join(root, "tests/deploy/fake-wrangler.mjs");
 
-/** Fake Cloudflare API: the zone exists; `foreignHost` has an unrelated DNS record. */
-async function cloudflareApi({ foreignHost = null, ownedHosts = [] } = {}) {
+/**
+ * Fake Cloudflare API: the zone exists; `foreignHost` has an unrelated DNS record.
+ * With `dnsForbidden` the token cannot read DNS records (HTTP 403) and the
+ * public resolver (`/dns-query`) answers instead, listing `publicHosts`.
+ */
+async function cloudflareApi({ foreignHost = null, ownedHosts = [], dnsForbidden = false, publicHosts = [] } = {}) {
   const server = createServer((req, res) => {
     const u = new URL(req.url, "http://x");
     let body = { success: true, result: [] };
+    if (u.pathname.endsWith("/dns-query")) {
+      const name = u.searchParams.get("name");
+      res.writeHead(200, { "content-type": "application/dns-json" });
+      return res.end(JSON.stringify({ Status: 0, Answer: publicHosts.includes(name) && u.searchParams.get("type") === "A" ? [{ name, type: 1, data: "192.0.2.1" }] : undefined }));
+    }
+    if (dnsForbidden && u.pathname.includes("/dns_records")) {
+      res.writeHead(403, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }));
+    }
     if (u.pathname.endsWith("/zones")) body.result = [{ id: "zone123", name: "agroai-pilot.com" }];
     else if (u.pathname.includes("/dns_records")) {
       const name = u.searchParams.get("name");
@@ -31,7 +44,8 @@ async function cloudflareApi({ foreignHost = null, ownedHosts = [] } = {}) {
     res.end(JSON.stringify(body));
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  return { base: `http://127.0.0.1:${server.address().port}/client/v4`, close: () => server.close() };
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  return { base: `${origin}/client/v4`, doh: `${origin}/dns-query`, close: () => server.close() };
 }
 
 function workspace() {
@@ -52,6 +66,7 @@ function run(ws, target, api, extraEnv = {}) {
         HOME: ws.dir,
         ACADEMY_WRANGLER: `node ${FAKE}`,
         CF_API_BASE: api.base,
+        DOH_BASE: api.doh,
         FAKE_STATE: ws.state,
         CLOUDFLARE_API_TOKEN: "test-token-not-real",
         CLOUDFLARE_ACCOUNT_ID: "acct-test",
@@ -244,6 +259,23 @@ test("an unrelated DNS record on the hostname stops the deployment", async () =>
   const api = await cloudflareApi({ foreignHost: "academy-staging.agroai-pilot.com" });
   const ws = workspace();
   const r = await run(ws, "staging", api);
+  api.close();
+  assert.equal(r.code, 1);
+  assert.match(r.out, /already has a DNS record that is not this Worker's custom domain/);
+  assert.equal(r.calls, "", "nothing created or deployed");
+});
+
+test("a token without DNS read permission falls back to public DNS", async () => {
+  // No public record: the deployment proceeds and the custom domain is created.
+  let api = await cloudflareApi({ dnsForbidden: true });
+  let r = await run(workspace(), "staging", api);
+  api.close();
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /Token cannot read DNS records; public DNS shows 0 record\(s\)/);
+  // A public record that is not this Worker stops it before anything is created.
+  api = await cloudflareApi({ dnsForbidden: true, publicHosts: ["academy-staging.agroai-pilot.com"] });
+  const ws = workspace();
+  r = await run(ws, "staging", api);
   api.close();
   assert.equal(r.code, 1);
   assert.match(r.out, /already has a DNS record that is not this Worker's custom domain/);

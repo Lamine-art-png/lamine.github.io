@@ -1,0 +1,243 @@
+# AGRO-AI Academy — staging, launch and production runbook
+
+Release candidate: PR #601 (`claude/inspiring-hypatia-gq0x5p`). Nothing in
+this document deploys production; production needs the founder's explicit
+approval and a manual workflow run (section 6).
+
+## 1. Infrastructure preflight (2026-10-20, workflow "Academy Preflight")
+
+The preflight workflow (`.github/workflows/academy-preflight.yml`) is read-only
+and prints secret presence only, never values. Re-run it at any time from the
+Actions tab (after merge) or by re-running the PR check.
+
+| Item | Finding |
+|---|---|
+| Cloudflare API token (repository secret) | Present, valid, active. Zone `agroai-pilot.com` accessible (Free plan). |
+| Workers / custom domains | Readable; the same token already deploys Workers on custom domains (`faep`, `signal`). |
+| R2 | Readable (3 company buckets). Academy buckets are created by `deploy.sh`. |
+| **D1** | **HTTP 401: the token has no D1 permission. Blocks any Academy deploy.** |
+| DNS records | HTTP 403 (no DNS read). `deploy.sh` now falls back to public DNS for the ownership check; Cloudflare also refuses to attach a custom domain over an existing record. |
+| Academy hostnames | `academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com` do not resolve: no records, nothing to collide with. |
+| Existing Academy resources | None (no Academy Worker, D1 database or bucket yet). |
+| GitHub environment `academy-staging` | Exists (created by the preflight), no protection rules, no environment secrets; inherits the repository Cloudflare secrets. |
+| GitHub environment `academy-production` | Not created yet. It is created on first use; add required reviewers before the first production run. |
+| Company email | Platform API reports Resend configured, sender domain `mail.agroai-pilot.com`; operator notifications from `no-reply@mail.agroai-pilot.com` are being delivered. The Academy now sends from `academy@mail.agroai-pilot.com` (same verified domain), replies to `contact@agroai-pilot.com`. |
+| Resend key for the Academy | The company key lives in the `production` environment only and cannot be read by Academy jobs. A copy (or a new sending-only key) must be added as an Academy secret. |
+| Early-access form | `agroai-pilot.com/academy/early-access` live (HTTP 200), untouched. |
+
+### What deploys without any new secret
+
+`deploy.sh` creates the D1 database and both private R2 buckets, generates the
+certificate-signing key inside Cloudflare (staging), and the staging workflow
+generates a fresh, masked staging test token on every run. Bootstrap admin
+emails, Resend and Google are optional for staging: without them the staging
+test still runs end to end (its synthetic addresses use a suppressed outbox).
+
+## 2. Founder checklist (everything that only you can do)
+
+Required before merging PR #601 (staging):
+
+1. **Cloudflare token: add D1 permission.** In Cloudflare → My Profile → API
+   Tokens, edit the token stored as the GitHub secret `CLOUDFLARE_API_TOKEN`
+   and add **Account → D1 → Edit** (recommended also: **Zone agroai-pilot.com →
+   DNS → Read**). Alternatively create a dedicated Academy token with: Account →
+   Workers Scripts Edit, D1 Edit, Workers R2 Storage Edit, Account Settings
+   Read; Zone agroai-pilot.com → Workers Routes Edit, DNS Read, Zone Read — and
+   save it as `CLOUDFLARE_API_TOKEN` in the `academy-staging` and
+   `academy-production` GitHub environments (environment secrets override the
+   repository one, so other company workflows are unaffected).
+   Then re-run the "Academy Preflight" check: D1 must read as accessible.
+
+Recommended for a full live staging test (each is optional):
+
+2. `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS` (environment `academy-staging`):
+   your email, to sign in to the staging admin console.
+3. `ACADEMY_STAGING_RESEND_API_KEY`: the company Resend key (or a new
+   sending-only key for `mail.agroai-pilot.com`), to verify real email delivery
+   to your own inbox on staging.
+4. `ACADEMY_STAGING_GOOGLE_CLIENT_ID` / `_SECRET`: only if Google sign-in should
+   be tested (OAuth redirect URI
+   `https://academy-staging.agroai-pilot.com/auth/google/callback`).
+
+Required before production (section 6): items 5–9.
+
+5. Create the `academy-production` environment with **required reviewers**.
+6. `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET`: 64 random hex characters, also
+   kept in the company password manager (escrow — a lost key invalidates every
+   certificate). Generate with `openssl rand -hex 32`.
+7. `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE`: long random passphrase, also in the
+   password manager (backups are GPG-encrypted with it).
+8. `ACADEMY_PRODUCTION_RESEND_API_KEY` and
+   `ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS`.
+9. Decisions in section 5 (reviews, video policy) and the legal review (section 7).
+
+## 3. Live staging verification
+
+Every push to `main` that touches the Academy runs CI, then deploys staging and
+runs `tests/remote/staging.mjs` against `https://academy-staging.agroai-pilot.com`
+over real HTTP, Cloudflare D1 and R2. Production depends on that job passing.
+
+| Check | Covered live by | Notes |
+|---|---|---|
+| Health, D1, signing, language inventory | staging.mjs | |
+| Security headers, HTTPS redirect, mobile viewport | staging.mjs | Visual mobile layout and WCAG scan run in CI (Playwright, axe) on the same build, not against the live host. |
+| Languages pt-BR, fr-FR, es, ar (RTL) | staging.mjs | |
+| Registration → email verification → sign-in | staging.mjs | Synthetic `.invalid` addresses, suppressed outbox read through the token-protected staging inbox. |
+| Enrollment → lesson → saved progress → completion | staging.mjs (probe course) | |
+| Course publication through a reviewed revision | staging.mjs | Probe course publishes a new revision every run. |
+| Exam → result → certificate → PDF → public verification → LinkedIn link | staging.mjs | Exam questions are snapshot at start; grading uses the snapshot. |
+| Admin access, role restrictions, A1 publication refused without approvals | staging.mjs | Synthetic staff account gets `academy_admin` through a staging-only, token-protected endpoint (never super_admin). |
+| R2 upload by staff, authenticated learner download, anonymous refusal, removal | staging.mjs | |
+| Password reset, account deletion (credential revoked) | staging.mjs | |
+| Real email delivery to a real inbox | Manual, needs item 3 | Register on staging with your own address. |
+| Google sign-in | Manual, needs item 4 | |
+
+Results are recorded per run in the workflow log and job summary. A check is
+reported PASS only from a run against the deployed staging host.
+
+## 4. Existing early-access registrants
+
+Where they are: the Platform API database, table `saas_requests`, rows with
+`source_page = 'academy/early-access'` (name, email, role, `metadata_json` with
+`language`, `email_opt_in`, `campaign`), created through
+`api.agroai-pilot.com/v1/sales/contact`. About 18 operator notifications were
+delivered to `contact@agroai-pilot.com` between 15 and 20 October, including
+internal test submissions from deployment workflows. None of these people has
+an Academy account (the Academy has never been deployed). The Academy never
+reads the Platform API database.
+
+Process (built and tested in this PR, migration 0008):
+
+1. **Export** (founder or operator with database access, read-only):
+
+   ```sql
+   \copy (SELECT id AS source_id, email, name, metadata_json->>'language' AS language,
+                 role, COALESCE(metadata_json->>'email_opt_in', 'false') AS email_opt_in,
+                 created_at AS registered_at
+            FROM saas_requests
+           WHERE source_page = 'academy/early-access'
+           ORDER BY created_at) TO 'academy-early-access.csv' WITH CSV HEADER
+   ```
+
+   Keep the file in a private location and delete it after import.
+2. **Import** in the production Academy: Admin → People → Early access (super
+   administrators only). Paste the CSV, review the preview (new, already
+   imported, already have an account, consented, rejected rows), then import.
+   Importing creates no accounts, no passwords, verifies nothing and sends no
+   email. Internal test submissions (`contact@agroai-pilot.com`) are skipped;
+   duplicates merge by email (earliest registration and any consent kept);
+   language and role are preserved.
+3. **Activation:** a registrant becomes "activated" only when that person
+   registers with the same address **and proves the mailbox** (email
+   verification, password reset or Google). Anyone who already has a verified
+   account is linked at import time.
+4. **Invitation (needs founder approval):** the same page shows how many
+   registrants consented, have no account and were never invited, and sends
+   them a one-time invitation in their language in confirmed batches of 100
+   (typed confirmation; a changed count cancels the send). Each registrant is
+   claimed atomically before sending, so nobody is invited twice. Outside
+   production only synthetic test addresses can be invited.
+5. **Deletion:** deleting an Academy account also deletes the matching
+   early-access record.
+
+## 5. Course A1 — Introduction to Artificial Intelligence in Agriculture
+
+State in the release candidate (from the seeded database):
+
+| Item | State |
+|---|---|
+| Structure | 4 modules, 17 required lessons: 12 text, 1 case study, 1 exercise, 3 module quizzes |
+| Module quizzes | 3, each draws 5 of 6 questions, pass mark 60% |
+| Certification exam | 20 questions drawn by difficulty (6 easy of 9, 10 medium of 14, 4 hard of 7) from a 30-question bank, 30 minutes, pass mark 80% |
+| Certificate | Enabled; requires all lessons and the exam (quiz passes not required) |
+| Course status | `review` (not published) |
+| Academic reviews recorded | 0 of 3 |
+| Instructor videos | **14 planned, 0 exist.** All 14 records are `scripted`: no video file, URL, duration or captions. Instructor record "Joshua" exists. |
+| Video policy | `required` — publication is blocked until videos are approved, playable and captioned, or the waiver below is approved |
+| Other 33 courses | `draft` (shown as upcoming / not open) |
+
+**Three approvals the founder must record** (Admin → Courses → A1, "Reviews" section,
+each by a named reviewer, bound to the exact course content; any later edit
+voids them):
+
+1. **Academic review** — lesson content and learning objectives are accurate,
+   current and appropriate for the stated audience.
+2. **Assessment review** — the three quizzes, the 30-question exam bank and the
+   80% passing standard measure the learning objectives fairly.
+3. **Accessibility review** — reading level, text alternatives, captions or
+   transcripts for any media, keyboard and screen-reader use.
+
+**Text-first launch option (prepared, NOT activated).** If the videos are not
+ready, the founder may set A1's video policy to *Optional* (Admin → Courses →
+A1, course settings, "Video policy") with this documented reason:
+
+> Launch on 29 October 2026 as a text-first course: every lesson's complete
+> instruction is available as text; the 14 instructor videos (Joshua) are in
+> production and will be added as each is approved and captioned. Approved by
+> <founder name> on <date>.
+
+The change is audited, voids nothing already reviewed, and learners see an
+"Instructor video in production" notice on the lessons that will have video.
+The public FAQ and home page now state that videos are in production and that
+one course opens on 29 October.
+
+## 6. Production release (requires founder approval)
+
+Preconditions: staging run green on the merged commit; founder checklist items
+5–9 complete; three reviews recorded and the video decision taken (or A1 kept
+unpublished at launch).
+
+1. **Run:** Actions → *Academy Deploy* → Run workflow on `main`, target
+   `production`, confirmation `deploy academy production`. Staging deploys and
+   passes its live test first in the same run; required reviewers on
+   `academy-production` must approve.
+2. **What the job does:** checks `academy.agroai-pilot.com` has no foreign DNS
+   record (refuses otherwise; never edits DNS), creates/uses D1
+   `agroai-academy` and private buckets `agroai-academy-files` and
+   `agroai-academy-backups`, exports + verifies + stores a backup before any
+   migration (on the first deploy the database is new), applies migrations,
+   deploys the Worker, sets secrets without ever replacing an existing signing
+   key, then runs the read-only smoke test.
+3. **Certificate-signing continuity:** the production key comes from
+   `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET` (escrowed). It is set once and never
+   replaced; the deploy refuses to run if certificates exist and the Worker has
+   no key.
+4. **Smoke test after deploy (manual, 10 minutes):** `/healthz` (database ok,
+   signing configured), home in English and Arabic, register with your own
+   address, receive and confirm the email, sign in, open A1 (or see it as
+   upcoming if not yet published), `/verify/AGA-0000-0000-0000` → not found.
+5. **Publishing A1** is a separate admin action after the reviews; it is not
+   part of the deploy.
+6. **Rollback:** code — re-run the workflow on the previous good commit, or
+   `wrangler rollback` for the `agroai-academy` Worker. Data — every deploy
+   records a D1 Time Travel bookmark and a verified backup in
+   `agroai-academy-backups`; restore with
+   `scripts/restore-backup.sh <bucket>/<key> <new-db-name> <sha256>` into a new
+   database, verify, then point `database_id` at it and redeploy. Hostname —
+   removing the Worker's custom domain takes `academy.agroai-pilot.com` offline
+   without touching any other record.
+7. **Isolation:** the Academy uses only its own Worker, D1 databases, buckets
+   and hostnames. It does not change DNS, the Enterprise Portal, Platform API,
+   billing, the website, the early-access Worker or any other Worker; the
+   preflight and the deploy script both assert this.
+
+## 7. Legal pages — review checklist (founder or counsel)
+
+Pages: `/privacy`, `/terms`, `/accessibility` (source
+`src/content/legal.js`).
+
+- Controller identity and contact (AGRO-AI Inc., `contact@agroai-pilot.com`).
+- Data collected (account, learning records, assessment answers, certificates,
+  optional country analytics), purposes and legal bases.
+- Processors: Cloudflare (hosting, database, storage), Resend (email), Google
+  (optional sign-in). International transfers.
+- Retention: accounts until deletion; certificates kept as revoked/anonymized
+  after deletion; email outbox; backups (state the backup retention period).
+- Early-access registrants: consent given on the agroai-pilot.com form, use
+  for one opening invitation, deletion on request and on account deletion.
+- Learner rights (access, correction, deletion, export), children's use and
+  minimum age, cookies (session, CSRF, language, theme only).
+- Certificates: what public verification shows; revocation policy.
+- AI-generated content and avatar labelling; no professional-advice disclaimer
+  for agronomic decisions.
+- Accessibility statement: conformance target WCAG 2.2 AA, known gaps, contact.

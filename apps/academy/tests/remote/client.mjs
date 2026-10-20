@@ -31,6 +31,21 @@ export class RemoteClient {
     if (m) this.csrf = m[1];
     return { status: res.status, text, headers: res.headers, location: res.headers.get("location") };
   }
+  /** Multipart upload; the CSRF token goes in the query string as the app expects for multipart forms. */
+  async upload(path, fields, { name, type, bytes }) {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(fields)) form.set(k, v);
+    form.set("file", new File([bytes], name, { type }));
+    const h = new Headers({ "user-agent": "agroai-academy-staging-test", origin: this.base, cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ") });
+    const sep = path.includes("?") ? "&" : "?";
+    const res = await fetch(`${this.base}${path}${sep}_csrf=${encodeURIComponent(this.csrf || "")}`, { method: "POST", headers: h, body: form, redirect: "manual" });
+    return { status: res.status, location: res.headers.get("location"), text: await res.text() };
+  }
+  async bytes(path) {
+    const h = new Headers({ "user-agent": "agroai-academy-staging-test", cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ") });
+    const res = await fetch(this.base + path, { headers: h, redirect: "manual" });
+    return { status: res.status, type: res.headers.get("content-type") || "", body: new Uint8Array(await res.arrayBuffer()), location: res.headers.get("location") };
+  }
   get(path, opts) {
     return this.request("GET", path, opts);
   }

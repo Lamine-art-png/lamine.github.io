@@ -11,6 +11,7 @@ import { alert, csrfField, field, selectField } from "../views/components.js";
 import { createUser, findUserByEmail, normalizeEmail, validEmail, issueToken, consumeToken, peekToken, setPassword, applyBootstrapRoles, PROFESSIONAL_ROLES } from "../services/users.js";
 import { sendEmail } from "../services/email.js";
 import { issueIfEligible } from "../services/certificates.js";
+import { linkVerifiedUser } from "../services/earlyAccess.js";
 
 export const COUNTRY_CODES = countries.countries.filter((x) => x.iso3166_assigned !== false).map((x) => x.code);
 
@@ -230,6 +231,7 @@ export async function verifyEmail(c) {
   if (cleared) await audit({ ...c, user: { id: userId } }, "account.unverified_password_cleared", "user", userId, { via: "email_verification" });
   const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
   await applyBootstrapRoles(c.env, c.cfg, user);
+  await linkVerifiedUser(c.env, user);
   await sendEmail(c, { user, template: "welcome", vars: { url: `${c.cfg.origin}/courses` } });
   // Learners who finished a course before verifying receive their credentials now.
   const done = (await c.env.DB.prepare("SELECT c.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE e.user_id = ? AND e.status = 'completed'").bind(userId).all()).results;
@@ -310,6 +312,7 @@ export async function reset(c) {
   await setPassword(c.env, userId, String(b.password));
   // Proving control of the inbox also verifies the address.
   await c.env.DB.prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?").bind(nowIso(), userId).run();
+  await linkVerifiedUser(c.env, { ...user, email_verified_at: user.email_verified_at || nowIso() });
   await audit({ ...c, user: { id: userId } }, "user.password_reset", "user", userId);
   await sendEmail(c, { user, template: "password_changed", vars: { url: `${c.cfg.origin}/forgot-password` } });
   return redirect("/login?reset=1");
@@ -397,6 +400,7 @@ export async function googleCallback(c) {
   if (!user || user.status !== "active") return loginPage(c, { error: "auth.error.invalid", status: 403 });
   await c.env.DB.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").bind(now, userId).run();
   await applyBootstrapRoles(c.env, c.cfg, user);
+  await linkVerifiedUser(c.env, user);
   await createSession(c, userId);
   return redirect(safeNext(decodeURIComponent(nextEnc || "")));
 }

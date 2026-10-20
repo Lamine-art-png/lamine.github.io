@@ -479,6 +479,25 @@ export async function stagingProbeCourse(c) {
   return json({ ok: true, probe: await ensureProbeCourse(c.env) });
 }
 
+/**
+ * Staging only, token-protected: give a verified synthetic staging test
+ * account a staff role (never super_admin), so the staging integration test
+ * can check admin access, role restrictions, publication controls and R2.
+ */
+export async function stagingStaff(c) {
+  const token = String(c.env.STAGING_TEST_TOKEN || "");
+  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
+  const b = await c.readBody();
+  const email = String(b.email || "").toLowerCase();
+  const role = ["academy_admin", "content_editor"].includes(b.role) ? b.role : null;
+  if (!role || !isStagingTestAddress(email)) throw new HttpError(400, "invalid_request");
+  const user = await c.env.DB.prepare("SELECT id FROM users WHERE email = ? AND email_verified_at IS NOT NULL AND status = 'active'").bind(email).first();
+  if (!user) throw new HttpError(404, "not_found");
+  await c.env.DB.prepare("INSERT OR IGNORE INTO user_roles (user_id, role, granted_by, granted_at) VALUES (?, ?, 'staging-test', ?)").bind(user.id, role, nowIso()).run();
+  return json({ ok: true, user_id: user.id, role });
+}
+
 /** Public language-support page: what is translated, reviewed or English-only, per language. */
 export async function languages(c) {
   const t = c.t;

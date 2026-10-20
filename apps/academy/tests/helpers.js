@@ -191,3 +191,24 @@ export async function approveReviews(admin, courseId, reviewer = "Synthetic Test
     if (r.status !== 303 || /err=/.test(r.location || "")) throw new Error(`review ${type}: ${r.status} ${r.location}`);
   }
 }
+
+/** In-memory R2 bucket with the same body-length rule as Cloudflare R2. */
+export function fakeR2() {
+  const store = new Map();
+  return {
+    store,
+    async put(key, value, opts) {
+      if (value instanceof ReadableStream) throw new TypeError("Provided readable stream must have a known length (request/response body or readable half of FixedLengthStream)");
+      const bytes = new Uint8Array(value instanceof Blob ? await value.arrayBuffer() : value);
+      store.set(key, { bytes, opts });
+      return { key, size: bytes.length };
+    },
+    async get(key) {
+      const o = store.get(key);
+      return o ? { body: new Blob([o.bytes]).stream(), httpMetadata: o.opts?.httpMetadata, size: o.bytes.length } : null;
+    },
+    async delete(key) {
+      store.delete(key);
+    },
+  };
+}

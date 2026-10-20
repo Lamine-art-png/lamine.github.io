@@ -12,6 +12,7 @@ import * as ops from "./pages/admin/ops.js";
 import * as cur from "./pages/admin/curriculum.js";
 import * as asm from "./pages/admin/assessments.js";
 import * as people from "./pages/admin/people.js";
+import * as earlyAccess from "./pages/admin/earlyAccess.js";
 import * as tr from "./pages/admin/translations.js";
 
 const AUTH = { auth: true };
@@ -38,6 +39,7 @@ export function registerRoutes(r) {
   r.get("/__staging/inbox", pub.stagingInbox);
   // Bearer-token authenticated (no cookies), so no CSRF token; 404 outside staging.
   r.post("/__staging/probe-course", pub.stagingProbeCourse, { csrf: false });
+  r.post("/__staging/staff", pub.stagingStaff, { csrf: false });
 
   // Authentication
   r.get("/register", (c) => auth.registerPage(c));
@@ -164,6 +166,9 @@ export function registerRoutes(r) {
   r.get("/admin/grading/:id", asm.gradeAttemptPage, p("grading"));
   r.post("/admin/grading/:id/:qid", asm.gradeItem, p("grading"));
 
+  r.get("/admin/early-access", earlyAccess.page, p("early_access.manage"));
+  r.post("/admin/early-access/import", earlyAccess.importAction, p("early_access.manage"));
+  r.post("/admin/early-access/invite", earlyAccess.inviteAction, p("early_access.manage"));
   r.get("/admin/learners", people.learners, p("learners.view"));
   r.get("/admin/learners/:id", people.learnerDetail, p("learners.view"));
   r.post("/admin/learners/:id/resend", people.resendVerification, p("learners.manage"));

@@ -44,8 +44,10 @@ SITE_URL = "https://agroai-pilot.com"
 API_URL = "https://api.agroai-pilot.com"
 API_DOCS_URL = "https://platform.agroai-pilot.com"
 SUPPORT_EMAIL = "contact@agroai-pilot.com"
-EMAIL_FROM = "AGRO-AI Academy <academy@agroai-pilot.com>"
+EMAIL_FROM = "AGRO-AI Academy <academy@mail.agroai-pilot.com>"
 FIRST_CLASSES_DATE = "2026-10-29"
+# Email is sent from the company Resend domain mail.agroai-pilot.com (verified;
+# also used by the Platform API), replies go to SUPPORT_EMAIL.
 # Secrets (set with `wrangler secret put`, never committed):
 #   CERT_SIGNING_SECRET   — required; signs certificate records
 #   RESEND_API_KEY        — enables email delivery
@@ -68,7 +70,7 @@ SITE_URL = "https://agroai-pilot.com"
 API_URL = "https://api.agroai-pilot.com"
 API_DOCS_URL = "https://platform.agroai-pilot.com"
 SUPPORT_EMAIL = "contact@agroai-pilot.com"
-EMAIL_FROM = "AGRO-AI Academy <academy@agroai-pilot.com>"
+EMAIL_FROM = "AGRO-AI Academy <academy@mail.agroai-pilot.com>"
 FIRST_CLASSES_DATE = "2026-10-29"
 
 [[env.staging.d1_databases]]

@@ -1,7 +1,29 @@
 # AGRO-AI Academy — execution status
 
-Updated 2026-10-18 (second audit pass). Branch: `claude/inspiring-hypatia-gq0x5p`. Nothing is deployed yet;
+Updated 2026-10-20 (deployment preparation). Branch: `claude/inspiring-hypatia-gq0x5p`. Nothing is deployed yet;
 merging to `main` deploys **staging only**. Production needs a separate, confirmed dispatch.
+
+**Staging, launch and production runbook: [`LAUNCH.md`](LAUNCH.md)** — infrastructure preflight
+results, the founder checklist, the live staging test matrix, the early-access registrant
+process, Course A1 readiness and the production/rollback procedure.
+
+### Deployment preparation (2026-10-20)
+
+- Read-only **Academy Preflight** workflow: secret presence (never values), Cloudflare
+  inventory and live endpoints. Finding: the Cloudflare token has **no D1 permission**
+  (blocks staging); DNS read is denied (deploy now falls back to public DNS).
+- Staging needs no manually created secret besides that token fix: the test token is
+  generated per run, the signing key inside Cloudflare.
+- Email reuses the company's verified Resend domain: sender `academy@mail.agroai-pilot.com`.
+- Early-access registrants (Platform API `saas_requests`): migration 0008, super-admin import
+  with preview, linking only after mailbox proof, one confirmed invitation per consenting
+  person, never from a non-production copy, erased with the account
+  (`tests/integration/early-access.test.js`, 7 tests).
+- Live staging test now also covers languages (pt-BR, fr-FR, es, ar RTL), HTTPS redirect,
+  certificate PDF and LinkedIn link, admin access and role limits, refusal to publish A1
+  without approvals, and R2 upload/download/removal. The Worker redirects HTTP to HTTPS itself.
+- Public copy corrected in all six interface languages: one course opens on 29 October
+  (not "courses"); instructor videos are described as in production.
 
 ## Launch plan for 29 October (one excellent course)
 

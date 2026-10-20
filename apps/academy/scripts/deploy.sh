@@ -59,7 +59,23 @@ summary "### Academy ${TARGET} deployment" "- Worker \`${SERVICE}\`, D1 \`${DB_N
 echo "==> Checking DNS ownership of ${HOST}"
 ZONE_ID="$(api "/zones?name=agroai-pilot.com" | $H zone-id)"
 test -n "$ZONE_ID" || { echo "Zone agroai-pilot.com is not accessible with this token." >&2; exit 1; }
-RECORDS="$(api "/zones/${ZONE_ID}/dns_records?name=${HOST}" | $H result-count)"
+DNS_CODE="$(curl -sS -o "$WORK/dns.json" -w '%{http_code}' -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "${CF_API}/zones/${ZONE_ID}/dns_records?name=${HOST}")" || DNS_CODE=000
+if [ "$DNS_CODE" = "200" ]; then
+  RECORDS="$($H result-count < "$WORK/dns.json")"
+elif [ "$DNS_CODE" = "403" ]; then
+  # Token without DNS read permission: check public DNS instead. (Cloudflare
+  # also refuses to attach a Worker custom domain over an existing record.)
+  RECORDS="$(node -e '
+    const [base, host] = process.argv.slice(1);
+    Promise.all(["A", "AAAA", "CNAME"].map((t) => fetch(`${base}?name=${host}&type=${t}`, { headers: { accept: "application/dns-json" } }).then((r) => r.json())))
+      .then((rs) => { if (rs.some((r) => r.Status !== 0 && r.Status !== 3)) throw new Error("lookup failed"); console.log(rs.reduce((n, r) => n + (r.Answer || []).length, 0)); })
+      .catch(() => console.log("error"));
+  ' "${DOH_BASE:-https://cloudflare-dns.com/dns-query}" "$HOST")"
+  [ "$RECORDS" != "error" ] || { echo "::error::Could not check DNS for ${HOST}; refusing to continue." >&2; exit 1; }
+  echo "    Token cannot read DNS records; public DNS shows ${RECORDS} record(s)."
+else
+  echo "::error::Could not read DNS records for ${HOST} (HTTP ${DNS_CODE}); refusing to continue." >&2; exit 1
+fi
 if [ "$RECORDS" != "0" ]; then
   OWNED="$(api "/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains?hostname=${HOST}" | $H domain-owned "$SERVICE")"
   if [ "$OWNED" != "yes" ]; then
