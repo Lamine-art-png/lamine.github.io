@@ -42,6 +42,22 @@ test("a reviewed course translation is marked with its language inside an Englis
   assert.match(r.text, /<h1 class="display-sm" lang="de" dir="ltr">Einführung in KI in der Landwirtschaft<\/h1>/);
 });
 
+test("partly translated content is marked field by field, and machine translations are disclosed on English-fallback pages", async () => {
+  const env = makeEnv();
+  await publishCourse(env, "crs_a1");
+  const now = new Date().toISOString();
+  // Only the title is translated: the subtitle stays English and must be marked as such.
+  await env.DB.prepare("INSERT INTO content_translations (entity_type, entity_id, field, locale, value, status, updated_at) VALUES ('course','crs_a1','title','ar','مقدمة في الذكاء الاصطناعي في الزراعة','reviewed',?), ('course','crs_a1','title','de','Einführung in KI','machine',?)").bind(now, now).run();
+  let r = await new Client(env).get(`${COURSE}?lang=ar`);
+  assert.match(r.text, /<h1 class="display-sm">مقدمة في الذكاء الاصطناعي في الزراعة<\/h1>/, "translated field: no marker in an Arabic page");
+  assert.match(r.text, /<p class="lead" lang="en" dir="ltr">What AI is/, "untranslated field stays marked as English");
+  // German has no interface catalog: the page is English, the title a machine translation that must be disclosed.
+  r = await new Client(env).get(`${COURSE}?lang=de`);
+  assert.match(r.text, /<h1 class="display-sm" lang="de" dir="ltr">Einführung in KI<\/h1>/);
+  assert.match(r.text, /<p class="lead">What AI is/, "English subtitle in an English page needs no marker");
+  assert.match(r.text, /class="translation-note"[^<]*<svg[^]*?Machine-translated — not yet reviewed/, "machine translation disclosed");
+});
+
 test("a language picked in the header is saved to the profile and follows the learner to another device", async () => {
   const env = makeEnv();
   const learner = await registeredLearner(env, { email: "lang@academy.test" });

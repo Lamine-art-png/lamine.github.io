@@ -24,10 +24,10 @@ export function courseCard(c, course, { progress = null } = {}) {
   const thumb = courseThumb(course);
   return html`<a class="card card-link course-card" href="/courses/${course.slug}">
     <div class="thumb"><img src="${thumb}" alt="" loading="lazy" decoding="async" width="800" height="450">${courseStatusBadge(c, course)}</div>
-    <div class="body"${contentLang(c, course)}>
+    <div class="body">
       ${course.program_title ? html`<span class="program-label">${course.program_code ? `${c.t("program.label", { code: course.program_code })} · ` : ""}${course.program_title}</span>` : ""}
-      <h3>${course.title}</h3>
-      <p>${course.subtitle || ""}</p>
+      <h3${contentLang(c, course, "title")}>${course.title}</h3>
+      <p${contentLang(c, course, "subtitle")}>${course.subtitle || ""}</p>
       ${progress != null
         ? html`<div class="mt-1"><div class="progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100" aria-label="${c.t("progress.label")}"><span class="pct-${Math.round(progress)}"></span></div>
            <span class="tiny muted">${c.t("progress.percent_complete", { pct: progress })}</span></div>`
@@ -100,20 +100,27 @@ export function selectField(c, { name, label, options, value, required = false, 
 }
 
 /**
- * lang/dir attributes for curriculum text written in a language other than the
- * page's: English source text inside a translated page, or a translation
- * inside an English page. Keeps screen readers and bidi layout correct.
+ * lang/dir attributes for one curriculum field written in a language other
+ * than the page's: English source text inside a translated page, or a
+ * translation inside an English page. Decided per field, since a row may be
+ * only partly translated. Keeps screen readers and bidi layout correct.
  */
-export function contentLang(c, row) {
+export function contentLang(c, row, field) {
   const tr = row?._tr;
   if (!tr) return "";
-  const lang = tr.fallback || tr.status === "source" ? "en" : c.locale;
+  const lang = tr.fields?.has(field) ? c.locale : "en";
   return lang === c.displayLocale ? "" : raw(` lang="${lang}" dir="${localeInfo(lang).dir}"`);
 }
 
+/**
+ * Says when curriculum content is shown in English or as an unreviewed machine
+ * translation. The machine-translation disclosure follows the content's
+ * language, so it also shows on pages whose interface falls back to English;
+ * "shown in English" is redundant there (the page notice already says so).
+ */
 export function translationNotice(c, tr) {
-  if (!tr || c.displayLocale === "en") return "";
-  if (tr.status === "missing") return html`<p class="translation-note">${icon("globe", { size: 14 })} ${c.t("i18n.content_in_english")}</p>`;
+  if (!tr || c.locale === "en") return "";
+  if (tr.status === "missing" && c.displayLocale !== "en") return html`<p class="translation-note">${icon("globe", { size: 14 })} ${c.t("i18n.content_in_english")}</p>`;
   if (tr.status === "machine") return html`<p class="translation-note">${icon("globe", { size: 14 })} ${c.t("i18n.machine_translated")}</p>`;
   return "";
 }

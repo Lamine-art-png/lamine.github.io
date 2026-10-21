@@ -116,8 +116,8 @@ export async function courseLanding(c) {
     <div>
       ${breadcrumbs([[t("nav.courses"), "/courses"], ...(course.program_title ? [[course.program_title, `/programs#${course.program_slug}`]] : []), [course.title]])}
       ${course.program_title ? html`<p class="eyebrow">${t("program.label", { code: course.program_code || "" })} · ${course.program_title}</p>` : ""}
-      <h1 class="display-sm"${contentLang(c, course)}>${course.title}</h1>
-      <p class="lead"${contentLang(c, course)}>${course.subtitle}</p>
+      <h1 class="display-sm"${contentLang(c, course, "title")}>${course.title}</h1>
+      <p class="lead"${contentLang(c, course, "subtitle")}>${course.subtitle}</p>
       <div class="meta">
         <span>${icon("layers", { size: 16 })} ${levelLabel(c, course.level)}</span>
         ${course.duration_minutes ? html`<span>${icon("clock", { size: 16 })} ${formatDuration(course.duration_minutes, t)}</span>` : ""}
@@ -146,17 +146,17 @@ export async function courseLanding(c) {
 
   <div class="wrap course-body">
     <div>
-      ${course.objectives.length ? html`<h2 class="h2">${t("course.objectives")}</h2><ul class="objectives"${contentLang(c, course)}>${course.objectives.map((o) => html`<li>${icon("check", { size: 18 })}<span>${o}</span></li>`)}</ul>` : ""}
+      ${course.objectives.length ? html`<h2 class="h2">${t("course.objectives")}</h2><ul class="objectives"${contentLang(c, course, "objectives_json")}>${course.objectives.map((o) => html`<li>${icon("check", { size: 18 })}<span>${o}</span></li>`)}</ul>` : ""}
       <h2 class="h2">${t("course.about")}</h2>
-      <div class="prose"${contentLang(c, course)}>${course.description.split(/\n{2,}/).map((p) => html`<p>${p}</p>`)}</div>
+      <div class="prose"${contentLang(c, course, "description")}>${course.description.split(/\n{2,}/).map((p) => html`<p>${p}</p>`)}</div>
 
       <h2 class="h2 mt-4">${t("course.syllabus")}</h2>
       <p class="muted">${t("course.syllabus_meta", { modules: syllabus.modules.length, lessons: lessonsTotal })}</p>
       <div class="syllabus">${syllabus.modules.map(
-        (m, mi) => html`<details ${mi === 0 ? raw("open") : ""}><summary><span>${t("course.module_n", { n: mi + 1 })} · <span${contentLang(c, m)}>${m.title}</span></span><span class="muted">${t("course.lesson_count", { n: m.lessons.length })}</span></summary>
-          ${m.summary ? html`<p class="small muted mod-summary"${contentLang(c, m)}>${m.summary}</p>` : ""}
+        (m, mi) => html`<details ${mi === 0 ? raw("open") : ""}><summary><span>${t("course.module_n", { n: mi + 1 })} · <span${contentLang(c, m, "title")}>${m.title}</span></span><span class="muted">${t("course.lesson_count", { n: m.lessons.length })}</span></summary>
+          ${m.summary ? html`<p class="small muted mod-summary"${contentLang(c, m, "summary")}>${m.summary}</p>` : ""}
           <ol>${m.lessons.map(
-            (l) => html`<li><span class="grow">${icon(lessonTypeIcon(l.type), { size: 16 })} <span${contentLang(c, l)}>${l.title}</span></span>
+            (l) => html`<li><span class="grow">${icon(lessonTypeIcon(l.type), { size: 16 })} <span${contentLang(c, l, "title")}>${l.title}</span></span>
               ${l.is_preview && course.isAvailable ? html`<a class="badge badge-lime" href="/learn/${course.slug}/${l.slug}">${t("course.preview")}</a>` : ""}
               <span class="small muted nowrap">${t("duration.minutes", { n: l.est_minutes })}</span></li>`,
           )}</ol></details>`,
