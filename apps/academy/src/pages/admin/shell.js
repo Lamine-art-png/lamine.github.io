@@ -54,7 +54,9 @@ export function adminPage(c, { title, active, body, actions = "", status = 200, 
     title: `${title} · Admin`,
     noindex: true,
     status,
-    body: html`<div class="admin">${nav}<div class="admin-main" lang="en">
+    // English-only staff console: marked so it lays out left-to-right and is
+    // read as English even inside an Arabic or other translated session.
+    body: html`<div class="admin" lang="en" dir="ltr">${nav}<div class="admin-main">
       <div class="row-between mb-2"><h1 class="mb-0">${title}</h1><div class="row">${actions}</div></div>
       ${msg ? html`<div class="alert alert-success" role="status">${icon("check-circle", { size: 18 })}<div>${messageFor(msg)}</div></div>` : ""}
       ${c.url.searchParams.get("err") ? html`<div class="alert alert-error" role="alert">${icon("alert", { size: 18 })}<div>${c.url.searchParams.get("err")}</div></div>` : ""}

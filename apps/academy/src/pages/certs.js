@@ -9,6 +9,7 @@ import { unsupportedNameScripts } from "../lib/pdf.js";
 import { renderCertificatePdf } from "../services/certificate-pdf.js";
 import { formatDate } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
+import { brandLogo } from "../views/layout.js";
 import { alert, csrfField, emptyState, pageHead } from "../views/components.js";
 import { getByCredential, shareUrls, signatureStatus, issueIfEligible } from "../services/certificates.js";
 import { getCourseBySlug } from "../services/content.js";
@@ -16,7 +17,7 @@ import { getCourseBySlug } from "../services/content.js";
 export function certificateVisual(c, cert, verifyUrl) {
   const t = c.t;
   return html`<div class="certificate ${cert.status === "revoked" ? "revoked" : ""}" role="img" aria-label="${t("cert.visual_label", { name: cert.credential_name, course: cert.course_title })}">
-    <div class="c-top"><div class="c-brand"><img src="/static/img/mark-64.png" alt=""><span>AGRO-AI <span>Academy</span></span></div><span class="c-id">${cert.credential_id}</span></div>
+    <div class="c-top"><div class="c-brand">${brandLogo({ variant: "dark" })}</div><span class="c-id">${cert.credential_id}</span></div>
     <div class="c-center">
       <div class="c-label">${t("cert.title_label")}</div>
       <div class="c-name">${cert.credential_name}</div>

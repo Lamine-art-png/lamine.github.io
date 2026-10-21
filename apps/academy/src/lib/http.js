@@ -1,4 +1,5 @@
 // HTTP helpers: cookies, responses, security headers and request body parsing.
+import { fontOrigin } from "../brand.js";
 
 export class HttpError extends Error {
   constructor(status, code, message, extra = {}) {
@@ -47,10 +48,10 @@ export function securityHeaders(headers, { isHtml, secure }) {
       [
         "default-src 'self'",
         "script-src 'self'",
-        "style-src 'self'",
+        `style-src 'self'${fontOrigin ? ` ${fontOrigin}` : ""}`,
         "img-src 'self' data: https:",
         "media-src 'self' https: blob:",
-        "font-src 'self'",
+        `font-src 'self'${fontOrigin ? ` ${fontOrigin}` : ""}`,
         "connect-src 'self'",
         "frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://iframe.videodelivery.net https://share.synthesia.io",
         "frame-ancestors 'none'",

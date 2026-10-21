@@ -1,6 +1,7 @@
 // Route table. `auth` requires a signed-in learner; `perm` requires an admin
 // permission (see ROLE_PERMISSIONS). All POST routes are CSRF-checked.
 import * as pub from "./pages/public.js";
+import * as staging from "./pages/staging.js";
 import * as auth from "./pages/auth.js";
 import * as catalog from "./pages/catalog.js";
 import * as learn from "./pages/learn.js";
@@ -36,11 +37,11 @@ export function registerRoutes(r) {
   r.get("/robots.txt", pub.robots);
   r.get("/healthz", pub.health);
   r.get("/languages", pub.languages);
-  r.get("/__staging/inbox", pub.stagingInbox);
+  r.get("/__staging/inbox", staging.inbox);
   // Bearer-token authenticated (no cookies), so no CSRF token; 404 outside staging.
-  r.post("/__staging/probe-course", pub.stagingProbeCourse, { csrf: false });
-  r.post("/__staging/staff", pub.stagingStaff, { csrf: false });
-  r.post("/__staging/cleanup", pub.stagingCleanup, { csrf: false });
+  r.post("/__staging/probe-course", staging.probeCourse, { csrf: false });
+  r.post("/__staging/staff", staging.staff, { csrf: false });
+  r.post("/__staging/cleanup", staging.cleanupAccounts, { csrf: false });
 
   // Authentication
   r.get("/register", (c) => auth.registerPage(c));

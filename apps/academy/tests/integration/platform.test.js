@@ -284,8 +284,10 @@ test("language support is described honestly: selectable, translated, reviewed, 
   r = await anon.get("/?lang=es");
   assert.match(r.text, /class="lang-notice[^]*traducido automáticamente|class="lang-notice[^]*tradujo automáticamente/);
   r = await anon.get("/?lang=de");
-  assert.match(r.text, /class="lang-notice[^]*isn(?:'|&#39;)t translated yet, so pages are shown in English/);
-  assert.match(r.text, /<html lang="de"/);
+  assert.match(r.text, /class="lang-notice[^]*German isn(?:'|&#39;)t translated yet, so the Academy is shown in English for now/);
+  // The page is written in English, so it is marked and laid out as English; the choice stays selected.
+  assert.match(r.text, /<html lang="en" dir="ltr"/);
+  assert.match(r.text, /<option value="de" lang="de" dir="ltr" selected>/);
   // The picker separates translated interfaces from English-for-now ones.
   assert.match(r.text, /<optgroup label="Interface translated">/);
   assert.match(r.text, /<optgroup label="Interface in English for now">/);

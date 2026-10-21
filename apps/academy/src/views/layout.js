@@ -1,17 +1,31 @@
 // Page shell: document head (SEO, social, hreflang), header, footer.
 import { html, raw, jsonScript } from "../lib/html.js";
-import { LOCALES, interfaceStatus } from "../lib/i18n.js";
+import { LOCALES, interfaceStatus, localeInfo } from "../lib/i18n.js";
 import { icon } from "./icons.js";
-import { BUILD } from "../app.js";
+import { BRAND, fontOrigin } from "../brand.js";
+import { asset } from "./assets.js";
 
-export const asset = (p) => `/static/${p}?v=${BUILD}`;
+export { asset };
+
+/**
+ * The official horizontal lockup. "auto" follows the colour theme (dark
+ * wordmark on light surfaces, light wordmark on dark ones); "light" and "dark"
+ * are for surfaces that never change, such as the footer or certificate paper.
+ */
+export function brandLogo({ variant = "auto", lazy = false } = {}) {
+  const { width, height } = BRAND.horizontalSize;
+  const img = (src, cls, alt) =>
+    html`<img class="logo ${cls}" src="${asset(src)}" width="${width}" height="${height}" alt="${alt}" decoding="async" ${lazy ? raw('loading="lazy"') : ""}>`;
+  if (variant === "light") return img(BRAND.logo.horizontalLight, "", BRAND.name);
+  if (variant === "dark") return img(BRAND.logo.horizontal, "", BRAND.name);
+  return html`${img(BRAND.logo.horizontal, "logo-on-light", BRAND.name)}${img(BRAND.logo.horizontalLight, "logo-on-dark", "")}`;
+}
 
 function langSwitcher(c) {
-  const here = c.url.pathname + (c.url.search ? c.url.search.replace(/([?&])lang=[^&]*&?/, "$1").replace(/[?&]$/, "") : "");
   return html`<form class="lang" method="get" action="${c.url.pathname}" data-autosubmit>
     ${[...c.url.searchParams].filter(([k]) => k !== "lang").map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}">`)}
     <label class="lang-label">${icon("globe", { size: 16 })}<span class="sr-only">${c.t("nav.language")}</span>
-      <select name="lang" aria-label="${c.t("nav.language")}" data-current="${here}">
+      <select name="lang" aria-label="${c.t("nav.language")}">
         ${[
           ["translated", LOCALES.filter((l) => interfaceStatus(l.code) !== "fallback")],
           ["fallback", LOCALES.filter((l) => interfaceStatus(l.code) === "fallback")],
@@ -25,12 +39,16 @@ function langSwitcher(c) {
   </form>`;
 }
 
-/** Says plainly when the interface is a machine draft or not translated yet. */
+/**
+ * Says plainly when the interface is a machine draft, or when the chosen
+ * language has no translation yet and the Academy is shown in English.
+ */
 function languageNotice(c) {
   const status = interfaceStatus(c.locale);
   if (status !== "machine" && status !== "fallback") return "";
+  const chosen = localeInfo(c.locale);
   return html`<div class="lang-notice no-print" role="note"><div class="wrap">${icon("globe", { size: 15 })}
-    <span>${c.t(`lang.notice_${status}`, { language: c.localeInfo.nativeName })}</span> <a href="/languages">${c.t("lang.notice_link")}</a></div></div>`;
+    <span>${c.t(`lang.notice_${status}`, { language: chosen.englishName })}</span> <a href="/languages">${c.t("lang.notice_link")}</a></div></div>`;
 }
 
 function themeToggle(c) {
@@ -55,10 +73,7 @@ function header(c, active) {
   const user = c.user;
   return html`<header class="site-header">
   <div class="wrap header-row">
-    <a class="brand" href="/" aria-label="${t("brand.home_label")}">
-      <img src="${asset("img/mark-64.png")}" width="32" height="32" alt="" decoding="async">
-      <span class="brand-text"><span class="brand-agro">AGRO-AI</span> <span class="brand-academy">Academy</span></span>
-    </a>
+    <a class="brand" href="/" aria-label="${t("brand.home_label")}">${brandLogo()}</a>
     <nav class="primary-nav" aria-label="${t("nav.primary")}">
       <ul>${nav.map(([href, label, key]) => html`<li><a href="${href}" ${active === key ? raw('aria-current="page"') : ""}>${label}</a></li>`)}</ul>
     </nav>
@@ -102,8 +117,7 @@ function footer(c) {
   return html`<footer class="site-footer">
   <div class="wrap footer-grid">
     <div class="footer-brand">
-      <a class="brand" href="/"><img src="${asset("img/mark-64.png")}" width="32" height="32" alt="" loading="lazy">
-        <span class="brand-text"><span class="brand-agro">AGRO-AI</span> <span class="brand-academy">Academy</span></span></a>
+      <a class="brand" href="/">${brandLogo({ variant: "light", lazy: true })}</a>
       <p>${t("footer.tagline")}</p>
       <p class="free-badge">${icon("check-circle", { size: 16 })} ${t("footer.free_forever")}</p>
     </div>
@@ -136,10 +150,13 @@ export function renderPage(c, opts) {
   const fullTitle = title ? `${title} · AGRO-AI Academy` : `AGRO-AI Academy — ${t("meta.tagline")}`;
   const canonicalPath = opts.canonical ?? c.url.pathname;
   const canonical = c.cfg.origin + canonicalPath;
-  const og = ogImage || c.cfg.origin + asset("img/og-academy.png");
+  const og = ogImage || c.cfg.origin + asset(BRAND.logo.social);
+  // Only languages the interface is translated into get alternate URLs; the
+  // others would be English duplicates.
+  const alternates = LOCALES.filter((l) => interfaceStatus(l.code) !== "fallback");
   const indexable = !noindex && status === 200 && !c.user;
   const doc = html`<!doctype html>
-<html lang="${c.locale}" dir="${c.localeInfo.dir}" data-theme="${c.theme}">
+<html lang="${c.displayLocale}" dir="${c.localeInfo.dir}" data-theme="${c.theme}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -147,7 +164,7 @@ export function renderPage(c, opts) {
 <meta name="description" content="${description}">
 <link rel="canonical" href="${canonical}">
 ${indexable ? html`<link rel="alternate" hreflang="x-default" href="${canonical}">
-${LOCALES.map((l) => html`<link rel="alternate" hreflang="${l.code}" href="${canonical}?lang=${l.code}">`)}` : html`<meta name="robots" content="noindex, nofollow">`}
+${alternates.map((l) => html`<link rel="alternate" hreflang="${l.code}" href="${canonical}?lang=${l.code}">`)}` : html`<meta name="robots" content="noindex, nofollow">`}
 <meta property="og:site_name" content="AGRO-AI Academy">
 <meta property="og:type" content="${ogType}">
 <meta property="og:title" content="${title || "AGRO-AI Academy"}">
@@ -155,15 +172,17 @@ ${LOCALES.map((l) => html`<link rel="alternate" hreflang="${l.code}" href="${can
 <meta property="og:url" content="${canonical}">
 <meta property="og:image" content="${og}">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta property="og:locale" content="${c.locale.replace("-", "_")}">
+<meta property="og:locale" content="${c.displayLocale.replace("-", "_")}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#1F3D27" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0C1510" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="${BRAND.colors.green}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="${BRAND.colors.forestDeep}" media="(prefers-color-scheme: dark)">
 <meta name="csrf-token" content="${c.csrf}">
 <link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" href="${asset("img/favicon-32.png")}">
-<link rel="apple-touch-icon" href="${asset("img/apple-touch-icon.png")}">
+<link rel="icon" type="image/png" sizes="32x32" href="${asset(BRAND.logo.mark(32))}">
+<link rel="apple-touch-icon" href="${asset(BRAND.logo.appleTouch)}">
 <link rel="manifest" href="/site.webmanifest">
+${fontOrigin ? html`<link rel="preconnect" href="${fontOrigin}" crossorigin>` : ""}
+<link rel="stylesheet" href="${BRAND.fontStylesheet}" media="print" data-brand-font>
 <link rel="stylesheet" href="${asset("css/academy.css")}">
 <script src="${asset("js/academy.js")}" defer></script>
 ${jsonLd ? html`<script type="application/ld+json">${jsonScript(jsonLd)}</script>` : ""}

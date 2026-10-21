@@ -38,7 +38,11 @@ check /verify/AGA-0000-0000-0000 404 "Credential not found"
 check /register 200 "Create your account"
 check /sitemap.xml 200 "<urlset"
 check "/?lang=ar" 200 'dir="rtl"'
+check "/?lang=fa" 200 '<html lang="en" dir="ltr"'
 check /static/css/academy.css?v=smoke 200
+check /static/brand/academy-lockup-h.webp 200
+check /static/brand/og-academy.png 200
+check /apple-touch-icon.png 200
 check /dashboard 303
 grep -qi '^content-security-policy:' headers.txt || true
 curl -sS -D h.txt -o /dev/null "${BASE}/" && grep -qi '^content-security-policy:' h.txt || fail "CSP header missing"

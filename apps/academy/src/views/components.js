@@ -3,6 +3,7 @@ import { html, raw } from "../lib/html.js";
 import { icon } from "./icons.js";
 import { courseThumb } from "./art.js";
 import { formatDuration } from "../lib/util.js";
+import { localeInfo } from "../lib/i18n.js";
 
 export function courseStatusBadge(c, course) {
   if (course.status === "published") return "";
@@ -23,7 +24,7 @@ export function courseCard(c, course, { progress = null } = {}) {
   const thumb = courseThumb(course);
   return html`<a class="card card-link course-card" href="/courses/${course.slug}">
     <div class="thumb"><img src="${thumb}" alt="" loading="lazy" decoding="async" width="800" height="450">${courseStatusBadge(c, course)}</div>
-    <div class="body">
+    <div class="body"${contentLang(c, course)}>
       ${course.program_title ? html`<span class="program-label">${course.program_code ? `${c.t("program.label", { code: course.program_code })} · ` : ""}${course.program_title}</span>` : ""}
       <h3>${course.title}</h3>
       <p>${course.subtitle || ""}</p>
@@ -98,8 +99,20 @@ export function selectField(c, { name, label, options, value, required = false, 
     </select>${hint ? html`<p class="field-hint">${hint}</p>` : ""}</div>`;
 }
 
+/**
+ * lang/dir attributes for curriculum text written in a language other than the
+ * page's: English source text inside a translated page, or a translation
+ * inside an English page. Keeps screen readers and bidi layout correct.
+ */
+export function contentLang(c, row) {
+  const tr = row?._tr;
+  if (!tr) return "";
+  const lang = tr.fallback || tr.status === "source" ? "en" : c.locale;
+  return lang === c.displayLocale ? "" : raw(` lang="${lang}" dir="${localeInfo(lang).dir}"`);
+}
+
 export function translationNotice(c, tr) {
-  if (!tr || c.locale === "en") return "";
+  if (!tr || c.displayLocale === "en") return "";
   if (tr.status === "missing") return html`<p class="translation-note">${icon("globe", { size: 14 })} ${c.t("i18n.content_in_english")}</p>`;
   if (tr.status === "machine") return html`<p class="translation-note">${icon("globe", { size: 14 })} ${c.t("i18n.machine_translated")}</p>`;
   return "";

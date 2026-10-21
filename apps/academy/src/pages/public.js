@@ -2,18 +2,17 @@
 // contact, legal pages, and SEO endpoints.
 import { html, raw } from "../lib/html.js";
 import { redirect, json, serializeCookie, HttpError } from "../lib/http.js";
-import { newId, nowIso, safeEqual } from "../lib/util.js";
+import { newId, nowIso } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { md } from "../lib/markdown.js";
 import { LOCALES, interfaceStatus, TRANSLATED_INTERFACE_COUNT } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
+import { BRAND } from "../brand.js";
+import { brandLogo, asset } from "../views/layout.js";
 import { artSvg } from "../views/art.js";
 import { courseCard, pageHead, emptyState, alert, csrfField, field, selectField } from "../views/components.js";
 import { listCourses, listPrograms, listPaths, localize } from "../services/content.js";
 import { validEmail } from "../services/users.js";
-import { isStagingTestAddress } from "../services/email.js";
-import { ensureProbeCourse } from "../services/staging-probe.js";
-import { cleanup as stagingCleanupRun } from "../services/staging-cleanup.js";
 import { LEGAL } from "../content/legal.js";
 import { qrSvg } from "../lib/qr.js";
 
@@ -69,8 +68,8 @@ export async function home(c) {
         <li>${icon("globe", { size: 18 })} ${t("home.point_languages", { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT })}</li>
       </ul>
     </div>
-    <div class="hero-visual">
-      <img src="/art/pivots/green/academy-hero.svg?w=900&h=980" alt="${t("home.hero_alt")}" width="900" height="980" fetchpriority="high">
+    <div class="hero-visual hero-brand">
+      <img class="hero-lockup" src="${asset(BRAND.logo.stackedLight)}" alt="${BRAND.name}" width="${BRAND.stackedSize.width}" height="${BRAND.stackedSize.height}" fetchpriority="high">
       <div class="hero-card">
         <div class="row-between">
           <div><strong>${t("home.first_classes")}</strong><span class="tiny">${firstDate}</span></div>
@@ -192,7 +191,7 @@ ${team.length
       "@type": "EducationalOrganization",
       name: "AGRO-AI Academy",
       url: c.cfg.origin,
-      logo: `${c.cfg.origin}/static/img/mark-512.png`,
+      logo: `${c.cfg.origin}/static/${BRAND.logo.mark(512)}`,
       description: t("meta.default_description"),
       parentOrganization: { "@type": "Organization", name: "AGRO-AI Inc.", url: c.cfg.siteUrl },
       address: { "@type": "PostalAddress", addressLocality: "San Francisco", addressRegion: "CA", addressCountry: "US" },
@@ -206,7 +205,7 @@ function roleIcon(role) {
 
 export function sampleCertificate(c) {
   return html`<div class="certificate" role="img" aria-label="${c.t("home.cert_sample")}">
-    <div class="c-top"><div class="c-brand"><img src="/static/img/mark-64.png" alt=""><span>AGRO-AI <span>Academy</span></span></div><span class="c-id">AGA-SAMP-LE00-0000</span></div>
+    <div class="c-top"><div class="c-brand">${brandLogo({ variant: "dark" })}</div><span class="c-id">AGA-SAMP-LE00-0000</span></div>
     <div class="c-center">
       <div class="c-label">${c.t("cert.title_label")}</div>
       <div class="c-name">${c.t("home.cert_sample_name")}</div>
@@ -374,7 +373,7 @@ export async function legal(c) {
   const t = c.t;
   const body = html`${pageHead({ eyebrow: t("legal.eyebrow"), title: doc.title, lead: t("legal.updated", { date: c.fmtDate(doc.updated) }) })}
   <section class="section-tight"><div class="wrap narrow">
-    ${c.locale !== "en" ? alert("info", t("legal.english_governs")) : ""}
+    ${c.displayLocale !== "en" ? alert("info", t("legal.english_governs")) : ""}
     <div class="prose" lang="en">${md(doc.body)}</div>
   </div></section>`;
   return c.page({ title: doc.title, description: doc.summary, body });
@@ -455,68 +454,6 @@ export async function health(c) {
     },
     ok ? 200 : 503,
   );
-}
-
-/**
- * Staging-only test inbox for the automated staging test. Returns the latest
- * message for a synthetic @academy-staging-test.invalid address. Disabled (404)
- * unless ENVIRONMENT is "staging" and a strong STAGING_TEST_TOKEN is set, and
- * the caller presents that token. Never available in production.
- */
-export async function stagingInbox(c) {
-  const token = String(c.env.STAGING_TEST_TOKEN || "");
-  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  const to = String(c.url.searchParams.get("to") || "").toLowerCase();
-  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token) || !isStagingTestAddress(to)) throw new HttpError(404, "not_found");
-  const row = await c.env.DB.prepare("SELECT template, subject, text, status, created_at FROM email_outbox WHERE to_email = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(to).first();
-  return json(row ? { ok: true, message: row } : { ok: false }, row ? 200 : 404);
-}
-
-/** Staging only, token-protected: ensure the synthetic probe course exists (staging integration test). */
-export async function stagingProbeCourse(c) {
-  const token = String(c.env.STAGING_TEST_TOKEN || "");
-  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
-  return json({ ok: true, probe: await ensureProbeCourse(c.env) });
-}
-
-/**
- * Staging only, token-protected: give a verified synthetic staging test
- * account a staff role (never super_admin), so the staging integration test
- * can check admin access, role restrictions, publication controls and R2.
- */
-export async function stagingStaff(c) {
-  const token = String(c.env.STAGING_TEST_TOKEN || "");
-  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
-  const b = await c.readBody();
-  const email = String(b.email || "").toLowerCase();
-  const role = ["academy_admin", "content_editor"].includes(b.role) ? b.role : null;
-  if (!role || !isStagingTestAddress(email)) throw new HttpError(400, "invalid_request");
-  const user = await c.env.DB.prepare("SELECT id FROM users WHERE email = ? AND email_verified_at IS NOT NULL AND status = 'active'").bind(email).first();
-  if (!user) throw new HttpError(404, "not_found");
-  await c.env.DB.prepare("INSERT OR IGNORE INTO user_roles (user_id, role, granted_by, granted_at) VALUES (?, ?, 'staging-test', ?)").bind(user.id, role, nowIso()).run();
-  return json({ ok: true, user_id: user.id, role });
-}
-
-/**
- * One-off removal of synthetic accounts left by failed staging runs (manual,
- * token-protected, staging only). Accounts are named explicitly; "check"
- * reports, "delete" deletes only if every account passes every check.
- */
-export async function stagingCleanup(c) {
-  const token = String(c.env.STAGING_TEST_TOKEN || "");
-  const given = (c.req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (c.cfg.environment !== "staging" || token.length < 32 || !safeEqual(given, token)) throw new HttpError(404, "not_found");
-  const b = await c.readBody();
-  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String))];
-  const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
-  const mode = b.mode === "delete" ? "delete" : b.mode === "check" ? "check" : null;
-  if (!mode || ids.length < 1 || ids.length > 10 || !ids.every((id) => /^usr_[A-Za-z0-9_-]{8,40}$/.test(id)) || !iso.test(b.from || "") || !iso.test(b.to || "") || b.from > b.to) {
-    throw new HttpError(400, "invalid_request");
-  }
-  const report = await stagingCleanupRun(c.env, { ids, from: b.from, to: b.to, mode });
-  return json(report, report.refused ? 409 : 200);
 }
 
 /** Public language-support page: what is translated, reviewed or English-only, per language. */

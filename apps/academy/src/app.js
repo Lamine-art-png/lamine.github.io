@@ -2,11 +2,9 @@
 import { Router } from "./lib/router.js";
 import { HttpError, parseCookies, securityHeaders, redirect, json, readBody, serializeCookie } from "./lib/http.js";
 import { loadSession, ensureCsrf, checkCsrf, can } from "./lib/security.js";
-import { negotiate, matchLocale, localeInfo, makeTranslator, loadOverrides, formatDate, formatNumber } from "./lib/i18n.js";
+import { negotiate, matchLocale, localeInfo, displayLocale, makeTranslator, loadOverrides, formatDate, formatNumber } from "./lib/i18n.js";
 import { renderPage, renderError } from "./views/layout.js";
 import { registerRoutes } from "./routes.js";
-
-export const BUILD = "2026.10.18";
 
 /** Minimum length of CERT_SIGNING_SECRET outside development and tests. */
 export const MIN_CERT_SECRET_LENGTH = 32;
@@ -90,16 +88,25 @@ export async function handle(req, env, ctx) {
     c.roles = sess?.roles || [];
     c.can = (perm) => can(c.roles, perm);
 
-    // Locale: explicit ?lang → cookie → profile → Accept-Language.
+    // Locale: explicit ?lang → cookie → profile → Accept-Language. An explicit
+    // choice is remembered in a cookie and, when signed in, in the profile, so
+    // it follows the learner to other devices and into their emails.
     const qLang = matchLocale(url.searchParams.get("lang"));
     if (qLang && qLang !== c.cookies[LOCALE_COOKIE]) {
       c.setCookie(serializeCookie(LOCALE_COOKIE, qLang, { maxAge: 31536000, secure: cfg.secure, httpOnly: false }));
     }
+    if (qLang && c.user && qLang !== c.user.locale) {
+      c.defer(env.DB.prepare("UPDATE users SET locale = ?, updated_at = ? WHERE id = ?").bind(qLang, new Date().toISOString(), c.user.id).run());
+    }
+    // c.locale is the learner's choice (picker, notices, content translations);
+    // c.displayLocale is the language the interface is written in (lang, dir,
+    // dates, numbers): English while a chosen language has no catalog.
     c.locale = qLang || matchLocale(c.cookies[LOCALE_COOKIE]) || matchLocale(c.user?.locale) || negotiate(req.headers.get("accept-language"));
-    c.localeInfo = localeInfo(c.locale);
-    c.t = makeTranslator(c.locale, await loadOverrides(env));
-    c.fmtDate = (iso, opts) => formatDate(c.locale, iso, opts);
-    c.fmtNum = (n, opts) => formatNumber(c.locale, n, opts);
+    c.displayLocale = displayLocale(c.locale);
+    c.localeInfo = localeInfo(c.displayLocale);
+    c.t = makeTranslator(c.displayLocale, await loadOverrides(env));
+    c.fmtDate = (iso, opts) => formatDate(c.displayLocale, iso, opts);
+    c.fmtNum = (n, opts) => formatNumber(c.displayLocale, n, opts);
     c.theme = ["light", "dark"].includes(c.cookies[THEME_COOKIE]) ? c.cookies[THEME_COOKIE] : "system";
     c.csrf = ensureCsrf(c);
     c.page = (opts) => renderPage(c, opts);
