@@ -6,7 +6,7 @@ import { newId, nowIso, parseJson } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { renderMarkdown, md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
-import { csrfField, translationNotice, lessonTypeIcon, progressBar, alert } from "../views/components.js";
+import { csrfField, translationNotice, contentLang, lessonTypeIcon, progressBar, alert } from "../views/components.js";
 import { getCourseBySlug, getSyllabus, getLesson, getVideo } from "../services/content.js";
 import { validInteractive } from "../lib/interactive.js";
 import { getEnrollment, progressMap, recordProgress } from "../services/progress.js";
@@ -153,7 +153,7 @@ export async function lessonPage(c) {
     <div class="class-main">
       <div class="class-top">
         <button class="icon-btn sidebar-toggle" type="button" data-sidebar-toggle aria-controls="syllabus" aria-expanded="false" aria-label="${t("lesson.course_contents")}">${icon("list", { size: 20 })}</button>
-        <span class="title grow">${lesson.title}</span>
+        <span class="title grow"${contentLang(c, lesson, "title")}>${lesson.title}</span>
         ${completed ? html`<span class="badge badge-green">${icon("check", { size: 12 })} ${t("lesson.completed")}</span>` : ""}
         ${next ? html`<a class="btn btn-secondary btn-sm" href="/learn/${course.slug}/${next.slug}">${t("lesson.next")} ${icon("chevron-right", { size: 16, cls: "ic-flip" })}</a>` : ""}
       </div>
@@ -162,13 +162,13 @@ export async function lessonPage(c) {
         ${flash ? alert("success", t("lesson.marked_complete")) : ""}
         ${c.url.searchParams.get("watch") === "1" && !completed ? alert("info", t("lesson.watch_to_complete")) : ""}
         <p class="eyebrow">${icon(lessonTypeIcon(lesson.type), { size: 14 })} ${t(`lesson.type.${lesson.type}`)} · ${t("duration.minutes", { n: lesson.est_minutes })}</p>
-        <h1 class="display-sm">${lesson.title}</h1>
+        <h1 class="display-sm"${contentLang(c, lesson, "title")}>${lesson.title}</h1>
         ${translationNotice(c, lesson._tr)}
         ${lesson.type === "video" || lesson.video_id ? videoBlock(c, lesson, video, lp) : ""}
-        ${lesson.summary ? html`<p class="lead mt-3">${lesson.summary}</p>` : ""}
+        ${lesson.summary ? html`<p class="lead mt-3"${contentLang(c, lesson, "summary")}>${lesson.summary}</p>` : ""}
         ${rendered.toc.length > 2 ? html`<nav class="panel mt-2" aria-label="${t("lesson.on_this_page")}"><strong class="small">${t("lesson.on_this_page")}</strong>
           <ul class="small mb-0 toc-list">${rendered.toc.filter((h) => h.level <= 2).map((h) => html`<li><a href="#${h.id}">${h.text}</a></li>`)}</ul></nav>` : ""}
-        <div class="prose mt-3">${raw(rendered.html)}</div>
+        <div class="prose mt-3"${contentLang(c, lesson, "body_md")}>${raw(rendered.html)}</div>
         ${interactive(c, lesson)}
         ${isQuizLesson && assessment
           ? html`<section class="panel mt-3"><h2 class="h2">${assessment.title}</h2><p>${assessment.instructions}</p>

@@ -2,7 +2,8 @@
 // one embedded JPEG, embedded TrueType subsets for shaped Unicode text) and
 // the AGRO-AI Academy certificate layout.
 import { WIDTHS } from "./font-metrics.js";
-import { MARK_JPEG_B64, MARK_JPEG_SIZE } from "./brand-jpeg.js";
+import { LOCKUP_JPEG_B64, LOCKUP_JPEG_WIDTH, LOCKUP_JPEG_HEIGHT } from "./brand-jpeg.js";
+import { BRAND } from "../brand.js";
 import { encodeQr } from "./qr.js";
 import { b64urlDecode } from "./util.js";
 import { subsetFont } from "./ttf.js";
@@ -93,7 +94,7 @@ class Canvas {
    * subset ids when the PDF is assembled. ActualText carries the exact text
    * for copy, search and screen readers.
    */
-  shaped(line, text, x, y, { size, color = "#10231b", align = "left", maxWidth = 0 }) {
+  shaped(line, text, x, y, { size, color = "#0f2410", align = "left", maxWidth = 0 }) {
     let k = 1;
     if (maxWidth && line.width > maxWidth) k = maxWidth / line.width;
     const w = line.width * k;
@@ -153,7 +154,7 @@ class Canvas {
     return this;
   }
   /** Draw text; align: left|center|right. Shrinks to maxWidth when given. Returns the size used. */
-  text(str, x, y, { font = "Helvetica", size = 12, color = "#10231b", align = "left", charSpace = 0, maxWidth = 0 } = {}) {
+  text(str, x, y, { font = "Helvetica", size = 12, color = "#0f2410", align = "left", charSpace = 0, maxWidth = 0 } = {}) {
     const { codes } = winAnsi(str);
     let s = size;
     let w = textWidth(codes, font, s, charSpace);
@@ -222,7 +223,7 @@ function buildPdf(canvas, { width, height, jpeg, title, subject }) {
       .join(" ")} >> /XObject << /Im1 5 0 R >> /ProcSet [/PDF /Text /ImageC] >> >>`,
   );
   obj(4, [`<< /Length ${enc.encode(content).length} >>\nstream\n`, content, "\nendstream"]);
-  obj(5, [`<< /Type /XObject /Subtype /Image /Width ${jpeg.size} /Height ${jpeg.size} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.bytes.length} >>\nstream\n`, jpeg.bytes, "\nendstream"]);
+  obj(5, [`<< /Type /XObject /Subtype /Image /Width ${jpeg.width} /Height ${jpeg.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.bytes.length} >>\nstream\n`, jpeg.bytes, "\nendstream"]);
   obj(6, `<< /Title ${pdfTextString(title)} /Subject ${pdfTextString(subject)} /Author (AGRO-AI Academy) /Creator (AGRO-AI Academy) /Producer (AGRO-AI Academy credential service) >>`);
   fonts.forEach(([name], i) => obj(fontObjBase + i, `<< /Type /Font /Subtype /Type1 /BaseFont /${name} /Encoding /WinAnsiEncoding >>`));
   for (const f of embedded.values()) {
@@ -302,9 +303,9 @@ function toUnicodeCMap(entries) {
   ].join("\n");
 }
 
-const markJpeg = () => {
-  const b64 = MARK_JPEG_B64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return { bytes: b64urlDecode(b64), size: MARK_JPEG_SIZE };
+const lockupJpeg = () => {
+  const b64 = LOCKUP_JPEG_B64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return { bytes: b64urlDecode(b64), width: LOCKUP_JPEG_WIDTH, height: LOCKUP_JPEG_HEIGHT };
 };
 
 /**
@@ -315,11 +316,7 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = n
   const W = 842;
   const H = 595;
   const cv = new Canvas();
-  const green = "#1f3d27";
-  const ink = "#10231b";
-  const muted = "#5d6c62";
-  const lime = "#8db300";
-  const limeText = "#4b6b06";
+  const { green, ink, muted, leafBright: lime, leaf: limeText } = BRAND.colors;
 
   cv.fill("#fffdf8").rect(0, 0, W, H);
   cv.stroke(green, 1.6).rect(22, 22, W - 44, H - 44, "S");
@@ -329,11 +326,10 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = n
     cv.stroke(green, 1.2).line(x + dx * 8, y + dy * 8, x + dx * 40, y + dy * 8).line(x + dx * 8, y + dy * 8, x + dx * 8, y + dy * 40);
   }
 
-  // Header.
-  cv.image("Im1", 64, H - 104, 40, 40);
-  cv.text("AGRO-AI", 114, H - 82, { font: "Helvetica-Bold", size: 17, color: ink, charSpace: 0.6 });
-  cv.text("Academy", 194, H - 82, { font: "Times-Roman", size: 19, color: ink });
-  cv.text("A learning institution of AGRO-AI Inc.", 114, H - 98, { font: "Helvetica", size: 8.5, color: muted });
+  // Header: the official AGRO-AI Academy lockup.
+  const logoH = 46;
+  cv.image("Im1", 64, H - 112, (logoH * LOCKUP_JPEG_WIDTH) / LOCKUP_JPEG_HEIGHT, logoH);
+  cv.text("A learning institution of AGRO-AI Inc.", 64, H - 126, { font: "Helvetica", size: 8.5, color: muted });
   cv.text("CREDENTIAL ID", W - 64, H - 74, { font: "Helvetica-Bold", size: 7.5, color: muted, align: "right", charSpace: 1.2 });
   cv.text(cert.credential_id, W - 64, H - 90, { font: "Courier", size: 11, color: ink, align: "right" });
 
@@ -346,8 +342,8 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = n
   if (nameLine) cv.shaped(nameLine, cert.credential_name, cx, H - 262, { size: 40, color: ink, align: "center", maxWidth: 660 });
   else cv.text(cert.credential_name, cx, H - 262, { font: "Times-Bold", size: 40, color: ink, align: "center", maxWidth: 660 });
   cv.text("has successfully completed the course and passed its final assessment", cx, H - 296, { font: "Helvetica", size: 12, color: "#3c4e43", align: "center" });
-  const titleLines = cv.wrap(cert.course_title, "Times-Bold", 26, 640).slice(0, 2);
-  titleLines.forEach((line, i) => cv.text(line, cx, H - 338 - i * 30, { font: "Times-Bold", size: 26, color: green, align: "center", maxWidth: 680 }));
+  const titleLines = cv.wrap(cert.course_title, "Helvetica-Bold", 24, 640).slice(0, 2);
+  titleLines.forEach((line, i) => cv.text(line, cx, H - 338 - i * 30, { font: "Helvetica-Bold", size: 24, color: green, align: "center", maxWidth: 680 }));
   const descY = H - 338 - titleLines.length * 30 - 8;
   const desc = cert.program_title
     ? `Part of the ${cert.program_title} program. Awarded for verified course completion and assessment achievement within AGRO-AI Academy.`
@@ -359,7 +355,7 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = n
   cv.text("DATE OF ISSUE", 64, fy + 22, { font: "Helvetica-Bold", size: 7.5, color: muted, charSpace: 1.2 });
   cv.text(issuedDate, 64, fy + 6, { font: "Helvetica-Bold", size: 12, color: ink });
   cv.text("AUTHORIZED ISSUER", 250, fy + 22, { font: "Helvetica-Bold", size: 7.5, color: muted, charSpace: 1.2 });
-  cv.text("AGRO-AI Academy", 250, fy + 6, { font: "Times-Bold", size: 14, color: ink });
+  cv.text("AGRO-AI Academy", 250, fy + 6, { font: "Helvetica-Bold", size: 13, color: ink });
   cv.text("AGRO-AI Inc., San Francisco, California", 250, fy - 8, { font: "Helvetica", size: 8.5, color: muted });
   cv.stroke("#c9cfc2", 0.6).line(64, fy - 22, 520, fy - 22);
   cv.text(`Verify this credential at ${host}/verify/${cert.credential_id}`, 64, fy - 38, { font: "Helvetica", size: 8.5, color: muted, maxWidth: 470 });
@@ -383,7 +379,7 @@ export function certificatePdf(cert, { verifyUrl, host, issuedDate, nameLine = n
   return buildPdf(cv, {
     width: W,
     height: H,
-    jpeg: markJpeg(),
+    jpeg: lockupJpeg(),
     title: `${cert.course_title} - AGRO-AI Academy Certificate`,
     subject: `Credential ${cert.credential_id} issued to ${cert.credential_name}`,
   });

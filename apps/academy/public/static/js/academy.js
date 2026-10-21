@@ -46,6 +46,13 @@
   }
 
   // ───── Generic behaviors ─────
+  // The brand typeface loads without blocking the first paint (it comes from a
+  // font CDN); system fonts show until it arrives, or if it never does.
+  $$("link[data-brand-font]").forEach((l) => {
+    const use = () => (l.media = "all");
+    if (l.sheet) use();
+    else l.addEventListener("load", use, { once: true });
+  });
   $$("form[data-autosubmit] select").forEach((s) => s.addEventListener("change", () => s.form.submit()));
   $$("[data-autosubmit-change]").forEach((el) => {
     const form = el.tagName === "FORM" ? el : el.form;

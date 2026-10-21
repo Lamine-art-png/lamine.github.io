@@ -245,7 +245,7 @@ export function encodeQr(text) {
 }
 
 /** Render as a compact SVG path with a 4-module quiet zone. */
-export function qrSvg(text, { dark = "#10231b", light = "#ffffff", title = "" } = {}) {
+export function qrSvg(text, { dark = "#0f2410", light = "#ffffff", title = "" } = {}) {
   const { size, modules } = encodeQr(text);
   const q = 4;
   let d = "";

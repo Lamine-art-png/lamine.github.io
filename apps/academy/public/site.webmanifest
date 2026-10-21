@@ -5,10 +5,10 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fbfaf6",
-  "theme_color": "#1f3d27",
+  "background_color": "#fbfbf7",
+  "theme_color": "#1c4c07",
   "icons": [
-    { "src": "/static/img/mark-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/static/img/mark-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/static/brand/academy-mark-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/brand/academy-mark-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

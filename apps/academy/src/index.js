@@ -3,7 +3,7 @@ import { handle } from "./app.js";
 import { runScheduled } from "./services/jobs.js";
 
 const STATIC_PREFIXES = ["/static/"];
-const STATIC_FILES = new Set(["/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/site.webmanifest"]);
+const STATIC_FILES = new Set(["/favicon.ico", "/apple-touch-icon.png", "/site.webmanifest"]);
 
 async function serveAsset(req, env) {
   const url = new URL(req.url);

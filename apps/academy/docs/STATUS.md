@@ -7,6 +7,27 @@ merging to `main` deploys **staging only**. Production needs a separate, confirm
 results, the founder checklist, the live staging test matrix, the early-access registrant
 process, Course A1 readiness and the production/rollback procedure.
 
+### Brand, language and quality pass (2026-10-21)
+
+- **Brand**: the official lockup (`brand/agro-ai-academy-logo.svg`) now appears in the header,
+  footer, home, sign-in, certificate previews, certificate PDFs, emails, favicons, app icons and
+  the social card (which was missing before: every share preview was broken). Palette sampled
+  from the logo; Glacial Indifference for headings and controls; course art limited to brand
+  greens. One brand module (`src/brand.js`) feeds pages, email, PDF and CSP.
+- **Languages**: a page is marked and laid out in the language it is actually written in.
+  Untranslated languages (54 of 60) show English with `lang="en" dir="ltr"`, English
+  Gregorian dates and an honest notice — before, Persian and Urdu showed English text laid out
+  right-to-left with reversed punctuation and a Solar Hijri date. English curriculum text inside
+  a translated page (and a translation inside an English page) carries its own `lang`/`dir`. A
+  language picked in the header is saved to the profile, so it follows the learner to other
+  devices and into emails; emails follow the same fallback rule. Only translated languages are
+  advertised as `hreflang` alternates. The English staff console stays left-to-right in an
+  Arabic session.
+- **Cleanup**: staging-only endpoints moved to `pages/staging.js` behind one guard; duplicated
+  header CSS, an unused picker attribute, an unused catalog key and a ghost `/favicon.svg`
+  route removed; `/apple-touch-icon.png` now exists; the asset version moved out of a circular
+  import. Tests: 198 unit/integration (7 new localization tests), 12/12 browser journey steps.
+
 ### Deployment preparation (2026-10-20)
 
 - Read-only **Academy Preflight** workflow: secret presence (never values), Cloudflare

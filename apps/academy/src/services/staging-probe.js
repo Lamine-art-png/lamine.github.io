@@ -3,7 +3,7 @@
 // completion, a certification attempt, certificate issuance and verification)
 // runs on every staging deploy, whatever the state of the real courses.
 // Created through the normal draft → revision publication path. Never
-// reachable outside staging (see pages/public.js stagingProbeCourse).
+// reachable outside staging (see pages/staging.js).
 import { newId, nowIso } from "../lib/util.js";
 import { publishDraft, draftVersion } from "./drafts.js";
 import { courseContentHash } from "./readiness.js";

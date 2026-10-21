@@ -34,6 +34,25 @@ dev/                  local server + D1 shim (node:sqlite) used by dev and tests
 tests/                unit, integration (in-process Worker), e2e (Playwright)
 ```
 
+## Brand
+
+The official AGRO-AI Academy lockup is `brand/agro-ai-academy-logo.svg`, the single source
+for every logo file. `src/brand.js` holds the logo paths, the palette (sampled from the logo)
+and the brand typeface, and is used by pages, emails, certificates and the CSP.
+
+- Regenerate the logo assets after the source changes (needs Playwright's Chromium and Pillow):
+  `node scripts/brand/render-logo.mjs /tmp/logo@2x.png && python3 scripts/brand/build_assets.py /tmp/logo@2x.png`.
+  It writes `public/static/brand/*` (lockups for light and dark surfaces, mark, favicons,
+  email header, 1200×630 social card), `public/favicon.ico`, `public/apple-touch-icon.png` and
+  the certificate header image `src/lib/brand-jpeg.js`. Assets only crop, scale or recolour the
+  official artwork; nothing is redrawn.
+- Typeface: **Glacial Indifference** for headings, navigation and controls; reading text stays
+  in a system sans that covers every script. The font loads without blocking the first paint
+  from the same source as agroai-pilot.com (`BRAND.fontStylesheet`, allowed by the CSP). To
+  self-host it, serve the OFL font files with a local stylesheet and point `fontStylesheet` at it.
+- Static files are cached as immutable under `?v=<BUILD>`: bump `BUILD` in
+  `src/views/assets.js` whenever anything under `public/static/` changes.
+
 ## Run locally
 
 Requires Node 22.5+ (uses the built-in `node:sqlite`). No `npm install` needed.

@@ -6,6 +6,8 @@ import { createSession, destroySession, verifyPassword, passwordProblem, rateLim
 import { LOCALES, matchLocale, TRANSLATED_INTERFACE_COUNT } from "../lib/i18n.js";
 import countries from "../../../../shared/registries/countries.json" with { type: "json" };
 import { icon } from "../views/icons.js";
+import { asset } from "../views/assets.js";
+import { BRAND } from "../brand.js";
 import { artSvg } from "../views/art.js";
 import { alert, csrfField, field, selectField } from "../views/components.js";
 import { createUser, findUserByEmail, normalizeEmail, validEmail, issueToken, consumeToken, peekToken, setPassword, applyBootstrapRoles, PROFESSIONAL_ROLES } from "../services/users.js";
@@ -18,11 +20,11 @@ export const COUNTRY_CODES = countries.countries.filter((x) => x.iso3166_assigne
 export function countryOptions(c) {
   let names;
   try {
-    names = new Intl.DisplayNames([c.locale, "en"], { type: "region" });
+    names = new Intl.DisplayNames([c.displayLocale, "en"], { type: "region" });
   } catch {
     names = new Intl.DisplayNames(["en"], { type: "region" });
   }
-  return COUNTRY_CODES.map((code) => [code, names.of(code) || code]).sort((a, b) => a[1].localeCompare(b[1], c.locale));
+  return COUNTRY_CODES.map((code) => [code, names.of(code) || code]).sort((a, b) => a[1].localeCompare(b[1], c.displayLocale));
 }
 
 export function safeNext(next, fallback = "/dashboard") {
@@ -37,6 +39,7 @@ function authShell(c, { title, body }) {
     noindex: true,
     body: html`<div class="auth-page">
       <aside class="auth-aside">${raw(artSvg("contours", "auth", "green", 800, 1000).replace("<svg ", '<svg class="bg-art" '))}
+        <img class="auth-lockup" src="${asset(BRAND.logo.stackedLight)}" alt="${BRAND.name}" width="${BRAND.stackedSize.width}" height="${BRAND.stackedSize.height}">
         <h2>${t("auth.aside_title")}</h2>
         <ul class="check-list">${["free", "certificates", "languages", "progress"].map((k) => html`<li>${icon("check-circle", { size: 18 })} <span>${t(`auth.aside.${k}`, { n: LOCALES.length, translated: TRANSLATED_INTERFACE_COUNT })}</span></li>`)}</ul>
       </aside>

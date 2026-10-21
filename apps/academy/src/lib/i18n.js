@@ -68,6 +68,14 @@ export function interfaceStatus(code) {
   if (!CATALOGS[code]) return "fallback";
   return CATALOG_META[code]?.reviewed ? "reviewed" : "machine";
 }
+/**
+ * The language pages are actually written in for a chosen locale. A locale
+ * without an interface catalog is shown in English, so the document is
+ * English too: lang, text direction, dates and numbers all follow the text
+ * on the page, never a language the page isn't written in.
+ */
+export const displayLocale = (code) => (interfaceStatus(code) === "fallback" ? DEFAULT_LOCALE : code);
+
 export const TRANSLATED_INTERFACE_COUNT = LOCALES.filter((l) => interfaceStatus(l.code) !== "fallback").length;
 
 // Database overrides, cached per isolate for a short time.
@@ -122,10 +130,12 @@ export function catalogCoverage() {
   });
 }
 
+// Dates are Gregorian everywhere: course dates, deadlines and certificates must
+// read the same in every language.
 export function formatDate(locale, iso, opts = { dateStyle: "long" }) {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat(locale, { timeZone: "UTC", ...opts }).format(new Date(iso));
+    return new Intl.DateTimeFormat(locale, { timeZone: "UTC", calendar: "gregory", ...opts }).format(new Date(iso));
   } catch {
     return new Intl.DateTimeFormat("en", { timeZone: "UTC", ...opts }).format(new Date(iso));
   }

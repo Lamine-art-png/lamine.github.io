@@ -14,19 +14,21 @@ function rng(seedStr) {
   };
 }
 
+// Every palette is a family of the AGRO-AI greens sampled from the official
+// logo, so course art always reads as AGRO-AI. Keys are kept stable because
+// cover URLs (/art/<motif>/<palette>/...) include them.
 const PALETTES = {
-  green: ["#0f2418", "#1f3d27", "#2f5f2c", "#4d7f22", "#75ae10", "#a9d42c", "#c8ee3a"],
-  earth: ["#1d1a12", "#3b3220", "#6b5a32", "#8f7a43", "#b59a55", "#d9c58a", "#efe3b8"],
-  water: ["#0b1d24", "#123844", "#1b5866", "#2a7d86", "#53a7a3", "#8fd0c2", "#c9efe2"],
-  dusk: ["#140f1f", "#2a1f3d", "#463461", "#6b4f7a", "#a0708a", "#d79a7c", "#f2c98a"],
-  night: ["#070d14", "#0d1b2a", "#15304a", "#1e4b6b", "#2f7396", "#5fa8c8", "#a8dcef"],
+  green: ["#082503", "#0c3e03", "#1c4c07", "#27570b", "#427b11", "#6fac1e", "#b1e646"],
+  earth: ["#0f2410", "#1a3a12", "#2f5418", "#4f7a24", "#7fa63a", "#b9d36a", "#e4efb8"],
+  water: ["#0b231a", "#123a2a", "#1d553b", "#2f7650", "#4f9a68", "#86c08f", "#c6e6c4"],
+  dusk: ["#061a06", "#0c2a0c", "#163f12", "#245a18", "#3d7a1f", "#6fac1e", "#d6fc5b"],
+  night: ["#051704", "#0a2808", "#123d0c", "#1c5410", "#2f7a16", "#6fac1e", "#b1e646"],
 };
 
 const f = (n) => Math.round(n * 10) / 10;
 
 function pivots(r, p, w, h) {
   let s = `<rect width="${w}" height="${h}" fill="${p[1]}"/>`;
-  // Section grid (roads) then center-pivot circles, as seen from orbit.
   // Section grid (roads) with center-pivot circles, as seen from orbit.
   const cell = Math.max(110, Math.round(w / 5.5));
   const ox = -Math.round(r() * cell * 0.5);

@@ -16,7 +16,7 @@ export async function localize(env, entityType, rows, fields, locale, { requireR
   const list = Array.isArray(rows) ? rows : [rows];
   if (!list.length || !list[0]) return rows;
   if (locale === sourceLocale) {
-    for (const r of list) if (r) r._tr = { status: "source", fallback: false };
+    for (const r of list) if (r) r._tr = { status: "source", fallback: false, fields: new Set() };
     return rows;
   }
   const ids = [...new Set(list.map((r) => r.id))];
@@ -35,16 +35,18 @@ export async function localize(env, entityType, rows, fields, locale, { requireR
   for (const r of list) {
     if (!r) continue;
     const tr = found.get(r.id) || {};
-    let any = false;
+    const translated = new Set();
     let machine = false;
     for (const f of fields) {
       if (tr[f] && (await currentFor(tr[f], r[f], f))) {
         r[f] = tr[f].value;
-        any = true;
+        translated.add(f);
         if (tr[f].status === "machine") machine = true;
       }
     }
-    r._tr = { status: any ? (machine ? "machine" : "reviewed") : "missing", fallback: !any };
+    const any = translated.size > 0;
+    // `fields` lists exactly which fields were overlaid, so the rest can be marked as English.
+    r._tr = { status: any ? (machine ? "machine" : "reviewed") : "missing", fallback: !any, fields: translated };
   }
   return rows;
 }

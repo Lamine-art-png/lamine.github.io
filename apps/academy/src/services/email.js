@@ -3,7 +3,8 @@
 // provider is not configured; messages are kept as 'unconfigured' instead.
 import { newId, nowIso } from "../lib/util.js";
 import { escapeHtml } from "../lib/html.js";
-import { makeTranslator, loadOverrides, localeInfo } from "../lib/i18n.js";
+import { makeTranslator, loadOverrides, localeInfo, displayLocale } from "../lib/i18n.js";
+import { BRAND } from "../brand.js";
 
 const TEMPLATES = {
   verify_email: { category: "security", cta: "email.verify.cta" },
@@ -20,6 +21,12 @@ const TEMPLATES = {
   course_reminder: { category: "reminder", cta: "email.reminder.cta", pref: "notify_course_reminders" },
 };
 
+// Email-safe brand styling: inline styles only, web-safe fallbacks for the
+// brand typeface, and an opaque logo image (some clients mishandle alpha).
+const C = BRAND.colors;
+const HEAD_FONT = "'Glacial Indifference','Century Gothic','Avenir Next',Avenir,'Helvetica Neue',Arial,sans-serif";
+const BODY_FONT = "-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+
 function renderEmail(t, cfg, template, vars) {
   const dir = localeInfo(t.locale).dir;
   const subject = t(`email.${template}.subject`, vars);
@@ -28,17 +35,18 @@ function renderEmail(t, cfg, template, vars) {
   const ctaLabel = spec.cta ? t(spec.cta, vars) : null;
   const url = vars.url;
   const footer = t("email.footer", { support: cfg.supportEmail });
-  const html = `<!doctype html><html lang="${escapeHtml(t.locale)}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(subject)}</title></head>
-<body style="margin:0;background:#f3f2ec;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#10231b">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f2ec;padding:32px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e0e3d8">
-<tr><td style="background:#1f3d27;padding:22px 28px;color:#ffffff;font-size:18px"><img src="${cfg.origin}/static/img/mark-64.png" width="28" height="28" alt="" style="vertical-align:middle;margin-inline-end:10px"><strong style="letter-spacing:.03em">AGRO-AI</strong> <span style="font-family:Georgia,serif">Academy</span></td></tr>
-<tr><td style="padding:30px 28px 8px;font-size:16px;line-height:1.6">
-<h1 style="font-family:Georgia,serif;font-weight:600;font-size:24px;line-height:1.25;margin:0 0 16px;color:#10231b">${escapeHtml(subject)}</h1>
+  const html = `<!doctype html><html lang="${escapeHtml(t.locale)}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;background:#f2f4ec;font-family:${BODY_FONT};color:${C.ink}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f4ec;padding:32px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e1e6d8">
+<tr><td height="6" style="height:6px;line-height:6px;font-size:0;background:${C.green};background-image:linear-gradient(90deg,${C.forest},${C.leafBright} 70%,${C.lime})">&nbsp;</td></tr>
+<tr><td style="padding:26px 32px 4px"><img src="${cfg.origin}/static/${BRAND.logo.email}" width="128" height="44" alt="${BRAND.name}" style="display:block;border:0;height:44px;width:auto"></td></tr>
+<tr><td style="padding:22px 32px 8px;font-size:16px;line-height:1.6">
+<h1 style="font-family:${HEAD_FONT};font-weight:700;font-size:25px;line-height:1.25;margin:0 0 16px;color:${C.ink};letter-spacing:-0.01em">${escapeHtml(subject)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 14px">${escapeHtml(p)}</p>`).join("")}
-${ctaLabel && url ? `<p style="margin:24px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#1f3d27;color:#ffffff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:999px">${escapeHtml(ctaLabel)}</a></p><p style="font-size:13px;color:#5d6c62;word-break:break-all">${escapeHtml(url)}</p>` : ""}
+${ctaLabel && url ? `<p style="margin:26px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:${C.green};color:#ffffff;text-decoration:none;font-family:${HEAD_FONT};font-weight:700;font-size:16px;padding:14px 26px;border-radius:999px">${escapeHtml(ctaLabel)}</a></p><p style="font-size:13px;color:${C.muted};word-break:break-all">${escapeHtml(url)}</p>` : ""}
 </td></tr>
-<tr><td style="padding:18px 28px 26px;font-size:12px;line-height:1.5;color:#5d6c62;border-top:1px solid #e0e3d8">${escapeHtml(footer)}<br>AGRO-AI Inc. · San Francisco, California · <a href="${cfg.origin}/account" style="color:#1f3d27">${escapeHtml(t("email.manage_preferences"))}</a></td></tr>
+<tr><td style="padding:18px 32px 28px;font-size:12px;line-height:1.55;color:${C.muted};border-top:1px solid #e1e6d8">${escapeHtml(footer)}<br>AGRO-AI Inc. · San Francisco, California · <a href="${cfg.origin}/account" style="color:${C.green}">${escapeHtml(t("email.manage_preferences"))}</a></td></tr>
 </table></td></tr></table></body></html>`;
   const text = [subject, "", ...paragraphs, "", ctaLabel && url ? `${ctaLabel}: ${url}` : "", "", footer, "AGRO-AI Inc. · San Francisco, California"].filter((x) => x !== null).join("\n");
   return { subject, html, text, category: spec.category };
@@ -58,7 +66,9 @@ export async function queueEmail(env, cfg, { user, template, vars = {}, to = nul
     const pref = await env.DB.prepare(`SELECT ${spec.pref} AS on_ FROM user_preferences WHERE user_id = ?`).bind(user.id).first();
     if (pref && !pref.on_) return null;
   }
-  const t = makeTranslator(user?.locale || "en", await loadOverrides(env));
+  // Written in the learner's language when the interface is translated into
+  // it, otherwise in English (and laid out as English).
+  const t = makeTranslator(displayLocale(user?.locale || "en"), await loadOverrides(env));
   const msg = renderEmail(t, cfg, template, { name: user?.display_name || "", ...vars });
   const id = newId("em_");
   const address = to || user.email;
