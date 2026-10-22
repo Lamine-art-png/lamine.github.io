@@ -9,6 +9,8 @@ from app.core.security import create_access_token
 from app.models.platform_product import PlatformApiApplication, PlatformProgramEnrollment, PlatformProductAuditEvent
 from app.platform_api.automatic_application_review import adjudicate_submitted_test_applications
 from app.models.saas import User, Organization, OrganizationMembership
+from app.models.platform_api import ApiProject, ApiServiceAccount
+from app.platform_api.keys import create_platform_key
 from tests.unit.test_platform_api_product import _application_payload
 
 
@@ -100,3 +102,63 @@ def test_reconciles_old_pending_requests_and_respects_suspensions(client, db, mo
     assert followup.status_code == 202
     assert followup.json()["application"]["status"] == "rejected"
     assert enrollment.status == "suspended"
+
+
+def test_existing_live_intelligence_does_not_consume_test_quotas(client, db, monkeypatch):
+    user, org, headers = _setup(db, monkeypatch)
+    application = client.post(
+        "/v1/platform/applications", headers=headers, json=_application_payload(user.email)
+    )
+    assert application.status_code == 202
+    assert application.json()["application"]["status"] == "approved"
+    monkeypatch.setattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED", False)
+
+    live = ApiProject(
+        organization_id=org.id, name="AGRO-AI Intelligence", slug="intelligence",
+        environment="live", status="active", created_by_user_id=user.id,
+    )
+    db.add(live)
+    db.flush()
+    live_service = ApiServiceAccount(
+        organization_id=org.id, api_project_id=live.id, name="live-advisory",
+        status="active", scopes=["projects:read"], created_by_user_id=user.id,
+    )
+    db.add(live_service)
+    db.flush()
+    create_platform_key(
+        db, project=live, service_account=live_service, name="existing advisory key",
+        scopes=["projects:read"], created_by_user_id=user.id,
+    )
+    db.commit()
+
+    # The one-project TEST cap must apply only to TEST, not the existing LIVE project.
+    response = client.post(
+        "/v1/platform/developer/projects", headers=headers,
+        json={"name": "dmrv-test", "environment": "test"},
+    )
+    assert response.status_code == 201, response.text
+    test_id = response.json()["project"]["id"]
+    assert response.json()["project"]["environment"] == "test"
+
+    # Test SA/key quotas are likewise separate from the LIVE advisory credential.
+    service = client.post(
+        f"/v1/platform/developer/projects/{test_id}/service-accounts",
+        headers=headers, json={"name": "dmrv-test-service", "scopes": ["projects:read"]},
+    )
+    assert service.status_code == 201, service.text
+    sa_id = service.json()["service_account"]["id"]
+    key = client.post(
+        f"/v1/platform/developer/service-accounts/{sa_id}/keys",
+        headers=headers, json={"name": "dmrv-test-key", "scopes": ["projects:read"]},
+    )
+    assert key.status_code == 201, key.text
+    assert key.json()["plaintext_key"].startswith("agro_test_")
+
+    # A second TEST project must still be rejected. No LIVE access was granted.
+    again = client.post(
+        "/v1/platform/developer/projects", headers=headers,
+        json={"name": "dmrv-test-2", "environment": "test"},
+    )
+    assert again.status_code == 409, again.text
+    assert db.get(ApiProject, live.id).status == "active"
