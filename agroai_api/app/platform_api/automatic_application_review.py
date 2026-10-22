@@ -95,6 +95,8 @@ def adjudicate_submitted_test_applications(
             # A previously suspended / revoked row is never reactivated.
             if enrollment is not None and enrollment.status not in ("active", "approved"):
                 allowed, reason = False, "An existing inactive developer enrollment prevents automatic reactivation."
+            elif enrollment is not None and "live" in (enrollment.allowed_environments_json or []):
+                allowed, reason = False, "Existing broader entitlement cannot be relabelled as automatically approved TEST-only access."
             else:
                 if enrollment is None:
                     enrollment = PlatformProgramEnrollment(
