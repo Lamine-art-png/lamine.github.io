@@ -28,6 +28,8 @@ TEST_SCOPES = (
 def _decision(db: Session, app: PlatformApiApplication) -> tuple[bool, str]:
     if app.application_type != "developer_beta" or app.requested_environment != "test":
         return False, "Automated access is restricted to the synthetic-data TEST developer beta. LIVE and partner privileges are not granted."
+    if not (settings.PLATFORM_API_TEST_PROJECTS_ENABLED and settings.PLATFORM_API_SELF_SERVICE_SANDBOX_ENABLED):
+        return False, "TEST runtime unavailable."
     org = db.get(Organization, app.organization_id)
     user = db.get(User, app.applicant_user_id)
     if org is None or user is None or not organization_access_allowed(org):
