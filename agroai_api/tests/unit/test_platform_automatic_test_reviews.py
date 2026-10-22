@@ -2,23 +2,36 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import uuid4
 
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.models.platform_product import PlatformApiApplication, PlatformProgramEnrollment, PlatformProductAuditEvent
 from app.platform_api.automatic_application_review import adjudicate_submitted_test_applications
-from tests.unit.test_platform_api_foundation import _project_and_key
+from app.models.saas import User, Organization, OrganizationMembership
 from tests.unit.test_platform_api_product import _application_payload
 
 
 def _setup(db, monkeypatch):
-    user, org, *_ = _project_and_key(db)
-    org.verification_status = "approved"
-    # _project_and_key includes an existing broad LIVE beta entitlement; remove
-    # it to model a verified but not-yet-enrolled applicant.
-    db.query(PlatformProgramEnrollment).filter_by(
-        organization_id=org.id, program="developer_private_beta"
-    ).delete()
+    user = User(
+        email=f"test-review-{uuid4().hex[:12]}@example.com",
+        password_hash="x",
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
+    db.add(user)
+    db.flush()
+    org = Organization(
+        name="Test Review Applicant",
+        slug=f"test-review-{uuid4().hex[:12]}",
+        owner_user_id=user.id,
+        verification_status="approved",
+    )
+    db.add(org)
+    db.flush()
+    db.add(OrganizationMembership(
+        organization_id=org.id, user_id=user.id, role="owner", status="active",
+    ))
     db.commit()
     monkeypatch.setattr(settings, "PLATFORM_API_APPLICATIONS_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_AUTOMATED_TEST_REVIEWS_ENABLED", True)
