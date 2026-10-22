@@ -35,6 +35,8 @@ def _setup(db, monkeypatch):
     db.commit()
     monkeypatch.setattr(settings, "PLATFORM_API_APPLICATIONS_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_AUTOMATED_TEST_REVIEWS_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_SELF_SERVICE_SANDBOX_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)
     return user, org, {"Authorization": f"Bearer {create_access_token({'sub': user.id})}"}
 
