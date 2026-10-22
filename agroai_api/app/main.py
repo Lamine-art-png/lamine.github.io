@@ -88,6 +88,23 @@ async def lifespan(app: FastAPI):
     schema_status = saas_portal_schema_status()
     if not schema_status["ready"]:
         logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
+    # Reconcile outstanding TEST applications on deploy. This also processes
+    # customers who applied before automatic decisions were introduced.
+    # Startup stays safe if production schema/configuration is unavailable.
+    if schema_status["ready"] and settings.PLATFORM_API_AUTOMATED_TEST_REVIEWS_ENABLED:
+        try:
+            from app.db.base import SessionLocal
+            from app.platform_api.automatic_application_review import adjudicate_submitted_test_applications
+
+            with SessionLocal() as review_db:
+                for _ in range(10):
+                    count = adjudicate_submitted_test_applications(review_db, limit=200)
+                    if not count:
+                        break
+                logger.info("Automatic bounded TEST application reconciliation completed")
+        except Exception:
+            logger.exception("Automatic TEST application review failed; API will remain available")
+
     scheduler_started = False
 
     try:
