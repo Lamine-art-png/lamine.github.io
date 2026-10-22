@@ -14,6 +14,11 @@ from tests.unit.test_platform_api_product import _application_payload
 def _setup(db, monkeypatch):
     user, org, *_ = _project_and_key(db)
     org.verification_status = "approved"
+    # _project_and_key includes an existing broad LIVE beta entitlement; remove
+    # it to model a verified but not-yet-enrolled applicant.
+    db.query(PlatformProgramEnrollment).filter_by(
+        organization_id=org.id, program="developer_private_beta"
+    ).delete()
     db.commit()
     monkeypatch.setattr(settings, "PLATFORM_API_APPLICATIONS_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_AUTOMATED_TEST_REVIEWS_ENABLED", True)
