@@ -84,6 +84,7 @@ def adjudicate_submitted_test_applications(
         return 0
     query = db.query(PlatformApiApplication).filter(
         PlatformApiApplication.status.in_(PENDING),
+        PlatformApiApplication.application_type == "developer_beta",
     )
     if organization_id is not None:
         query = query.filter(PlatformApiApplication.organization_id == organization_id)
