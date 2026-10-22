@@ -525,13 +525,19 @@ def submit_application(
         dedupe_key=f"application:{row.id}:received",
     )
     db.commit()
-    return {"status": "submitted", "application": _application_public(row)}
+    # TEST decisions are automatic when enabled. No customer email is sent by
+    # the adjudicator and the applied limits are server-authoritative.
+    from app.platform_api.automatic_application_review import adjudicate_submitted_test_applications
+    adjudicate_submitted_test_applications(db, organization_id=ctx.organization.id)
+    return {"status": row.status, "application": _application_public(row)}
 
 
 @router.get("/applications")
 def list_applications(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     _flag("PLATFORM_API_APPLICATIONS_ENABLED")
     assert ctx.organization is not None
+    from app.platform_api.automatic_application_review import adjudicate_submitted_test_applications
+    adjudicate_submitted_test_applications(db, organization_id=ctx.organization.id)
     rows = (
         db.query(PlatformApiApplication)
         .filter(PlatformApiApplication.organization_id == ctx.organization.id)

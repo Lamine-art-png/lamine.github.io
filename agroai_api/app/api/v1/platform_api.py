@@ -1028,7 +1028,12 @@ def create_project(payload: ProjectCreate, ctx=Depends(require_developer_control
         operation="projects.create",
         api_project_id=None,
     )
-    project_count = db.query(ApiProject).filter(ApiProject.organization_id == ctx.organization.id).count()
+    project_count_query = db.query(ApiProject).filter(ApiProject.organization_id == ctx.organization.id)
+    # Synthetic TEST resources have a separate bounded quota. An existing
+    # commercial LIVE intelligence project must never consume TEST capacity.
+    if payload.environment == "test":
+        project_count_query = project_count_query.filter(ApiProject.environment == "test")
+    project_count = project_count_query.count()
     enforce_enrollment_limit(
         db,
         enrollment=enrollment,
@@ -1180,11 +1185,14 @@ def create_service_account(project_id: str, payload: ServiceAccountCreate, ctx=D
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    count = (
-        db.query(ApiServiceAccount)
-        .filter(ApiServiceAccount.organization_id == ctx.organization.id)
-        .count()
+    account_count_query = db.query(ApiServiceAccount).filter(
+        ApiServiceAccount.organization_id == ctx.organization.id
     )
+    if project.environment == "test":
+        account_count_query = account_count_query.join(
+            ApiProject, ApiServiceAccount.api_project_id == ApiProject.id
+        ).filter(ApiProject.environment == "test")
+    count = account_count_query.count()
     enforce_enrollment_limit(
         db,
         enrollment=_control_plane_enrollment(db, ctx),
@@ -1296,14 +1304,13 @@ def create_key(service_account_id: str, payload: KeyCreate, ctx=Depends(require_
     project = db.get(ApiProject, service_account.api_project_id)
     if not project or project.organization_id != ctx.organization.id:
         raise HTTPException(status_code=404, detail="Project not found")
-    count = (
-        db.query(PlatformApiKey)
-        .filter(
-            PlatformApiKey.organization_id == ctx.organization.id,
-            PlatformApiKey.status == "active",
-        )
-        .count()
+    key_count_query = db.query(PlatformApiKey).filter(
+        PlatformApiKey.organization_id == ctx.organization.id,
+        PlatformApiKey.status == "active",
     )
+    if project.environment == "test":
+        key_count_query = key_count_query.filter(PlatformApiKey.environment == "test")
+    count = key_count_query.count()
     enforce_enrollment_limit(
         db,
         enrollment=_control_plane_enrollment(db, ctx),
