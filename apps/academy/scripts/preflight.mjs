@@ -95,12 +95,12 @@ async function cloudflare() {
 // Read-only inventory of staging accounts for cleanup planning. No identifier,
 // address, name or other personal field is selected, and only synthetic test
 // accounts (*.invalid, filtered inside the database) are read row by row.
-async function d1Query(uuid, sql) {
+async function d1Query(uuid, sql, params = []) {
   try {
     const r = await fetch(`${CF}/accounts/${ACCOUNT}/d1/database/${uuid}/query`, {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ sql }),
+      body: JSON.stringify({ sql, params }),
     });
     const j = await r.json();
     return r.ok && j.success ? j.result[0].results : `HTTP ${r.status} ${(j.errors || []).map((e) => e.code).join(",")}`;
@@ -134,6 +134,29 @@ async function stagingAccounts() {
   synthetic.forEach((u, i) => out(`| #${i + 1} | ${u.status} | ${u.created_at} | ${u.verified ? "yes" : "no"} | ${u.roles || "-"} | ${u.enrollments} | ${u.certificates} | ${u.sessions} |`));
   const certs = await d1Query(db.uuid, "SELECT status, user_id IS NULL AS orphaned, COUNT(*) AS n FROM certificates GROUP BY 1, 2");
   if (Array.isArray(certs)) out(`- Certificates by status: ${certs.map((c) => `${c.status}${c.orphaned ? " (holder deleted)" : ""}=${c.n}`).join(", ") || "none"}`);
+
+  // Real accounts: counts only, never a row.
+  const real = await d1Query(db.uuid, `SELECT COUNT(*) AS n, COALESCE(SUM(email_verified_at IS NOT NULL), 0) AS verified,
+      COALESCE(SUM(EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = 'super_admin')), 0) AS super_admins
+    FROM users u WHERE lower(u.email) NOT LIKE '%.invalid'`);
+  if (Array.isArray(real)) out(`- Real accounts: ${real[0].n}; email verified: ${real[0].verified}; super administrators: ${real[0].super_admins}`);
+
+  // Administrator bootstrap: the configured addresses are compared inside the
+  // database (as query parameters) and only counts and statuses are reported.
+  const admins = String(process.env.BOOTSTRAP_ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!admins.length) return out("- Bootstrap administrators: none configured");
+  const marks = admins.map(() => "?").join(",");
+  const boot = await d1Query(db.uuid, `SELECT COUNT(*) AS registered, COALESCE(SUM(email_verified_at IS NOT NULL), 0) AS verified,
+      COALESCE(SUM(EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = 'super_admin')), 0) AS super_admins,
+      COALESCE(SUM(status = 'active'), 0) AS active
+    FROM users u WHERE lower(u.email) IN (${marks})`, admins);
+  const mail = await d1Query(db.uuid, `SELECT status, COUNT(*) AS n, MAX(created_at) AS latest FROM email_outbox
+    WHERE template = 'verify_email' AND lower(to_email) IN (${marks}) GROUP BY status`, admins);
+  if (Array.isArray(boot)) {
+    const b = boot[0];
+    out(`- Bootstrap administrators: ${admins.length} configured; registered: ${b.registered}; active: ${b.active}; email verified: ${b.verified}; super_admin role: ${b.super_admins}`);
+  } else out(`- Bootstrap check refused (${boot})`);
+  if (Array.isArray(mail)) out(`- Verification emails to those addresses: ${mail.map((m) => `${m.status}=${m.n} (latest ${m.latest})`).join(", ") || "none"}`);
 }
 
 async function endpoints() {
