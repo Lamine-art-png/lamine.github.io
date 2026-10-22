@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.organization_access import organization_access_allowed
 from app.models.platform_product import PlatformApiApplication, PlatformProgramEnrollment
 from app.models.saas import Organization, OrganizationMembership, User
+from app.models.platform_api import PlatformApiKey
 from app.platform_api.product_audit import record_product_audit
 
 PENDING = ("submitted", "under_review")
@@ -57,6 +58,9 @@ def _decision(db: Session, app: PlatformApiApplication) -> tuple[bool, str]:
         return False, "Existing Platform API suspension blocks automatic enrollment."
     # No provider or physical scopes are granted even if an application asks
     # for them. This decision only provides a synthetic TEST surface.
+    keys = db.query(PlatformApiKey).filter(PlatformApiKey.organization_id == org.id, PlatformApiKey.environment == "test", PlatformApiKey.status == "active").all()
+    if any(not set(key.scopes or []).issubset(TEST_SCOPES) for key in keys):
+        return False, "Existing TEST credentials exceed the permitted scope set."
     if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
         from fastapi import HTTPException
         from app.platform_api.terms import require_user_acceptance
