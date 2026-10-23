@@ -31,6 +31,7 @@ from app.intelligence_platform import knowledge as platform_knowledge
 from app.intelligence_platform import schemas as platform_schemas
 from app.intelligence_platform import sessions as platform_sessions
 from app.intelligence_platform import tools as platform_tools
+from app.core.config import settings
 from app.platform_api.principal import PlatformPrincipal
 from app.schemas.ai import EvidenceContext, ToolCitation
 
@@ -117,6 +118,8 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
     except platform_schemas.SchemaRejected as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_response_format", "message": str(exc)}) from exc
     if resolved.schema is not None and resolved.schema[0] == "dmrv_advisory":
+        if not settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED:
+            raise HTTPException(status_code=404, detail={"code": "dmrv_advisory_unavailable"})
         validate_dmrv_context(_merged_context(resolved.session, payload))
     return resolved
 
