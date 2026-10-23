@@ -120,7 +120,8 @@ def _live_payload(context: dict) -> IntelligenceRequest:
     )
 
 
-def test_live_dmrv_context_gate_occurs_before_charge(db):
+def test_live_dmrv_context_gate_occurs_before_charge(db, monkeypatch):
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", True)
     principal = PlatformPrincipal(authentication_type="internal_service")
     accepted = intelligence_runtime.resolve(db, principal, _live_payload(_payload()["context"]))
     assert accepted.schema and accepted.schema[0] == "dmrv_advisory"
@@ -203,3 +204,26 @@ def test_new_location_defaults_preserve_legacy_context_idempotency_hashes():
         },
     )
     assert _request_hash(explicit_null) != historic_hash
+
+
+def test_dmrv_live_schema_stays_hidden_until_explicitly_enabled(client, db, monkeypatch):
+    from app.intelligence_platform.routes import builtin_schema, capabilities
+    from fastapi import Response
+
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", False)
+    principal = PlatformPrincipal(authentication_type="internal_service")
+    payload = _live_payload(_payload()["context"])
+    with pytest.raises(HTTPException) as refused:
+        intelligence_runtime.resolve(db, principal, payload)
+    assert refused.value.status_code == 404
+    assert refused.value.detail["code"] == "dmrv_advisory_unavailable"
+    names = {item["name"] for item in capabilities(Response())["structured_output"]["builtin_schemas"]}
+    assert "dmrv_advisory" not in names
+    with pytest.raises(HTTPException) as unavailable:
+        builtin_schema("dmrv_advisory", Response())
+    assert unavailable.value.status_code == 404
+
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", True)
+    assert "dmrv_advisory" in {item["name"] for item in capabilities(Response())["structured_output"]["builtin_schemas"]}
+    assert builtin_schema("dmrv_advisory", Response())["name"] == "dmrv_advisory"
+    assert intelligence_runtime.resolve(db, principal, payload).schema[0] == "dmrv_advisory"
