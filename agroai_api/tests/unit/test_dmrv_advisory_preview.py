@@ -81,6 +81,7 @@ def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypa
     monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ENABLED", True)
     _owner, org, _workspace, project, _sa, _key, token = _project_and_key(db, scopes=PUBLIC_SCOPES)
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", org.id)
     route = "/v1/platform/recommendations/preview"
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -109,6 +110,8 @@ def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypa
     _owner3, _org3, _ws3, _project3, _sa3, _key3, missing_scope_key = _project_and_key(db, scopes=["projects:read"])
     assert client.post(route, headers={"Authorization": f"Bearer {missing_scope_key}"}, json=_payload()).status_code == 403
     assert client.post(route, json=_payload()).status_code == 401
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", "")
+    assert client.post(route, headers=headers, json=_payload()).status_code == 404
 
 
 def _live_payload(context: dict) -> IntelligenceRequest:
