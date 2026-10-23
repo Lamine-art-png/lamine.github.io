@@ -29,8 +29,15 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -q -r requirements.txt pytest
-      - name: Install ffmpeg (Field Intelligence bounded media verification)
-        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Ensure ffmpeg and ffprobe for bounded media verification
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+            ffmpeg -version | head -n 1
+          else
+            sudo apt-get update -q
+            sudo apt-get install -y -q ffmpeg
+            command -v ffmpeg && command -v ffprobe
+          fi
       - name: Compile backend and migration tree
         run: python -m compileall -q app alembic scripts
       - name: Enforce revision graph contract
