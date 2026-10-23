@@ -23,8 +23,12 @@ The UAT preview is private beta and should not be advertised as live or
 production-ready until released and smoke-tested.
 
 The endpoint is disabled by default and requires explicit
-`PLATFORM_API_DMRV_PREVIEW_ENABLED=true` in addition to existing TEST program
-authorization. Do not activate for an unverified customer.
+`PLATFORM_API_DMRV_PREVIEW_ENABLED=true`, an organization identifier in
+`PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS` (comma-separated allowlist),
+and existing TEST program authorization. The allowlist defaults to empty;
+enabling the flag alone grants no customer access. Do not activate for an
+unverified customer. LIVE `dmrv_advisory` has a separate disabled-by-default
+`INTELLIGENCE_DMRV_ADVISORY_ENABLED` switch.
 
 
 ## TEST request
