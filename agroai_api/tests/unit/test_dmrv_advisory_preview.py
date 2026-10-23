@@ -5,6 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from fastapi import HTTPException
+
+from app.api.v1.commercial_intelligence import IntelligenceRequest
+from app.intelligence_platform import runtime as intelligence_runtime
+from app.platform_api.principal import PlatformPrincipal
 
 from app.core.config import settings
 from app.intelligence_platform.contract import ResponseFormat
@@ -101,3 +106,50 @@ def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypa
     _owner3, _org3, _ws3, _project3, _sa3, _key3, missing_scope_key = _project_and_key(db, scopes=["projects:read"])
     assert client.post(route, headers={"Authorization": f"Bearer {missing_scope_key}"}, json=_payload()).status_code == 403
     assert client.post(route, json=_payload()).status_code == 401
+
+
+def _live_payload(context: dict) -> IntelligenceRequest:
+    return IntelligenceRequest(
+        task="decision",
+        question="Prepare evidence-grounded DMRV recommendations for this location and crop",
+        context=context,
+        response_format={"type": "agroai_schema", "name": "dmrv_advisory"},
+    )
+
+
+def test_live_dmrv_context_gate_occurs_before_charge(db):
+    principal = PlatformPrincipal(authentication_type="internal_service")
+    accepted = intelligence_runtime.resolve(db, principal, _live_payload(_payload()["context"]))
+    assert accepted.schema and accepted.schema[0] == "dmrv_advisory"
+    for broken in (
+        {"location": {"country": "IN", "state": "Uttar Pradesh", "district": "Gautam Buddha Nagar"}},
+        {"crop": {"name": "wheat"}},
+        {"location": {"country": "IN", "state": "UP"}, "crop": {"name": "wheat"}},
+        {"location": {"country": "in", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat"}},
+        {"location": {"country": "IN", "state": "UP", "region": "Punjab", "district": "Meerut"}, "crop": {"name": "wheat"}},
+    ):
+        with pytest.raises(HTTPException) as failure:
+            intelligence_runtime.resolve(db, principal, _live_payload(broken))
+        assert failure.value.status_code == 422
+        assert failure.value.detail["code"] == "dmrv_context_incomplete"
+
+
+def test_dmrv_schema_prompt_requires_evidence_and_rejects_carbon_claims():
+    args = {
+        "question": "How should this district manage wheat?",
+        "schema": BUILTIN_SCHEMAS["dmrv_advisory"],
+        "analysis": {"answer": "Review the evidence."},
+        "data_block": "",
+        "language": None,
+    }
+    prompt = intelligence_runtime._structure_messages(schema_name="dmrv_advisory", **args)
+    policy = prompt[0]["content"]
+    assert "carbon" in policy.lower()
+    assert "fertilizer" in policy.lower()
+    assert "geocoded evidence" in policy.lower()
+    assert "never provide numeric irrigation depth" in policy.lower()
+    other = intelligence_runtime._structure_messages(
+        schema_name="recommendations",
+        **{**args, "schema": BUILTIN_SCHEMAS["recommendations"]},
+    )
+    assert "geocoded evidence" not in other[0]["content"]
