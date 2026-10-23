@@ -795,6 +795,9 @@ def preview_dmrv_advisory(
     project = _project(db, principal)
     if principal.environment != "test" or project.environment != "test":
         raise HTTPException(status_code=403, detail={"code": "test_project_required"})
+    allowed = {item.strip() for item in str(settings.PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS or "").split(",") if item.strip()}
+    if principal.organization_id not in allowed:
+        raise HTTPException(status_code=404, detail={"code": "dmrv_preview_not_available"})
     return simulate_dmrv_preview(payload, project)
 
 
