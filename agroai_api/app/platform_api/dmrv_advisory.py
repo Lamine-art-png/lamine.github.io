@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.intelligence_platform.contract import AgriculturalContext
+from app.intelligence_platform.schemas import BUILTIN_SCHEMAS, validation_errors
 from app.models.platform_api import ApiProject
 from app.platform_api.sandbox import FIXTURE_VERSION
 
@@ -106,6 +107,21 @@ def simulate_dmrv_preview(payload: DmrvAdvisoryPreviewRequest, project: ApiProje
         }
         for area in selected
     ]
+    output = {
+        "summary": "Synthetic DMRV advisory preview. These are evidence-collection prompts, not validated location-specific prescriptions.",
+        "recommendations": recommendations,
+        "confidence": "low",
+        "missing_data": sorted({item for area in selected for item in _ACTIONS[area][2]}),
+        "limitations": [
+            "No live weather, agronomic datasets, local regulations, or soil measurements were retrieved.",
+            "Country, region, and district are caller-provided labels and have not been geocoded or independently verified.",
+            "No fertilizer dose, irrigation quantity, carbon claim, or climate impact has been calculated.",
+            "Production evidence-based intelligence requires a separately approved LIVE integration.",
+        ],
+    }
+    errors = validation_errors(output, BUILTIN_SCHEMAS["dmrv_advisory"])
+    if errors:
+        raise RuntimeError("Internal synthetic DMRV contract validation failed")
     return {
         "id": scenario_id,
         "status": "simulated",
@@ -125,18 +141,7 @@ def simulate_dmrv_preview(payload: DmrvAdvisoryPreviewRequest, project: ApiProje
             "location_verified": False,
         },
         "structured_output_status": "valid",
-        "structured_output": {
-            "summary": "Synthetic DMRV advisory preview. These are evidence-collection prompts, not validated location-specific prescriptions.",
-            "recommendations": recommendations,
-            "confidence": "low",
-            "missing_data": sorted({item for area in selected for item in _ACTIONS[area][2]}),
-            "limitations": [
-                "No live weather, agronomic datasets, local regulations, or soil measurements were retrieved.",
-                "Country, region, and district are caller-provided labels and have not been geocoded or independently verified.",
-                "No fertilizer dose, irrigation quantity, carbon claim, or climate impact has been calculated.",
-                "Production evidence-based intelligence requires a separately approved LIVE integration.",
-            ],
-        },
+        "structured_output": output,
         "provenance": {
             "fixture_version": FIXTURE_VERSION,
             "evidence_ids": [],
