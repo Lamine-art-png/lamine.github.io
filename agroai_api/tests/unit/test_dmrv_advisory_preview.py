@@ -149,7 +149,7 @@ def test_dmrv_schema_prompt_requires_evidence_and_rejects_carbon_claims():
         "data_block": "",
         "language": None,
     }
-    prompt = intelligence_runtime._structure_messages(schema_name="dmrv_advisory", **args)
+    prompt = intelligence_runtime._structure_messages(schema_name="dmrv_advisory", apply_dmrv_policy=True, **args)
     policy = prompt[0]["content"]
     assert "carbon" in policy.lower()
     assert "fertilizer" in policy.lower()
@@ -160,6 +160,41 @@ def test_dmrv_schema_prompt_requires_evidence_and_rejects_carbon_claims():
         **{**args, "schema": BUILTIN_SCHEMAS["recommendations"]},
     )
     assert "geocoded evidence" not in other[0]["content"]
+
+
+
+def test_custom_schema_named_dmrv_advisory_is_not_builtin_gated(db, monkeypatch):
+    """Caller-owned schema names must not grant or trigger built-in DMRV policy."""
+    principal = PlatformPrincipal(authentication_type="internal_service")
+    payload = IntelligenceRequest(
+        task="decision",
+        question="Return a short custom JSON response",
+        context={},
+        response_format={
+            "type": "json_schema",
+            "name": "dmrv_advisory",
+            "schema": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]},
+        },
+    )
+    for enabled in (False, True):
+        monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", enabled)
+        resolved = intelligence_runtime.resolve(db, principal, payload)
+        assert resolved.schema is not None and resolved.schema[0] == "dmrv_advisory"
+        assert resolved.schema_is_builtin_dmrv is False
+        prompt = intelligence_runtime._structure_messages(
+            question=payload.question,
+            schema_name=resolved.schema[0],
+            schema=resolved.schema[1],
+            analysis={"answer": "Test"},
+            data_block="",
+            language=None,
+            apply_dmrv_policy=resolved.schema_is_builtin_dmrv,
+        )
+        assert "geocoded evidence" not in prompt[0]["content"]
+
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", True)
+    builtin = intelligence_runtime.resolve(db, principal, _live_payload(_payload()["context"]))
+    assert builtin.schema_is_builtin_dmrv is True
 
 
 def test_new_location_defaults_preserve_legacy_context_idempotency_hashes():
