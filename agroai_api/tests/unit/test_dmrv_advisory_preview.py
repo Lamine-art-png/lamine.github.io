@@ -191,3 +191,15 @@ def test_new_location_defaults_preserve_legacy_context_idempotency_hashes():
         },
     )
     assert _request_hash(explicit) != historic_hash
+
+    # Older clients could send an explicitly null extra field; preserve its
+    # inclusion in the canonical hash rather than conflating it with omission.
+    explicit_null = IntelligenceRequest(
+        question="Review almond crop risk",
+        task="crop_risk",
+        context={
+            "location": {"country": "US", "region": "California", "state": None},
+            "crop": {"name": "almond"},
+        },
+    )
+    assert _request_hash(explicit_null) != historic_hash
