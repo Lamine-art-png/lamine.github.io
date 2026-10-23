@@ -35,6 +35,19 @@ from app.platform_api.principal import PlatformPrincipal
 from app.schemas.ai import EvidenceContext, ToolCitation
 
 
+DMRV_ADVISORY_POLICY = (
+    "DMRV advisory rules: Country, region/state and district names supplied by the customer are selectors, "
+    "not independently verified geocoded evidence. Do not invent local rainfall, soil properties, "
+    "climate conditions, regulations, crop stage or agricultural datasets. Distinguish universally "
+    "applicable monitoring best practices from genuinely site-supported prescriptions. "
+    "Never provide numeric irrigation depth or duration without dated local water/ET0 evidence and "
+    "system characteristics; never prescribe fertilizer amounts without measured soil/tissue "
+    "conditions and relevant crop inputs. Cite only evidence that was actually analyzed. "
+    "When evidence is missing, lower confidence, identify required data and explain limitations. "
+    "A DMRV advisory is not verification of carbon removals, emissions reductions, credits or "
+    "methodology compliance. No physical actions, external provider writes or input purchases."
+)
+
 DATA_BLOCK_MAX_CHARS = 18_000
 DOCUMENT_EXCERPT_CHARS = 6_000
 PRICE_COMPONENTS_CENTS = {
@@ -103,7 +116,41 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
         resolved.schema = platform_schemas.resolve_schema(payload.response_format)
     except platform_schemas.SchemaRejected as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_response_format", "message": str(exc)}) from exc
+    if resolved.schema is not None and resolved.schema[0] == "dmrv_advisory":
+        validate_dmrv_context(_merged_context(resolved.session, payload))
     return resolved
+
+
+def validate_dmrv_context(context: dict[str, Any]) -> None:
+    """Validate only this new schema's minimum selectors before paid inference.
+
+    This checks declared labels, not actual geopolitical or agronomic accuracy.
+    Region names are never interpreted as geocoded facts.
+    """
+    location = context.get("location") or {}
+    crop = context.get("crop") or {}
+    country = str(location.get("country") or "").strip()
+    state = str(location.get("state") or "").strip()
+    region = str(location.get("region") or "").strip()
+    district = str(location.get("district") or "").strip()
+    crop_name = str(crop.get("name") or "").strip()
+    missing = []
+    if not country or len(country) != 2 or not country.isalpha() or country != country.upper():
+        missing.append("location.country: uppercase two-letter ISO country code")
+    if not state and not region:
+        missing.append("location.state or location.region")
+    if not district:
+        missing.append("location.district")
+    if not crop_name:
+        missing.append("crop.name")
+    if state and region and state.casefold() != region.casefold():
+        missing.append("location.state and location.region must not conflict")
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "dmrv_context_incomplete", "missing": missing,
+                    "message": "DMRV advisory needs geographic and crop selectors; they are not independently verified."},
+        )
 
 
 def quote(base_cents: int, payload: Any, resolved: Resolved) -> tuple[int, list[dict[str, Any]]]:
@@ -583,6 +630,7 @@ def _structure_messages(
         "When evidence is insufficient, say so inside the schema's own fields (for example limitations or missing_data) "
         "and use null where the schema allows it. Evidence ids must be copied exactly from the DATA block or ANALYSIS. "
         "Recommendations are advisory; never state that an action was executed."
+        + (" " + DMRV_ADVISORY_POLICY if schema_name == "dmrv_advisory" else "")
         + (f" Write human-readable string values in language '{language}'." if language else "")
     )
     analysis_text = json.dumps(analysis, default=str, ensure_ascii=False)[:8_000]
