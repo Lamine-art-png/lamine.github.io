@@ -790,7 +790,7 @@ def preview_dmrv_advisory(
 ) -> dict:
     """Isolated no-charge synthetic contract preview, not live intelligence."""
     require_scopes(principal.scopes, {"recommendations:read"})
-    if not settings.PLATFORM_API_TEST_PROJECTS_ENABLED:
+    if not settings.PLATFORM_API_TEST_PROJECTS_ENABLED or not settings.PLATFORM_API_DMRV_PREVIEW_ENABLED:
         raise HTTPException(status_code=404, detail="Not found")
     project = _project(db, principal)
     if principal.environment != "test" or project.environment != "test":
