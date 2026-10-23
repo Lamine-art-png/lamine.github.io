@@ -1,13 +1,16 @@
 """Regression checks for the synthetic DMRV contract and TEST-only API gate."""
 from __future__ import annotations
 
+import hashlib
+import json
 from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 from fastapi import HTTPException
 
-from app.api.v1.commercial_intelligence import IntelligenceRequest
+from app.api.v1.commercial_intelligence import IntelligenceRequest, _request_hash
+from app.intelligence_platform.contract import PLATFORM_REQUEST_FIELDS
 from app.intelligence_platform import runtime as intelligence_runtime
 from app.platform_api.principal import PlatformPrincipal
 
@@ -153,3 +156,38 @@ def test_dmrv_schema_prompt_requires_evidence_and_rejects_carbon_claims():
         **{**args, "schema": BUILTIN_SCHEMAS["recommendations"]},
     )
     assert "geocoded evidence" not in other[0]["content"]
+
+
+def test_new_location_defaults_preserve_legacy_context_idempotency_hashes():
+    # Before DMRV fields were typed, absent state and district did not appear
+    # in serialized Location. Replays across release must hash identically.
+    payload = IntelligenceRequest(
+        question="Review almond crop risk",
+        task="crop_risk",
+        context={
+            "location": {"country": "US", "region": "California"},
+            "crop": {"name": "almond"},
+        },
+    )
+    serialized = payload.model_dump(mode="json", by_alias=True)
+    location = serialized["context"]["location"]
+    assert location.pop("state") is None
+    assert location.pop("district") is None
+    serialized.pop("stream", None)
+    for key, default in PLATFORM_REQUEST_FIELDS.items():
+        if serialized.get(key) == default:
+            serialized.pop(key, None)
+    historic_hash = hashlib.sha256(
+        json.dumps(serialized, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert _request_hash(payload) == historic_hash
+
+    explicit = IntelligenceRequest(
+        question="Review almond crop risk",
+        task="crop_risk",
+        context={
+            "location": {"country": "US", "region": "California", "state": "California", "district": "Fresno"},
+            "crop": {"name": "almond"},
+        },
+    )
+    assert _request_hash(explicit) != historic_hash
