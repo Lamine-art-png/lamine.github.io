@@ -22,6 +22,11 @@ verification (DMRV) applications.
 The UAT preview is private beta and should not be advertised as live or
 production-ready until released and smoke-tested.
 
+The endpoint is disabled by default and requires explicit
+`PLATFORM_API_DMRV_PREVIEW_ENABLED=true` in addition to existing TEST program
+authorization. Do not activate for an unverified customer.
+
+
 ## TEST request
 
 ```http
