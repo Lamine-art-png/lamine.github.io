@@ -64,6 +64,7 @@ class Resolved:
     session: Any | None = None
     files: list[Any] = field(default_factory=list)
     schema: tuple[str, dict[str, Any]] | None = None
+    schema_is_builtin_dmrv: bool = False
 
 
 @dataclass
@@ -117,7 +118,13 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
         resolved.schema = platform_schemas.resolve_schema(payload.response_format)
     except platform_schemas.SchemaRejected as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_response_format", "message": str(exc)}) from exc
-    if resolved.schema is not None and resolved.schema[0] == "dmrv_advisory":
+    resolved.schema_is_builtin_dmrv = bool(
+        resolved.schema is not None
+        and payload.response_format is not None
+        and payload.response_format.type == "agroai_schema"
+        and resolved.schema[0] == "dmrv_advisory"
+    )
+    if resolved.schema_is_builtin_dmrv:
         if not settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED:
             raise HTTPException(status_code=404, detail={"code": "dmrv_advisory_unavailable"})
         validate_dmrv_context(_merged_context(resolved.session, payload))
@@ -623,6 +630,7 @@ def _structure_messages(
     analysis: dict[str, Any],
     data_block: str,
     language: str | None,
+    apply_dmrv_policy: bool = False,
     previous: str | None = None,
     errors: list[str] | None = None,
 ) -> list[dict[str, str]]:
@@ -633,7 +641,7 @@ def _structure_messages(
         "When evidence is insufficient, say so inside the schema's own fields (for example limitations or missing_data) "
         "and use null where the schema allows it. Evidence ids must be copied exactly from the DATA block or ANALYSIS. "
         "Recommendations are advisory; never state that an action was executed."
-        + (" " + DMRV_ADVISORY_POLICY if schema_name == "dmrv_advisory" else "")
+        + (" " + DMRV_ADVISORY_POLICY if apply_dmrv_policy else "")
         + (f" Write human-readable string values in language '{language}'." if language else "")
     )
     analysis_text = json.dumps(analysis, default=str, ensure_ascii=False)[:8_000]
@@ -672,6 +680,7 @@ async def structure(
     data_block: str,
     known_ids: set[str],
     language: str | None,
+    apply_dmrv_policy: bool = False,
 ) -> StructuredOutcome:
     previous: str | None = None
     errors: list[str] = []
@@ -684,6 +693,7 @@ async def structure(
             analysis=analysis,
             data_block=data_block,
             language=language,
+            apply_dmrv_policy=apply_dmrv_policy,
             previous=previous,
             errors=errors,
         )
