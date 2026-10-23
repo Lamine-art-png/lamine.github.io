@@ -52,6 +52,10 @@ def test_dmrv_preview_matches_live_structured_schema_without_inference():
     {"location": {"country": "in", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat"}},
     {"location": {"country": "IN", "state": "UP", "district": "Meerut", "latitude": 28.98}, "crop": {"name": "wheat"}},
     {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat"}, "observations": [{"type": "soil_vwc", "value": 0.12}]},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut", "other_data": "not-allowed"}, "crop": {"name": "wheat"}},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat", "variety": "private"}},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut", "elevation_m": 123}, "crop": {"name": "wheat"}},
+    {"location": {"country": "IN", "state": "UP", "region": "Punjab", "district": "Meerut"}, "crop": {"name": "wheat"}},
 ])
 def test_dmrv_preview_rejects_unsafe_or_incomplete_input(replacement):
     with pytest.raises(ValidationError):
@@ -67,6 +71,7 @@ def test_dmrv_preview_rejects_live_project_even_directly():
 def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypatch):
     _enable_api(monkeypatch)
     monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ENABLED", True)
     _owner, org, _workspace, project, _sa, _key, token = _project_and_key(db, scopes=PUBLIC_SCOPES)
     route = "/v1/platform/recommendations/preview"
     headers = {"Authorization": f"Bearer {token}"}
@@ -83,6 +88,9 @@ def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypa
     assert repeat.status_code == 200
     assert repeat.json()["id"] == body["id"]
 
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ENABLED", False)
+    assert client.post(route, headers=headers, json=_payload()).status_code == 404
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ENABLED", True)
     monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", False)
     assert client.post(route, headers=headers, json=_payload()).status_code == 404
     monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
