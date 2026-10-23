@@ -27,6 +27,7 @@ from app.platform_api.jobs import PLATFORM_OPERATION_TASK_TYPE
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.restrictions import enforce_resource_access
 from app.platform_api.sandbox import ensure_sandbox_state, reset_sandbox, sandbox_dataset
+from app.platform_api.dmrv_advisory import DmrvAdvisoryPreviewRequest, simulate_dmrv_preview
 from app.platform_api.scopes import require_scopes
 from app.services.object_storage import get_object_store, object_storage_configured
 
@@ -779,6 +780,23 @@ def list_recommendations(
         }
 
     return _page(rows, limit, serialize)
+
+
+@router.post("/recommendations/preview")
+def preview_dmrv_advisory(
+    payload: DmrvAdvisoryPreviewRequest,
+    principal: PlatformPrincipal = Depends(require_platform_api_principal),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Isolated no-charge synthetic contract preview, not live intelligence."""
+    require_scopes(principal.scopes, {"recommendations:read"})
+    if not settings.PLATFORM_API_TEST_PROJECTS_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found")
+    project = _project(db, principal)
+    if principal.environment != "test" or project.environment != "test":
+        raise HTTPException(status_code=403, detail={"code": "test_project_required"})
+    ensure_sandbox_state(db, project)
+    return simulate_dmrv_preview(payload, project)
 
 
 @router.get("/recommendations/{recommendation_id}")
