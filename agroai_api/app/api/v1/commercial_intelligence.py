@@ -146,6 +146,17 @@ def _money(cents: int) -> str:
 
 def _request_hash(payload: IntelligenceRequest, *, execution: str = "sync") -> str:
     data = payload.model_dump(mode="json", by_alias=True)
+    # Location.state and location.district became typed, optional fields in
+    # DMRV v1. Previously they existed only when sent as caller extra fields.
+    # Omit their absent/null defaults to preserve hashes of in-flight legacy
+    # context requests that may be retried across a deployment.
+    context_data = data.get("context")
+    if isinstance(context_data, dict):
+        location_data = context_data.get("location")
+        if isinstance(location_data, dict):
+            for new_location_key in ("state", "district"):
+                if location_data.get(new_location_key) is None:
+                    location_data.pop(new_location_key, None)
     # Platform fields left at their defaults are omitted so a legacy-shaped
     # request hashes exactly as it did before the platform existed (replays of
     # pre-platform runs stay idempotent). ``stream`` is transport, not
