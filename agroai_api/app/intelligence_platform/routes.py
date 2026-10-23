@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.v1 import commercial_intelligence as legacy
 from app.api.v1 import commercial_intelligence_hardened as hardened
 from app.api.v1.commercial_intelligence_input_guard import reject_credentials, text_contains_credential
+from app.core.config import settings
 from app.db.base import get_db
 from app.intelligence_platform import files as platform_files
 from app.intelligence_platform import jobs as platform_jobs
@@ -144,7 +145,7 @@ def capabilities(response: Response) -> dict[str, Any]:
             },
         },
         "structured_output": {
-            "builtin_schemas": [{"name": name, "description": platform_schemas.BUILTIN_DESCRIPTIONS[name]} for name in platform_schemas.BUILTIN_SCHEMAS],
+            "builtin_schemas": [{"name": name, "description": platform_schemas.BUILTIN_DESCRIPTIONS[name]} for name in platform_schemas.BUILTIN_SCHEMAS if name != "dmrv_advisory" or settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED],
             "custom_json_schema": {"draft": "2020-12", "max_bytes": platform_schemas.MAX_SCHEMA_BYTES, "unsupported_keywords": sorted(platform_schemas._FORBIDDEN_KEYWORDS)},
         },
         "tools": [tool.name for tool in platform_tools.REGISTRY.all()],
@@ -158,6 +159,8 @@ def capabilities(response: Response) -> dict[str, Any]:
 
 @router.get("/intelligence/schemas/{name}")
 def builtin_schema(name: str, response: Response) -> dict[str, Any]:
+    if name == "dmrv_advisory" and not settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED:
+        raise HTTPException(status_code=404, detail={"code": "schema_not_found"})
     schema = platform_schemas.BUILTIN_SCHEMAS.get(name)
     if schema is None:
         raise HTTPException(status_code=404, detail={"code": "schema_not_found"})

@@ -31,9 +31,23 @@ from app.intelligence_platform import knowledge as platform_knowledge
 from app.intelligence_platform import schemas as platform_schemas
 from app.intelligence_platform import sessions as platform_sessions
 from app.intelligence_platform import tools as platform_tools
+from app.core.config import settings
 from app.platform_api.principal import PlatformPrincipal
 from app.schemas.ai import EvidenceContext, ToolCitation
 
+
+DMRV_ADVISORY_POLICY = (
+    "DMRV advisory rules: Country, region/state and district names supplied by the customer are selectors, "
+    "not independently verified geocoded evidence. Do not invent local rainfall, soil properties, "
+    "climate conditions, regulations, crop stage or agricultural datasets. Distinguish universally "
+    "applicable monitoring best practices from genuinely site-supported prescriptions. "
+    "Never provide numeric irrigation depth or duration without dated local water/ET0 evidence and "
+    "system characteristics; never prescribe fertilizer amounts without measured soil/tissue "
+    "conditions and relevant crop inputs. Cite only evidence that was actually analyzed. "
+    "When evidence is missing, lower confidence, identify required data and explain limitations. "
+    "A DMRV advisory is not verification of carbon removals, emissions reductions, credits or "
+    "methodology compliance. No physical actions, external provider writes or input purchases."
+)
 
 DATA_BLOCK_MAX_CHARS = 18_000
 DOCUMENT_EXCERPT_CHARS = 6_000
@@ -50,6 +64,7 @@ class Resolved:
     session: Any | None = None
     files: list[Any] = field(default_factory=list)
     schema: tuple[str, dict[str, Any]] | None = None
+    schema_is_builtin_dmrv: bool = False
 
 
 @dataclass
@@ -103,7 +118,49 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
         resolved.schema = platform_schemas.resolve_schema(payload.response_format)
     except platform_schemas.SchemaRejected as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_response_format", "message": str(exc)}) from exc
+    resolved.schema_is_builtin_dmrv = bool(
+        resolved.schema is not None
+        and payload.response_format is not None
+        and payload.response_format.type == "agroai_schema"
+        and resolved.schema[0] == "dmrv_advisory"
+    )
+    if resolved.schema_is_builtin_dmrv:
+        if not settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED:
+            raise HTTPException(status_code=404, detail={"code": "dmrv_advisory_unavailable"})
+        validate_dmrv_context(_merged_context(resolved.session, payload))
     return resolved
+
+
+def validate_dmrv_context(context: dict[str, Any]) -> None:
+    """Validate only this new schema's minimum selectors before paid inference.
+
+    This checks declared labels, not actual geopolitical or agronomic accuracy.
+    Region names are never interpreted as geocoded facts.
+    """
+    location = context.get("location") or {}
+    crop = context.get("crop") or {}
+    country = str(location.get("country") or "").strip()
+    state = str(location.get("state") or "").strip()
+    region = str(location.get("region") or "").strip()
+    district = str(location.get("district") or "").strip()
+    crop_name = str(crop.get("name") or "").strip()
+    missing = []
+    if not country or len(country) != 2 or not country.isalpha() or country != country.upper():
+        missing.append("location.country: uppercase two-letter ISO country code")
+    if not state and not region:
+        missing.append("location.state or location.region")
+    if not district:
+        missing.append("location.district")
+    if not crop_name:
+        missing.append("crop.name")
+    if state and region and state.casefold() != region.casefold():
+        missing.append("location.state and location.region must not conflict")
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "dmrv_context_incomplete", "missing": missing,
+                    "message": "DMRV advisory needs geographic and crop selectors; they are not independently verified."},
+        )
 
 
 def quote(base_cents: int, payload: Any, resolved: Resolved) -> tuple[int, list[dict[str, Any]]]:
@@ -573,6 +630,7 @@ def _structure_messages(
     analysis: dict[str, Any],
     data_block: str,
     language: str | None,
+    apply_dmrv_policy: bool = False,
     previous: str | None = None,
     errors: list[str] | None = None,
 ) -> list[dict[str, str]]:
@@ -583,6 +641,7 @@ def _structure_messages(
         "When evidence is insufficient, say so inside the schema's own fields (for example limitations or missing_data) "
         "and use null where the schema allows it. Evidence ids must be copied exactly from the DATA block or ANALYSIS. "
         "Recommendations are advisory; never state that an action was executed."
+        + (" " + DMRV_ADVISORY_POLICY if apply_dmrv_policy else "")
         + (f" Write human-readable string values in language '{language}'." if language else "")
     )
     analysis_text = json.dumps(analysis, default=str, ensure_ascii=False)[:8_000]
@@ -621,6 +680,7 @@ async def structure(
     data_block: str,
     known_ids: set[str],
     language: str | None,
+    apply_dmrv_policy: bool = False,
 ) -> StructuredOutcome:
     previous: str | None = None
     errors: list[str] = []
@@ -633,6 +693,7 @@ async def structure(
             analysis=analysis,
             data_block=data_block,
             language=language,
+            apply_dmrv_policy=apply_dmrv_policy,
             previous=previous,
             errors=errors,
         )

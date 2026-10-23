@@ -124,7 +124,7 @@ async def run_scenario(scenario: dict[str, Any], *, live: bool) -> ScenarioResul
     if resolved.schema is not None:
         if live:
             outcome = await runtime.structure(
-                question=payload.question, schema_name=resolved.schema[0], schema=resolved.schema[1], analysis=body,
+                question=payload.question, schema_name=resolved.schema[0], schema=resolved.schema[1], apply_dmrv_policy=resolved.schema_is_builtin_dmrv, analysis=body,
                 data_block=prepared.data_block, known_ids=prepared.known_ids, language=payload.language,
             )
         else:
@@ -137,7 +137,7 @@ async def run_scenario(scenario: dict[str, Any], *, live: bool) -> ScenarioResul
             runtime.generate_json = scripted_json
             try:
                 outcome = await runtime.structure(
-                    question=payload.question, schema_name=resolved.schema[0], schema=resolved.schema[1], analysis=body,
+                    question=payload.question, schema_name=resolved.schema[0], schema=resolved.schema[1], apply_dmrv_policy=resolved.schema_is_builtin_dmrv, analysis=body,
                     data_block=prepared.data_block, known_ids=prepared.known_ids, language=payload.language,
                 )
             finally:

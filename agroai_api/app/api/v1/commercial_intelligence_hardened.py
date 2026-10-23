@@ -734,6 +734,9 @@ async def _complete_paid_run(
         + language_instruction
     )
 
+    if admitted.resolved.schema is not None and admitted.resolved.schema[0] == "dmrv_advisory":
+        instruction += "\n" + platform_runtime.DMRV_ADVISORY_POLICY
+
     try:
         await _emit(progress, "run.started", {"id": run_id, "task": payload.task, "price_cents": price_cents})
         prepared = await platform_runtime.prepare(db, admitted.scope or principal, payload, admitted.resolved, context)
@@ -777,6 +780,7 @@ async def _complete_paid_run(
                 question=payload.question,
                 schema_name=admitted.resolved.schema[0],
                 schema=admitted.resolved.schema[1],
+                apply_dmrv_policy=admitted.resolved.schema_is_builtin_dmrv,
                 analysis=body,
                 data_block=prepared.data_block,
                 known_ids=prepared.known_ids | {item.source_id for item in context.citations},

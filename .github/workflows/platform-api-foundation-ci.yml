@@ -42,6 +42,7 @@ jobs:
           tests/unit/test_platform_api_product.py
           tests/unit/test_platform_automatic_test_reviews.py
           tests/unit/test_platform_api_public_resources.py
+          tests/unit/test_dmrv_advisory_preview.py
           tests/unit/test_platform_api_billing_product.py
           tests/unit/test_platform_api_stripe_provision.py
           tests/unit/test_production_readiness.py
