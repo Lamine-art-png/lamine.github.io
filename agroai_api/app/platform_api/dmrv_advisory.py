@@ -45,8 +45,19 @@ class DmrvAdvisoryPreviewRequest(BaseModel):
         )
         if any(getattr(self.context, field) for field in disallowed):
             raise ValueError("TEST preview accepts location and crop selectors only; do not submit production data")
-        if location.geometry or location.latitude is not None or location.longitude is not None:
-            raise ValueError("TEST preview does not accept precise real-world coordinates or geometry")
+        if any(
+            getattr(location, field) is not None
+            for field in ("geometry", "latitude", "longitude", "elevation_m")
+        ):
+            raise ValueError("TEST preview does not accept precise real-world location evidence")
+        if location.model_extra or crop.model_extra:
+            raise ValueError("TEST preview does not accept unrecognized location or crop data")
+        if any(getattr(crop, field) is not None for field in ("variety", "season", "cycle_id", "planted_at")):
+            raise ValueError("TEST preview allows only crop name and optional growth stage")
+        if location.state and location.region and location.state.strip().casefold() != location.region.strip().casefold():
+            raise ValueError("state and region cannot conflict")
+        if not all(label.strip() for label in (location.state or location.region, location.district)):
+            raise ValueError("state/region and district cannot be empty")
         if len(self.areas) != len(set(self.areas)):
             raise ValueError("areas must be unique")
         return self
