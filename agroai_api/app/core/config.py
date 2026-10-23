@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED: bool = False
     PLATFORM_API_TEST_PROJECTS_ENABLED: bool = False
     PLATFORM_API_DMRV_PREVIEW_ENABLED: bool = False  # disabled by default; synthetic, never live inference
+    INTELLIGENCE_DMRV_ADVISORY_ENABLED: bool = False  # separate LIVE schema release gate
     PLATFORM_API_LIVE_PROJECTS_ENABLED: bool = False
     PLATFORM_API_WEBHOOK_DELIVERY_ENABLED: bool = False
     PLATFORM_API_PUBLIC_DOCS_ENABLED: bool = False
