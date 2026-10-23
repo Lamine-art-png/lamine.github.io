@@ -780,6 +780,7 @@ async def _complete_paid_run(
                 question=payload.question,
                 schema_name=admitted.resolved.schema[0],
                 schema=admitted.resolved.schema[1],
+                apply_dmrv_policy=admitted.resolved.schema_is_builtin_dmrv,
                 analysis=body,
                 data_block=prepared.data_block,
                 known_ids=prepared.known_ids | {item.source_id for item in context.citations},
