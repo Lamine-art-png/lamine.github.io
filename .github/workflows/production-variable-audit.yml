@@ -1,0 +1,29 @@
+name: Production Variable Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-variable-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PUBLISH_VALUE: ${{ vars.QUEUE_PUBLISH_TOKEN }}
+      CONSUMER_VALUE: ${{ vars.QUEUE_CONSUMER_TOKEN }}
+      CF_PUBLISH_VALUE: ${{ vars.CLOUDFLARE_QUEUE_PUBLISH_TOKEN }}
+      CF_CONSUMER_VALUE: ${{ vars.CLOUDFLARE_QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Report variable presence only
+        shell: bash
+        run: |
+          present() { if [ -n "${1:-}" ]; then echo yes; else echo no; fi; }
+          echo "QUEUE_PUBLISH_TOKEN_VAR=$(present "${PUBLISH_VALUE:-}")"
+          echo "QUEUE_CONSUMER_TOKEN_VAR=$(present "${CONSUMER_VALUE:-}")"
+          echo "CLOUDFLARE_QUEUE_PUBLISH_TOKEN_VAR=$(present "${CF_PUBLISH_VALUE:-}")"
+          echo "CLOUDFLARE_QUEUE_CONSUMER_TOKEN_VAR=$(present "${CF_CONSUMER_VALUE:-}")"
