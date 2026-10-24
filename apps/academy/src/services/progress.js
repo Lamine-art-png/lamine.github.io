@@ -131,9 +131,13 @@ export async function recordProgress(c, lesson, report) {
   return { completed: complete || prev?.status === "completed", newlyCompleted, ...summary };
 }
 
-/** Whether a lesson completes only by watching its approved, playable video. */
+/** Any non-quiz lesson with an approved video must meet the watch threshold.
+ * A1 contains narrated text, case-study and exercise lessons. Using their
+ * presentation type to bypass the video gate would allow instant completion.
+ * Quiz completion remains driven exclusively by graded assessment attempts.
+ */
 export async function watchRequired(env, lesson) {
-  if (lesson.type !== "video" || !lesson.video_id) return false;
+  if (!lesson.video_id || lesson.type === "quiz") return false;
   lesson.video ??= await env.DB.prepare("SELECT status, hls_url, mp4_url, duration_seconds FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
   const v = lesson.video;
   // Approval requires a duration; without one watching cannot be measured (readiness blocks publication).
