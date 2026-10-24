@@ -560,6 +560,10 @@ from app.services.crop_scientific_tools import register_crop_tools  # noqa: E402
 
 register_crop_tools(_register)
 
+from app.services.climate_scientific_tools import register_climate_tools  # noqa: E402
+
+register_climate_tools(_register)
+
 
 def get_scientific_tool_registry() -> ScientificToolRegistry:
     return REGISTRY

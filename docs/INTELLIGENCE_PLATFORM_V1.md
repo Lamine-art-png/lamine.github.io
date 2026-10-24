@@ -189,15 +189,21 @@ site-specific truth.
 The response schema includes a recommendation category, action, rationale,
 priority, human-approval requirement, evidence ids and missing evidence.
 Evidence ids are validated against supplied sources. The answer may be degraded
-when evidence or model quality is insufficient. Geographical labels are
-customer-supplied and are **not** independently geocoded, and carbon credits or
-impact claims require a separate approved methodology and verification.
+when evidence or model quality is insufficient. Before any charge, the location
+is resolved against the GeoNames-derived gazetteer (unresolvable or mismatched
+districts and unsupported crops are rejected with 422). The deterministic DMRV
+engine (`app/intelligence_platform/dmrv_engine.py`) then adds a cited
+`DMRV_GROUNDING` data section: district climate normals with FAO-56 ET₀/ETc,
+SoilGrids topsoil context, the FAO-56 crop calendar and any field soil
+constants supplied in `context.field`. A resolved district is an administrative
+point, not geocoded field evidence. Carbon credits or impact claims require a
+separate approved methodology and verification.
 
 A separate, non-billable `POST /v1/platform/recommendations/preview` endpoint
-is available only after explicit TEST-preview release gating. It returns
-deterministic **synthetic** templates via a TEST project key; it does not invoke
-LIVE agricultural inference, and it cannot operate equipment or bill a wallet.
-See `docs/integrations/dmrv-advisory-api.md` for the TEST contract.
+(TEST keys only, per-organization allowlist) returns the same deterministic
+engine output without a model. Optional measurements must be declared synthetic.
+It cannot invoke LIVE inference, operate equipment or bill a wallet. See
+`docs/integrations/dmrv-advisory-api.md` for the contract (`dmrv-uat/2`).
 
 ## 5. Files and multimodal input
 

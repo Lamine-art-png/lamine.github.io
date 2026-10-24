@@ -20,12 +20,13 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.intelligence_platform import dmrv_engine
 from app.intelligence_platform import files as platform_files
 from app.intelligence_platform import knowledge as platform_knowledge
 from app.intelligence_platform import schemas as platform_schemas
@@ -45,6 +46,8 @@ DMRV_ADVISORY_POLICY = (
     "system characteristics; never prescribe fertilizer amounts without measured soil/tissue "
     "conditions and relevant crop inputs. Cite only evidence that was actually analyzed. "
     "When evidence is missing, lower confidence, identify required data and explain limitations. "
+    "A DMRV_GROUNDING section holds deterministic AGRO-AI calculations: reuse its quantities unchanged, cite its ids, "
+    "and describe climate-normal water demand as a planning estimate, not an irrigation schedule. "
     "A DMRV advisory is not verification of carbon removals, emissions reductions, credits or "
     "methodology compliance. No physical actions, external provider writes or input purchases."
 )
@@ -65,6 +68,7 @@ class Resolved:
     files: list[Any] = field(default_factory=list)
     schema: tuple[str, dict[str, Any]] | None = None
     schema_is_builtin_dmrv: bool = False
+    dmrv_grounding: dict[str, Any] | None = None
 
 
 @dataclass
@@ -127,8 +131,93 @@ def resolve(db: Session, principal: PlatformPrincipal, payload: Any) -> Resolved
     if resolved.schema_is_builtin_dmrv:
         if not settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED:
             raise HTTPException(status_code=404, detail={"code": "dmrv_advisory_unavailable"})
-        validate_dmrv_context(_merged_context(resolved.session, payload))
+        merged = _merged_context(resolved.session, payload)
+        validate_dmrv_context(merged)
+        resolved.dmrv_grounding = dmrv_grounding_for_context(merged)
+        grounding_ids = {e["id"] for e in resolved.dmrv_grounding["evidence"]} | {c["id"] for c in resolved.dmrv_grounding["calculations"]}
+        caller_ids = {str(o.get("id")) for o in merged.get("observations") or [] if o.get("id")} | {str(s.get("id")) for s in merged.get("sources") or []}
+        clash = sorted(caller_ids & grounding_ids) or sorted(i for i in caller_ids if i.startswith(("ref:", "calc:", "dmrv:")))
+        if clash:
+            raise HTTPException(status_code=422, detail={"code": "reserved_evidence_id", "id": clash[0][:80]})
     return resolved
+
+
+def dmrv_grounding_for_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic engine grounding for a LIVE dmrv_advisory run (before any charge).
+
+    Field soil constants, irrigation efficiency and area supplied in
+    ``context.field`` are used as customer measurements.
+    """
+    location = context.get("location") or {}
+    crop = context.get("crop") or {}
+    field_ctx = context.get("field") or {}
+    soil = field_ctx.get("soil") or {}
+    system = field_ctx.get("irrigation_system") or {}
+    as_of = (context.get("time_window") or {}).get("as_of")
+    planted = crop.get("planted_at")
+    measurements: dict[str, Any] = {}
+    if soil.get("field_capacity_vwc_fraction") is not None or soil.get("wilting_point_vwc_fraction") is not None:
+        measurements["soil_water"] = {k: soil.get(k) for k in ("field_capacity_vwc_fraction", "wilting_point_vwc_fraction")}
+    if soil.get("ph") is not None:
+        measurements["soil_test"] = {"ph": soil.get("ph")}
+    if system.get("efficiency") is not None:
+        measurements["irrigation_system"] = {"efficiency": system.get("efficiency"), "type": system.get("type")}
+    if field_ctx.get("area_ha"):
+        measurements["field_area_ha"] = field_ctx.get("area_ha")
+
+    def _date(value: Any) -> date | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
+        except ValueError:
+            return None
+
+    try:
+        return dmrv_engine.build_dmrv_analysis(
+            country=str(location.get("country") or ""), state=location.get("state") or location.get("region"),
+            district=str(location.get("district") or ""), crop_name=str(crop.get("name") or ""),
+            variety=crop.get("variety"), season=crop.get("season"), growth_stage=crop.get("growth_stage"),
+            planted_at=_date(planted), as_of=_date(as_of), measurements=measurements,
+            measurement_prefix="dmrv", measurement_label="Customer-supplied field context",
+        )
+    except dmrv_engine.DmrvInputError as exc:
+        raise HTTPException(status_code=422, detail=exc.detail) from exc
+
+
+DMRV_SECTION_MAX_CHARS = 9_000
+
+
+def _dmrv_section(grounding: dict[str, Any]) -> tuple[str, set[str]]:
+    """Compact, citable projection of the engine output for the model's data window."""
+    structured = grounding["structured_output"]
+    cited = {e for rec in structured["recommendations"] for e in rec["evidence_ids"]}
+    calendar = grounding["calendar"]
+    water = grounding["water_balance"]
+    compact = {
+        "note": "Deterministic AGRO-AI calculations. Reuse these quantities unchanged and cite their ids.",
+        "location": {k: grounding["geography"].get(k) for k in ("district", "state", "country", "precision")},
+        "crop": grounding["crop"],
+        "calendar": {k: calendar.get(k) for k in ("season", "planting_basis", "planting", "current_stage", "computed_stage", "stage_contradiction", "stage_lengths_days")},
+        "water_balance": None if water is None else {
+            **{k: water[k] for k in ("season_etc_mm", "season_effective_rainfall_mm", "season_net_demand_mm", "peak_etc_mm_day", "peak_stage", "peak_month")},
+            "stages": [{k: s[k] for k in ("stage", "months", "etc_mm", "effective_rainfall_mm", "net_demand_after_effective_rain_mm", "calc")} for s in water["stages"]],
+        },
+        "soil_reference": grounding["soil_reference"],
+        "measured_soil_water": grounding["measured_soil_water"],
+        "heat_risk": None if grounding["heat_risk"] is None else {k: grounding["heat_risk"][k] for k in ("threshold_c", "stage", "exceeding_months")},
+        "evidence": [{k: e.get(k) for k in ("id", "type", "source", "precision")} for e in grounding["evidence"]],
+        "calculations": [{"id": c["id"], "tool": c["tool_id"], "output": c["output"]} for c in grounding["calculations"] if c["id"] in cited],
+        "baseline_recommendations": [{k: r[k] for k in ("category", "priority", "action", "evidence_ids")} for r in structured["recommendations"]],
+        "missing_data": structured["missing_data"],
+    }
+    text = json.dumps(compact, default=str, ensure_ascii=False, separators=(",", ":"))
+    if len(text) > DMRV_SECTION_MAX_CHARS:
+        # Keep every citable id resolvable: drop narrative before evidence.
+        compact["baseline_recommendations"] = [{k: r[k] for k in ("category", "priority", "evidence_ids")} for r in structured["recommendations"]]
+        text = json.dumps(compact, default=str, ensure_ascii=False, separators=(",", ":"))
+    ids = {item["id"] for item in grounding["evidence"]} | {c["id"] for c in compact["calculations"]}
+    return "DMRV_GROUNDING " + text, ids
 
 
 def validate_dmrv_context(context: dict[str, Any]) -> None:
@@ -340,6 +429,16 @@ async def prepare(
             sections.append(("OBSERVATION " + json.dumps(observation, default=str, ensure_ascii=False), {str(observation["id"])}))
         for source in agctx.get("sources") or []:
             sections.append(("SOURCE " + json.dumps(source, default=str, ensure_ascii=False), {str(source.get("id"))}))
+
+    # 1b. Deterministic DMRV grounding (built-in dmrv_advisory schema only).
+    if resolved.dmrv_grounding is not None:
+        section, ids = _dmrv_section(resolved.dmrv_grounding)
+        sections.append((section, ids))
+        prepared.known_ids |= ids
+        for item in resolved.dmrv_grounding["evidence"]:
+            prepared.sources.append({"id": item["id"], "type": item["type"], "title": str(item.get("summary") or item["source"])[:200],
+                                     "origin": "agroai_reference_data", "source": item.get("source"), "license": item.get("license")})
+        prepared.limitations.extend(resolved.dmrv_grounding["structured_output"]["limitations"][:5])
 
     # 2. Files: document text excerpts and image analyses.
     for row in resolved.files:

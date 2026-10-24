@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     PLATFORM_API_DMRV_PREVIEW_ENABLED: bool = False  # disabled by default; synthetic, never live inference
     PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS: str = ""  # comma-delimited, no default access
     INTELLIGENCE_DMRV_ADVISORY_ENABLED: bool = False  # separate LIVE schema release gate
+    INTELLIGENCE_INVOICE_CREDITS_ENABLED: bool = False  # admin-only paid-invoice wallet credits
     PLATFORM_API_LIVE_PROJECTS_ENABLED: bool = False
     PLATFORM_API_WEBHOOK_DELIVERY_ENABLED: bool = False
     PLATFORM_API_PUBLIC_DOCS_ENABLED: bool = False

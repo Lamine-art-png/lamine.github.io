@@ -20,6 +20,18 @@ from app.intelligence_platform.schemas import BUILTIN_SCHEMAS, resolve_schema, v
 from app.platform_api.dmrv_advisory import DmrvAdvisoryPreviewRequest, simulate_dmrv_preview
 from tests.unit.test_platform_api_foundation import _project_and_key
 from tests.unit.test_platform_api_public_resources import PUBLIC_SCOPES, _enable_api
+from tests.unit.dmrv_reference_fixture import synthetic_reference
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_reference(monkeypatch):
+    """Pin engine reference data so these contract tests do not depend on the committed dataset."""
+    from app.intelligence_platform import dmrv_engine
+    from app.platform_api import dmrv_advisory
+
+    reference = synthetic_reference()
+    monkeypatch.setattr(dmrv_engine, "load_reference", lambda path=None: reference)
+    monkeypatch.setattr(dmrv_advisory, "load_reference", lambda path=None: reference)
 
 
 def _payload(**context_override) -> dict:
@@ -43,12 +55,16 @@ def test_dmrv_preview_matches_live_structured_schema_without_inference():
     assert result["model_executed"] is False
     assert result["physical_execution"] is False
     assert result["synthetic"] is True
-    assert result["provenance"]["evidence_ids"] == []
+    # v2: recommendations are grounded and cite resolvable evidence (v1 returned a static template with none).
+    known = {item["id"] for item in result["evidence"]} | {item["id"] for item in result["calculations"]}
+    assert result["provenance"]["evidence_ids"] and set(result["provenance"]["evidence_ids"]) <= known
+    assert result["provenance"]["customer_field_data_used"] is False
     assert result["normalized_context"]["location_verified"] is False
-    assert [item["category"] for item in result["structured_output"]["recommendations"]] == [
-        "irrigation", "nutrients", "soil", "monitoring", "sustainability"
-    ]
-    assert all(not item["evidence_ids"] for item in result["structured_output"]["recommendations"])
+    assert result["normalized_context"]["location_resolved"] is True
+    categories = [item["category"] for item in result["structured_output"]["recommendations"]]
+    assert set(categories) == {"irrigation", "nutrients", "soil", "monitoring", "sustainability"}
+    assert categories == sorted(categories, key=["irrigation", "nutrients", "soil", "monitoring", "sustainability"].index)
+    assert all(item["evidence_ids"] and set(item["evidence_ids"]) <= known for item in result["structured_output"]["recommendations"])
     assert all(item["requires_human_approval"] for item in result["structured_output"]["recommendations"])
     assert not validation_errors(result["structured_output"], BUILTIN_SCHEMAS["dmrv_advisory"])
     resolved = resolve_schema(ResponseFormat(type="agroai_schema", name="dmrv_advisory"))
@@ -61,7 +77,9 @@ def test_dmrv_preview_matches_live_structured_schema_without_inference():
     {"location": {"country": "IN", "state": "UP", "district": "Meerut", "latitude": 28.98}, "crop": {"name": "wheat"}},
     {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat"}, "observations": [{"type": "soil_vwc", "value": 0.12}]},
     {"location": {"country": "IN", "state": "UP", "district": "Meerut", "other_data": "not-allowed"}, "crop": {"name": "wheat"}},
-    {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat", "variety": "private"}},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat", "cycle_id": "prod-cycle-7"}},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut\u0000"}, "crop": {"name": "wheat"}},
+    {"location": {"country": "IN", "state": "UP", "district": "Meerut"}, "crop": {"name": "wheat\n"}},
     {"location": {"country": "IN", "state": "UP", "district": "Meerut", "elevation_m": 123}, "crop": {"name": "wheat"}},
     {"location": {"country": "IN", "state": "UP", "region": "Punjab", "district": "Meerut"}, "crop": {"name": "wheat"}},
 ])
@@ -265,3 +283,140 @@ def test_dmrv_live_schema_stays_hidden_until_explicitly_enabled(client, db, monk
     assert "dmrv_advisory" in {item["name"] for item in capabilities(Response())["structured_output"]["builtin_schemas"]}
     assert builtin_schema("dmrv_advisory", Response())["name"] == "dmrv_advisory"
     assert intelligence_runtime.resolve(db, principal, payload).schema[0] == "dmrv_advisory"
+
+
+# ---------------------------------------------------------------- v2 grounded UAT contract
+
+def test_dmrv_preview_accepts_variety_season_planting_and_synthetic_measurements():
+    payload = DmrvAdvisoryPreviewRequest.model_validate({
+        "context": {
+            "location": {"country": "IN", "state": "Uttar Pradesh", "district": "Gautam Buddha Nagar"},
+            "crop": {"name": "wheat", "variety": "HD-2967", "season": "rabi", "planted_at": "2025-11-10T00:00:00Z", "growth_stage": "flowering"},
+        },
+        "as_of": "2026-01-25",
+        "measurements": {
+            "data_classification": "synthetic",
+            "soil_water": {"field_capacity_vwc_fraction": 0.3, "wilting_point_vwc_fraction": 0.13, "current_vwc_fraction": 0.18},
+            "irrigation_system": {"type": "furrow", "efficiency": 0.6},
+            "field_area_ha": 1.5,
+            "soil_test": {"available_n_kg_ha": 240, "available_p_kg_ha": 12, "available_k_kg_ha": 190, "ph": 8.2},
+        },
+    })
+    result = simulate_dmrv_preview(payload, SimpleNamespace(environment="test", id="project-A"))
+    assert result["contract_version"] == "dmrv-uat/2"
+    assert result["normalized_context"]["variety"] == "HD-2967"
+    assert result["calendar"]["planting_basis"] == "planted_at"
+    assert result["calendar"]["current_stage"] == "mid_season"
+    assert result["measured_soil_water"]["trigger_reached"] is True
+    assert result["soil_test"]["ratings"]["available_n_kg_ha"] == "low"
+    assert result["provenance"]["uat_measurements_used"] is True
+    assert result["billing"]["charged_cents"] == 0 and result["model_executed"] is False
+    # Different measurements change identity and outcome deterministically.
+    again = simulate_dmrv_preview(payload, SimpleNamespace(environment="test", id="project-A"))
+    assert again == result
+    without_soil_water = payload.model_copy(update={"measurements": payload.measurements.model_copy(update={"soil_water": None})})
+    assert simulate_dmrv_preview(without_soil_water, SimpleNamespace(environment="test", id="project-A"))["id"] != result["id"]
+
+
+@pytest.mark.parametrize("measurements", [
+    {"soil_test": {"ph": 7.0}},  # classification missing
+    {"data_classification": "production", "soil_test": {"ph": 7.0}},
+    {"data_classification": "synthetic", "soil_test": {"ph": 7.0, "farmer_name": "x"}},
+    {"data_classification": "synthetic", "soil_water": {"field_capacity_vwc_fraction": 1.4}},
+    {"data_classification": "synthetic", "stage_lengths_days": [10, 10, 10]},
+    {"data_classification": "synthetic", "stage_lengths_days": [10, 10, 10, 9000]},
+])
+def test_dmrv_preview_measurements_must_be_declared_synthetic_and_bounded(measurements):
+    with pytest.raises(ValidationError):
+        DmrvAdvisoryPreviewRequest.model_validate({**_payload(), "measurements": measurements})
+
+
+def test_dmrv_preview_outputs_differ_by_crop_and_district():
+    project = SimpleNamespace(environment="test", id="project-A")
+    def run(state, district, crop):
+        payload = DmrvAdvisoryPreviewRequest.model_validate({"context": {
+            "location": {"country": "IN", "state": state, "district": district}, "crop": {"name": crop}}})
+        return simulate_dmrv_preview(payload, project)["structured_output"]
+    wheat, rice = run("Uttar Pradesh", "Gautam Buddha Nagar", "wheat"), run("Uttar Pradesh", "Gautam Buddha Nagar", "rice")
+    bihar_rice = run("Bihar", "Aurangabad", "rice")
+    assert wheat["recommendations"] != rice["recommendations"] != bihar_rice["recommendations"]
+    assert wheat["summary"] != rice["summary"] != bihar_rice["summary"]
+
+
+def test_dmrv_preview_http_contract_errors_isolation_and_zero_billing(client, db, monkeypatch):
+    _enable_api(monkeypatch)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ENABLED", True)
+    _owner, org, _ws, _project, _sa, _key, token = _project_and_key(db, scopes=PUBLIC_SCOPES)
+    _owner_b, _org_b, _ws_b, _project_b, _sa_b, _key_b, other_token = _project_and_key(db, scopes=PUBLIC_SCOPES)
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", f" {org.id} ,")
+    route = "/v1/platform/recommendations/preview"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    ok = client.post(route, headers=headers, json=_payload())
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["billing"] == {"charged_cents": 0} and body["model_executed"] is False and body["physical_execution"] is False
+    assert body["geography"]["precision"] == "administrative_representative_point"
+    assert body["water_balance"]["season_etc_mm"] > 0
+    assert not validation_errors(body["structured_output"], BUILTIN_SCHEMAS["dmrv_advisory"])
+
+    # Another organization's valid TEST key is not on the allowlist.
+    assert client.post(route, headers={"Authorization": f"Bearer {other_token}"}, json=_payload()).status_code == 404
+
+    mismatch = client.post(route, headers=headers, json=_payload(location={"country": "IN", "state": "Uttar Pradesh", "district": "Aurangabad"}))
+    assert mismatch.status_code == 422
+    detail = mismatch.json()["detail"]
+    assert detail["code"] == "location_state_mismatch"
+    assert {c["state"] for c in detail["resolution"]["candidates"]} == {"Bihar", "Maharashtra"}
+
+    unknown_crop = client.post(route, headers=headers, json=_payload(crop={"name": "quinoa"}))
+    assert unknown_crop.status_code == 422 and unknown_crop.json()["detail"]["code"] == "crop_not_supported"
+
+    production = client.post(route, headers=headers, json={**_payload(), "measurements": {"data_classification": "production"}})
+    assert production.status_code == 422
+    observations = client.post(route, headers=headers, json=_payload(observations=[{"type": "soil_vwc", "value": 0.2}]))
+    assert observations.status_code == 422
+
+
+def test_live_dmrv_grounding_is_computed_before_charge_and_is_citable(db, monkeypatch):
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", True)
+    principal = PlatformPrincipal(authentication_type="internal_service")
+    accepted = intelligence_runtime.resolve(db, principal, _live_payload({
+        **_payload()["context"], "field": {"soil": {"field_capacity_vwc_fraction": 0.3, "wilting_point_vwc_fraction": 0.12}},
+    }))
+    grounding = accepted.dmrv_grounding
+    assert grounding and grounding["water_balance"]["season_etc_mm"] > 0
+    assert any(item["id"] == "dmrv:soil_water" for item in grounding["evidence"])
+    section, ids = intelligence_runtime._dmrv_section(grounding)
+    assert section.startswith("DMRV_GROUNDING ")
+    # Must fit the 18k analysis window alongside customer context, or it would be omitted.
+    assert len(section) <= intelligence_runtime.DMRV_SECTION_MAX_CHARS + len("DMRV_GROUNDING ")
+    cited = {e for rec in grounding["structured_output"]["recommendations"] for e in rec["evidence_ids"]}
+    assert cited <= ids
+    assert "dmrv_grounding" not in json.dumps(grounding)  # no recursive embedding
+
+    for context, code in (
+        ({"location": {"country": "IN", "state": "Uttar Pradesh", "district": "Nowhere"}, "crop": {"name": "wheat"}}, "location_district_not_found"),
+        ({"location": {"country": "IN", "state": "Uttar Pradesh", "district": "Gautam Buddha Nagar"}, "crop": {"name": "quinoa"}}, "crop_not_supported"),
+    ):
+        with pytest.raises(HTTPException) as refused:
+            intelligence_runtime.resolve(db, principal, _live_payload(context))
+        assert refused.value.status_code == 422 and refused.value.detail["code"] == code
+
+    impersonation = {**_payload()["context"], "observations": [{"id": "ref:soilgrids:101", "type": "soil_ph", "value": 5.0}]}
+    with pytest.raises(HTTPException) as clash:
+        intelligence_runtime.resolve(db, principal, _live_payload(impersonation))
+    assert clash.value.detail["code"] == "reserved_evidence_id"
+
+
+def test_non_dmrv_live_runs_keep_customer_ids_and_get_no_grounding(db, monkeypatch):
+    monkeypatch.setattr(settings, "INTELLIGENCE_DMRV_ADVISORY_ENABLED", True)
+    principal = PlatformPrincipal(authentication_type="internal_service")
+    payload = IntelligenceRequest(
+        task="decision", question="Summarise this field",
+        context={"observations": [{"id": "ref:lab-17", "type": "soil_ph", "value": 6.5}]},
+        response_format={"type": "agroai_schema", "name": "recommendations"},
+    )
+    resolved = intelligence_runtime.resolve(db, principal, payload)
+    assert resolved.dmrv_grounding is None
