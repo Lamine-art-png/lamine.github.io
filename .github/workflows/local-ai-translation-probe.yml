@@ -1,0 +1,43 @@
+name: Local AI Translation Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/local-ai-translation-probe.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe deployed local AI origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 https://local-ai.agroai-pilot.com/health | tee health.json | jq .
+          cat > request.json <<'JSON'
+          {
+            "model": "agroai-translation",
+            "messages": [
+              {
+                "role": "system",
+                "content": "Translate every JSON string value into German (de). Return JSON only."
+              },
+              {
+                "role": "user",
+                "content": "QUESTION: {\"language\":\"Language\",\"settings\":\"Settings\",\"save\":\"Save\",\"support\":\"Support\"}"
+              }
+            ],
+            "options": {"temperature": 0, "num_predict": 512}
+          }
+          JSON
+          started="$(date +%s)"
+          curl -fsS --max-time 30 \
+            -H 'Content-Type: application/json' \
+            --data @request.json \
+            https://local-ai.agroai-pilot.com/api/chat \
+            -o chat.json
+          echo "elapsed=$(( $(date +%s) - started ))s"
+          jq . chat.json

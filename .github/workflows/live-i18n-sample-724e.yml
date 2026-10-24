@@ -1,0 +1,31 @@
+name: Live I18n Sample 724e
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/live-i18n-sample-724e.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Prove representative production locales
+        shell: bash
+        run: |
+          set -euo pipefail
+          for locale in de ar ja; do
+            curl --fail --silent --show-error --max-time 60 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data "{\"locale\":\"${locale}\"}" \
+              https://app.agroai-pilot.com/v1/i18n/internal/canary \
+              -o "${locale}.json"
+            jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .key_count == 4 and .changed_count >= 2 and (.providers | length > 0) and (.models | length > 0)' "${locale}.json"
+            jq '{status,locale,changed_count,providers,models,catalog_sha256}' "${locale}.json"
+          done
