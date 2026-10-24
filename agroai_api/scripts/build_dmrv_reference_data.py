@@ -3,7 +3,9 @@
 
 Sources (all permit commercial use with attribution):
   * GeoNames country dumps + admin1 codes (CC BY 4.0) -> administrative gazetteer
-  * NASA POWER climatology API, AG community (NASA open data) -> monthly climate normals
+  * NASA POWER daily point API, AG community (NASA open data), 2004-2023 ->
+    monthly means of daily values (the POWER *climatology* T2M_MAX/T2M_MIN are
+    monthly extremes, which are not valid Penman-Monteith inputs)
   * ISRIC SoilGrids 2.0 REST API (CC BY 4.0) -> 0-30 cm topsoil properties
 
 Run where outbound HTTPS is allowed (the GitHub Actions workflow
@@ -41,7 +43,8 @@ USER_AGENT = "AGRO-AI-reference-data-builder/1.0 (+https://agroai-pilot.com)"
 COUNTRIES = ("IN", "BD")
 GEONAMES_DUMP = "https://download.geonames.org/export/dump/{country}.zip"
 GEONAMES_ADMIN1 = "https://download.geonames.org/export/dump/admin1CodesASCII.txt"
-POWER_URL = "https://power.larc.nasa.gov/api/temporal/climatology/point"
+POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
+POWER_START, POWER_END = "20040101", "20231231"
 POWER_PARAMETERS = ("T2M", "T2M_MAX", "T2M_MIN", "RH2M", "WS2M", "ALLSKY_SFC_SW_DWN", "PRECTOTCORR")
 SOILGRIDS_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query"
 SOIL_PROPERTIES = ("phh2o", "soc", "clay", "sand", "silt", "nitrogen", "cec")
@@ -116,30 +119,38 @@ def build_gazetteer() -> dict:
 
 def fetch_climate(lat: float, lon: float) -> dict:
     query = urllib.parse.urlencode({
-        "parameters": ",".join(POWER_PARAMETERS), "community": "AG",
-        "longitude": f"{lon:.4f}", "latitude": f"{lat:.4f}", "format": "JSON",
+        "parameters": ",".join(POWER_PARAMETERS), "community": "AG", "longitude": f"{lon:.4f}", "latitude": f"{lat:.4f}",
+        "start": POWER_START, "end": POWER_END, "format": "JSON",
     })
-    body = json.loads(_get(f"{POWER_URL}?{query}"))
+    body = json.loads(_get(f"{POWER_URL}?{query}", timeout=120))
     parameters = body["properties"]["parameter"]
     units = {name: (body.get("parameters") or {}).get(name, {}).get("units") for name in POWER_PARAMETERS}
     solar_factor = 3.6 if str(units.get("ALLSKY_SFC_SW_DWN") or "").lower().startswith("kw") else 1.0
+    sums: dict[tuple[str, int], list[float]] = {}
+    for name in POWER_PARAMETERS:
+        for day, raw in (parameters.get(name) or {}).items():
+            if raw is None or raw <= -998:
+                continue
+            sums.setdefault((name, int(day[4:6])), []).append(float(raw))
+
+    def mean(name: str, month: int, minimum_days: int = 300) -> float | None:
+        values = sums.get((name, month)) or []
+        return round(sum(values) / len(values), 3) if len(values) >= minimum_days else None
+
     monthly = {}
-    for index, month in enumerate(MONTHS, start=1):
-        def value(name: str) -> float | None:
-            raw = parameters.get(name, {}).get(month)
-            return None if raw is None or raw <= -998 else round(float(raw), 3)
-        solar = value("ALLSKY_SFC_SW_DWN")
-        monthly[str(index)] = {
-            "tmean_c": value("T2M"), "tmax_c": value("T2M_MAX"), "tmin_c": value("T2M_MIN"),
-            "rh_mean_pct": value("RH2M"), "wind_2m_ms": value("WS2M"),
+    for month in range(1, 13):
+        solar = mean("ALLSKY_SFC_SW_DWN", month)
+        monthly[str(month)] = {
+            "tmean_c": mean("T2M", month), "tmax_c": mean("T2M_MAX", month), "tmin_c": mean("T2M_MIN", month),
+            "rh_mean_pct": mean("RH2M", month), "wind_2m_ms": mean("WS2M", month),
             "solar_mj_m2_day": None if solar is None else round(solar * solar_factor, 3),
-            "precip_mm_day": value("PRECTOTCORR"),
+            "precip_mm_day": mean("PRECTOTCORR", month),
+            "days": len(sums.get(("T2M_MAX", month)) or []),
         }
-    header = body.get("header") or {}
     coordinates = (body.get("geometry") or {}).get("coordinates") or [lon, lat, None]
     return {
-        "source": "NASA POWER climatology (AG community)",
-        "period": f"{header.get('start')}-{header.get('end')}",
+        "source": "NASA POWER daily (AG community), monthly means of daily values",
+        "period": f"{POWER_START[:4]}-{POWER_END[:4]}",
         "grid_point": {"latitude": coordinates[1], "longitude": coordinates[0]},
         "elevation_m": coordinates[2] if len(coordinates) > 2 else None,
         "units_reported": units,
@@ -203,7 +214,7 @@ def build(out: Path) -> dict:
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "sources": {
             "gazetteer": {"name": "GeoNames", "license": "CC BY 4.0", "url": "https://www.geonames.org/"},
-            "climate": {"name": "NASA POWER climatology", "license": "NASA open data; attribution requested", "url": "https://power.larc.nasa.gov/"},
+            "climate": {"name": "NASA POWER daily data, 2004-2023 monthly means", "license": "NASA open data; attribution requested", "url": "https://power.larc.nasa.gov/"},
             "soil": {"name": "ISRIC SoilGrids 2.0", "license": "CC BY 4.0", "url": "https://soilgrids.org/"},
         },
         "gazetteer": gazetteer,
