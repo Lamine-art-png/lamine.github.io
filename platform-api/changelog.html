@@ -44,6 +44,24 @@
       <p class="lede">The Platform API is in private beta. It ships additively within <code>v1</code>: new endpoints and response fields can arrive; write clients that tolerate unknown fields. Any change to the public contract is reviewed and digest-pinned.</p>
 
       <article class="card" style="margin-bottom: 1.25rem">
+        <div class="flex items-center gap-3 wrap"><span class="badge badge-accent">2026-10-12</span><span class="badge">Reliability</span></div>
+        <h3 style="margin-top: .6rem">Production audit now verifies the deployed backend release</h3>
+        <p class="text-muted">The production surface audit now requires an exact match to the deployed backend build and no longer treats undeployed pull-request checks as production proof. The verified production backend build was <code>fdaa2de</code>. This is a reliability improvement, not a public-enrollment announcement.</p>
+      </article>
+
+      <article class="card" style="margin-bottom: 1.25rem">
+        <div class="flex items-center gap-3 wrap"><span class="badge badge-accent">2026-10-12</span><span class="badge">Docs</span></div>
+        <h3 style="margin-top: .6rem">Marketplace developer assets and launch boundaries clarified</h3>
+        <p class="text-muted">Corrected marketplace package OpenAPI artifact links and documented the difference between prepared distribution integrations and verified public purchasing. AWS Marketplace public purchasing, Microsoft Marketplace and RapidAPI publication are not confirmed here.</p>
+      </article>
+
+      <article class="card" style="margin-bottom: 1.25rem">
+        <div class="flex items-center gap-3 wrap"><span class="badge badge-accent">2026-10-04</span><span class="badge badge-beta">Preview</span></div>
+        <h3 style="margin-top: .6rem">Public TEST self-service engineering remains gated by legal approval</h3>
+        <p class="text-muted">The developer enrollment and TEST-key path has an implemented activation workflow, but automatic public enrollment and indexing remain disabled until counsel-approved API terms, acceptable use and privacy documents are versioned and validated. This page continues to describe a private preview.</p>
+      </article>
+
+      <article class="card" style="margin-bottom: 1.25rem">
         <div class="flex items-center gap-3 wrap"><span class="badge badge-accent">2026-07-21</span><span class="badge">Docs</span></div>
         <h3 style="margin-top: .6rem">Developer platform, generated from the contract</h3>
         <p class="text-muted">Introduced this unified developer platform. The API reference is generated directly from the curated backend contract, and a CI check fails the build if the docs drift from the server or if any private route would leak.</p>
