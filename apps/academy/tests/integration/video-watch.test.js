@@ -218,8 +218,10 @@ test("narrated text lessons must meet the video watch requirement before complet
   // A1's original lessons are typed 'text' even when an approved video is attached.
   await beat(0, { extra: { complete: true } });
   const complete = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
-  assert.match(complete.location, /\\?watch=1$/);
+  assert.match(complete.location, /\?watch=1$/);
   assert.equal((await state()).progress, "started");
+  // The rejected explicit completion pauses the watch run; restart at zero.
+  await beat(0);
   // A legitimate full watch still completes the lesson.
   for (let p = 5; p <= 180; p += 5) await beat(p, { after: 5 });
   assert.equal((await state()).progress, "completed");
