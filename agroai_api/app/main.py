@@ -526,6 +526,7 @@ from app.api.v1.orchestration import router as orchestration_router  # noqa: E40
 from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 from app.api.v1.platform_admin import router as platform_admin_router  # noqa: E402
+from app.api.v1.intelligence_contract_billing import router as intelligence_contract_billing_router  # noqa: E402
 from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
 from app.api.v1.platform_access import router as platform_access_router  # noqa: E402
 from app.api.v1.platform_resources import router as platform_resources_router  # noqa: E402
@@ -601,6 +602,7 @@ app.include_router(orchestration_router, prefix="/v1")
 app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 app.include_router(platform_admin_router, prefix="/v1")
+app.include_router(intelligence_contract_billing_router, prefix="/v1")
 app.include_router(platform_api_router, prefix="/v1")
 app.include_router(platform_access_router, prefix="/v1")
 app.include_router(platform_resources_router, prefix="/v1")

@@ -1,0 +1,45 @@
+name: DMRV reference data
+
+# Rebuilds the public-source DMRV reference dataset (GeoNames, NASA POWER,
+# ISRIC SoilGrids). Read-only against public APIs; no secrets, no deploys.
+# The committed dataset is the reviewed copy the API loads.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - agroai_api/scripts/build_dmrv_reference_data.py
+      - agroai_api/app/intelligence_platform/geography.py
+      - .github/workflows/dmrv-reference-data.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build dataset from public sources
+        run: python3 agroai_api/scripts/build_dmrv_reference_data.py --out "$RUNNER_TEMP/dmrv_reference_v1.json" --emit-log-chunks
+      - name: Compare with committed dataset
+        run: |
+          set -euo pipefail
+          committed=agroai_api/app/intelligence_platform/reference_data/dmrv_reference_v1.json
+          if [[ -f "$committed" ]]; then
+            python3 - "$committed" "$RUNNER_TEMP/dmrv_reference_v1.json" <<'PY'
+          import json, sys
+          a, b = (json.load(open(p)) for p in sys.argv[1:3])
+          for key in ("gazetteer", "climate", "soil"):
+              print(key, "unchanged" if a.get(key) == b.get(key) else "CHANGED (review before committing a rebuild)")
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmrv-reference-data
+          path: ${{ runner.temp }}/dmrv_reference_v1.json
+          retention-days: 14
