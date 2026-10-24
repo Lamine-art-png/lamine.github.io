@@ -11,11 +11,11 @@ import { creditFor, mergeSegments, MAX_RATE } from "../../src/services/progress.
 const LESSON = "les_a1_data";
 const LENGTH = 200;
 
-async function setup() {
+async function setup({ lessonType = "video" } = {}) {
   const env = makeEnv();
   await publishCourse(env, "crs_a1");
   await env.DB.prepare("UPDATE video_assets SET status='approved', duration_seconds=?, mp4_url='https://media.example/a1.mp4' WHERE id='vid_a1_data'").bind(LENGTH).run();
-  await env.DB.prepare("UPDATE lessons SET type='video' WHERE id=?").bind(LESSON).run();
+  await env.DB.prepare("UPDATE lessons SET type=? WHERE id=?").bind(lessonType, LESSON).run();
   const u = await registeredLearner(env);
   await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
   const beat = async (position, { playing = true, after = 0, extra = {} } = {}) => {
@@ -211,4 +211,16 @@ test("a delayed older heartbeat never replaces a newer anchor", async () => {
   assert.equal(after.watch.last_position, before.watch.last_position);
   assert.equal(after.watch.last_beat_at, before.watch.last_beat_at);
   assert.equal(after.watch.beats, before.watch.beats);
+});
+
+test("narrated text lessons must meet the video watch requirement before completion", async () => {
+  const { u, beat, state } = await setup({ lessonType: "text" });
+  // A1's original lessons are typed 'text' even when an approved video is attached.
+  await beat(0, { extra: { complete: true } });
+  const complete = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.match(complete.location, /\\?watch=1$/);
+  assert.equal((await state()).progress, "started");
+  // A legitimate full watch still completes the lesson.
+  for (let p = 5; p <= 180; p += 5) await beat(p, { after: 5 });
+  assert.equal((await state()).progress, "completed");
 });
