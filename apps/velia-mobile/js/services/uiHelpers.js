@@ -28,10 +28,10 @@ export function confidencePresentation(value, rec = {}) {
   const fieldChecks = rec.fieldChecks || [];
   const explanation = rec.confidenceExplanation
     || (label === "High"
-      ? "Velia has enough recent field and weather context for this recommendation."
+      ? "Terris has enough recent field and weather context for this recommendation."
       : label === "Low"
-        ? "Velia needs fresher or more complete field evidence before confidence improves."
-        : "Velia has usable context, with a few details that would improve certainty.");
+        ? "Terris needs fresher or more complete field evidence before confidence improves."
+        : "Terris has usable context, with a few details that would improve certainty.");
   const improve = rec.improveConfidence
     || fieldChecks[0]
     || (missing.length ? `Add ${missing.slice(0, 2).join(" and ")}.` : "Record a field check to improve today's recommendation.");
@@ -49,10 +49,10 @@ export function readConfidence(rec = {}) {
 
 export const actionMappings = {
   irrigate: { primary: "Log irrigation", secondary: "Review reasoning", primaryAction: "log", secondaryAction: "reasoning" },
-  "check field first": { primary: "Record field check", secondary: "Ask Velia", primaryAction: "condition", secondaryAction: "assistant" },
+  "check field first": { primary: "Record field check", secondary: "Ask Terris", primaryAction: "condition", secondaryAction: "assistant" },
   wait: { primary: "Set reminder", secondary: "View weather risk", primaryAction: "reminder", secondaryAction: "weather" },
-  monitor: { primary: "Update field condition", secondary: "Ask Velia", primaryAction: "condition", secondaryAction: "assistant" },
-  "update missing data": { primary: "Complete field data", secondary: "Ask Velia", primaryAction: "field-detail", secondaryAction: "assistant" },
+  monitor: { primary: "Update field condition", secondary: "Ask Terris", primaryAction: "condition", secondaryAction: "assistant" },
+  "update missing data": { primary: "Complete field data", secondary: "Ask Terris", primaryAction: "field-detail", secondaryAction: "assistant" },
 };
 
 export function normalizeDecisionAction(action = "") {
@@ -131,7 +131,7 @@ export function isAlertDismissed(alert, dismissed = {}, now = Date.now(), expira
 
 export function recommendationContextLabel(rec = {}, weather = {}, mode = "real") {
   if (mode === "demo") return "Demo preview";
-  if (rec.sourceMode === "backend") return "Synced backend intelligence";
+  if (rec.sourceMode === "backend") return "Backend intelligence refreshed";
   if (weather?.stale || rec.sourceMode === "offline") return "Stale offline fallback";
   if (rec.sourceMode === "refreshing") return "Refreshing intelligence";
   return "Local fallback with fresh cached context";

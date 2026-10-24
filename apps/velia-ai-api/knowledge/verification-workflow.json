@@ -3,11 +3,11 @@
   "title": "Verification Workflow",
   "topic": "verification",
   "sourceType": "internal_guidance",
-  "content": "Every recommendation should include a verification plan. The plan should ask the farmer to log whether irrigation happened, record duration when relevant, and capture a post-action field condition. If a recommendation was not followed, Velia should record the override and compare later observations. Repeated verification gaps should become a recurring pattern that reduces confidence until follow-up improves.",
+  "content": "Every recommendation should include a verification plan. The plan should ask the farmer to log whether irrigation happened, record duration when relevant, and capture a post-action field condition. If a recommendation was not followed, Terris should record the override and compare later observations. Repeated verification gaps should become a recurring pattern that reduces confidence until follow-up improves.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Verification workflow",
     "url": null
   }

@@ -1,5 +1,3 @@
-import { syncService } from "./sync.js";
-
 export function detectIntent(text) {
   const t = text.toLowerCase();
   if (/should i irrigate today/.test(t)) return "ASK_RECOMMENDATION";
@@ -40,5 +38,3 @@ export function applyVoiceAction(command, handlers) {
   if (command.action.type === "add_note") return handlers.onNote(command.action.payload);
   return handlers.onNoop?.(command.action.payload, command.intent);
 }
-
-export const saveOfflineVoiceAction = (action) => syncService.queueAction({ kind: "voice", ...action });

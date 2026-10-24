@@ -20,13 +20,56 @@ export function createInitialState() {
     alertFirstSeen: {},
     voiceTimeline: [],
     weatherCache: null,
+    nutrientRecords: [],
+    pumpRuntimeEvents: [],
+    fieldTasks: [],
+    evidenceArtifacts: [],
+    evidencePackets: [],
+    fieldLedgerEvents: [],
+    ledgerMetadata: {
+      retentionLimit: 500,
+      persistenceMode: "local_mobile_buffer",
+      durableBackendPersistence: false,
+      queuedForSync: false,
+    },
     demoScenario: "baseline",
     language: "en",
     units: "metric",
   };
 }
 
-export const loadState = () => storage.get(KEY, createInitialState());
+export function hydrateState(stored = {}) {
+  const defaults = createInitialState();
+  const safeStored = stored && typeof stored === "object" ? stored : {};
+  return {
+    ...defaults,
+    ...safeStored,
+    fields: Array.isArray(safeStored.fields) ? safeStored.fields : defaults.fields,
+    irrigationLogs: Array.isArray(safeStored.irrigationLogs) ? safeStored.irrigationLogs : defaults.irrigationLogs,
+    fieldNotes: Array.isArray(safeStored.fieldNotes) ? safeStored.fieldNotes : defaults.fieldNotes,
+    observations: Array.isArray(safeStored.observations) ? safeStored.observations : defaults.observations,
+    recommendationHistory: Array.isArray(safeStored.recommendationHistory) ? safeStored.recommendationHistory : defaults.recommendationHistory,
+    alertHistory: Array.isArray(safeStored.alertHistory) ? safeStored.alertHistory : defaults.alertHistory,
+    voiceTimeline: Array.isArray(safeStored.voiceTimeline) ? safeStored.voiceTimeline : defaults.voiceTimeline,
+    nutrientRecords: Array.isArray(safeStored.nutrientRecords) ? safeStored.nutrientRecords : defaults.nutrientRecords,
+    pumpRuntimeEvents: Array.isArray(safeStored.pumpRuntimeEvents) ? safeStored.pumpRuntimeEvents : defaults.pumpRuntimeEvents,
+    fieldTasks: Array.isArray(safeStored.fieldTasks) ? safeStored.fieldTasks : defaults.fieldTasks,
+    evidenceArtifacts: Array.isArray(safeStored.evidenceArtifacts) ? safeStored.evidenceArtifacts : defaults.evidenceArtifacts,
+    evidencePackets: Array.isArray(safeStored.evidencePackets) ? safeStored.evidencePackets : defaults.evidencePackets,
+    fieldLedgerEvents: Array.isArray(safeStored.fieldLedgerEvents) ? safeStored.fieldLedgerEvents : defaults.fieldLedgerEvents,
+    remoteDecisions: safeStored.remoteDecisions && typeof safeStored.remoteDecisions === "object" ? safeStored.remoteDecisions : defaults.remoteDecisions,
+    dismissedAlerts: safeStored.dismissedAlerts && typeof safeStored.dismissedAlerts === "object" ? safeStored.dismissedAlerts : defaults.dismissedAlerts,
+    alertFirstSeen: safeStored.alertFirstSeen && typeof safeStored.alertFirstSeen === "object" ? safeStored.alertFirstSeen : defaults.alertFirstSeen,
+    ledgerMetadata: {
+      ...defaults.ledgerMetadata,
+      ...(safeStored.ledgerMetadata && typeof safeStored.ledgerMetadata === "object" ? safeStored.ledgerMetadata : {}),
+      persistenceMode: "local_mobile_buffer",
+      durableBackendPersistence: false,
+    },
+  };
+}
+
+export const loadState = () => hydrateState(storage.get(KEY, createInitialState()));
 export const saveState = (state) => storage.set(KEY, state);
 
 export function recordRecommendationHistory(state, fieldId, rec) {
@@ -49,8 +92,9 @@ export function applyDemoScenario(state, scenarioName) {
 }
 
 export function useDemoMode(state) {
+  const base = hydrateState(state);
   return {
-    ...state,
+    ...base,
     mode: "demo",
     onboarded: true,
     demoScenario: "baseline",
@@ -62,6 +106,13 @@ export function useDemoMode(state) {
     recommendationHistory: demoProfile.recommendationHistory || [],
     alertHistory: demoProfile.alertHistory || [],
     voiceTimeline: demoProfile.voiceTimeline || [],
+    nutrientRecords: base.nutrientRecords || [],
+    pumpRuntimeEvents: base.pumpRuntimeEvents || [],
+    fieldTasks: base.fieldTasks || [],
+    evidenceArtifacts: base.evidenceArtifacts || [],
+    evidencePackets: base.evidencePackets || [],
+    fieldLedgerEvents: base.fieldLedgerEvents || [],
+    ledgerMetadata: { ...base.ledgerMetadata, queuedForSync: false },
     language: demoProfile.language,
     units: demoProfile.farm.units,
   };

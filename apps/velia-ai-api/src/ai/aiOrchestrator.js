@@ -30,11 +30,11 @@ function buildAssistantAnswer({ query = "", decision = {}, memory = {}, verifica
   let answer;
 
   if (/should i irrigate|irrigate today/.test(q)) {
-    answer = `Velia recommends: ${decision.action || "check field first"}. Timing: ${decision.timing || "today"}. Confidence is ${decision.confidenceLabel || "moderate"} because ${compactList(decision.reasons || [])}.`;
+    answer = `Terris recommends: ${decision.action || "check field first"}. Timing: ${decision.timing || "today"}. Confidence is ${decision.confidenceLabel || "moderate"} because ${compactList(decision.reasons || [])}.`;
   } else if (/why\b|reason|explain/.test(q)) {
     answer = `The main reasons are: ${compactList(decision.reasons || [])}. Deterministic rules checked: ${compactList(provenance.deterministicRulesTriggered || [])}.`;
   } else if (/missing|need from me|what information/.test(q)) {
-    answer = `Velia is missing: ${compactList(decision.missingData || [])}. Improving those items should raise confidence more than adding general notes.`;
+    answer = `Terris is missing: ${compactList(decision.missingData || [])}. Improving those items should raise confidence more than adding general notes.`;
   } else if (/check.*field|field check|what should i check/.test(q)) {
     answer = `Check: ${compactList(decision.fieldChecks || [])}. Then record the result so tomorrow's recommendation has stronger field evidence.`;
   } else if (/changed since yesterday|what changed/.test(q)) {
