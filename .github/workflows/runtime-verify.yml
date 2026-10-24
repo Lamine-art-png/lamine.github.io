@@ -1,0 +1,47 @@
+name: Runtime verification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install -q -r agroai_api/requirements.txt
+      - name: Compile
+        run: python -m py_compile $(find agroai_api/app agroai_api/alembic -name '*.py')
+      - name: Import
+        working-directory: agroai_api
+        env:
+          ENABLE_SCHEDULER: 'false'
+          DATABASE_URL: sqlite:///./runtime-verify.db
+        run: python -c "from app.main import app; print(app.title)"
+      - name: Migrate
+        working-directory: agroai_api
+        env:
+          ENABLE_SCHEDULER: 'false'
+          DATABASE_URL: sqlite:///./runtime-verify.db
+        run: alembic upgrade head
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install
+        working-directory: figma-enterprise-v4
+        run: npm ci
+      - name: Build
+        working-directory: figma-enterprise-v4
+        run: npm run build

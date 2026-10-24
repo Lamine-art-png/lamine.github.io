@@ -1,0 +1,15 @@
+name: Portal probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check portal
+        run: curl --fail --silent --show-error --location --max-time 30 https://app.agroai-pilot.com/ > /dev/null
