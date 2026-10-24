@@ -67,7 +67,7 @@ function videoBlock(c, lesson, video, progress) {
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
           ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="${fileVideoType(video.mp4_url)}">` : ""}
           ${video.captions.map((cap, i) => html`<track kind="captions" src="/captions/${cap.id}.vtt" srclang="${cap.locale}" label="${cap.label}" ${cap.locale === c.locale || (i === 0 && !video.captions.some((x) => x.locale === c.locale)) ? raw("default") : ""}>`)}
-          <p>${t("lesson.video_unsupported")} ${video.mp4_url ? html`<a href="${safeUrl(video.mp4_url)}">${t("lesson.download_video")}</a>` : ""}</p>
+          <p>${t("lesson.video_unsupported")}</p>
         </video>
       </div>
       <div class="player-bar no-print" data-player-bar>
