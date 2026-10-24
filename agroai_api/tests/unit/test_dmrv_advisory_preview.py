@@ -129,6 +129,19 @@ def test_dmrv_preview_http_requires_test_key_scope_and_flag(client, db, monkeypa
     assert client.post(route, headers={"Authorization": f"Bearer {missing_scope_key}"}, json=_payload()).status_code == 403
     assert client.post(route, json=_payload()).status_code == 401
     monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", "")
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS", "")
+    assert client.post(route, headers=headers, json=_payload()).status_code == 404
+
+    # Additive allowlist authorizes this TEST org alone.
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS", f" {org.id} ,")
+    assert client.post(route, headers=headers, json=_payload()).status_code == 200
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS", "another-org")
+    assert client.post(route, headers=headers, json=_payload()).status_code == 404
+
+    # Original grants remain effective independently of the additive list.
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", org.id)
+    assert client.post(route, headers=headers, json=_payload()).status_code == 200
+    monkeypatch.setattr(settings, "PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS", "")
     assert client.post(route, headers=headers, json=_payload()).status_code == 404
 
 
