@@ -155,6 +155,8 @@ def _calendar(run: _Run, crop: cwp.CropWaterParameters, country: str, season: st
             season_key = chosen
             run.limit(f"Planting date assumed as 1 {_MONTH[planting.month]} ({chosen} season); supply crop.planted_at for a field-specific calendar.")
             run.need("crop.planted_at (actual sowing/transplanting date)")
+    if planting is None:
+        run.need("crop.planted_at or crop.season (no typical season is tabulated for this crop and country)")
     label_stage = cwp.stage_from_label(stage_label)
     if stage_label and label_stage is None:
         run.limit(f"Growth stage '{stage_label}' was not recognised; stage-specific advice uses the calendar only.")
@@ -316,7 +318,9 @@ def _soil_reference(reference: ReferenceData, run: _Run, geo: dict[str, Any], cr
         "source": record["source"], "license": source["license"],
         "dataset_generated_at": reference.data["generated_at"],
         "summary": "Predicted 0-30 cm topsoil properties at the district representative point",
-        "precision": "250 m digital soil map prediction at one point; not a field measurement",
+        "precision": "250 m digital soil map prediction at one point; not a field measurement"
+                     + (f"; sampled {record['sampled_offset_deg']} degrees from the district point because that pixel was masked"
+                        if record.get("sampled_offset_deg") and any(record["sampled_offset_deg"]) else ""),
     })
     sand, silt, clay = value("sand"), value("silt"), value("clay")
     texture = cwp.usda_texture_class(sand, silt, clay) if None not in (sand, silt, clay) else None
@@ -359,31 +363,37 @@ def _measured_soil_water(run: _Run, crop: cwp.CropWaterParameters, m: dict[str, 
     evidence_id = run.add_evidence({"id": f"{run.measurement_prefix}:soil_water", "type": "caller_measurement", "source": run.measurement_label,
                                     "summary": "Soil water constants and current soil moisture supplied in the request",
                                     "observed_at": water.get("measured_at")})
-    depth = m.get("root_zone_depth_m") or round(sum(crop.root_depth_m) / 2, 2)
-    if not m.get("root_zone_depth_m"):
-        run.limit(f"Root-zone depth assumed {depth} m (mid-point of FAO-56 Table 22 range); supply root_zone_depth_m.")
+    depth = m.get("root_zone_depth_m")
+    # Without a measured effective rooting depth, work per metre of root zone: the
+    # trigger (depletion fraction vs p) is depth-independent; event depths are not.
+    basis_depth = depth or 1.0
+    if not depth:
+        run.need("root_zone_depth_m (effective rooting depth at the current stage) for refill depth and volume")
+    per = "" if depth else " per metre of root zone"
     taw = run.tool("soil.total_available_water.v1", {
         "field_capacity_vwc_fraction": water["field_capacity_vwc_fraction"],
-        "wilting_point_vwc_fraction": water["wilting_point_vwc_fraction"], "root_zone_depth_m": depth}, "Total available water from supplied soil constants")
+        "wilting_point_vwc_fraction": water["wilting_point_vwc_fraction"], "root_zone_depth_m": basis_depth}, "Total available water from supplied soil constants" + per)
     if not taw:
         raise DmrvInputError("measurement_invalid", "Supplied field capacity must exceed wilting point.", field="measurements.soil_water")
     raw = run.tool("soil.readily_available_water.v1", {"total_available_water_mm": taw["total_available_water_mm"],
-                   "management_allowable_depletion_fraction": crop.depletion_fraction_p}, "Readily available water (FAO-56 p)")
-    result = {"evidence_id": evidence_id, "root_zone_depth_m": depth, "taw_mm": _round(taw["total_available_water_mm"]),
-              "raw_mm": _round(raw["readily_available_water_mm"]) if raw else None, "calcs": [taw["id"]] + ([raw["id"]] if raw else [])}
+                   "management_allowable_depletion_fraction": crop.depletion_fraction_p}, "Readily available water (FAO-56 p)" + per)
+    result = {"evidence_id": evidence_id, "root_zone_depth_m": depth, "basis": "measured_root_zone" if depth else "per_metre_of_root_zone",
+              "taw_mm": _round(taw["total_available_water_mm"]), "raw_mm": _round(raw["readily_available_water_mm"]) if raw else None,
+              "calcs": [taw["id"]] + ([raw["id"]] if raw else [])}
     if water.get("current_vwc_fraction") is None:
         run.need("current volumetric soil moisture for an irrigation trigger decision")
         return result
     depletion = run.tool("soil.depletion_from_field_capacity.v1", {
         "field_capacity_vwc_fraction": water["field_capacity_vwc_fraction"], "current_vwc_fraction": water["current_vwc_fraction"],
-        "root_zone_depth_m": depth}, "Root-zone depletion from supplied soil moisture")
+        "root_zone_depth_m": basis_depth}, "Root-zone depletion from supplied soil moisture" + per)
     result["depletion_mm"] = _round(depletion["depletion_from_field_capacity_mm"]) if depletion else None
     result["calcs"].append(depletion["id"])
     if water["current_vwc_fraction"] < water["wilting_point_vwc_fraction"]:
         run.limit("Contradictory evidence: current soil moisture is below the supplied wilting point; verify sensor calibration.")
-    result["trigger_reached"] = bool(raw and result["depletion_mm"] is not None and result["depletion_mm"] >= raw["readily_available_water_mm"])
+    result["depletion_fraction"] = round(depletion["depletion_from_field_capacity_mm"] / taw["total_available_water_mm"], 3) if depletion else None
+    result["trigger_reached"] = bool(result["depletion_fraction"] is not None and result["depletion_fraction"] >= crop.depletion_fraction_p)
     efficiency = (m.get("irrigation_system") or {}).get("efficiency")
-    if result["depletion_mm"] and result["depletion_mm"] > 0 and efficiency:
+    if depth and result["depletion_mm"] and result["depletion_mm"] > 0 and efficiency:
         gross = run.tool("irrigation.gross_requirement.v1", {"net_requirement_mm": result["depletion_mm"], "efficiency": efficiency},
                          "Gross refill depth with supplied application efficiency")
         if gross:
@@ -395,7 +405,7 @@ def _measured_soil_water(run: _Run, crop: cwp.CropWaterParameters, m: dict[str, 
                 if volume:
                     result["gross_refill_volume_m3"] = _round(volume["volume_m3"])
                     result["calcs"].append(volume["id"])
-    elif result["depletion_mm"] and result["depletion_mm"] > 0:
+    elif depth and result["depletion_mm"] and result["depletion_mm"] > 0:
         run.need("irrigation application efficiency (measured or system-specified)")
     return result
 
@@ -530,7 +540,17 @@ def build_dmrv_analysis(
     if water:
         stage_calcs = [s["calc"] for s in water["stages"]]
         demand_share = (water["season_net_demand_mm"] or 0) / (water["season_etc_mm"] or 1)
-        raw_text = f" Readily available water for this soil and crop is roughly {soil['raw_mm_range'][0]}-{soil['raw_mm_range'][1]} mm, so irrigation intervals should be set from measured depletion against that range." if soil and soil.get("raw_mm_range") else ""
+        raw_evidence: list[str] = []
+        if measured_water and measured_water.get("raw_mm") is not None:
+            raw_text = (f" Readily available water from the supplied soil constants is {measured_water['raw_mm']} mm"
+                        + ("" if measured_water["root_zone_depth_m"] else " per metre of root zone")
+                        + ", so irrigate when measured depletion reaches that amount.")
+            raw_evidence = [measured_water["evidence_id"], *measured_water["calcs"]]
+        elif soil and soil.get("raw_mm_range"):
+            raw_text = f" Readily available water for this soil and crop is roughly {soil['raw_mm_range'][0]}-{soil['raw_mm_range'][1]} mm, so irrigation intervals should be set from measured depletion against that range."
+            raw_evidence = soil.get("calcs", [])
+        else:
+            raw_text = ""
         recs["irrigation"].append(_rec(
             "irrigation",
             f"Plan seasonal water supply for about {water['season_etc_mm']:.0f} mm of crop evapotranspiration, of which about "
@@ -540,7 +560,7 @@ def build_dmrv_analysis(
             "This is a climatological planning estimate for typical seasons, not an irrigation prescription for a specific field or year.",
             "high" if demand_share > 0.5 else ("medium" if demand_share > 0.15 else "low"),
             "season planning, before sowing",
-            [clim_id, crop_evidence, *stage_calcs, *(soil.get("calcs", []) if soil else [])],
+            [clim_id, crop_evidence, *stage_calcs, *raw_evidence],
             ["measured soil moisture", "irrigation system efficiency", "dated rainfall and ET0 for the current season", "water allocation or rights"],
         ))
         sensitive = [s for s in crop.water_sensitive_stages]
@@ -554,15 +574,21 @@ def build_dmrv_analysis(
             [crop_evidence, clim_id], ["soil moisture readings during sensitive stages", "irrigation event log"],
         ))
     if measured_water and measured_water.get("depletion_mm") is not None:
+        fraction = f"{measured_water['depletion_fraction'] * 100:.0f}%"
         if measured_water.get("trigger_reached"):
-            refill = f" Gross refill depth at the supplied efficiency is about {measured_water['gross_refill_mm']} mm" if measured_water.get("gross_refill_mm") else ""
-            volume = f" ({measured_water['gross_refill_volume_m3']} m3 for the supplied area)" if measured_water.get("gross_refill_volume_m3") else ""
-            action = (f"Irrigation trigger reached: measured root-zone depletion {measured_water['depletion_mm']} mm exceeds readily available water "
-                      f"{measured_water['raw_mm']} mm. Net refill to field capacity is {measured_water['depletion_mm']} mm.{refill}{volume}.")
+            if measured_water["root_zone_depth_m"]:
+                refill = f" Gross refill depth at the supplied efficiency is about {measured_water['gross_refill_mm']} mm" if measured_water.get("gross_refill_mm") else ""
+                volume = f" ({measured_water['gross_refill_volume_m3']} m3 for the supplied area)" if measured_water.get("gross_refill_volume_m3") else ""
+                amounts = f" Net refill to field capacity is {measured_water['depletion_mm']} mm over the {measured_water['root_zone_depth_m']} m root zone.{refill}{volume}"
+            else:
+                amounts = (f" Net refill is {measured_water['depletion_mm']} mm per metre of effective root zone; "
+                           "supply root_zone_depth_m to convert this to an event depth and volume")
+            action = (f"Irrigation trigger reached: {fraction} of available water is depleted, at or above the FAO-56 allowable "
+                      f"depletion of {crop.depletion_fraction_p * 100:.0f}% for {crop.display_name}.{amounts}.")
             priority = "high"
         else:
-            action = (f"No irrigation needed yet: measured depletion {measured_water['depletion_mm']} mm is below readily available water "
-                      f"{measured_water['raw_mm']} mm; re-measure before the next decision.")
+            action = (f"No irrigation needed yet: {fraction} of available water is depleted, below the FAO-56 allowable depletion of "
+                      f"{crop.depletion_fraction_p * 100:.0f}%; re-measure before the next decision.")
             priority = "low"
         recs["irrigation"].insert(0, _rec("irrigation", action,
                                           "Computed from the supplied soil water constants and current moisture with FAO-56 depletion and p; quantities apply only to the measured field.",
@@ -577,11 +603,13 @@ def build_dmrv_analysis(
     # Nutrients
     if soil_test:
         low = sorted(k for k, v in soil_test["ratings"].items() if v == "low")
-        rated = "; ".join(f"{k.replace('_kg_ha', '').replace('_', ' ')} {v}" for k, v in sorted(soil_test["ratings"].items()))
+        names = {"available_n_kg_ha": "available nitrogen", "available_p_kg_ha": "available phosphorus",
+                 "available_k_kg_ha": "available potassium", "organic_carbon_pct": "organic carbon"}
+        rated = "; ".join(f"{names[k]} {v}" for k, v in sorted(soil_test["ratings"].items()))
         recs["nutrients"].append(_rec(
             "nutrients",
             (f"Base the {crop.display_name} nutrient plan on the soil test ({rated}). "
-             + (f"Prioritise correcting {', '.join(k.replace('available_', '').replace('_kg_ha', '').replace('_', ' ').upper() if k.startswith('available_') else k.replace('_', ' ') for k in low)} "
+             + (f"Prioritise correcting low {', '.join(names[k] for k in low)} "
                 "using the state agricultural university or Soil Health Card recommendation for this crop." if low else
                 "No nutrient is rated low; follow maintenance recommendations from the state agricultural university.")) if rated else
             f"Base the {crop.display_name} nutrient plan on the supplied soil test using the applicable regional recommendation.",
@@ -676,7 +704,6 @@ def build_dmrv_analysis(
     run.limit("District-level values are regional context at an administrative point; they are not field measurements.")
     run.limit("Climate values are long-term monthly means; they are not current-season weather observations or forecasts.")
     run.limit("No fertilizer dose, carbon quantity or emissions outcome has been calculated or verified.")
-    used = {e for r in recommendations for e in r["evidence_ids"]}
     summary_bits = [f"{crop.display_name} in {geo['district']}, {geo['state']}"]
     if water:
         summary_bits.append(f"season crop ET about {water['season_etc_mm']:.0f} mm with net demand about {water['season_net_demand_mm']:.0f} mm after effective rain")
@@ -706,7 +733,7 @@ def build_dmrv_analysis(
         "heat_risk": heat,
         "coverage": {"location": "resolved", "climate": bool(climate), "soil": bool(soil), "stage_calendar": bool(cal["stage_windows"]),
                      "measurements": sorted(k for k in ("soil_water", "soil_test", "irrigation_system") if measurements.get(k))},
-        "evidence": [e for e in run.evidence if e["id"] in used or e["id"].startswith(("ref:geonames", "ref:fao56"))],
+        "evidence": run.evidence,
         "calculations": run.calculations,
         "structured_output": structured,
     }

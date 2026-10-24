@@ -180,6 +180,24 @@ def fetch_soil(lat: float, lon: float) -> dict:
     return {"source": "ISRIC SoilGrids 2.0 (250 m, mean)", "depth": "0-30 cm thickness-weighted", "properties": result}
 
 
+# SoilGrids masks urban and water pixels; district points often fall in towns.
+SOIL_OFFSETS_DEG = ((0.0, 0.0), (0.05, 0.0), (-0.05, 0.0), (0.0, 0.05), (0.0, -0.05), (0.1, 0.1), (-0.1, -0.1))
+
+
+def fetch_soil_nearest_valid(lat: float, lon: float) -> dict:
+    last: dict = {}
+    for dlat, dlon in SOIL_OFFSETS_DEG:
+        record = fetch_soil(lat + dlat, lon + dlon)
+        values = [p.get("value_0_30cm") for p in record["properties"].values()]
+        if record["properties"] and all(v is not None for v in values):
+            record["sampled_offset_deg"] = [dlat, dlon]
+            return record
+        last = record
+        time.sleep(13)
+    last["sampled_offset_deg"] = None
+    return last
+
+
 def build(out: Path) -> dict:
     gazetteer = build_gazetteer()
     resolver = geography.Gazetteer(gazetteer)
@@ -201,7 +219,7 @@ def build(out: Path) -> dict:
             soil[key] = {"source": "ISRIC SoilGrids 2.0 (250 m, mean)", "error": "skipped after repeated SoilGrids failures"}
         else:
             try:
-                soil[key] = fetch_soil(match["latitude"], match["longitude"])
+                soil[key] = fetch_soil_nearest_valid(match["latitude"], match["longitude"])
                 soil_failures = 0
             except (RuntimeError, KeyError, ValueError) as exc:
                 soil_failures += 1

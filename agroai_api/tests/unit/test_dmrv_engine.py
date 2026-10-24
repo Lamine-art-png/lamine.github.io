@@ -292,3 +292,23 @@ def test_soil_test_ratings_follow_soil_health_card_classes():
 def test_area_selection_limits_categories():
     result = _run(areas=["irrigation", "sustainability"])
     assert {r["category"] for r in result["structured_output"]["recommendations"]} == {"irrigation", "sustainability"}
+
+
+def test_measured_soil_constants_are_cited_even_without_current_moisture():
+    result = _run(measurements={"soil_water": {"field_capacity_vwc_fraction": 0.31, "wilting_point_vwc_fraction": 0.12}})
+    assert any(e["id"] == "uat:soil_water" for e in result["evidence"])
+    seasonal = result["structured_output"]["recommendations"][0]
+    assert "uat:soil_water" in seasonal["evidence_ids"] and "supplied soil constants" in seasonal["action"]
+    assert any("current volumetric soil moisture" in m for m in result["structured_output"]["missing_data"])
+
+
+def test_without_root_depth_no_event_depth_is_invented():
+    result = _run(measurements={"soil_water": {"field_capacity_vwc_fraction": 0.30, "wilting_point_vwc_fraction": 0.13, "current_vwc_fraction": 0.19},
+                                "irrigation_system": {"efficiency": 0.6}, "field_area_ha": 1.5})
+    water = result["measured_soil_water"]
+    assert water["basis"] == "per_metre_of_root_zone" and water["root_zone_depth_m"] is None
+    assert water["trigger_reached"] is True and water["depletion_fraction"] == pytest.approx(0.11 / 0.17, abs=0.001)
+    assert "gross_refill_mm" not in water and "gross_refill_volume_m3" not in water
+    first = result["structured_output"]["recommendations"][0]["action"]
+    assert "per metre of effective root zone" in first and "m3" not in first
+    assert any("root_zone_depth_m" in m for m in result["structured_output"]["missing_data"])

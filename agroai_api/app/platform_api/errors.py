@@ -46,6 +46,9 @@ def error_response(request: Request, exc: HTTPException) -> JSONResponse:
             "resource",
             "limit",
             "included_credits",
+            # Public, customer-actionable DMRV details (gazetteer candidates and suggestions, supported crops).
+            "resolution",
+            "supported_crops",
         }
         payload = {key: value for key, value in exc.detail.items() if key in safe_keys}
         payload.setdefault("type", "request_error")

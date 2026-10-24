@@ -366,15 +366,16 @@ def test_dmrv_preview_http_contract_errors_isolation_and_zero_billing(client, db
 
     mismatch = client.post(route, headers=headers, json=_payload(location={"country": "IN", "state": "Uttar Pradesh", "district": "Aurangabad"}))
     assert mismatch.status_code == 422
-    detail = mismatch.json()["detail"]
-    assert detail["code"] == "location_state_mismatch"
-    assert {c["state"] for c in detail["resolution"]["candidates"]} == {"Bihar", "Maharashtra"}
+    error = mismatch.json()  # Platform API error envelope: top-level code/type/message/request_id
+    assert error["code"] == "location_state_mismatch" and error["type"] == "request_error"
+    assert {c["state"] for c in error["resolution"]["candidates"]} == {"Bihar", "Maharashtra"}
 
     unknown_crop = client.post(route, headers=headers, json=_payload(crop={"name": "quinoa"}))
-    assert unknown_crop.status_code == 422 and unknown_crop.json()["detail"]["code"] == "crop_not_supported"
+    assert unknown_crop.status_code == 422 and unknown_crop.json()["code"] == "crop_not_supported"
+    assert "wheat" in unknown_crop.json()["supported_crops"]
 
     production = client.post(route, headers=headers, json={**_payload(), "measurements": {"data_classification": "production"}})
-    assert production.status_code == 422
+    assert production.status_code == 422 and production.json()["code"] == "invalid_request"
     observations = client.post(route, headers=headers, json=_payload(observations=[{"type": "soil_vwc", "value": 0.2}]))
     assert observations.status_code == 422
 
