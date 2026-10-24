@@ -1,3 +1,9 @@
+import { fileURLToPath } from "url";
+import { join, dirname } from "path";
+
+// Absolute path to apps/velia-ai-api/src/storage/ — independent of process.cwd().
+const _storageDir = join(dirname(fileURLToPath(import.meta.url)), "storage");
+
 export function getConfig() {
   return {
     port: Number(process.env.PORT || 4310),
@@ -11,7 +17,7 @@ export function getConfig() {
     openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
 
     embeddingProvider: (process.env.EMBEDDING_PROVIDER || "mock").toLowerCase(),
-    geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004",
+    geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-2",
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
 
     weatherProvider: (process.env.WEATHER_PROVIDER || "mock").toLowerCase(),
@@ -20,9 +26,9 @@ export function getConfig() {
     translationProvider: process.env.TRANSLATION_PROVIDER || "mock",
     vectorProvider: (process.env.VECTOR_PROVIDER || "local").toLowerCase(),
     memoryProvider: (process.env.MEMORY_PROVIDER || "json").toLowerCase(),
-    memoryFile: process.env.MEMORY_FILE || "./src/storage/memory.json",
-    vectorIndexFile: process.env.VECTOR_INDEX_FILE || "./src/storage/vector-index.json",
-    weatherCacheFile: process.env.WEATHER_CACHE_FILE || "./src/storage/weather-cache.json",
+    memoryFile: process.env.MEMORY_FILE || join(_storageDir, "memory.json"),
+    vectorIndexFile: process.env.VECTOR_INDEX_FILE || join(_storageDir, "vector-index.json"),
+    weatherCacheFile: process.env.WEATHER_CACHE_FILE || join(_storageDir, "weather-cache.json"),
 
     providerTimeoutMs: Number(process.env.PROVIDER_TIMEOUT_MS || 12000),
     providerRetryCount: Number(process.env.PROVIDER_RETRY_COUNT || 2),

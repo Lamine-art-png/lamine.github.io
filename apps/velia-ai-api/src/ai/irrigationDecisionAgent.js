@@ -6,6 +6,7 @@ import { modelRouter } from "./modelRouter.js";
 import { createWeatherProvider } from "../services/weatherProviderFactory.js";
 import { buildNormalizedFieldContext, calculateDeterministicSignals, deterministicDecisionFromSignals } from "./deterministicIrrigation.js";
 import { decisionResponseSchema, normalizeDecisionResponse, parseDecisionJson, validateDecisionResponse } from "./decisionSchema.js";
+import { scoreEvidence } from "./confidenceEngine.js";
 
 const label = (score) => (score >= 0.75 ? "high" : score >= 0.5 ? "moderate" : "low");
 
@@ -164,14 +165,24 @@ ${first.text}`, {
 function mergeDecision({ modelDecision, fallbackDecision, signals, context, rag, modelResult, plannerTools }) {
   const merged = normalizeDecisionResponse(modelDecision, fallbackDecision);
   const guardrailsTriggered = [];
-  if (merged.action === "irrigate" && fallbackDecision.action !== "irrigate" && signals.needScore < 0.68) {
+
+  if (merged.action === "irrigate" && fallbackDecision.action !== "irrigate") {
     merged.action = fallbackDecision.action;
     merged.timing = fallbackDecision.timing;
     merged.urgency = fallbackDecision.urgency;
-    guardrailsTriggered.push("deterministic_layer_overrode_model_action");
+    guardrailsTriggered.push("deterministic_layer_overrode_model_irrigate");
+  }
+  const escalationAttempted = ["irrigate"].includes(merged.action) && !["irrigate"].includes(fallbackDecision.action);
+  if (escalationAttempted) {
+    guardrailsTriggered.push("model_escalation_blocked");
   }
 
-  const confidenceScore = Math.max(0.2, Math.min(0.95, signals.confidenceScore + (modelResult.fallbackUsed ? -0.04 : 0.03) + (rag.fallbackUsed ? -0.04 : 0)));
+  const evidenceScore = scoreEvidence(context);
+  const confidenceScore = Math.max(0.1, Math.min(0.95,
+    evidenceScore.confidenceScore
+    + (modelResult.fallbackUsed ? -0.04 : 0.03)
+    + (rag.fallbackUsed ? -0.04 : 0),
+  ));
   const weatherRisk = weatherRiskAgent.assess(context.weather);
   const decisionTimestamp = new Date().toISOString();
   const provenance = {
@@ -205,6 +216,15 @@ function mergeDecision({ modelDecision, fallbackDecision, signals, context, rag,
     risks: [...new Set([...(merged.risks || []), ...weatherRisk.risks])],
     confidenceScore,
     confidenceLabel: label(confidenceScore),
+    evidenceQuality: {
+      score: evidenceScore.confidenceScore,
+      label: evidenceScore.confidenceLabel,
+      evidenceChecked: evidenceScore.evidenceChecked,
+      missingEvidence: evidenceScore.missingEvidence,
+      conflictingEvidence: evidenceScore.conflictingEvidence,
+      explanation: evidenceScore.explanation,
+      improvementSuggestions: evidenceScore.improvementSuggestions,
+    },
     deterministicSignals: {
       needScore: Number(signals.needScore.toFixed(2)),
       estimatedWaterPressure: signals.estimatedWaterPressure,
@@ -223,7 +243,7 @@ function mergeDecision({ modelDecision, fallbackDecision, signals, context, rag,
       : merged.verificationPlan,
   };
 
-  const safeDecision = safetyGuardrails.enforce(finalDecision, { weather: context.weather, deterministicSignals: signals });
+  const safeDecision = safetyGuardrails.enforce(finalDecision, { weather: context.weather, deterministicSignals: signals, fieldContext: context });
   safeDecision.provenance = {
     ...safeDecision.provenance,
     guardrailsTriggered: safeDecision.guardrailsTriggered || [],

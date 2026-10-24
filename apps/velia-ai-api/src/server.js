@@ -1,4 +1,10 @@
+import { loadDotenv } from "./loadEnv.js";
 import http from "http";
+
+// Populate process.env from .env before any config property is first accessed.
+// loadEnv.js does not auto-run; this explicit await makes the init sequence observable.
+await loadDotenv();
+
 import { config } from "./config.js";
 import { aiOrchestrator } from "./ai/aiOrchestrator.js";
 import { memoryStore } from "./ai/memoryStore.js";
@@ -64,7 +70,7 @@ function readJson(req) {
   });
 }
 
-function createFallbackApp() {
+export function createFallbackApp() {
   return async function fallbackApp(req, res) {
     const requestId = `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const url = new URL(req.url, "http://localhost");
@@ -154,9 +160,10 @@ function createFallbackApp() {
   };
 }
 
-async function createApp() {
+// createExpressFn is injectable for tests: pass a factory that throws to force native fallback.
+export async function createApp(createExpressFn = createExpressApp) {
   try {
-    return await createExpressApp();
+    return await createExpressFn();
   } catch (error) {
     console.warn(JSON.stringify({ level: "warn", msg: "Express dependencies unavailable; using Node fallback app", reason: error.code || error.message }));
     return createFallbackApp();

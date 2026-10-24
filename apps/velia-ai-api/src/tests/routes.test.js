@@ -7,10 +7,23 @@ const { app } = await import("../server.js");
 
 function invokeApp(method, path, body = null) {
   return new Promise((resolve, reject) => {
+    // Serialize body first so we can set content-length before creating the stream.
+    // Express body-parser requires content-length to parse a pre-ended PassThrough
+    // stream (it does not read until EOF from a stream that lacks transfer-encoding).
+    const bodyStr = body ? JSON.stringify(body) : null;
+
     const req = new PassThrough();
     req.method = method;
     req.url = path;
-    req.headers = { "content-type": "application/json" };
+    req.headers = {
+      "content-type": "application/json",
+      ...(bodyStr ? { "content-length": String(Buffer.byteLength(bodyStr)) } : {}),
+    };
+    // Express's setPrototypeOf(req, IncomingMessage) later calls eos(socket) in
+    // _destroy — eos requires instanceof Stream, so socket must be a real stream.
+    const socketMock = new PassThrough();
+    socketMock.remoteAddress = "127.0.0.1";
+    req.socket = socketMock;
 
     const chunks = [];
     const res = new Writable({
@@ -29,15 +42,20 @@ function invokeApp(method, path, body = null) {
       res.headers[key.toLowerCase()] = value;
     };
     res.getHeader = (key) => res.headers[key.toLowerCase()];
+    res.status = (code) => { res.statusCode = code; return res; };
+    res.json = (obj) => { res.end(JSON.stringify(obj)); };
     res.end = (chunk) => {
       if (chunk) chunks.push(Buffer.from(chunk));
       const text = Buffer.concat(chunks).toString("utf8");
       resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null });
     };
 
-    Promise.resolve(app(req, res)).catch(reject);
-    if (body) req.end(JSON.stringify(body));
+    // Write body before calling app — Express's setPrototypeOf replaces the
+    // PassThrough prototype chain (removing Writable methods like end()),
+    // so we must write/end the stream before handing it to Express.
+    if (bodyStr) req.end(bodyStr);
     else req.end();
+    Promise.resolve(app(req, res)).catch(reject);
   });
 }
 
