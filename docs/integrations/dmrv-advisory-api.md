@@ -30,7 +30,8 @@ production agreement is in place.
 3. **Soil** — ISRIC SoilGrids 2.0 (CC BY 4.0) 0–30 cm predictions at the
    district point give texture class, pH, organic carbon, nitrogen and CEC.
    FAO-56 Table 19 gives a total/readily available water range. These values are
-   labelled regional estimates.
+   labelled regional estimates. If the district pixel is masked (for example
+   urban), the nearest valid point within 0.1° is used and the offset is disclosed.
 4. **Crop** — Cited FAO-56 crop coefficients (Table 12), stage lengths
    (Table 11), rooting depth and depletion fraction (Table 22) for wheat, rice,
    maize, cotton, sugarcane, soybean, chickpea, potato and tomato. Common local

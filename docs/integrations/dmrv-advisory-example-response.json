@@ -39,7 +39,7 @@
     }
   },
   "response": {
-    "id": "uat_1c0bb3c17f7361ae88dbad02",
+    "id": "uat_1c79f2c0e826bb3b11af4836",
     "object": "agroai.dmrv_advisory.preview",
     "contract_version": "dmrv-uat/2",
     "status": "simulated",
@@ -55,8 +55,8 @@
     "engine_version": "dmrv-engine/2",
     "reference_dataset": {
       "version": "1",
-      "generated_at": "2026-10-24T12:35:53+00:00",
-      "sha256": "242fcb066e696809d7313a9c78b4fc9f0dbec2605838b74f59c63c7fff0397a9"
+      "generated_at": "2026-10-24T13:05:55+00:00",
+      "sha256": "c6bc362ffc50e2099a2e4b3b4db516d961fdbf521a5c003fde5e6232cae9883e"
     },
     "normalized_context": {
       "country": "IN",
@@ -518,7 +518,7 @@
         "type": "administrative_location",
         "source": "GeoNames",
         "license": "CC BY 4.0",
-        "dataset_generated_at": "2026-10-24T12:35:53+00:00",
+        "dataset_generated_at": "2026-10-24T13:05:55+00:00",
         "summary": "Gautam Buddha Nagar, Uttar Pradesh, IN (representative point 28.359, 77.551)",
         "precision": "administrative_representative_point"
       },
@@ -535,7 +535,7 @@
         "type": "climate_normals",
         "source": "NASA POWER daily (AG community), monthly means of daily values 2004-2023",
         "license": "NASA open data; attribution requested",
-        "dataset_generated_at": "2026-10-24T12:35:53+00:00",
+        "dataset_generated_at": "2026-10-24T13:05:55+00:00",
         "summary": "Monthly means of daily values, 2004-2023, at grid point 28.359, 77.551",
         "precision": "MERRA-2 0.5 x 0.625 degree meteorology and CERES 1 degree solar grids; long-term monthly means, not observed weather"
       },
@@ -544,7 +544,7 @@
         "type": "regional_soil_estimate",
         "source": "ISRIC SoilGrids 2.0 (250 m, mean)",
         "license": "CC BY 4.0",
-        "dataset_generated_at": "2026-10-24T12:35:53+00:00",
+        "dataset_generated_at": "2026-10-24T13:05:55+00:00",
         "summary": "Predicted 0-30 cm topsoil properties at the district representative point",
         "precision": "250 m digital soil map prediction at one point; not a field measurement"
       },
@@ -1317,7 +1317,7 @@
         "uat:soil_test"
       ],
       "source": "agroai_reference_data_and_scientific_tools",
-      "reference_dataset_sha256": "242fcb066e696809d7313a9c78b4fc9f0dbec2605838b74f59c63c7fff0397a9",
+      "reference_dataset_sha256": "c6bc362ffc50e2099a2e4b3b4db516d961fdbf521a5c003fde5e6232cae9883e",
       "customer_field_data_used": false,
       "uat_measurements_used": true
     }

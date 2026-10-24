@@ -99,3 +99,15 @@ def test_crop_without_a_local_season_reports_the_gap_instead_of_inventing_a_cale
     assert result["structured_output"]["confidence"] == "low"
     seasonal = _analysis("Rajshahi", "Bogra", "cotton", country="BD", season="kharif")
     assert seasonal["water_balance"]["season_etc_mm"] > 0
+
+
+def test_every_precomputed_district_has_complete_soil_with_disclosed_sampling():
+    for key, record in DATA["soil"].items():
+        assert "error" not in record, key
+        assert all(p["value_0_30cm"] is not None for p in record["properties"].values()), key
+        offset = record["sampled_offset_deg"]
+        assert offset is not None and max(abs(offset[0]), abs(offset[1])) <= 0.1, key
+    shifted = next(k for k, r in DATA["soil"].items() if any(r["sampled_offset_deg"]))
+    country, state, district = _district(shifted)
+    evidence = {e["id"]: e for e in _analysis(state, district, "wheat", country=country)["evidence"]}
+    assert "masked" in evidence[f"ref:soilgrids:{shifted}"]["precision"]
