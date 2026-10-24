@@ -60,6 +60,51 @@ def test_account_security_returns_verification_state(client, db):
     assert body["two_factor"]["status"] == "not_available_yet"
 
 
+
+def test_authenticated_customer_can_change_password_and_keep_current_browser_signed_in(client, db):
+    email = "password-change@example.com"
+    headers = _register_and_login(client, db, email)
+    old_token = headers["Authorization"].split(" ", 1)[1]
+
+    wrong = client.post(
+        "/v1/auth/change-password",
+        headers=headers,
+        json={
+            "current_password": "wrong-password",
+            "new_password": "A-new-strong-password-2026",
+            "confirm_password": "A-new-strong-password-2026",
+        },
+    )
+    assert wrong.status_code == 400
+    assert wrong.json()["detail"]["code"] == "current_password_incorrect"
+
+    changed = client.post(
+        "/v1/auth/change-password",
+        headers=headers,
+        json={
+            "current_password": "strong-password",
+            "new_password": "A-new-strong-password-2026",
+            "confirm_password": "A-new-strong-password-2026",
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    body = changed.json()
+    assert body["status"] == "password_changed"
+    new_token = body["access_token"]
+    assert new_token and new_token != old_token
+
+    # Every older session is invalid after the credential change.
+    old_session = client.get("/v1/account/security", headers={"Authorization": f"Bearer {old_token}"})
+    assert old_session.status_code == 401
+
+    # The fresh token returned by the same request keeps this browser signed in.
+    current_session = client.get("/v1/account/security", headers={"Authorization": f"Bearer {new_token}"})
+    assert current_session.status_code == 200
+
+    assert client.post("/v1/auth/login", json={"email": email, "password": "strong-password"}).status_code == 401
+    assert client.post("/v1/auth/login", json={"email": email, "password": "A-new-strong-password-2026"}).status_code == 200
+
+
 def test_billing_summary_returns_current_plan_without_customer_debug(client, db):
     headers = _register_and_login(client, db, "billing-summary-v21@example.com")
     response = client.get("/v1/billing/summary", headers=headers)
