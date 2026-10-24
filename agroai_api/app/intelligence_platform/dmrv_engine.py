@@ -335,6 +335,7 @@ def _soil_reference(reference: ReferenceData, run: _Run, geo: dict[str, Any], cr
             "root_zone_depth_m": crop.root_depth_m[1]}, "Total available water, upper bound (texture class, deep root zone)")
         if low and high:
             taw_range = (low["total_available_water_mm"], high["total_available_water_mm"], low["id"], high["id"])
+        if taw_range and not crop.p_relative_to_saturation:
             raw_low = run.tool("soil.readily_available_water.v1", {"total_available_water_mm": taw_range[0], "management_allowable_depletion_fraction": crop.depletion_fraction_p}, "Readily available water, lower bound (FAO-56 p)")
             raw_high = run.tool("soil.readily_available_water.v1", {"total_available_water_mm": taw_range[1], "management_allowable_depletion_fraction": crop.depletion_fraction_p}, "Readily available water, upper bound (FAO-56 p)")
             if raw_low and raw_high:
@@ -375,6 +376,14 @@ def _measured_soil_water(run: _Run, crop: cwp.CropWaterParameters, m: dict[str, 
         "wilting_point_vwc_fraction": water["wilting_point_vwc_fraction"], "root_zone_depth_m": basis_depth}, "Total available water from supplied soil constants" + per)
     if not taw:
         raise DmrvInputError("measurement_invalid", "Supplied field capacity must exceed wilting point.", field="measurements.soil_water")
+    if crop.p_relative_to_saturation:
+        # FAO-56 Table 22 p for paddy is relative to saturation, not to FC-WP storage:
+        # applying it here would give a wrong trigger and refill, so none is given.
+        run.need("paddy water depth from field water tubes (or saturation-based soil water) for a paddy irrigation decision")
+        run.limit("Paddy depletion fraction is defined relative to saturation; no field-capacity-based trigger or refill is computed for rice.")
+        return {"evidence_id": evidence_id, "root_zone_depth_m": depth, "basis": "per_metre_of_root_zone" if not depth else "measured_root_zone",
+                "taw_mm": _round(taw["total_available_water_mm"]), "raw_mm": None, "trigger_withheld": "paddy_saturation_basis",
+                "calcs": [taw["id"]]}
     raw = run.tool("soil.readily_available_water.v1", {"total_available_water_mm": taw["total_available_water_mm"],
                    "management_allowable_depletion_fraction": crop.depletion_fraction_p}, "Readily available water (FAO-56 p)" + per)
     result = {"evidence_id": evidence_id, "root_zone_depth_m": depth, "basis": "measured_root_zone" if depth else "per_metre_of_root_zone",

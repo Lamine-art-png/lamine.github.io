@@ -312,3 +312,19 @@ def test_without_root_depth_no_event_depth_is_invented():
     first = result["structured_output"]["recommendations"][0]["action"]
     assert "per metre of effective root zone" in first and "m3" not in first
     assert any("root_zone_depth_m" in m for m in result["structured_output"]["missing_data"])
+
+
+def test_paddy_trigger_is_withheld_because_fao56_p_is_saturation_based():
+    measurements = {"soil_water": {"field_capacity_vwc_fraction": 0.40, "wilting_point_vwc_fraction": 0.20, "current_vwc_fraction": 0.40},
+                    "irrigation_system": {"efficiency": 0.7}, "field_area_ha": 1.0, "root_zone_depth_m": 0.5}
+    result = _run(crop_name="rice", measurements=measurements)
+    water = result["measured_soil_water"]
+    assert water["trigger_withheld"] == "paddy_saturation_basis" and water["raw_mm"] is None
+    assert "trigger_reached" not in water and "gross_refill_mm" not in water
+    text = _all_text(result)
+    assert "Irrigation trigger reached" not in text and "No irrigation needed yet" not in text
+    assert "Readily available water" not in text
+    assert any("paddy water depth" in m for m in result["structured_output"]["missing_data"])
+    assert not any(c["tool_id"] == "soil.readily_available_water.v1" for c in result["calculations"])
+    # Non-paddy crops keep the FC-based trigger.
+    assert _run(crop_name="maize", measurements=measurements)["measured_soil_water"]["trigger_reached"] is False

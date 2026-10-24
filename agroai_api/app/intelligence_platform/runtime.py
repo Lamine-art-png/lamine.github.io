@@ -188,6 +188,22 @@ def dmrv_grounding_for_context(context: dict[str, Any]) -> dict[str, Any]:
 DMRV_SECTION_MAX_CHARS = 9_000
 
 
+def dmrv_sources(grounding: dict[str, Any], citable_ids: set[str]) -> list[dict[str, Any]]:
+    """Provenance records for every citable grounding id: evidence and the calculations behind cited quantities."""
+    sources = [
+        {"id": item["id"], "type": item["type"], "title": str(item.get("summary") or item["source"])[:200],
+         "origin": "agroai_reference_data", "source": item.get("source"), "license": item.get("license"),
+         "precision": item.get("precision")}
+        for item in grounding["evidence"]
+    ]
+    sources += [
+        {"id": calc["id"], "type": "calculation", "title": calc["label"][:200], "origin": "agroai_scientific_tool",
+         "tool_id": calc["tool_id"], "tool_version": calc["tool_version"], "inputs": calc["inputs"], "output": calc["output"]}
+        for calc in grounding["calculations"] if calc["id"] in citable_ids
+    ]
+    return sources
+
+
 def _dmrv_section(grounding: dict[str, Any]) -> tuple[str, set[str]]:
     """Compact, citable projection of the engine output for the model's data window."""
     structured = grounding["structured_output"]
@@ -435,9 +451,7 @@ async def prepare(
         section, ids = _dmrv_section(resolved.dmrv_grounding)
         sections.append((section, ids))
         prepared.known_ids |= ids
-        for item in resolved.dmrv_grounding["evidence"]:
-            prepared.sources.append({"id": item["id"], "type": item["type"], "title": str(item.get("summary") or item["source"])[:200],
-                                     "origin": "agroai_reference_data", "source": item.get("source"), "license": item.get("license")})
+        prepared.sources.extend(dmrv_sources(resolved.dmrv_grounding, ids))
         prepared.limitations.extend(resolved.dmrv_grounding["structured_output"]["limitations"][:5])
 
     # 2. Files: document text excerpts and image analyses.

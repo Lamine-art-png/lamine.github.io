@@ -40,6 +40,7 @@ class CropWaterParameters:
     heat_threshold_source: str | None = None
     typical_seasons: dict[str, tuple[str, ...]] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
+    p_relative_to_saturation: bool = False  # FAO-56 Table 22 paddy convention
 
     @property
     def season_length_days(self) -> int | None:
@@ -69,6 +70,7 @@ CROPS: tuple[CropWaterParameters, ...] = (
         notes=("Kc end shown is the mid-point of the FAO-56 range 0.90-0.60.",
                "Crop ET excludes land preparation, puddling, standing-water and percolation losses.",
                "Depletion fraction p is relative to saturation for paddy."),
+        p_relative_to_saturation=True,
     ),
     CropWaterParameters(
         crop_id="maize", display_name="Maize (grain)", aliases=("maize", "corn", "makka", "makki", "bhutta"), family="cereal",

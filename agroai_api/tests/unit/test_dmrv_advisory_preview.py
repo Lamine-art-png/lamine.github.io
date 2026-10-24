@@ -395,6 +395,11 @@ def test_live_dmrv_grounding_is_computed_before_charge_and_is_citable(db, monkey
     assert len(section) <= intelligence_runtime.DMRV_SECTION_MAX_CHARS + len("DMRV_GROUNDING ")
     cited = {e for rec in grounding["structured_output"]["recommendations"] for e in rec["evidence_ids"]}
     assert cited <= ids
+    # Every citable id resolves to a returned provenance record, including calculations.
+    sources = {item["id"]: item for item in intelligence_runtime.dmrv_sources(grounding, ids)}
+    assert ids <= set(sources)
+    calc_ids = {i for i in cited if i.startswith("calc:")}
+    assert calc_ids and all(sources[i]["tool_id"] and sources[i]["tool_version"] and sources[i]["output"] for i in calc_ids)
     assert "dmrv_grounding" not in json.dumps(grounding)  # no recursive embedding
 
     for context, code in (
