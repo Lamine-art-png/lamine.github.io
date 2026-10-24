@@ -88,6 +88,15 @@ async def lifespan(app: FastAPI):
     schema_status = saas_portal_schema_status()
     if not schema_status["ready"]:
         logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
+    # Configuration-only deployment proof; never log tenant IDs or API secrets.
+    logger.info(
+        "DMRV TEST release configuration: preview_enabled=%s test_projects_enabled=%s original_allowlist_count=%s additive_allowlist_count=%s live_dmrv_enabled=%s",
+        bool(settings.PLATFORM_API_DMRV_PREVIEW_ENABLED),
+        bool(settings.PLATFORM_API_TEST_PROJECTS_ENABLED),
+        len({x.strip() for x in str(settings.PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS or "").split(",") if x.strip()}),
+        len({x.strip() for x in str(settings.PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS or "").split(",") if x.strip()}),
+        bool(settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED),
+    )
     # Reconcile outstanding TEST applications on deploy. This also processes
     # customers who applied before automatic decisions were introduced.
     # Startup stays safe if production schema/configuration is unavailable.
