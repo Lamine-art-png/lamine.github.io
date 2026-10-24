@@ -71,16 +71,16 @@ TARGETS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def _get(url: str, *, attempts: int = 4, timeout: int = 90) -> bytes:
+def _get(url: str, *, attempts: int = 3, timeout: int = 60, backoff: int = 10) -> bytes:
     last: Exception | None = None
     for attempt in range(attempts):
         try:
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json, */*"})
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.read()
-        except (urllib.error.URLError, TimeoutError) as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
             last = exc
-            time.sleep(15 * (attempt + 1))
+            time.sleep(backoff * (attempt + 1))
     raise RuntimeError(f"fetch failed after {attempts} attempts: {url}") from last
 
 
@@ -150,7 +150,7 @@ def fetch_climate(lat: float, lon: float) -> dict:
 def fetch_soil(lat: float, lon: float) -> dict:
     params = [("lon", f"{lon:.4f}"), ("lat", f"{lat:.4f}"), ("value", "mean")]
     params += [("property", name) for name in SOIL_PROPERTIES] + [("depth", label) for label, _w in SOIL_DEPTHS]
-    body = json.loads(_get(f"{SOILGRIDS_URL}?{urllib.parse.urlencode(params)}"))
+    body = json.loads(_get(f"{SOILGRIDS_URL}?{urllib.parse.urlencode(params)}", attempts=2, timeout=30, backoff=15))
     result: dict[str, dict] = {}
     for layer in body.get("properties", {}).get("layers", []):
         factor = float((layer.get("unit_measure") or {}).get("d_factor") or 1)
@@ -173,18 +173,30 @@ def build(out: Path) -> dict:
     gazetteer = build_gazetteer()
     resolver = geography.Gazetteer(gazetteer)
     climate, soil, unresolved = {}, {}, []
+    soil_failures = 0
+    print(f"gazetteer: {sum(len(c['districts']) for c in gazetteer.values())} districts", flush=True)
     for country, state, district in TARGETS:
         match = resolver.resolve(country, state, district)
         if match["status"] != "resolved":
             unresolved.append({"target": [country, state, district], "result": match})
+            print(f"unresolved {country}/{state}/{district}: {match['status']}", flush=True)
             continue
         key = str(match["geoname_id"])
-        climate[key] = fetch_climate(match["latitude"], match["longitude"])
         try:
-            soil[key] = fetch_soil(match["latitude"], match["longitude"])
-        except RuntimeError as exc:
-            soil[key] = {"source": "ISRIC SoilGrids 2.0 (250 m, mean)", "error": str(exc)[:200]}
-        time.sleep(13)  # SoilGrids fair-use limit: 5 requests per minute.
+            climate[key] = fetch_climate(match["latitude"], match["longitude"])
+        except (RuntimeError, KeyError, ValueError) as exc:
+            print(f"climate failed {district}: {exc}", flush=True)
+        if soil_failures >= 3:
+            soil[key] = {"source": "ISRIC SoilGrids 2.0 (250 m, mean)", "error": "skipped after repeated SoilGrids failures"}
+        else:
+            try:
+                soil[key] = fetch_soil(match["latitude"], match["longitude"])
+                soil_failures = 0
+            except (RuntimeError, KeyError, ValueError) as exc:
+                soil_failures += 1
+                soil[key] = {"source": "ISRIC SoilGrids 2.0 (250 m, mean)", "error": str(exc)[:200]}
+            time.sleep(13)  # SoilGrids fair-use limit: 5 requests per minute.
+        print(f"done {country}/{state}/{district} climate={key in climate} soil={'error' not in soil.get(key, {})}", flush=True)
     data = {
         "dataset": "agroai-dmrv-reference",
         "version": "1",
