@@ -1,0 +1,59 @@
+name: Adaptive backend diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime and tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r agroai_api/requirements.txt
+          python -m pip install pytest==7.4.4 pytest-asyncio==0.23.3 pytest-mock==3.12.0
+      - name: Compile
+        run: python -m py_compile $(find agroai_api/app agroai_api/alembic -name '*.py')
+      - name: Import app
+        working-directory: agroai_api
+        env:
+          ENABLE_SCHEDULER: 'false'
+          DATABASE_URL: sqlite:///./ci-import.db
+        run: python -c "from app.main import app; print('import ok', app.title)"
+      - name: Alembic heads
+        working-directory: agroai_api
+        run: alembic heads
+      - name: Fresh migration smoke
+        working-directory: agroai_api
+        env:
+          ENABLE_SCHEDULER: 'false'
+          DATABASE_URL: sqlite:///./ci-migration.db
+        run: alembic upgrade head
+      - name: AI foundation tests
+        shell: bash
+        run: |
+          if [[ -f agroai_api/tests/unit/test_ai_foundation.py ]]; then
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging agroai_api/tests/unit/test_ai_foundation.py -q
+          fi
+      - name: Intelligence core tests
+        shell: bash
+        run: |
+          if [[ -f agroai_api/tests/unit/test_intelligence_core.py ]]; then
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging agroai_api/tests/unit/test_intelligence_core.py -q
+          fi
+      - name: Product shell tests
+        shell: bash
+        run: |
+          if [[ -f agroai_api/tests/unit/test_product_shell.py ]]; then
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging agroai_api/tests/unit/test_product_shell.py -q
+          fi
