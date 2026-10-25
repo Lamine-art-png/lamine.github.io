@@ -41,6 +41,7 @@ ROUTE_MANIFEST: tuple[RouteSurface, ...] = (
     RouteSurface("GET", "/v1/platform/observations", "platform_api_resource", "platform_api_key", ("observations:read",), True),
     RouteSurface("POST", "/v1/platform/recommendations", "platform_api_resource", "platform_api_key", ("recommendations:write",), True, True),
     RouteSurface("GET", "/v1/platform/recommendations", "platform_api_resource", "platform_api_key", ("recommendations:read",), True),
+    RouteSurface("POST", "/v1/platform/recommendations/preview", "platform_api_resource", "platform_api_key", ("recommendations:read",), False),
     RouteSurface("GET", "/v1/platform/recommendations/{recommendation_id}", "platform_api_resource", "platform_api_key", ("recommendations:read",), True),
     RouteSurface("POST", "/v1/platform/reports", "platform_api_resource", "platform_api_key", ("reports:write",), True, True),
     RouteSurface("GET", "/v1/platform/reports", "platform_api_resource", "platform_api_key", ("reports:read",), True),

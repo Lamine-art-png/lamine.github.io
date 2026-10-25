@@ -1,0 +1,117 @@
+name: DMRV UAT activation
+
+# Verifies (read-only) or activates the TEST-only DMRV UAT preview for one
+# organization. Never enables LIVE projects, LIVE dmrv_advisory, billing,
+# invoice credits, webhooks or physical execution. Prints booleans only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify (read-only) or activate"
+        required: true
+        default: verify
+        type: choice
+        options: [verify, activate]
+      organization_id:
+        description: "AGRO-AI organization id to allowlist (activate) or check (verify)"
+        required: true
+        type: string
+      confirmation:
+        description: "For activate, type ACTIVATE_DMRV_UAT_TEST_ONLY exactly"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  API_BASE: https://api.agroai-pilot.com
+
+jobs:
+  dmrv-uat:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: dmrv-uat-activation
+      cancel-in-progress: false
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SERVICE_ID: ${{ vars.PRODUCTION_API_SERVICE_ID }}
+      ORG_ID: ${{ inputs.organization_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse stale, non-main or unconfirmed runs
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Must run from main" >&2; exit 1; }
+          git fetch origin main --depth=1
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || { echo "Workflow SHA is not current main" >&2; exit 1; }
+          [[ "$ORG_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "organization_id must be a UUID" >&2; exit 1; }
+          if [[ "${{ inputs.mode }}" == "activate" ]]; then
+            [[ "${{ inputs.confirmation }}" == "ACTIVATE_DMRV_UAT_TEST_ONLY" ]] || { echo "Exact confirmation phrase missing" >&2; exit 1; }
+          fi
+          [[ -n "${RENDER_API_KEY:-}" && -n "${SERVICE_ID:-}" ]] || { echo "RENDER_API_KEY and PRODUCTION_API_SERVICE_ID are required" >&2; exit 1; }
+
+      - name: Activate TEST-only preview for the organization
+        if: inputs.mode == 'activate'
+        run: |
+          set -euo pipefail
+          get_env() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" | jq -r '.value // empty' || true; }
+          put_env() {
+            curl --fail-with-body --silent --show-error -X PUT \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+              --data "$(jq -nc --arg value "$2" '{value:$value}')" \
+              "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" >/dev/null
+          }
+          [[ "$(get_env PLATFORM_API_TEST_PROJECTS_ENABLED)" == "true" ]] || { echo "TEST projects are not enabled; refusing" >&2; exit 1; }
+          current="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
+          merged="$(printf '%s,%s' "$current" "$ORG_ID" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -E '.' | sort -u | paste -sd, -)"
+          put_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS "$merged"
+          put_env PLATFORM_API_DMRV_PREVIEW_ENABLED true
+
+      - name: Deploy exact main SHA
+        if: inputs.mode == 'activate'
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" | jq -e '.id != null' >/dev/null
+          for attempt in $(seq 1 120); do
+            body="$(curl -sS --max-time 15 "$API_BASE/v1/health" || true)"
+            [[ "$(jq -r '.build_sha // empty' <<<"$body" 2>/dev/null || true)" == "$GITHUB_SHA" ]] && exit 0
+            sleep 5
+          done
+          echo "Backend did not reach exact SHA $GITHUB_SHA" >&2
+          exit 1
+
+      - name: Verify flags (booleans only) and live routing
+        run: |
+          set -euo pipefail
+          get_env() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" | jq -r '.value // empty' || true; }
+          flag() { [[ "$(get_env "$1")" == "true" ]] && echo true || echo false; }
+          allow="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
+          allowlisted=false; [[ ",${allow// /}," == *",$ORG_ID,"* ]] && allowlisted=true
+          health="$(curl -sS --max-time 15 "$API_BASE/v1/health")"
+          preview_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"context":{"location":{"country":"IN","state":"Uttar Pradesh","district":"Gautam Buddha Nagar"},"crop":{"name":"wheat"}}}' "$API_BASE/v1/platform/recommendations/preview")"
+          {
+            echo "### DMRV UAT state"
+            echo "- deployed build_sha: $(jq -r .build_sha <<<"$health") (main: $GITHUB_SHA)"
+            echo "- PLATFORM_API_ENABLED: $(flag PLATFORM_API_ENABLED)"
+            echo "- PLATFORM_API_TEST_PROJECTS_ENABLED: $(flag PLATFORM_API_TEST_PROJECTS_ENABLED)"
+            echo "- PLATFORM_API_DMRV_PREVIEW_ENABLED: $(flag PLATFORM_API_DMRV_PREVIEW_ENABLED)"
+            echo "- organization allowlisted for preview: $allowlisted"
+            echo "- INTELLIGENCE_DMRV_ADVISORY_ENABLED (LIVE schema): $(flag INTELLIGENCE_DMRV_ADVISORY_ENABLED)"
+            echo "- INTELLIGENCE_INVOICE_CREDITS_ENABLED: $(flag INTELLIGENCE_INVOICE_CREDITS_ENABLED)"
+            echo "- PLATFORM_API_LIVE_PROJECTS_ENABLED: $(flag PLATFORM_API_LIVE_PROJECTS_ENABLED)"
+            echo "- unauthenticated preview POST status (route mounted => 401): $preview_status"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ inputs.mode }}" == "activate" ]]; then
+            [[ "$(flag PLATFORM_API_DMRV_PREVIEW_ENABLED)" == "true" && "$allowlisted" == "true" ]] || { echo "Activation not reflected" >&2; exit 1; }
+            [[ "$(jq -r .build_sha <<<"$health")" == "$GITHUB_SHA" ]] || { echo "Deployed SHA mismatch" >&2; exit 1; }
+            [[ "$preview_status" == "401" ]] || { echo "Preview route not mounted as expected" >&2; exit 1; }
+          fi

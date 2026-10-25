@@ -101,7 +101,7 @@ result.structured_output   # validated against the diagnosis schema
 Built-in schemas (`GET /v1/intelligence/schemas/{name}` for the full JSON
 Schema): `diagnosis`, `recommendations`, `risk_assessment`,
 `irrigation_schedule`, `financial_projection`, `compliance_findings`,
-`task_list`, `evidence_summary`.
+`task_list`, `evidence_summary`, `dmrv_advisory`.
 
 Your own schema: `{"type": "json_schema", "name": "lender_summary", "schema": {...}}`
 — JSON Schema draft 2020-12, root `type: object`, ≤ 32 KB, ≤ 12 levels.
@@ -159,6 +159,51 @@ AGRO-AI prefixes (`tool_`, `ctx_obs_`, `chunk_`, `file_`, `doc_`, `ses_`,
 window, whole items are left out: they are marked `omitted_from_analysis` in
 provenance and cannot be cited. Bounds: 256 KB per context, finite numbers, physical
 ranges (e.g. latitude ±90, pH 0–14) enforced.
+
+### Agricultural DMRV advisory (separate LIVE approval required)
+
+The `dmrv_advisory` structured response schema supports advisory recommendations
+for irrigation, nutrients, soil, field monitoring and sustainability. It
+requires country (uppercase two-letter ISO code), state/region, district and
+crop name in the typed agricultural context. Missing selectors are rejected
+before any model work or wallet charge. Optional weather, soil, evidence and
+crop-stage information improve grounding; place names alone do not establish
+site-specific truth.
+
+```json
+{
+  "task": "decision",
+  "question": "Provide evidence-supported crop management and sustainability monitoring recommendations. Explicitly identify missing information and do not invent local weather, fertilizer doses, irrigation volumes, or climate impact.",
+  "context": {
+    "location": {
+      "country": "IN",
+      "state": "Uttar Pradesh",
+      "district": "Gautam Buddha Nagar"
+    },
+    "crop": {"name": "wheat", "growth_stage": "vegetative"}
+  },
+  "response_format": {"type": "agroai_schema", "name": "dmrv_advisory"}
+}
+```
+
+The response schema includes a recommendation category, action, rationale,
+priority, human-approval requirement, evidence ids and missing evidence.
+Evidence ids are validated against supplied sources. The answer may be degraded
+when evidence or model quality is insufficient. Before any charge, the location
+is resolved against the GeoNames-derived gazetteer (unresolvable or mismatched
+districts and unsupported crops are rejected with 422). The deterministic DMRV
+engine (`app/intelligence_platform/dmrv_engine.py`) then adds a cited
+`DMRV_GROUNDING` data section: district climate normals with FAO-56 ET₀/ETc,
+SoilGrids topsoil context, the FAO-56 crop calendar and any field soil
+constants supplied in `context.field`. A resolved district is an administrative
+point, not geocoded field evidence. Carbon credits or impact claims require a
+separate approved methodology and verification.
+
+A separate, non-billable `POST /v1/platform/recommendations/preview` endpoint
+(TEST keys only, per-organization allowlist) returns the same deterministic
+engine output without a model. Optional measurements must be declared synthetic.
+It cannot invoke LIVE inference, operate equipment or bill a wallet. See
+`docs/integrations/dmrv-advisory-api.md` for the contract (`dmrv-uat/2`).
 
 ## 5. Files and multimodal input
 

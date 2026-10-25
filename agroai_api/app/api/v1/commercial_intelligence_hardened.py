@@ -313,6 +313,19 @@ class AdmitOutcome:
     retry_failed_run_id: str | None = None
 
 
+def _provider_usage(model_result: Any) -> dict[str, float]:
+    """Token and cost counters the provider reported for the analysis call, if any."""
+    raw = getattr(model_result, "raw", None)
+    usage = raw.get("usage") if isinstance(raw, dict) else None
+    if not isinstance(usage, dict):
+        return {}
+    return {
+        key: usage[key]
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cost")
+        if isinstance(usage.get(key), (int, float)) and not isinstance(usage.get(key), bool)
+    }
+
+
 async def _emit(progress: Callable[[str, dict[str, Any]], Awaitable[None]] | None, event: str, data: dict[str, Any]) -> None:
     if progress is not None:
         try:
@@ -420,6 +433,12 @@ def _admit_paid_run(
     # Fast fail before spending provider compute. The final debit is rechecked
     # under a row lock after successful inference to handle concurrent requests.
     wallet = legacy._wallet(db, principal.organization_id)
+    if int(wallet.balance_cents) < price_cents:
+        # A Checkout paid moments ago may not be posted yet (wallet credit is
+        # reconciled from Stripe, not pushed). Reconcile pending top-ups once
+        # before refusing; this calls Stripe only when a pending top-up exists.
+        _sync_pending_topups(db, principal.organization_id)
+        wallet = legacy._wallet(db, principal.organization_id)
     if int(wallet.balance_cents) < price_cents:
         db.rollback()
         raise HTTPException(
@@ -734,6 +753,9 @@ async def _complete_paid_run(
         + language_instruction
     )
 
+    if admitted.resolved.schema is not None and admitted.resolved.schema[0] == "dmrv_advisory":
+        instruction += "\n" + platform_runtime.DMRV_ADVISORY_POLICY
+
     try:
         await _emit(progress, "run.started", {"id": run_id, "task": payload.task, "price_cents": price_cents})
         prepared = await platform_runtime.prepare(db, admitted.scope or principal, payload, admitted.resolved, context)
@@ -777,6 +799,7 @@ async def _complete_paid_run(
                 question=payload.question,
                 schema_name=admitted.resolved.schema[0],
                 schema=admitted.resolved.schema[1],
+                apply_dmrv_policy=admitted.resolved.schema_is_builtin_dmrv,
                 analysis=body,
                 data_block=prepared.data_block,
                 known_ids=prepared.known_ids | {item.source_id for item in context.citations},
@@ -870,7 +893,12 @@ async def _complete_paid_run(
                 amount_cents=-price_cents,
                 idempotency_key=f"charge:{principal.api_project_id}:{fresh_run.idempotency_key}",
                 intelligence_run_id=fresh_run.id,
-                metadata_json={"task": payload.task, "public_model": legacy.PUBLIC_MODEL, "components": admitted.components},
+                metadata_json={
+                    "task": payload.task, "public_model": legacy.PUBLIC_MODEL, "components": admitted.components,
+                    # Internal cost telemetry for margin reconciliation; never returned to customers.
+                    "provider": fresh_run.provider_internal, "model": fresh_run.model_internal,
+                    "provider_usage": _provider_usage(model_result),
+                },
                 posted_at=datetime.utcnow(),
             )
         )

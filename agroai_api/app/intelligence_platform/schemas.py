@@ -87,6 +87,32 @@ BUILTIN_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         ["recommendations", "confidence"],
     ),
+    "dmrv_advisory": _obj(
+        {
+            "summary": {"type": "string"},
+            "recommendations": {
+                "type": "array",
+                "maxItems": 20,
+                "items": _obj(
+                    {
+                        "category": {"type": "string", "enum": ["irrigation", "nutrients", "soil", "monitoring", "sustainability"]},
+                        "action": {"type": "string"},
+                        "rationale": {"type": "string"},
+                        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+                        "timing": {"type": "string"},
+                        "requires_human_approval": {"type": "boolean"},
+                        "evidence_ids": _EVIDENCE_IDS,
+                        "required_evidence": _STRINGS,
+                    },
+                    ["category", "action", "rationale", "priority", "requires_human_approval", "evidence_ids", "required_evidence"],
+                ),
+            },
+            "confidence": _CONFIDENCE,
+            "missing_data": _STRINGS,
+            "limitations": _STRINGS,
+        },
+        ["summary", "recommendations", "confidence", "missing_data", "limitations"],
+    ),
     "risk_assessment": _obj(
         {
             "overall_risk": {"type": "string", "enum": ["unknown", "low", "medium", "high", "critical"]},
@@ -222,6 +248,7 @@ BUILTIN_SCHEMAS: dict[str, dict[str, Any]] = {
 BUILTIN_DESCRIPTIONS = {
     "diagnosis": "Likely causes with reasoning, checks that discriminate between them, and next steps.",
     "recommendations": "Prioritised advisory actions with rationale; nothing is executed.",
+    "dmrv_advisory": "Structured irrigation, nutrients, soil, monitoring and sustainability recommendations with evidence gaps; no unverified climate claims.",
     "risk_assessment": "Overall and per-risk likelihood/impact with drivers and mitigations.",
     "irrigation_schedule": "Dated irrigation events with depth/duration only where evidence supports a number.",
     "financial_projection": "Scenario revenue/cost/margin and breakeven from caller-supplied economics.",

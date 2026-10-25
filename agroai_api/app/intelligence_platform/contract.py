@@ -67,6 +67,8 @@ class Location(_Entity):
     longitude: float | None = Field(default=None, ge=-180, le=180)
     elevation_m: float | None = Field(default=None, ge=-500, le=9_000)
     region: str | None = Field(default=None, max_length=200)
+    state: str | None = Field(default=None, max_length=200, description="State or first-level administrative region")
+    district: str | None = Field(default=None, max_length=200, description="District or second-level administrative area; caller-supplied, not independently geocoded")
     country: str | None = Field(default=None, min_length=2, max_length=2, description="ISO 3166-1 alpha-2")
     geometry: dict[str, Any] | None = Field(default=None, description="GeoJSON Point, Polygon or MultiPolygon")
 

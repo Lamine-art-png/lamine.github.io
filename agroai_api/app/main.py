@@ -88,6 +88,16 @@ async def lifespan(app: FastAPI):
     schema_status = saas_portal_schema_status()
     if not schema_status["ready"]:
         logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
+    # Uvicorn owns the INFO handler in production; module logger INFO is suppressed.
+    # Configuration-only deployment proof; never log tenant IDs or API secrets.
+    logging.getLogger("uvicorn.error").info(
+        "DMRV TEST release configuration: preview_enabled=%s test_projects_enabled=%s original_allowlist_count=%s additive_allowlist_count=%s live_dmrv_enabled=%s",
+        bool(settings.PLATFORM_API_DMRV_PREVIEW_ENABLED),
+        bool(settings.PLATFORM_API_TEST_PROJECTS_ENABLED),
+        len({x.strip() for x in str(settings.PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS or "").split(",") if x.strip()}),
+        len({x.strip() for x in str(settings.PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS or "").split(",") if x.strip()}),
+        bool(settings.INTELLIGENCE_DMRV_ADVISORY_ENABLED),
+    )
     # Reconcile outstanding TEST applications on deploy. This also processes
     # customers who applied before automatic decisions were introduced.
     # Startup stays safe if production schema/configuration is unavailable.
@@ -526,6 +536,7 @@ from app.api.v1.orchestration import router as orchestration_router  # noqa: E40
 from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 from app.api.v1.platform_admin import router as platform_admin_router  # noqa: E402
+from app.api.v1.intelligence_contract_billing import router as intelligence_contract_billing_router  # noqa: E402
 from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
 from app.api.v1.platform_access import router as platform_access_router  # noqa: E402
 from app.api.v1.platform_resources import router as platform_resources_router  # noqa: E402
@@ -601,6 +612,7 @@ app.include_router(orchestration_router, prefix="/v1")
 app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 app.include_router(platform_admin_router, prefix="/v1")
+app.include_router(intelligence_contract_billing_router, prefix="/v1")
 app.include_router(platform_api_router, prefix="/v1")
 app.include_router(platform_access_router, prefix="/v1")
 app.include_router(platform_resources_router, prefix="/v1")
