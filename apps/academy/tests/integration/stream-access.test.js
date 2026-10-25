@@ -119,10 +119,43 @@ test("token renewal: entitled learners only, rate limited, never cached, fails c
   assert.match(r.text, /This video is temporarily unavailable/);
   r = await off.learner.postJson("/api/video-token", { lessonId: LESSON });
   assert.equal(r.status, 503);
-  // An unplayable video never strands the learner: the lesson completes from its text.
-  r = await off.learner.post(LESSON_URL + "/complete", {});
-  assert.doesNotMatch(r.location || "", /watch=1/);
-  assert.equal((await off.env.DB.prepare("SELECT status FROM lesson_progress WHERE lesson_id = ?").bind(LESSON).first()).status, "completed");
+});
+
+test("playback unavailable never waives a required video: no completion from text, complete:true or the form", async () => {
+  const key = await signing;
+  const { env, learner } = await setup({ configured: false });
+  const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(learner.email).first();
+  const now = new Date().toISOString();
+  // Legitimate progress from before the outage: one lesson completed, this one 40 s in.
+  await env.DB.prepare("INSERT INTO lesson_progress (user_id, lesson_id, course_id, status, position_seconds, started_at, completed_at, last_viewed_at) VALUES (?, 'les_a1_welcome', 'crs_a1', 'completed', 0, ?, ?, ?), (?, ?, 'crs_a1', 'started', 40, ?, NULL, ?)")
+    .bind(user.id, now, now, now, user.id, LESSON, now, now)
+    .run();
+  const status = async (id = LESSON) => (await env.DB.prepare("SELECT status, position_seconds FROM lesson_progress WHERE user_id = ? AND lesson_id = ?").bind(user.id, id).first());
+
+  let r = await learner.get(LESSON_URL);
+  assert.match(r.text, /This video is temporarily unavailable/);
+  assert.match(r.text, /completed by watching its video/);
+  assert.doesNotMatch(r.text, /data-complete-form/, "no manual completion while the video cannot play");
+  // The completion form is refused and does not disturb the saved position.
+  r = await learner.post(LESSON_URL + "/complete", {});
+  assert.match(r.location, /\?watch=1$/, "the completion endpoint requires watching");
+  assert.deepEqual({ ...(await status()) }, { status: "started", position_seconds: 40 });
+  // A forged report claiming the video was watched (complete:true at the end) is refused.
+  r = await learner.postJson("/api/progress", { lessonId: LESSON, position: 199, duration: 200, playing: false, complete: true });
+  assert.equal(r.status, 200);
+  assert.equal(JSON.parse(r.text).results[0].completed, false);
+  assert.equal((await status()).status, "started");
+  // No certificate can follow: the required lesson is not complete.
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM certificates WHERE user_id = ?").bind(user.id).first()).n, 0);
+  // Earlier legitimate progress is untouched.
+  assert.equal((await status("les_a1_welcome")).status, "completed");
+
+  // Playback restored: the player returns and resumes where the learner was.
+  env.STREAM_SIGNING_KEY_ID = key.kid;
+  env.STREAM_SIGNING_JWK = key.jwk;
+  r = await learner.get(LESSON_URL);
+  assert.match(r.text, /data-player data-lesson="les_a1_data" data-start="\d+"/);
+  assert.doesNotMatch(r.text, /data-complete-form/);
 });
 
 test("a copied token is only as good as its expiry", async () => {

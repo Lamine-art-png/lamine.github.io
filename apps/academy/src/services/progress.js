@@ -3,7 +3,7 @@ import { newId, nowIso, clamp } from "../lib/util.js";
 import { HttpError } from "../lib/http.js";
 import { eventStmt, grantAchievement, notifyStmt } from "./activity.js";
 import { queueEmail, deliverById } from "./email.js";
-import { hasMedia } from "./stream.js";
+import { watchableMedia } from "./stream.js";
 import { certificationExam, lessonCompletion, bestPassedAttempt, issueIfEligible } from "./certificates.js";
 
 export async function getEnrollment(env, userId, courseId) {
@@ -88,6 +88,9 @@ export async function recordProgress(c, lesson, report) {
   const enrollment = await getEnrollment(env, user.id, lesson.course_id);
   if (!enrollment || enrollment.status === "withdrawn") throw new HttpError(403, "not_enrolled");
   const now = nowIso();
+  // A report without a position (the completion form) never moves the resume
+  // position and is not a heartbeat.
+  const hasPosition = report.position !== undefined && report.position !== null && report.position !== "";
   const position = clamp(Number(report.position) || 0, 0, 24 * 3600);
   const duration = report.duration != null ? clamp(Number(report.duration) || 0, 0, 24 * 3600) : null;
   const scroll = clamp(Math.round(Number(report.scroll) || 0), 0, 100);
@@ -101,8 +104,7 @@ export async function recordProgress(c, lesson, report) {
   // by the server from heartbeats (see recordWatchBeat). An explicit
   // "complete" or a reported position alone is never accepted for them.
   if (await watchRequired(env, lesson)) {
-    const watch = await recordWatchBeat(env, user.id, lesson, { position, playing: report.playing, now });
-    complete = watch.complete;
+    complete = hasPosition ? (await recordWatchBeat(env, user.id, lesson, { position, playing: report.playing, now })).complete : await watchedEnough(env, user.id, lesson);
   }
   // Out-of-order reports are resolved inside the upsert (newest client time
   // wins), so two overlapping requests cannot move the position backwards.
@@ -110,7 +112,7 @@ export async function recordProgress(c, lesson, report) {
     `INSERT INTO lesson_progress (user_id, lesson_id, course_id, status, position_seconds, duration_seconds, scroll_pct, started_at, completed_at, last_viewed_at, client_updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-       position_seconds = CASE WHEN client_updated_at > excluded.client_updated_at THEN position_seconds ELSE excluded.position_seconds END,
+       position_seconds = CASE WHEN ? = 0 OR client_updated_at > excluded.client_updated_at THEN position_seconds ELSE excluded.position_seconds END,
        duration_seconds = COALESCE(excluded.duration_seconds, duration_seconds),
        scroll_pct = MAX(scroll_pct, excluded.scroll_pct),
        status = CASE WHEN status = 'completed' OR excluded.status = 'completed' THEN 'completed' ELSE 'started' END,
@@ -118,7 +120,7 @@ export async function recordProgress(c, lesson, report) {
        last_viewed_at = excluded.last_viewed_at,
        client_updated_at = CASE WHEN client_updated_at > excluded.client_updated_at THEN client_updated_at ELSE excluded.client_updated_at END`,
   )
-    .bind(user.id, lesson.id, lesson.course_id, complete ? "completed" : "started", position, duration, scroll, now, complete ? now : null, now, clientAt)
+    .bind(user.id, lesson.id, lesson.course_id, complete ? "completed" : "started", position, duration, scroll, now, complete ? now : null, now, clientAt, hasPosition ? 1 : 0)
     .run();
   await env.DB.prepare("UPDATE enrollments SET last_lesson_id = ?, last_activity_at = ? WHERE user_id = ? AND course_id = ?").bind(lesson.id, now, user.id, lesson.course_id).run();
 
@@ -142,7 +144,8 @@ export async function watchRequired(env, lesson) {
   lesson.video ??= await env.DB.prepare("SELECT status, provider, provider_ref, hls_url, mp4_url, duration_seconds FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
   const v = lesson.video;
   // Approval requires a duration; without one watching cannot be measured (readiness blocks publication).
-  return Boolean(v && v.status === "approved" && hasMedia(v, env) && Number(v.duration_seconds) > 0);
+  // Whether it can play at this moment is irrelevant: an outage never waives the requirement.
+  return Boolean(v && v.status === "approved" && watchableMedia(v, env) && Number(v.duration_seconds) > 0);
 }
 
 // ───────────── Server-measured watching ─────────────
@@ -196,6 +199,13 @@ export function creditFor(prev, { position, at, playing }) {
   const advance = position - prev.last_position;
   if (advance <= 0 || advance > allowed) return null;
   return [prev.last_position, position];
+}
+
+/** Whether server-measured watching already meets the threshold (reads only). */
+async function watchedEnough(env, userId, lesson) {
+  const total = Number(lesson.video?.duration_seconds) || 0;
+  const w = await env.DB.prepare("SELECT watched_seconds FROM video_watch WHERE user_id = ? AND lesson_id = ?").bind(userId, lesson.id).first();
+  return total > 0 && (w?.watched_seconds || 0) >= total * WATCH_SHARE;
 }
 
 export async function recordWatchBeat(env, userId, lesson, { position, playing, now }) {

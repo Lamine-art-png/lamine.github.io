@@ -67,7 +67,8 @@ async function videoBlock(c, lesson, video, progress) {
   const t = c.t;
   if (video && isStreamVideo(video) && video.status === "approved" && !streamConfigured(c.env)) {
     // Fail closed: without the signing key there is no way to play a protected
-    // video. The video is then not playable, so the lesson completes from its text.
+    // video. The lesson still requires watching (watchRequired): it waits,
+    // with the learner's progress kept, until playback is available again.
     console.warn(JSON.stringify({ event: "video_token", outcome: "unconfigured", lesson: lesson.id }));
     return html`<div class="video-pending" role="note"><div>${icon("alert", { size: 40 })}<h2>${t("lesson.video_unavailable")}</h2><p>${t("lesson.video_unavailable_body")}</p></div></div>`;
   }
@@ -285,7 +286,8 @@ const wantsJson = (c) => (c.req.headers.get("accept") || "").includes("applicati
 
 export async function completeLesson(c) {
   const { course, lesson } = await lessonForWrite(c);
-  const result = await recordProgress(c, lesson, { complete: true, position: 0, clientAt: nowIso() });
+  // No position: the form neither moves the resume point nor counts as watching.
+  const result = await recordProgress(c, lesson, { complete: true, clientAt: nowIso() });
   if (wantsJson(c)) return json({ ok: true, ...result, certificate: result.certificate?.credential_id || null });
   if (!result.completed) return redirect(`/learn/${course.slug}/${lesson.slug}?watch=1`);
   if (result.certificate) return redirect(`/certificates/${result.certificate.credential_id}?new=1`);

@@ -226,3 +226,18 @@ test("narrated text lessons must meet the video watch requirement before complet
   for (let p = 5; p <= 180; p += 5) await beat(p, { after: 5 });
   assert.equal((await state()).progress, "completed");
 });
+
+test("the completion form neither counts as watching nor moves the resume point; it succeeds only after real watching", async () => {
+  const { env, u, beat, state } = await setup({ lessonType: "text" });
+  await beat(0);
+  for (let t = 10; t <= 100; t += 10) await beat(t, { after: 5 });
+  let r = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.match(r.location, /\?watch=1$/, "half watched: refused");
+  const p = await env.DB.prepare("SELECT position_seconds FROM lesson_progress WHERE lesson_id = ?").bind(LESSON).first();
+  assert.equal(p.position_seconds, 100, "the refused form kept the resume point");
+  assert.equal((await state()).watch.last_position, 100, "the form is not a heartbeat");
+  for (let t = 110; t <= 180; t += 10) await beat(t, { after: 5 });
+  assert.equal((await state()).progress, "completed", "90% measured watching completes it");
+  r = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.doesNotMatch(r.location, /watch=1/);
+});

@@ -517,7 +517,7 @@
   "lesson.download_video": "Download the video",
   "lesson.video_failed": "The video couldn't load. Check your connection, or continue with the lesson text and transcript below.",
   "lesson.video_unavailable": "This video is temporarily unavailable",
-  "lesson.video_unavailable_body": "The lesson text below covers the same material. Please try the video again later.",
+  "lesson.video_unavailable_body": "This lesson is completed by watching its video, so it stays open until the video is back. Your progress is saved; please try again shortly. You can read the lesson text below in the meantime.",
   "lesson.video_player": "Lesson video: {title}",
   "lesson.speed": "Playback speed",
   "lesson.captions": "Captions",

@@ -23,13 +23,19 @@ export function streamConfigured(env) {
 }
 
 /**
- * A video with something to play: a protected Stream upload this Worker can
- * sign tokens for, or (development and tests only) a direct source. Without
- * the signing key a Stream video is not playable, so it never blocks a
- * learner's completion and never counts as ready for publication.
+ * A video that exists to be watched: a Stream upload, or (development and
+ * tests only) a direct source. This, not whether it can play right now,
+ * decides that a lesson must be watched: a missing signing key or a playback
+ * outage never turns a required video into an optional one.
  */
-export const hasMedia = (v, env) =>
-  Boolean(v && ((isStreamVideo(v) && streamConfigured(env)) || (v.provider !== "stream" && directMediaAllowed(env) && (v.hls_url || v.mp4_url))));
+export const watchableMedia = (v, env) => Boolean(v && (isStreamVideo(v) || (v.provider !== "stream" && directMediaAllowed(env) && (v.hls_url || v.mp4_url))));
+
+/**
+ * Playable right now: watchable, and for Stream this Worker holds the signing
+ * key. Without the key the player shows "temporarily unavailable" and the
+ * course cannot be published, but the lesson still requires watching.
+ */
+export const hasMedia = (v, env) => watchableMedia(v, env) && (!isStreamVideo(v) || streamConfigured(env));
 
 const keyCache = new Map();
 async function signingKey(env) {
