@@ -184,6 +184,22 @@ export async function approveA1Videos(env, admin, { mediaBase = "https://media.a
   return videos.length;
 }
 
+/**
+ * Watch a lesson video through server-timed heartbeats (5 s apart in simulated
+ * server time), the only way a video-backed lesson can complete.
+ */
+export async function watchLesson(env, client, userId, lessonId, seconds) {
+  const back = (s) =>
+    env.DB.prepare("UPDATE video_watch SET last_beat_at = ? WHERE lesson_id = ? AND user_id = ?")
+      .bind(new Date(Date.now() - s * 1000).toISOString(), lessonId, userId)
+      .run();
+  await client.postJson("/api/progress", { lessonId, position: 0, playing: true });
+  for (let t = 5; t < seconds + 5; t += 5) {
+    await back(5);
+    await client.postJson("/api/progress", { lessonId, position: Math.min(t, seconds), playing: t < seconds });
+  }
+}
+
 /** Record the three mandatory review approvals through the admin console. */
 export async function approveReviews(admin, courseId, reviewer = "Synthetic Test Faculty") {
   for (const type of ["academic", "assessment", "accessibility"]) {

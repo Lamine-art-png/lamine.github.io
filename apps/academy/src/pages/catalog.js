@@ -157,7 +157,6 @@ export async function courseLanding(c) {
           ${m.summary ? html`<p class="small muted mod-summary"${contentLang(c, m, "summary")}>${m.summary}</p>` : ""}
           <ol>${m.lessons.map(
             (l) => html`<li><span class="grow">${icon(lessonTypeIcon(l.type), { size: 16 })} <span${contentLang(c, l, "title")}>${l.title}</span></span>
-              ${l.is_preview && course.isAvailable ? html`<a class="badge badge-lime" href="/learn/${course.slug}/${l.slug}">${t("course.preview")}</a>` : ""}
               <span class="small muted nowrap">${t("duration.minutes", { n: l.est_minutes })}</span></li>`,
           )}</ol></details>`,
       )}</div>

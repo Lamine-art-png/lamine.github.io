@@ -185,7 +185,7 @@ State in the release candidate (from the seeded database):
 | Certificate | Enabled; requires all lessons and the exam (quiz passes not required) |
 | Course status | `review` (not published) |
 | Academic reviews recorded | 0 of 3 |
-| Instructor videos | **14 planned, 0 exist.** All 14 records are `scripted`: no video file, URL, duration or captions. Instructor record "Joshua" exists. |
+| Instructor videos | 14 final videos uploaded to Cloudflare Stream by the founder (2026-10-25). The Academy's records are `scripted` until the deploy pipeline links them (needs `ACADEMY_STREAM_API_TOKEN`, §5a) and a person approves each one. Captions: none reviewed yet. |
 | Video policy | `required` — publication is blocked until videos are approved, playable and captioned, or the waiver below is approved |
 | Other 33 courses | `draft` (shown as upcoming / not open) |
 
@@ -213,6 +213,67 @@ The change is audited, voids nothing already reviewed, and learners see an
 "Instructor video in production" notice on the lessons that will have video.
 The public FAQ and home page now state that videos are in production and that
 one course opens on 29 October.
+
+### 5a. Protected lesson videos (Cloudflare Stream)
+
+The 14 final A1 videos are in Cloudflare Stream. The Academy plays them only
+inside Stream's player, from tokens the Worker signs for an enrolled learner
+(or staff), valid 20 minutes and renewed by the player when they expire. No
+page, API or caption route exposes a video id, manifest, MP4 or download.
+Direct media URLs (`hls_url`, `mp4_url`) are ignored in staging and
+production. Without the signing key, Stream lessons show "temporarily
+unavailable" (fail closed).
+
+**One credential is needed (founder, about 3 minutes):**
+
+1. Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom
+   token. Name: `academy-stream`. Permission: *Account → Stream → Edit*,
+   account: AGRO-AI only. Nothing else. (Free; no plan change.)
+2. GitHub → repository Settings → Secrets and variables → Actions → New
+   repository secret `ACADEMY_STREAM_API_TOKEN` with that token. (Or set it
+   as an environment secret in both `academy-staging` and
+   `academy-production`.)
+3. Re-run "Academy Deploy" for staging.
+
+**Until then, protect the videos by hand** (Cloudflare dashboard → Stream →
+each video → Settings): turn on *Require Signed URLs*, add
+`academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com` under
+*Allowed origins*, and remove any MP4 download. Stream's own setting is what
+protects the files; the Academy cannot see or change it without the token.
+
+**What every deploy then does** (`scripts/stream.mjs`, from `deploy.sh`):
+
+- Maps the uploads to the 14 lesson videos by title (video number as
+  tie-break); unrelated uploads are listed, never changed.
+- For each lesson video: requires signed URLs, restricts embedding to the two
+  Academy hosts, deletes downloadable renditions, then re-reads every setting
+  from Stream.
+- Probes from outside: the bare id (HLS and MP4) and an expired token must be
+  refused, a fresh signed token must play. Results go to the job summary and
+  to `stream_protection`; the publication gate requires a passing record no
+  older than 8 days for every Stream video, and the deploy fails if any video
+  is not verifiably protected.
+- Creates the Worker's own signing key on first run (Worker secrets
+  `STREAM_SIGNING_KEY_ID`, `STREAM_SIGNING_JWK`; never printed or stored
+  elsewhere) and records the playback subdomain.
+- Links each video record to its upload (`provider = stream`, Stream id,
+  duration measured by Stream). Status is untouched: a person still approves
+  each video in Admin → Videos after watching it.
+- Imports Stream's machine captions (if any) as **draft** captions for review;
+  once a reviewer marks a caption *reviewed* in the admin, the next deploy
+  replaces the machine captions in Stream's player with it. Learners never
+  receive unreviewed captions from the Academy, and the transcript tab is
+  built only from reviewed captions of the final video (never the planning
+  script). `STREAM_GENERATE_CAPTIONS=1` asks Stream to generate English
+  drafts for videos without any (founder to confirm this stays free on the
+  current plan before enabling).
+
+**Residual risks (cannot be prevented by any web player):** an entitled
+learner can screen-record or photograph playback; a signed token copied out
+of the page plays until it expires (at most 20 minutes, one video). Downloads,
+anonymous playback, embedding on other sites and token scraping (rate limit:
+60 tokens per learner per 10 minutes) are prevented. DRM (Widevine/FairPlay)
+would raise the bar against capture tools and needs a paid vendor decision.
 
 ## 6. Production release (requires founder approval)
 

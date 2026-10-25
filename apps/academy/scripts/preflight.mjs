@@ -27,9 +27,9 @@ function presence() {
 
 const CF = "https://api.cloudflare.com/client/v4";
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "";
-async function cf(path) {
+async function cfBase(path, token = process.env.CLOUDFLARE_API_TOKEN) {
   try {
-    const r = await fetch(CF + path, { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } });
+    const r = await fetch(CF + path, { headers: { Authorization: `Bearer ${token}` } });
     const j = await r.json().catch(() => ({}));
     return { status: r.status, ok: r.ok && j.success !== false, result: j.result, errors: (j.errors || []).map((e) => e.code).join(",") };
   } catch (e) {
@@ -44,6 +44,7 @@ async function probe(url, method = "GET") {
     return `unreachable (${String(e.cause?.code || e.message).slice(0, 60)})`;
   }
 }
+const cf = (path) => cfBase(path);
 const academy = (name) => /academy/i.test(String(name || ""));
 
 async function repository() {
@@ -109,6 +110,10 @@ async function anonymous(url) {
 async function stream() {
   out("");
   out("## Cloudflare Stream (read-only)");
+  // The Stream token (ACADEMY_STREAM_API_TOKEN) when this job has one, else the deploy token.
+  const st = process.env.STREAM_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
+  out(`- Token used: ${process.env.STREAM_API_TOKEN ? "ACADEMY_STREAM_API_TOKEN" : "deploy token"}`);
+  const cf = (path) => cfBase(path, st);
   const list = await cf(`/accounts/${ACCOUNT}/stream?limit=200`);
   if (!list.ok) return out(`- Stream: unreadable with this token (HTTP ${list.status} ${list.errors}) — the token needs Stream read (and, to protect videos, Stream edit)`);
   const videos = (list.result || []).sort((a, b) => String(a.meta?.name || "").localeCompare(String(b.meta?.name || "")));

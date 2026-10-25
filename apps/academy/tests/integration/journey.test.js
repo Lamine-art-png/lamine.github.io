@@ -3,7 +3,7 @@
 // Quizzes → Exam (fail, then pass) → Certificate → PDF → Verify → LinkedIn.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeEnv, Client, registeredLearner, lastEmail, tokenFrom, correctResponses, ORIGIN, approveA1Videos, approveReviews } from "../helpers.js";
+import { makeEnv, Client, registeredLearner, lastEmail, tokenFrom, correctResponses, ORIGIN, approveA1Videos, approveReviews, watchLesson } from "../helpers.js";
 
 const COURSE = "introduction-to-ai-in-agriculture";
 
@@ -77,8 +77,14 @@ test("critical learner journey with persistent backend data", async () => {
   assert.equal(lp.position_seconds, 42, "stale offline report does not move the resume position backwards");
   assert.equal(lp.scroll_pct, 30);
 
-  // Complete every non-quiz lesson through the form endpoint.
+  // Complete every non-quiz lesson: narrated lessons by watching (server-timed
+  // heartbeats; the form alone is refused), text-only lessons through the form.
   for (const l of lessons.filter((x) => x.type !== "quiz")) {
+    if (l.video_id) {
+      r = await learner.post(`/learn/${COURSE}/${l.slug}/complete`, {});
+      assert.match(r.location, /\?watch=1$/, `${l.slug}: completion requires watching`);
+      await watchLesson(env, learner, user.id, l.id, 12);
+    }
     r = await learner.post(`/learn/${COURSE}/${l.slug}/complete`, {});
     assert.equal(r.status, 303, `complete ${l.slug}`);
   }

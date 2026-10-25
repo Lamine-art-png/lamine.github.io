@@ -57,6 +57,8 @@ jobs:
       GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_STAGING_GOOGLE_CLIENT_SECRET }}
       CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_STAGING_CERT_SIGNING_SECRET }}
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE }}
+      # Cloudflare token scoped to Stream:Edit: protects and verifies lesson videos.
+      STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
       CONFIGURED_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +118,7 @@ jobs:
       GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET }}
       CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET }}
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE }}
+      STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

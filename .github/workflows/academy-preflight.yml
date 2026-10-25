@@ -55,6 +55,9 @@ jobs:
       PRESENT_ACADEMY_STAGING_CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_STAGING_CERT_SIGNING_SECRET != '' }}
       PRESENT_ACADEMY_STAGING_BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE != '' }}
       PRESENT_ACADEMY_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN != '' }}
+      PRESENT_ACADEMY_STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN != '' }}
+      # Read-only here: the inventory only lists Stream settings.
+      STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

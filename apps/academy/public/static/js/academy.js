@@ -194,8 +194,33 @@
 
     // Video player
     const player = $("[data-player]");
-    const video = player?.querySelector("video");
+    // Protected lessons play in Cloudflare Stream's player; its SDK exposes the
+    // same properties and events as a <video> element, so the heartbeat,
+    // resume, speed and bookmark code below drives either.
+    const frame = player?.querySelector("iframe");
+    const video = player?.querySelector("video") || (frame && typeof window.Stream === "function" ? window.Stream(frame) : null);
+    if (frame && !video) $("[data-video-error]").hidden = false;
     const now = () => (video ? video.currentTime : 0);
+    if (frame && video) {
+      // Playback tokens are short-lived. When one has expired (a long pause, a
+      // tab left open), fetch a fresh one and continue from the same moment.
+      let renewing = false;
+      video.addEventListener("error", async () => {
+        if (renewing || Date.parse(player.dataset.expires) - Date.now() > 60_000) return;
+        renewing = true;
+        try {
+          const out = await post("/api/video-token", { lessonId: player.dataset.lesson });
+          const at = Math.floor(video.currentTime || 0);
+          player.dataset.expires = out.expiresAt;
+          frame.src = `${out.url}${at > 0 ? `&startTime=${at}s` : ""}`;
+          $("[data-video-error]").hidden = true;
+        } catch {
+          $("[data-video-error]").hidden = false;
+        } finally {
+          renewing = false;
+        }
+      });
+    }
     if (video) {
       const start = Number(player.dataset.start) || 0;
       // Position before the current seek; the resume jump starts from the saved position, not 0.
@@ -206,10 +231,10 @@
       // Cached media can load its metadata before this script runs (e.g. on reload).
       if (video.readyState >= 1) resume();
       else video.addEventListener("loadedmetadata", resume, { once: true });
-      video.addEventListener("error", () => ($("[data-video-error]").hidden = false), true);
+      if (!frame) video.addEventListener("error", () => ($("[data-video-error]").hidden = false), true);
       $("[data-speed]")?.addEventListener("change", (e) => (video.playbackRate = Number(e.target.value)));
       const captions = () => {
-        const tracks = [...video.textTracks];
+        const tracks = [...(video.textTracks || [])];
         if (!tracks.length) return;
         const on = tracks.some((t) => t.mode === "showing");
         tracks.forEach((t, i) => (t.mode = !on && i === 0 ? "showing" : "disabled"));

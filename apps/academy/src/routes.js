@@ -75,7 +75,8 @@ export function registerRoutes(r) {
   r.post("/learn/:course/:lesson/bookmarks", learn.addBookmark, AUTH);
   r.post("/learn/:course/:lesson/feedback", learn.lessonFeedback, AUTH);
   r.post("/api/progress", learn.progressApi, AUTH);
-  r.get("/captions/:file", learn.captions);
+  r.post("/api/video-token", learn.videoToken, AUTH);
+  r.get("/captions/:file", learn.captions, AUTH);
   r.get("/resources/:id", learn.resourceDownload, AUTH);
 
   // Assessments

@@ -1,5 +1,6 @@
 // HTTP helpers: cookies, responses, security headers and request body parsing.
 import { fontOrigin } from "../brand.js";
+import { STREAM_SDK_ORIGIN, STREAM_FRAME_ORIGINS } from "../services/stream.js";
 
 export class HttpError extends Error {
   constructor(status, code, message, extra = {}) {
@@ -35,7 +36,7 @@ export function serializeCookie(name, value, opts = {}) {
   return s;
 }
 
-export function securityHeaders(headers, { isHtml, secure }) {
+export function securityHeaders(headers, { isHtml, secure, streamPlayer = false }) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("X-Frame-Options", "DENY");
@@ -47,13 +48,13 @@ export function securityHeaders(headers, { isHtml, secure }) {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self'",
+        `script-src 'self'${streamPlayer ? ` ${STREAM_SDK_ORIGIN}` : ""}`,
         `style-src 'self'${fontOrigin ? ` ${fontOrigin}` : ""}`,
         "img-src 'self' data: https:",
         "media-src 'self' https: blob:",
         `font-src 'self'${fontOrigin ? ` ${fontOrigin}` : ""}`,
         "connect-src 'self'",
-        "frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://iframe.videodelivery.net https://share.synthesia.io",
+        `frame-src ${STREAM_FRAME_ORIGINS.join(" ")}`,
         "frame-ancestors 'none'",
         "form-action 'self' https://accounts.google.com",
         "base-uri 'none'",

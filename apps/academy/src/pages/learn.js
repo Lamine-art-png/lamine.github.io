@@ -9,9 +9,10 @@ import { icon } from "../views/icons.js";
 import { csrfField, translationNotice, contentLang, lessonTypeIcon, progressBar, alert } from "../views/components.js";
 import { getCourseBySlug, getSyllabus, getLesson, getVideo } from "../services/content.js";
 import { validInteractive } from "../lib/interactive.js";
-import { getEnrollment, progressMap, recordProgress } from "../services/progress.js";
+import { getEnrollment, progressMap, recordProgress, watchRequired } from "../services/progress.js";
 import { certificationExam, activeCertificate } from "../services/certificates.js";
 import { track } from "../services/activity.js";
+import { isStreamVideo, playbackToken, iframeUrl, streamConfigured } from "../services/stream.js";
 
 async function loadContext(c, { lessonSlug = null } = {}) {
   const staff = c.can("courses.edit");
@@ -52,29 +53,42 @@ function interactive(c, lesson) {
   return "";
 }
 
-/** Media type for the progressive (non-HLS) source, from its file extension. */
+/** Media type of a direct (development-only) source, from its file extension. */
 function fileVideoType(url) {
   const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase();
   return { webm: "video/webm", mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime" }[ext] || "video/mp4";
 }
 
-function videoBlock(c, lesson, video, progress) {
+// Protected lessons only: callers have already checked enrollment (or staff).
+// Stream videos play in Stream's player from a short-lived signed token; no
+// media URL, file name or download link is ever written into the page.
+async function videoBlock(c, lesson, video, progress) {
   const t = c.t;
   if (video?.playable) {
     const start = progress?.status !== "completed" ? Math.floor(progress?.position_seconds || 0) : 0;
-    return html`<div class="player" data-player data-lesson="${lesson.id}" data-start="${start}">
-        <video controls playsinline preload="metadata" ${video.poster_url ? html`poster="${safeUrl(video.poster_url)}"` : ""} aria-label="${lesson.title}">
+    const stream = isStreamVideo(video);
+    const signed = stream ? await playbackToken(c.env, video.provider_ref) : null;
+    if (stream && !signed) {
+      // Fail closed: without the signing key there is no way to play a protected video.
+      console.warn(JSON.stringify({ event: "video_token", outcome: "unconfigured", lesson: lesson.id }));
+      return html`<div class="video-pending" role="note"><div>${icon("alert", { size: 40 })}<h2>${t("lesson.video_unavailable")}</h2><p>${t("lesson.video_unavailable_body")}</p></div></div>`;
+    }
+    const captions = video.captions.filter((cap) => cap.status === "reviewed" || c.can("courses.edit"));
+    return html`<div class="player${stream ? " player-stream" : ""}" data-player data-lesson="${lesson.id}" data-start="${start}"${stream ? raw(` data-stream data-expires="${signed.expiresAt}"`) : ""}>
+        ${stream
+          ? html`<iframe src="${iframeUrl(c.env, signed.token)}" title="${t("lesson.video_player", { title: lesson.title })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+          : html`<video controls playsinline preload="metadata" controlslist="nodownload" ${video.poster_url ? html`poster="${safeUrl(video.poster_url)}"` : ""} aria-label="${lesson.title}">
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
           ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="${fileVideoType(video.mp4_url)}">` : ""}
-          ${video.captions.map((cap, i) => html`<track kind="captions" src="/captions/${cap.id}.vtt" srclang="${cap.locale}" label="${cap.label}" ${cap.locale === c.locale || (i === 0 && !video.captions.some((x) => x.locale === c.locale)) ? raw("default") : ""}>`)}
+          ${captions.map((cap, i) => html`<track kind="captions" src="/captions/${cap.id}.vtt" srclang="${cap.locale}" label="${cap.label}" ${cap.locale === c.locale || (i === 0 && !captions.some((x) => x.locale === c.locale)) ? raw("default") : ""}>`)}
           <p>${t("lesson.video_unsupported")}</p>
-        </video>
+        </video>`}
       </div>
       <div class="player-bar no-print" data-player-bar>
         <label class="sr-only" for="speed">${t("lesson.speed")}</label>
         <span class="small muted">${icon("speed", { size: 16 })}</span>
         <select id="speed" data-speed>${[0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => html`<option value="${s}" ${s === 1 ? raw("selected") : ""}>${s}×</option>`)}</select>
-        <button class="btn btn-quiet btn-sm" type="button" data-captions-toggle>${icon("captions", { size: 16 })} ${t("lesson.captions")}</button>
+        ${isStreamVideo(video) ? "" : html`<button class="btn btn-quiet btn-sm" type="button" data-captions-toggle>${icon("captions", { size: 16 })} ${t("lesson.captions")}</button>`}
         <button class="btn btn-quiet btn-sm" type="button" data-fullscreen>${icon("maximize", { size: 16 })} ${t("lesson.fullscreen")}</button>
         <button class="btn btn-quiet btn-sm" type="button" data-bookmark-add>${icon("bookmark", { size: 16 })} ${t("lesson.bookmark_moment")}</button>
         <span class="tiny muted grow">${t("lesson.keyboard_hint")}</span>
@@ -93,8 +107,9 @@ export async function lessonPage(c) {
   const { course, enrolled, syllabus, staff } = ctx;
   const lesson = await getLesson(c.env, course.id, c.params.lesson, c.locale);
   if (lesson.status !== "ready" && !staff) throw new HttpError(404, "not_found");
-  const previewAccess = lesson.is_preview && course.isAvailable;
-  if (!enrolled && !previewAccess && !staff) {
+  // Lesson materials (text, video, captions, transcript, resources) are for
+  // enrolled learners and staff only; the public course page stays the sample.
+  if (!enrolled && !staff) {
     if (!c.user) return redirect(`/login?next=${encodeURIComponent(c.url.pathname)}`);
     return redirect(`/courses/${course.slug}`);
   }
@@ -119,8 +134,10 @@ export async function lessonPage(c) {
   const rendered = renderMarkdown(lesson.body_md, { headingOffset: 0 });
   const isQuizLesson = lesson.type === "quiz" && lesson.assessment_id;
   const assessment = isQuizLesson ? await c.env.DB.prepare("SELECT * FROM assessments WHERE id = ?").bind(lesson.assessment_id).first() : null;
-  const transcript = video?.playable ? video.script_md || "" : "";
+  const transcript = video?.playable ? await reviewedTranscript(c, video) : "";
   const completed = lp?.status === "completed";
+  // Same rule the server applies: any lesson with an approved, playable video completes by watching it.
+  const mustWatch = await watchRequired(c.env, { ...lesson, video });
   const flash = c.url.searchParams.get("done") === "1";
 
   const sidebar = html`<aside class="class-sidebar" id="syllabus" data-sidebar aria-label="${t("lesson.course_contents")}">
@@ -158,13 +175,12 @@ export async function lessonPage(c) {
         ${next ? html`<a class="btn btn-secondary btn-sm" href="/learn/${course.slug}/${next.slug}">${t("lesson.next")} ${icon("chevron-right", { size: 16, cls: "ic-flip" })}</a>` : ""}
       </div>
       <article class="class-content" data-lesson-root data-lesson-id="${lesson.id}" data-lesson-type="${lesson.type}" data-track="${canTrack ? "1" : "0"}" data-completed="${completed ? "1" : "0"}">
-        ${!enrolled && previewAccess ? alert("info", html`${t("lesson.preview_notice")} <a href="/courses/${course.slug}">${t("course.enroll_free")}</a>`) : ""}
         ${flash ? alert("success", t("lesson.marked_complete")) : ""}
         ${c.url.searchParams.get("watch") === "1" && !completed ? alert("info", t("lesson.watch_to_complete")) : ""}
         <p class="eyebrow">${icon(lessonTypeIcon(lesson.type), { size: 14 })} ${t(`lesson.type.${lesson.type}`)} · ${t("duration.minutes", { n: lesson.est_minutes })}</p>
         <h1 class="display-sm"${contentLang(c, lesson, "title")}>${lesson.title}</h1>
         ${translationNotice(c, lesson._tr)}
-        ${lesson.type === "video" || lesson.video_id ? videoBlock(c, lesson, video, lp) : ""}
+        ${lesson.type === "video" || lesson.video_id ? await videoBlock(c, lesson, video, lp) : ""}
         ${lesson.summary ? html`<p class="lead mt-3"${contentLang(c, lesson, "summary")}>${lesson.summary}</p>` : ""}
         ${rendered.toc.length > 2 ? html`<nav class="panel mt-2" aria-label="${t("lesson.on_this_page")}"><strong class="small">${t("lesson.on_this_page")}</strong>
           <ul class="small mb-0 toc-list">${rendered.toc.filter((h) => h.level <= 2).map((h) => html`<li><a href="#${h.id}">${h.text}</a></li>`)}</ul></nav>` : ""}
@@ -180,14 +196,14 @@ export async function lessonPage(c) {
         ${canTrack && !isQuizLesson
           ? html`<div class="complete-box no-print">
               <div><strong>${completed ? t("lesson.completed") : t("lesson.ready_to_complete")}</strong>
-                <p class="small muted mb-0">${completed ? t("lesson.completed_on", { date: c.fmtDate(lp.completed_at, { dateStyle: "medium" }) }) : lesson.type === "video" && video?.playable ? t("lesson.video_autocomplete") : t("lesson.mark_hint")}</p></div>
+                <p class="small muted mb-0">${completed ? t("lesson.completed_on", { date: c.fmtDate(lp.completed_at, { dateStyle: "medium" }) }) : mustWatch ? t("lesson.video_autocomplete") : t("lesson.mark_hint")}</p></div>
               ${completed
                 ? next
                   ? html`<a class="btn btn-primary" href="/learn/${course.slug}/${next.slug}">${t("lesson.next")} ${icon("arrow-right", { size: 16, cls: "ic-flip" })}</a>`
                   : exam
                     ? html`<a class="btn btn-primary" href="/assessments/${exam.id}">${t("lesson.go_to_exam")}</a>`
                     : ""
-                : lesson.type === "video" && video?.playable
+                : mustWatch
                   ? ""
                   : html`<form method="post" action="/learn/${course.slug}/${lesson.slug}/complete" data-complete-form>${csrfField(c)}
                     <button class="btn btn-primary" type="submit">${icon("check", { size: 16 })} ${t("lesson.mark_complete")}</button></form>`}
@@ -221,7 +237,7 @@ export async function lessonPage(c) {
                   ${r.size_bytes ? html`<span class="tiny muted">${Math.max(1, Math.round(r.size_bytes / 1024))} KB</span>` : ""}</li>`,
                 )}</ul></section>`
               : ""}
-            ${transcript ? html`<section role="tabpanel" id="panel-transcript" aria-labelledby="tab-transcript" hidden><div class="transcript prose">${md(transcript)}</div></section>` : ""}
+            ${transcript ? html`<section role="tabpanel" id="panel-transcript" aria-labelledby="tab-transcript" hidden><div class="transcript prose"${transcript.lang !== c.displayLocale ? raw(` lang="${transcript.lang}"`) : ""}>${transcript.paragraphs.map((p) => html`<p><button class="link-btn tiny muted" type="button" data-seek="${p.start}">${fmtTime(p.start)}</button> ${p.text}</p>`)}</div></section>` : ""}
 
             <section class="panel mt-3 no-print" aria-labelledby="fb-h">
               <h2 class="h2" id="fb-h">${t("lesson.helpful_q")}</h2>
@@ -241,7 +257,7 @@ export async function lessonPage(c) {
       </article>
     </div>
   </div>`;
-  return c.page({ title: `${lesson.title} · ${course.title}`, body, noindex: true, bodyClass: "in-classroom" });
+  return c.page({ title: `${lesson.title} · ${course.title}`, body, noindex: true, bodyClass: "in-classroom", streamPlayer: Boolean(video?.playable && isStreamVideo(video) && streamConfigured(c.env)) });
 }
 
 function fmtTime(s) {
@@ -361,11 +377,82 @@ export async function courseFeedback(c) {
   return redirect(`${back}${back.includes("?") ? "&" : "?"}feedback=1`);
 }
 
+// Captions are lesson material: served only to someone entitled to a ready
+// lesson that uses the video, never cached by shared caches, and unreviewed
+// (machine) captions only to staff.
 export async function captions(c) {
   const id = c.params.file.replace(/\.vtt$/, "");
-  const row = await c.env.DB.prepare("SELECT vtt FROM video_captions WHERE id = ?").bind(id).first();
-  if (!row) throw new HttpError(404, "not_found");
-  return new Response(row.vtt, { headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  const row = await c.env.DB.prepare("SELECT id, video_id, vtt, status FROM video_captions WHERE id = ?").bind(id).first();
+  const staff = c.can("courses.edit");
+  if (!row || (row.status !== "reviewed" && !staff) || !(staff || (await entitledToVideo(c, row.video_id)))) throw new HttpError(404, "not_found");
+  return new Response(row.vtt, { headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "private, no-store" } });
+}
+
+/** True when the signed-in learner holds an active enrollment in a course with a ready lesson using this video. */
+async function entitledToVideo(c, videoId) {
+  if (!c.user) return false;
+  const row = await c.env.DB.prepare(
+    `SELECT 1 FROM lessons l JOIN enrollments e ON e.course_id = l.course_id
+      WHERE l.video_id = ? AND l.status = 'ready' AND e.user_id = ? AND e.status != 'withdrawn' LIMIT 1`,
+  )
+    .bind(videoId, c.user.id)
+    .first();
+  return Boolean(row);
+}
+
+/** Readable transcript from the reviewed captions of the final video (never the planning script). */
+async function reviewedTranscript(c, video) {
+  const rows = (await c.env.DB.prepare("SELECT locale, vtt FROM video_captions WHERE video_id = ? AND status = 'reviewed'").bind(video.id).all()).results;
+  const pick = rows.find((r) => r.locale === c.locale) || rows.find((r) => r.locale === "en") || rows[0];
+  if (!pick) return "";
+  const paragraphs = vttParagraphs(pick.vtt);
+  return paragraphs.length ? { lang: pick.locale, paragraphs } : "";
+}
+
+/** WebVTT cues → paragraphs of about 40 seconds, each with its start time. */
+export function vttParagraphs(vtt) {
+  const cues = [];
+  for (const block of String(vtt || "").replace(/\r/g, "").split(/\n{2,}/)) {
+    const lines = block.split("\n");
+    const at = lines.findIndex((l) => l.includes("-->"));
+    if (at < 0) continue;
+    const m = /^(?:(\d+):)?(\d{1,2}):(\d{2})[.,]\d+/.exec(lines[at].trim());
+    if (!m) continue;
+    const text = lines.slice(at + 1).join(" ").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+    if (text) cues.push({ start: Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]), text });
+  }
+  const out = [];
+  for (const cue of cues) {
+    const last = out[out.length - 1];
+    if (last && cue.start - last.start < 40) last.text += ` ${cue.text}`;
+    else out.push({ ...cue });
+  }
+  return out;
+}
+
+// Fresh playback token for a protected video, for a player whose token expired
+// mid-lesson. Same entitlement as the lesson page; rate limited; never cached.
+export async function videoToken(c) {
+  const b = await c.readBody();
+  await rateLimit(c, "video_token", { limit: 60, windowSeconds: 600, key: c.user.id });
+  const lesson = await c.env.DB.prepare("SELECT l.id, l.course_id, l.status, l.video_id FROM lessons l WHERE l.id = ?").bind(String(b.lessonId || "")).first();
+  const staff = c.can("courses.edit");
+  const enr = lesson ? await getEnrollment(c.env, c.user.id, lesson.course_id) : null;
+  const allowed = lesson && (staff || (lesson.status === "ready" && enr && enr.status !== "withdrawn"));
+  const video = allowed ? await getVideo(c.env, lesson.video_id, c.locale) : null;
+  const log = (outcome) => console.log(JSON.stringify({ event: "video_token", outcome, lesson: lesson?.id || null, staff }));
+  if (!allowed) {
+    log("denied");
+    throw new HttpError(403, "not_enrolled");
+  }
+  if (!video?.playable || !isStreamVideo(video)) throw new HttpError(404, "not_found");
+  const signed = await playbackToken(c.env, video.provider_ref);
+  if (!signed) {
+    log("unconfigured");
+    throw new HttpError(503, "video_unavailable");
+  }
+  log("granted");
+  return json({ ok: true, url: iframeUrl(c.env, signed.token), expiresAt: signed.expiresAt }, 200, { "Cache-Control": "private, no-store" });
 }
 
 export async function resourceDownload(c) {
@@ -378,8 +465,7 @@ export async function resourceDownload(c) {
   // Active (or completed) enrollment only: withdrawn learners lose access to private files.
   const enr = await getEnrollment(c.env, c.user.id, r.course_id);
   const active = enr && enr.status !== "withdrawn";
-  const preview = r.is_preview && r.course_status === "published";
-  if (!active && !preview && !c.can("courses.edit")) throw new HttpError(403, "not_enrolled");
+  if (!active && !c.can("courses.edit")) throw new HttpError(403, "not_enrolled");
   if (r.kind === "link") return redirect(safeUrl(r.url), 302);
   if (!c.env.FILES || !r.file_key) throw new HttpError(404, "not_found");
   const obj = await c.env.FILES.get(r.file_key);
@@ -388,7 +474,7 @@ export async function resourceDownload(c) {
     headers: {
       "Content-Type": r.mime || "application/octet-stream",
       "Content-Disposition": `attachment; filename="${r.title.replace(/[^\w.-]+/g, "_").slice(0, 80)}${(/\.[a-z0-9]+$/.exec(r.file_key) || [""])[0]}"`,
-      "Cache-Control": "private, max-age=3600",
+      "Cache-Control": "private, no-store",
     },
   });
 }

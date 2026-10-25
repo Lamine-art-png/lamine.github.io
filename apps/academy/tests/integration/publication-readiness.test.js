@@ -98,7 +98,9 @@ test("required instructor videos must be approved, playable and captioned", asyn
 
   // An approved video always needs a playable URL.
   r = await admin.post(`/admin/videos/${one}`, { title: "x", provider: "r2", status: "approved", mp4_url: "", hls_url: "" });
-  assert.match(decodeURIComponent(r.location), /needs an HLS or MP4 URL/);
+  assert.match(decodeURIComponent(r.location), /needs its Stream video ID/);
+  r = await admin.post(`/admin/videos/${one}`, { title: "x", provider: "stream", status: "approved", provider_ref: "https://example.com/video.mp4", duration_seconds: "60" });
+  assert.match(decodeURIComponent(r.location), /32 lowercase hexadecimal/, "a Stream id is never a URL");
   // Retiring a required video blocks publication again.
   await env.DB.prepare("UPDATE video_assets SET status = 'retired' WHERE id = ?").bind(one).run();
   assert.ok(blocked(await publish(admin)));

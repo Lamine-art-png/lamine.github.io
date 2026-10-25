@@ -3,6 +3,7 @@ import { newId, nowIso, clamp } from "../lib/util.js";
 import { HttpError } from "../lib/http.js";
 import { eventStmt, grantAchievement, notifyStmt } from "./activity.js";
 import { queueEmail, deliverById } from "./email.js";
+import { hasMedia } from "./stream.js";
 import { certificationExam, lessonCompletion, bestPassedAttempt, issueIfEligible } from "./certificates.js";
 
 export async function getEnrollment(env, userId, courseId) {
@@ -138,10 +139,10 @@ export async function recordProgress(c, lesson, report) {
  */
 export async function watchRequired(env, lesson) {
   if (!lesson.video_id || lesson.type === "quiz") return false;
-  lesson.video ??= await env.DB.prepare("SELECT status, hls_url, mp4_url, duration_seconds FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
+  lesson.video ??= await env.DB.prepare("SELECT status, provider, provider_ref, hls_url, mp4_url, duration_seconds FROM video_assets WHERE id = ?").bind(lesson.video_id).first();
   const v = lesson.video;
   // Approval requires a duration; without one watching cannot be measured (readiness blocks publication).
-  return Boolean(v && v.status === "approved" && (v.hls_url || v.mp4_url) && Number(v.duration_seconds) > 0);
+  return Boolean(v && v.status === "approved" && hasMedia(v, env) && Number(v.duration_seconds) > 0);
 }
 
 // ───────────── Server-measured watching ─────────────
