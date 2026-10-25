@@ -3,12 +3,13 @@
 #   bash scripts/deploy.sh staging
 #   ACADEMY_DEPLOY_CONFIRM=production bash scripts/deploy.sh production
 #
-# Required: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
+# Required: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, and STREAM_API_TOKEN
+# (Stream:Edit; every deploy protects and verifies the lesson videos, see
+# scripts/stream.mjs).
 # Optional secrets (read from the environment, never printed):
 #   BOOTSTRAP_ADMIN_EMAILS, RESEND_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
 #   CERT_SIGNING_SECRET (used only if the Worker has none yet),
-#   BACKUP_PASSPHRASE (encrypts backups with GPG AES-256 before upload),
-#   STREAM_API_TOKEN (Stream:Edit; protects and verifies lesson videos, see scripts/stream.mjs).
+#   BACKUP_PASSPHRASE (encrypts backups with GPG AES-256 before upload).
 #
 # Safety:
 # * Staging and production use different Workers, D1 databases, hostnames,
@@ -45,6 +46,9 @@ case "$TARGET" in
 esac
 test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CLOUDFLARE_API_TOKEN is required" >&2; exit 1; }
 test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required" >&2; exit 1; }
+# Video protection is verified on every deploy; without the Stream token a
+# release could go out unverified, so nothing starts.
+test -n "${STREAM_API_TOKEN:-}" || { echo "::error::STREAM_API_TOKEN is required: lesson video protection is verified on every deploy. Add a Cloudflare token limited to Stream:Edit as the GitHub secret ACADEMY_STREAM_API_TOKEN." >&2; exit 1; }
 
 WORK="$(mktemp -d)"
 cleanup() { rm -rf "$WORK"; rm -f wrangler.generated.toml; }
@@ -221,40 +225,35 @@ if [ "$TARGET" = "staging" ] && [ -n "${STAGING_TEST_INBOX_TOKEN:-}" ]; then
 fi
 echo "==> Protecting lesson videos in Cloudflare Stream"
 # Every deploy re-asserts and re-verifies protection of the lesson videos and
-# records the evidence the publication gate reads. Without a Stream token the
-# step is skipped with a warning; the app still refuses to play Stream videos
-# without its signing key, so nothing becomes public by skipping it.
-if [ -n "${STREAM_API_TOKEN:-}" ]; then
-  mkdir -p "$WORK/stream"
-  if [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_SIGNING_KEY_ID)" != "yes" ]; then
-    node "$HERE/stream.mjs" create-key --out "$WORK/stream"
-    $WRANGLER secret put STREAM_SIGNING_KEY_ID "${CONFIG[@]}" < "$WORK/stream/key-id" >/dev/null
-    $WRANGLER secret put STREAM_SIGNING_JWK "${CONFIG[@]}" < "$WORK/stream/key-jwk" >/dev/null
-    rm -f "$WORK/stream/key-id" "$WORK/stream/key-jwk"
-    echo "    Created a Stream signing key for ${SERVICE} (Worker secrets only)."
+# records the evidence the publication gate reads. It is mandatory: the
+# token is checked before anything changes (top of this script) and any
+# failure here fails the deployment.
+mkdir -p "$WORK/stream"
+if [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_SIGNING_KEY_ID)" != "yes" ]; then
+  node "$HERE/stream.mjs" create-key --out "$WORK/stream"
+  $WRANGLER secret put STREAM_SIGNING_KEY_ID "${CONFIG[@]}" < "$WORK/stream/key-id" >/dev/null
+  $WRANGLER secret put STREAM_SIGNING_JWK "${CONFIG[@]}" < "$WORK/stream/key-jwk" >/dev/null
+  rm -f "$WORK/stream/key-id" "$WORK/stream/key-jwk"
+  echo "    Created a Stream signing key for ${SERVICE} (Worker secrets only)."
+fi
+d1 "SELECT video_id, locale, vtt FROM video_captions WHERE status = 'reviewed'" | $H rows > "$WORK/stream/reviewed.json"
+STREAM_OK=0
+node "$HERE/stream.mjs" protect --out "$WORK/stream" --reviewed "$WORK/stream/reviewed.json" || STREAM_OK=$?
+# Evidence is recorded even when a check fails, so the gate sees the failure.
+for F in evidence mapping captions; do
+  if [ -s "$WORK/stream/$F.sql" ]; then
+    $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --file "$WORK/stream/$F.sql" >/dev/null
+    echo "    Applied $F ($(grep -c . "$WORK/stream/$F.sql") statement(s))."
   fi
-  d1 "SELECT video_id, locale, vtt FROM video_captions WHERE status = 'reviewed'" | $H rows > "$WORK/stream/reviewed.json"
-  STREAM_OK=0
-  node "$HERE/stream.mjs" protect --out "$WORK/stream" --reviewed "$WORK/stream/reviewed.json" || STREAM_OK=$?
-  # Evidence is recorded even when a check fails, so the gate sees the failure.
-  for F in evidence mapping captions; do
-    if [ -s "$WORK/stream/$F.sql" ]; then
-      $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --file "$WORK/stream/$F.sql" >/dev/null
-      echo "    Applied $F ($(grep -c . "$WORK/stream/$F.sql") statement(s))."
-    fi
-  done
-  CODE="$(cat "$WORK/stream/customer-code" 2>/dev/null || true)"
-  if [ -n "$CODE" ] && [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_CUSTOMER_CODE)" != "yes" ]; then
-    printf '%s' "$CODE" | $WRANGLER secret put STREAM_CUSTOMER_CODE "${CONFIG[@]}" >/dev/null
-    echo "    Set STREAM_CUSTOMER_CODE."
-  fi
-  if [ "$STREAM_OK" != "0" ]; then
-    echo "::error::One or more lesson videos are not verifiably protected in Cloudflare Stream (see the job summary)." >&2
-    exit 1
-  fi
-else
-  echo "::warning::STREAM_API_TOKEN is not set: lesson video protection was not checked. Add a Cloudflare token with Stream:Edit as the environment secret ACADEMY_STREAM_API_TOKEN."
-  summary "- Stream protection: **not checked** (no Stream token)"
+done
+CODE="$(cat "$WORK/stream/customer-code" 2>/dev/null || true)"
+if [ -n "$CODE" ] && [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_CUSTOMER_CODE)" != "yes" ]; then
+  printf '%s' "$CODE" | $WRANGLER secret put STREAM_CUSTOMER_CODE "${CONFIG[@]}" >/dev/null
+  echo "    Set STREAM_CUSTOMER_CODE."
+fi
+if [ "$STREAM_OK" != "0" ]; then
+  echo "::error::One or more lesson videos are not verifiably protected in Cloudflare Stream (see the job summary)." >&2
+  exit 1
 fi
 
 echo "==> ${TARGET} deployed to https://${HOST}"

@@ -22,7 +22,8 @@
 // DIR/key-jwk (mode 600) for `wrangler secret put`; deploy.sh deletes them.
 //
 // Requires STREAM_API_TOKEN (account token with Stream:Edit) and
-// CLOUDFLARE_ACCOUNT_ID. STREAM_GENERATE_CAPTIONS=1 also asks Stream to
+// CLOUDFLARE_ACCOUNT_ID. STREAM_GENERATE_CAPTIONS=1 also asks Stream (included
+// at no additional cost for Stream customers) to
 // generate English captions for videos that have none.
 import { writeFileSync, readFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
@@ -183,6 +184,7 @@ async function protect() {
   // (reported above, and enforced by the publication gate), not a leak.
   let failures = 0;
   let customer = "";
+  const pendingCaptions = [];
   const reviewed = arg("reviewed") ? JSON.parse(readFileSync(arg("reviewed"), "utf8")) : [];
   log("");
   log("| # | Lesson video | Upload | Matched by | Id | State | Video length | Lesson est. | Signed | Origins | Downloads | Bare id (HLS / MP4 / thumb) | Fresh token | Expired token | Captions |");
@@ -226,6 +228,8 @@ async function protect() {
         const current = caps.find((c) => c.language === "en");
         const live = current && !current.generated ? (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text : "";
         if (live.trim() !== mine.vtt.trim()) {
+          // One caption per language: the machine draft makes way for the reviewed file.
+          if (current) await cf(`/stream/${uid}/captions/en`, { method: "DELETE" });
           const fd = new FormData();
           fd.append("file", new Blob([mine.vtt], { type: "text/vtt" }), "en.vtt");
           await cf(`/stream/${uid}/captions/en`, { method: "PUT", body: fd });
@@ -234,13 +238,10 @@ async function protect() {
         await cf(`/stream/${uid}/captions/en/generate`, { method: "POST" });
       }
       caps = (await cf(`/stream/${uid}/captions`)) || [];
-      const machine = caps.find((c) => c.language === "en" && c.generated && (c.status || "ready") === "ready");
-      if (machine && video && !mine) {
-        const vtt = (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text;
-        if (vtt.startsWith("WEBVTT"))
-          captions.push(
-            `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES (${sql(`cap_${video.id.slice(4)}_en`)}, ${sql(video.id)}, 'en', 'English', ${sql(vtt)}, 'machine', ${sql(new Date().toISOString())}) ON CONFLICT(video_id, locale) DO UPDATE SET vtt = excluded.vtt WHERE video_captions.status = 'machine' AND video_captions.vtt <> excluded.vtt;`,
-          );
+      if (video && !mine) {
+        const draft = await machineDraft(uid, video, caps);
+        if (draft) captions.push(draft);
+        else if (caps.some((c) => c.language === "en" && c.generated)) pendingCaptions.push({ uid, video });
       }
       const capDesc = caps.map((c) => `${c.language}${c.generated ? " (machine)" : ""}:${c.status || "ready"}`).join(" ") || "none";
       evidence.push(
@@ -257,16 +258,40 @@ async function protect() {
     }
     log(row);
   }
+  // Generation takes a few minutes; wait for drafts requested in this run.
+  for (let i = 0; i < 30 && pendingCaptions.length; i++) {
+    await sleep(10000);
+    for (const p of [...pendingCaptions]) {
+      const draft = await machineDraft(p.uid, p.video, (await cf(`/stream/${p.uid}/captions`)) || []);
+      if (draft) {
+        captions.push(draft);
+        pendingCaptions.splice(pendingCaptions.indexOf(p), 1);
+      }
+    }
+  }
   writeFileSync(join(out, "evidence.sql"), evidence.join("\n") + "\n");
   writeFileSync(join(out, "mapping.sql"), mapping.join("\n") + "\n");
   writeFileSync(join(out, "captions.sql"), captions.join("\n") + "\n");
   writeFileSync(join(out, "customer-code"), customer);
   log("");
   log(`- Bare id and expired token: HTTP status for a request without a valid token (must be 4xx). Fresh token: a 5-minute signed token (must be 200). Lesson est.: the lesson's displayed time, which includes reading the lesson text.`);
-  log(`- Machine captions imported as drafts for review: ${captions.length}`);
+  log(`- Machine captions imported as **drafts awaiting human review** (status "machine", never shown to learners): ${captions.length}`);
+  if (pendingCaptions.length) log(`- Captions still generating (imported by the next deploy): ${pendingCaptions.map((p) => p.video.n).join(", ")}`);
   log(failures ? `- **${failures} upload(s) not verifiably protected.**` : `- All ${rows.length} uploads verified private (${map.length} linked to lesson videos).`);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
   process.exit(failures ? 1 : 0);
+}
+
+/**
+ * SQL importing Stream's finished machine captions for a lesson video as a
+ * draft. A caption a person has marked reviewed is never overwritten.
+ */
+async function machineDraft(uid, video, caps) {
+  const machine = caps.find((c) => c.language === "en" && c.generated && (c.status || "ready") === "ready");
+  if (!machine) return null;
+  const vtt = (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text;
+  if (!vtt.startsWith("WEBVTT")) return null;
+  return `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES (${sql(`cap_${video.id.slice(4)}_en`)}, ${sql(video.id)}, 'en', 'English', ${sql(vtt)}, 'machine', ${sql(new Date().toISOString())}) ON CONFLICT(video_id, locale) DO UPDATE SET vtt = excluded.vtt WHERE video_captions.status = 'machine' AND video_captions.vtt <> excluded.vtt;`;
 }
 
 async function createKey() {

@@ -12,6 +12,7 @@ export const PROBE = {
   courseId: "crs_staging_probe",
   slug: "staging-write-path-probe",
   lessonSlug: "probe-lesson",
+  videoLessonSlug: "probe-protected-video",
   assessmentId: "asm_staging_probe_exam",
   questionId: "q_staging_probe_1",
   correctOption: "o1",
@@ -47,6 +48,19 @@ export async function ensureProbeCourse(env) {
          VALUES ('les_staging_probe', ?1, 'mod_staging_probe', ?2, 'Probe lesson', 'text', 'Synthetic lesson text for staging checks.', 1, 'ready', 1, 1, ?3, ?3)`,
         PROBE.courseId, PROBE.lessonSlug, now,
       ],
+      // Optional lesson playing one of the real, verified-protected A1 uploads
+      // through its own staging-only asset record: the protected-playback path
+      // is tested end to end without approving anything in Course A1.
+      [
+        `INSERT OR IGNORE INTO video_assets (id, title, provider, status, created_at, updated_at)
+         VALUES ('vid_staging_probe_stream', 'Staging probe: protected Stream playback (synthetic)', 'stream', 'planned', ?1, ?1)`,
+        now,
+      ],
+      [
+        `INSERT OR IGNORE INTO draft_lessons (id, course_id, module_id, slug, title, type, body_md, est_minutes, video_id, status, is_required, sort_order, created_at, updated_at)
+         VALUES ('les_staging_probe_video', ?1, 'mod_staging_probe', ?2, 'Probe protected video', 'video', 'Synthetic lesson for the protected playback check.', 2, 'vid_staging_probe_stream', 'ready', 0, 2, ?3, ?3)`,
+        PROBE.courseId, PROBE.videoLessonSlug, now,
+      ],
       ["INSERT OR IGNORE INTO draft_question_banks (id, course_id, title, created_at, updated_at) VALUES ('bnk_staging_probe', ?1, 'Probe bank', ?2, ?2)", PROBE.courseId, now],
       [
         `INSERT OR IGNORE INTO draft_questions (id, bank_id, type, difficulty, prompt, data_json, answer_json, explanation, grading, points, status, created_at, updated_at)
@@ -65,6 +79,20 @@ export async function ensureProbeCourse(env) {
       ["INSERT OR IGNORE INTO draft_assessment_rules (id, assessment_id, bank_id, draw_count, sort_order) VALUES ('rul_staging_probe', ?1, 'bnk_staging_probe', 1, 1)", PROBE.assessmentId],
     ].map(([sql, ...args]) => env.DB.prepare(sql).bind(...args)),
   );
+  // Point the probe asset at an upload the deploy pipeline verified private
+  // within the last day; without one the playback check reports it is skipped.
+  const verified = await env.DB.prepare(
+    `SELECT uid, duration_seconds FROM stream_protection WHERE signed_required = 1 AND anonymous_status >= 400 AND downloads = 'none'
+       AND duration_seconds > 0 AND checked_at > ? ORDER BY title LIMIT 1`,
+  )
+    .bind(new Date(Date.now() - 86400_000).toISOString())
+    .first();
+  await env.DB.prepare(
+    `UPDATE video_assets SET provider_ref = ?1, duration_seconds = ?2, status = CASE WHEN ?1 IS NULL THEN 'planned' ELSE 'approved' END, updated_at = ?3
+      WHERE id = 'vid_staging_probe_stream' AND (COALESCE(provider_ref, '') <> COALESCE(?1, '') OR COALESCE(duration_seconds, 0) <> COALESCE(?2, 0))`,
+  )
+    .bind(verified?.uid ?? null, verified?.duration_seconds ?? null, now)
+    .run();
   const marker = `probe-${newId("").toLowerCase()}`;
   await env.DB.prepare("UPDATE draft_lessons SET body_md = ?, updated_at = ? WHERE id = 'les_staging_probe'")
     .bind(`Synthetic lesson text for staging checks.\n\nRun marker: ${marker}`, now)
@@ -72,5 +100,5 @@ export async function ensureProbeCourse(env) {
   // The synthetic course is not reviewed; each run publishes its draft directly as a new revision.
   const version = await draftVersion(env);
   const revision = await publishDraft(env, { id: PROBE.courseId }, { hash: await courseContentHash(env, PROBE.courseId), version, by: "staging-probe" });
-  return { ...PROBE, revision, marker };
+  return { ...PROBE, revision, marker, protectedVideo: Boolean(verified) };
 }

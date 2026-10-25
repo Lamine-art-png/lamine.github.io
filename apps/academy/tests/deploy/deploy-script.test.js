@@ -34,6 +34,8 @@ async function cloudflareApi({ foreignHost = null, ownedHosts = [], dnsForbidden
       return res.end(JSON.stringify({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }));
     }
     if (u.pathname.endsWith("/zones")) body.result = [{ id: "zone123", name: "agroai-pilot.com" }];
+    // Stream: an account without uploads; a signing key can be created.
+    else if (u.pathname.endsWith("/stream/keys")) body.result = { id: "kid-test", jwk: Buffer.from("{}").toString("base64") };
     else if (u.pathname.includes("/dns_records")) {
       const name = u.searchParams.get("name");
       if (name === foreignHost || ownedHosts.some((h) => h.host === name)) body.result = [{ id: "rec1", name, type: "CNAME" }];
@@ -70,6 +72,7 @@ function run(ws, target, api, extraEnv = {}) {
         FAKE_STATE: ws.state,
         CLOUDFLARE_API_TOKEN: "test-token-not-real",
         CLOUDFLARE_ACCOUNT_ID: "acct-test",
+        STREAM_API_TOKEN: "test-stream-token-not-real",
         GITHUB_SHA: "abc1234",
         ...extraEnv,
       },
@@ -102,6 +105,18 @@ async function liveProduction(api) {
   writeFileSync(join(ws.state, "calls.log"), "");
   return ws;
 }
+
+test("no deployment starts without the Stream token that verifies video protection", async () => {
+  const api = await cloudflareApi();
+  for (const target of ["staging", "production"]) {
+    const ws = workspace();
+    const r = await run(ws, target, api, { ...prod, STREAM_API_TOKEN: "" });
+    assert.notEqual(r.code, 0, target);
+    assert.match(r.out, /STREAM_API_TOKEN is required/);
+    assert.doesNotMatch(r.calls, /deploy|migrations apply|d1 export/, `${target}: nothing changed`);
+  }
+  api.close();
+});
 
 test("production refuses to deploy without explicit confirmation", async () => {
   const api = await cloudflareApi();

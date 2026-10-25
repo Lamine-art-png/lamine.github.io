@@ -59,6 +59,9 @@ jobs:
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE }}
       # Cloudflare token scoped to Stream:Edit: protects and verifies lesson videos.
       STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
+      # Stream's automatic English captions (included for Stream customers),
+      # imported as drafts for human review; never marked reviewed.
+      STREAM_GENERATE_CAPTIONS: "1"
       CONFIGURED_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -89,10 +92,20 @@ jobs:
       - name: Smoke test staging (read-only)
         working-directory: apps/academy
         run: bash scripts/smoke.sh https://academy-staging.agroai-pilot.com
+      # For the real-browser check of protected Stream playback.
+      - name: Install Playwright Chromium
+        working-directory: apps/academy
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
       # Mandatory: production (needs: staging) runs only if this passes.
       - name: Staging integration test against Cloudflare D1 over HTTP
         working-directory: apps/academy
         run: node tests/remote/staging.mjs https://academy-staging.agroai-pilot.com
+      # Mandatory: real protected playback of an A1 upload (signed token, browser).
+      - name: Protected Stream playback test (real A1 video)
+        working-directory: apps/academy
+        run: node tests/remote/stream-playback.mjs https://academy-staging.agroai-pilot.com
 
   production:
     needs: staging

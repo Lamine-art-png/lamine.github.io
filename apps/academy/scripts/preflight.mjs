@@ -216,6 +216,44 @@ async function stagingAccounts() {
     out(`- Bootstrap administrators: ${admins.length} configured; registered: ${b.registered}; active: ${b.active}; email verified: ${b.verified}; super_admin role: ${b.super_admins}`);
   } else out(`- Bootstrap check refused (${boot})`);
   if (Array.isArray(mail)) out(`- Verification emails to those addresses: ${mail.map((m) => `${m.status}=${m.n} (latest ${m.latest})`).join(", ") || "none"}`);
+  if (Array.isArray(boot) && Number(boot[0].registered) < admins.length) await bootstrapDiagnosis(db.uuid, admins);
+}
+
+// Why a configured administrator address matches no account. Only yes/no
+// answers and counts are printed; addresses are compared inside the database.
+async function bootstrapDiagnosis(uuid, admins) {
+  const raw = String(process.env.BOOTSTRAP_ADMIN_EMAILS || "");
+  out("- Bootstrap address diagnosis (no address is printed):");
+  out(`  - Entries after splitting on commas: ${admins.length}`);
+  const odd = [
+    [/["'<>]/.test(raw), "quotes or angle brackets (paste the bare address only)"],
+    [/[;\n\r]/.test(raw), "semicolons or line breaks (separate several addresses with commas)"],
+    [/mailto:/i.test(raw), "a mailto: prefix"],
+    [admins.some((a) => /\s/.test(a)), "a space inside an address"],
+    [admins.some((a) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a)), "an entry that is not an email address"],
+  ].filter(([bad]) => bad);
+  out(`  - Formatting problems: ${odd.length ? odd.map(([, w]) => w).join("; ") : "none"}`);
+  for (const [i, a] of admins.entries()) {
+    const [local, domain] = a.split("@");
+    // Gmail ignores dots and anything after "+" in the local part; Google
+    // accounts may also be registered under googlemail.com.
+    const gmail = /^(gmail|googlemail)\.com$/.test(domain || "");
+    const canon = (l) => String(l || "").split("+")[0].replace(/\./g, "");
+    const r = await d1Query(uuid, `SELECT
+        COALESCE(SUM(lower(email) = ?1), 0) AS exact,
+        COALESCE(SUM(substr(lower(email), instr(email, '@') + 1) = ?2), 0) AS same_domain,
+        COALESCE(SUM(lower(email) LIKE ?3), 0) AS same_local,
+        COALESCE(SUM(?4 AND substr(lower(email), instr(email, '@') + 1) IN ('gmail.com', 'googlemail.com')
+          AND replace(substr(lower(email), 1, CASE WHEN instr(email, '+') > 0 THEN instr(email, '+') - 1 ELSE instr(email, '@') - 1 END), '.', '') = ?5), 0) AS gmail_equivalent,
+        COALESCE(SUM(status = 'deleted' AND lower(email) = ?1), 0) AS deleted
+      FROM users`, [a, domain || "", `${local}@%`, gmail ? 1 : 0, canon(local)]);
+    if (!Array.isArray(r)) {
+      out(`  - Address #${i + 1}: comparison refused (${r})`);
+      continue;
+    }
+    const x = r[0];
+    out(`  - Address #${i + 1}: exact account ${x.exact > 0 ? "yes" : "no"}; an account with the same domain ${x.same_domain > 0 ? "yes" : "no"}; with the same name before @ ${x.same_local > 0 ? "yes" : "no"}; Gmail-equivalent (dots/+tag differ) ${x.gmail_equivalent > 0 ? "yes" : "no"}; deleted account ${x.deleted > 0 ? "yes" : "no"}`);
+  }
 }
 
 async function endpoints() {
