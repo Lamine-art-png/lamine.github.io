@@ -10,20 +10,26 @@ without their actual review.
 
 ## Order of work (each step depends on the one before)
 
+All approvals are stored per database. Video approvals, reviewed captions and
+the three reviews count only where they are recorded, so they are done **in
+production**. Staging is for rehearsal, and nothing recorded there carries
+over. The 14 videos are shared, so production holds the one reviewed caption
+set that Stream's player shows.
+
 | # | Step | Who | Where |
 |---|---|---|---|
-| 1 | ~~Upload videos 4 and 9~~: done. 14/14 protected (staging deploy run 40216697146) | Founder | — |
-| 2 | Correct the machine caption drafts for all 14 videos against the audio, and mark each *reviewed* | Caption reviewer (see below) | Staging admin → Videos → each video → Captions |
-| 3 | Watch each of the 14 videos in full and set it to *approved* | Founder or delegated content owner | Admin → Videos |
-| 4 | Deploy production (A1 stays unpublished) | Founder authorization | *Academy Deploy*, target production |
-| 5 | Repeat steps 2–3 in production; reviews and video approvals are stored per database | Same people | Production admin |
-| 6 | Academic, assessment and accessibility reviews | Named reviewers | Production admin → Courses → A1 → Reviews |
-| 7 | Legal sign-off of `/privacy`, `/terms`, `/accessibility` | Counsel or founder | Outside the app (signed note); see LAUNCH.md §7 |
-| 8 | Publish A1 | Founder | Production admin → Courses → A1 (the readiness panel must be all green) |
+| 1 | ~~Upload all 14 videos~~: done. 14/14 protected and verified (staging deploy run 40216697146) | Founder | — |
+| 2 | Production credentials: the scoped Cloudflare token in `academy-production`, the signing key, backup passphrase, Resend key and admin address, plus required reviewers on the environment (LAUNCH.md §2) | Founder | GitHub → Settings → Environments |
+| 3 | Merge PR #618, then authorize the production deploy: *Academy Deploy*, target production, confirmation `deploy academy production`. A1 stays unpublished. The deploy links the 14 videos, verifies their protection and imports 14 caption drafts | Founder | GitHub Actions |
+| 4 | Sign in to production with the admin address and confirm Admin opens | Founder | `academy.agroai-pilot.com/admin` |
+| 5 | For each of the 14 videos: correct the loaded draft against the audio and save it as *reviewed*. Then run the production deploy again, so the reviewed files reach the player | Caption reviewer | Admin → Videos → each video → Captions |
+| 6 | For each of the 14 videos: watch it in full, check the official logo, and set it to *approved* | Founder or delegated content owner | Admin → Videos |
+| 7 | Academic, assessment and accessibility reviews | Named reviewers | Admin → Courses → A1 → Reviews |
+| 8 | Legal sign-off of `/privacy`, `/terms`, `/accessibility` | Counsel or founder | Outside the app (signed, dated note); see LAUNCH.md §7 |
+| 9 | Publish A1. The readiness panel must be all green: 14 approved, playable and protected videos, reviewed captions, 3 reviews | Founder | Admin → Courses → A1 |
 
-Do steps 2–3 before step 6. Changing a caption or a video after a review
-voids that review. To avoid double work, steps 2 and 3 can be done once in
-production right after step 4.
+Steps 5 and 6 must be finished before step 7: changing a caption or a video
+after a review voids that review.
 
 ## How a review is recorded
 

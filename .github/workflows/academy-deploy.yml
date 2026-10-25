@@ -131,6 +131,8 @@ jobs:
       CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET }}
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE }}
       STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
+      # Caption drafts for review in production (the reviewed set lives there).
+      STREAM_GENERATE_CAPTIONS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
