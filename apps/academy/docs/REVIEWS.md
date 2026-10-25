@@ -12,7 +12,7 @@ without their actual review.
 
 | # | Step | Who | Where |
 |---|---|---|---|
-| 1 | Upload videos 4 and 9 ("Video4- …", "Video9- …"); the staging deploy reports 14/14 protected | Founder | Cloudflare Stream, then *Academy Deploy* (staging) |
+| 1 | ~~Upload videos 4 and 9~~: done. 14/14 protected (staging deploy run 40216697146) | Founder | — |
 | 2 | Correct the machine caption drafts for all 14 videos against the audio, and mark each *reviewed* | Caption reviewer (see below) | Staging admin → Videos → each video → Captions |
 | 3 | Watch each of the 14 videos in full and set it to *approved* | Founder or delegated content owner | Admin → Videos |
 | 4 | Deploy production (A1 stays unpublished) | Founder authorization | *Academy Deploy*, target production |

@@ -216,7 +216,7 @@ State in the release candidate (from the seeded database):
 | Certificate | Enabled; requires all lessons and the exam (quiz passes not required) |
 | Course status | `review` (not published) |
 | Academic reviews recorded | 0 of 3 |
-| Instructor videos | **12 of 14 in Cloudflare Stream, all 12 verified private** (§5a). Videos 4 (*Data: the raw material of agricultural AI*) and 9 (*Crop health monitoring from above and up close*) are not uploaded yet. The 12 records are linked to their uploads on staging and remain `scripted` until a person approves each one after watching it. Captions: none reviewed. |
+| Instructor videos | **14 of 14 in Cloudflare Stream, all 14 verified private** (§5a). The 14 records are linked to their uploads on staging and remain `scripted` until a person approves each one after watching it. Captions: 14 machine drafts imported for review, **0 reviewed**. |
 | Video policy | `required` — publication is blocked until videos are approved, playable and captioned, or the waiver below is approved |
 | Other 33 courses | `draft` (shown as upcoming / not open) |
 
@@ -239,9 +239,13 @@ decision.
 
 ### 5a. Protected lesson videos (Cloudflare Stream)
 
-**Status (staging deploy run 40170486990, 2026-10-25; re-checked read-only by
-preflight run 40171393346): 12 of 14 uploaded, 12 of 12 verified private.**
-Videos 4 and 9 are not uploaded yet.
+**Status (staging deploy run 40216697146, 2026-10-25): 14 of 14 uploaded,
+mapped and verified private.** For each video, Stream reports signed URLs
+required, embedding limited to the two Academy hosts and no downloads. The
+bare id (HLS, MP4, thumbnail) and an expired token are refused (401); a fresh
+token plays (200). The real-playback test passed in Google Chrome. 14 English
+machine-caption drafts are in the Academy awaiting review and are not in
+Stream's player.
 
 The Academy plays these videos only inside Stream's player, from tokens the
 Worker signs for an enrolled learner (or staff). Tokens are valid 20 minutes
@@ -289,9 +293,10 @@ deployment starts.
   - token renewal works;
   - headless Chromium plays the video in Stream's player.
 
-**When videos 4 and 9 are uploaded,** name them "Video4- …" and "Video9- …",
-then run *Academy Deploy* for staging. The run must report 14 of 14 lesson
-videos mapped and every upload verified private.
+**Replacing a video:** upload the new file with the same number at the start
+of its name, delete the old upload in Stream, then run *Academy Deploy* for
+staging. The run must report 14 of 14 mapped and every upload verified
+private. A replaced video needs a new approval and new captions.
 
 **Residual risks (cannot be prevented by any web player):** an entitled
 learner can screen-record or photograph playback; a signed token copied out
