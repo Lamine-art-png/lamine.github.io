@@ -28,6 +28,8 @@ jobs:
       PRESENT_ACADEMY_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN != '' }}
       PRESENT_ACADEMY_STAGING_RESEND_API_KEY: ${{ secrets.ACADEMY_STAGING_RESEND_API_KEY != '' }}
       PRESENT_ACADEMY_PRODUCTION_RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY != '' }}
+      # A repository-level copy is shadowed by the environment secret of the same name.
+      PRESENT_ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
