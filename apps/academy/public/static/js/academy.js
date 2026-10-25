@@ -109,13 +109,22 @@
       /* keep the queue for the next attempt */
     }
   }
+  // Reports go out one at a time, in the order they happened: the server
+  // times heartbeats on arrival, so a pause that overtook the following play
+  // would cost the learner a credited span. Only the page-exit report skips
+  // the line (keepalive), since the page may be gone before its turn.
+  let inFlight = Promise.resolve();
   function sendProgress(report, { keepalive = false } = {}) {
     const r = { ...report, clientAt: new Date().toISOString() };
-    return post("/api/progress", r, { keepalive }).catch(() => {
-      const q = store.get(QUEUE, []).filter((x) => !(x.lessonId === r.lessonId && !x.complete));
-      q.push(r);
-      store.set(QUEUE, q.slice(-200));
-    });
+    const send = () =>
+      post("/api/progress", r, { keepalive }).catch(() => {
+        const q = store.get(QUEUE, []).filter((x) => !(x.lessonId === r.lessonId && !x.complete));
+        q.push(r);
+        store.set(QUEUE, q.slice(-200));
+      });
+    if (keepalive) return send();
+    inFlight = inFlight.then(send);
+    return inFlight;
   }
   const pill = $("[data-offline]");
   if (pill) pill.hidden = navigator.onLine;
