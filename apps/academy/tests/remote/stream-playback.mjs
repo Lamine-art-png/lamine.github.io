@@ -82,33 +82,52 @@ async function playback(learner, probe) {
     const context = await browser.newContext();
     await context.addCookies([...learner.jar].map(([name, value]) => ({ name, value, url: BASE, secure: true, httpOnly: true, sameSite: "Lax" })));
     const tab = await context.newPage();
+    // Evidence for a failure: console, page errors, CSP reports and Stream
+    // responses (signed tokens in URLs are redacted).
+    const redact = (u) => String(u).replace(/[\w-]{20,}\.[\w-]{20,}\.[\w-]{20,}/g, "<token>").replace(/[0-9a-f]{32}/g, "<id>");
+    const notes = [];
+    tab.on("console", (m) => notes.length < 40 && notes.push(`console.${m.type()}: ${redact(m.text()).slice(0, 200)}`));
+    tab.on("pageerror", (e) => notes.push(`pageerror: ${redact(e.message).slice(0, 200)}`));
+    context.on("requestfailed", (r) => /cloudflarestream|videodelivery/.test(r.url()) && notes.push(`failed ${redact(r.url()).slice(0, 120)}: ${r.failure()?.errorText}`));
+    context.on("response", (r) => /cloudflarestream|videodelivery/.test(r.url()) && r.status() >= 400 && notes.push(`HTTP ${r.status()} ${redact(r.url()).slice(0, 120)}`));
     await tab.goto(`${BASE}/learn/${probe.slug}/${probe.videoLessonSlug}`);
     await tab.waitForSelector("[data-player] iframe");
-    const played = await tab.evaluate(
-      () =>
-        new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error("playback did not start within 45 s")), 45000);
-          const wait = () => (typeof window.Stream === "function" ? start() : setTimeout(wait, 200));
-          const start = () => {
-            const p = window.Stream(document.querySelector("[data-player] iframe"));
-            p.addEventListener("error", () => {
-              clearTimeout(timer);
-              reject(new Error("Stream's player reported an error"));
-            });
-            p.muted = true;
-            p.addEventListener("timeupdate", () => {
-              if (p.currentTime > 2) {
+    const sdk = await tab.waitForFunction(() => typeof window.Stream === "function", null, { timeout: 15000 }).then(() => true, () => false);
+    // Play the <video> inside Stream's player frame and watch real playback time.
+    let frame;
+    for (let i = 0; i < 60 && !frame; i++) {
+      frame = tab.frames().find((f) => /cloudflarestream\.com|videodelivery\.net/.test(f.url()));
+      if (!frame) await tab.waitForTimeout(500);
+    }
+    let played;
+    try {
+      expect(frame, "Stream's player frame never loaded");
+      await frame.waitForSelector("video", { timeout: 30000 });
+      played = await frame.evaluate(
+        () =>
+          new Promise((resolve, reject) => {
+            const v = document.querySelector("video");
+            const timer = setTimeout(() => reject(new Error(`playback did not reach 2 s within 45 s (readyState ${v.readyState}, networkState ${v.networkState}, error ${v.error?.code ?? "none"}, t ${v.currentTime})`)), 45000);
+            v.muted = true;
+            v.addEventListener("timeupdate", () => {
+              if (v.currentTime > 2) {
                 clearTimeout(timer);
-                resolve({ t: p.currentTime, duration: p.duration });
+                resolve({ t: v.currentTime, duration: v.duration });
               }
             });
-            p.play();
-          };
-          wait();
-        }),
-    );
+            v.addEventListener("error", () => {
+              clearTimeout(timer);
+              reject(new Error(`media error ${v.error?.code}: ${v.error?.message || ""}`));
+            });
+            v.play().catch(() => {});
+          }),
+      );
+    } catch (e) {
+      throw new Error(`${e.message}; SDK loaded: ${sdk}; ${notes.join(" | ") || "no browser messages"}`);
+    }
+    expect(sdk, "the Stream player SDK (heartbeat source) did not load on the lesson page");
     expect(played.duration > 10, `player reported duration ${played.duration}`);
-    return `segment ${bytes} bytes; browser played ${played.t.toFixed(1)} s of ${Math.round(played.duration)} s; bare id ${bare.status}`;
+    return `segment ${bytes} bytes; Chrome played ${played.t.toFixed(1)} s of ${Math.round(played.duration)} s in Stream's player; SDK loaded; bare id ${bare.status}`;
   } finally {
     await browser.close();
   }
