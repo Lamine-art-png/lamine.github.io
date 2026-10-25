@@ -259,3 +259,19 @@ test("a caption reviewer corrects Stream's machine draft in place; only the revi
   r = await learner.get(LESSON_URL);
   assert.match(r.text, /Soil moisture is data\./);
 });
+
+test("an administrator address configured after sign-in takes effect on the next request, for verified accounts only", async () => {
+  const env = makeEnv({ BOOTSTRAP_ADMIN_EMAILS: "" });
+  const founder = await registeredLearner(env, { email: "owner@academy.test" });
+  const unverified = await registeredLearner(env, { email: "pending@academy.test", verify: false });
+  let r = await founder.get("/admin");
+  assert.notEqual(r.status, 200, "not an administrator yet");
+  // The operator corrects the secret (applied at the next deploy); the signed-in founder is not signed out.
+  env.BOOTSTRAP_ADMIN_EMAILS = "owner@academy.test, pending@academy.test";
+  r = await founder.get("/admin");
+  assert.equal(r.status, 200, "admin console opens without signing in again");
+  const audit = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'role.bootstrap_grant'").first();
+  assert.equal(audit.n, 1, "the grant is audited once");
+  r = await unverified.get("/admin");
+  assert.notEqual(r.status, 200, "an unverified address never becomes administrator");
+});

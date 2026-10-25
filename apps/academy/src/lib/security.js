@@ -1,6 +1,7 @@
 // Password hashing, sessions, CSRF, rate limiting and audit logging.
 import { b64url, b64urlDecode, randomBytes, randomToken, sha256Hex, safeEqual, nowIso, addSeconds, newId } from "./util.js";
 import { HttpError, serializeCookie, clientIp } from "./http.js";
+import { applyBootstrapRoles } from "../services/users.js";
 
 // Cloudflare Workers cap PBKDF2 at 100,000 iterations.
 const PBKDF2_ITERATIONS = 100_000;
@@ -76,6 +77,10 @@ export async function loadSession(c) {
     c.defer(c.env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run());
   }
   const roles = (await c.env.DB.prepare("SELECT role FROM user_roles WHERE user_id = ?").bind(row.id).all()).results.map((r) => r.role);
+  // An address added to BOOTSTRAP_ADMIN_EMAILS after the account signed in
+  // takes effect on its next request (the same rule as at sign-in: verified
+  // address on the operator-set list), not only at the next sign-in.
+  if (!roles.includes("super_admin") && c.cfg.bootstrapAdmins?.length && (await applyBootstrapRoles(c.env, c.cfg, row))) roles.push("super_admin");
   const { id_hash, expires_at, last_seen_at, revoked_at, password_hash, ...user } = row;
   return { idHash: id_hash, user: { ...user, has_password: !!password_hash }, roles };
 }
