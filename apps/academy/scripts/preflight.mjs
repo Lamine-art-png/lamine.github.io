@@ -89,7 +89,50 @@ async function cloudflare() {
       const buckets = (r2.result?.buckets || r2.result || []).map((b) => b.name).sort();
       out(`- R2 buckets (${buckets.length}): ${buckets.join(", ") || "none"}`);
     } else out(`- R2: unreadable with this token (HTTP ${r2.status} ${r2.errors})`);
+    await stream();
   }
+}
+
+// Read-only Cloudflare Stream inventory: titles, processing state, duration and
+// protection settings. Video ids are shortened because these logs may be
+// readable by others; the full mapping is written only into the private database.
+const short = (uid) => `${String(uid).slice(0, 6)}…`;
+async function anonymous(url) {
+  if (!url) return "n/a";
+  try {
+    const r = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+    return String(r.status);
+  } catch (e) {
+    return `unreachable (${String(e.cause?.code || e.message).slice(0, 40)})`;
+  }
+}
+async function stream() {
+  out("");
+  out("## Cloudflare Stream (read-only)");
+  const list = await cf(`/accounts/${ACCOUNT}/stream?limit=200`);
+  if (!list.ok) return out(`- Stream: unreadable with this token (HTTP ${list.status} ${list.errors}) — the token needs Stream read (and, to protect videos, Stream edit)`);
+  const videos = (list.result || []).sort((a, b) => String(a.meta?.name || "").localeCompare(String(b.meta?.name || "")));
+  const keys = await cf(`/accounts/${ACCOUNT}/stream/keys`);
+  out(`- Videos: ${videos.length}; signing keys: ${keys.ok ? keys.result.length : `unreadable (HTTP ${keys.status} ${keys.errors})`}`);
+  const wm = await cf(`/accounts/${ACCOUNT}/stream/watermarks`);
+  out(`- Watermark profiles: ${wm.ok ? wm.result.length : `unreadable (HTTP ${wm.status})`}`);
+  out("");
+  out("| # | Title | Id | State | Ready | Duration (s) | Signed URLs required | Allowed origins | Downloads | Captions | Anonymous HLS | Anonymous thumbnail |");
+  out("|---|---|---|---|---|---|---|---|---|---|---|---|");
+  let open = 0;
+  for (const [i, v] of videos.entries()) {
+    const dl = await cf(`/accounts/${ACCOUNT}/stream/${v.uid}/downloads`);
+    const downloads = dl.ok ? Object.entries(dl.result || {}).map(([k, d]) => `${k}:${d.status}`).join(" ") || "none" : `HTTP ${dl.status}`;
+    const caps = await cf(`/accounts/${ACCOUNT}/stream/${v.uid}/captions`);
+    const captions = caps.ok ? (caps.result || []).map((c) => `${c.language}${c.generated ? "(auto)" : ""}:${c.status || "ready"}`).join(" ") || "none" : `HTTP ${caps.status}`;
+    const hls = await anonymous(v.playback?.hls);
+    const thumb = await anonymous(v.thumbnail);
+    if (!v.requireSignedURLs || hls === "200") open++;
+    const name = String(v.meta?.name || "(untitled)").replace(/\|/g, "/").slice(0, 80);
+    out(`| ${i + 1} | ${name} | \`${short(v.uid)}\` | ${v.status?.state || "?"}${v.status?.pctComplete && v.status.state !== "ready" ? ` ${v.status.pctComplete}%` : ""} | ${v.readyToStream ? "yes" : "no"} | ${Math.round(v.duration || 0)} | ${v.requireSignedURLs ? "yes" : "**NO**"} | ${(v.allowedOrigins || []).join(" ") || "any"} | ${downloads} | ${captions} | ${hls} | ${thumb} |`);
+  }
+  out("");
+  out(`- Videos not protected (signed URLs off, or anonymous HLS returned 200): ${open}`);
 }
 
 // Read-only inventory of staging accounts for cleanup planning. No identifier,
