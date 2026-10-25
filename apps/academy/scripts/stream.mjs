@@ -69,6 +69,20 @@ async function anonymous(url) {
   return 0;
 }
 
+/**
+ * Status for a request that must be refused. A setting change can take a
+ * moment to reach every edge, so a 200 is re-checked for up to a minute
+ * before it is reported.
+ */
+async function refused(url) {
+  let status = await anonymous(url);
+  for (let i = 0; i < 6 && (status === 200 || status === 0); i++) {
+    await sleep(10000);
+    status = await anonymous(url);
+  }
+  return status;
+}
+
 /** Course A1's lesson videos in order: video number, asset id, lesson title. */
 export function a1Videos(course = a1) {
   const out = [];
@@ -84,42 +98,68 @@ const words = (s) =>
     .split(" ")
     .filter((w) => w.length > 2 && !["the", "and", "case", "study", "lesson", "video", "final", "agro", "academy"].includes(w));
 
-/** Video number written in an upload's name ("01 Welcome", "A1-07", "Lesson 7 –"), if any. */
+/**
+ * Video number the founder wrote in an upload's name: leading ("Video3-",
+ * "video 11-", "01 - ", "A1-07") or labelled ("Lesson 12"). Years and other
+ * numbers are ignored; only 1-14 count.
+ */
 export function numberIn(name) {
-  const m = /(?:^|[^0-9])(?:a1[\s_-]*)?(?:video|lesson|v)?[\s_#-]*0?([1-9]|1[0-4])(?:[^0-9]|$)/i.exec(String(name).replace(/\.(mp4|mov|m4v|webm)$/i, ""));
-  return m ? Number(m[1]) : null;
+  const s = String(name);
+  const m = /^\s*(?:a1[\s_-]*)?(?:video|lesson|vid|v)?[\s_#-]*0?(\d{1,2})(?!\d)/i.exec(s) || /\b(?:video|lesson)[\s_#-]*0?(\d{1,2})(?!\d)/i.exec(s);
+  const n = m ? Number(m[1]) : null;
+  return n >= 1 && n <= 14 ? n : null;
 }
 
+const overlapOf = (name, title) => {
+  const uw = new Set(words(name));
+  const vw = words(title);
+  return vw.filter((w) => uw.has(w)).length / Math.max(1, vw.length);
+};
+
 /**
- * Map uploads to lesson videos: best title overlap (at least half the
- * lesson title's words), the video number breaking ties. Each upload and each
- * lesson video is used once; anything ambiguous is left unmapped.
+ * Map uploads to lesson videos. The video number in the upload's name decides
+ * when exactly one upload carries it (the final titles were reworded, so they
+ * often share few words with the lesson titles). Uploads without a usable
+ * number fall back to title overlap (at least half the lesson title's words,
+ * unambiguous). Each upload and lesson video is used once.
  */
 export function mapUploads(uploads, videos = a1Videos()) {
-  const scored = [];
-  for (const u of uploads) {
-    const uw = new Set(words(u.name));
-    const num = numberIn(u.name);
-    for (const v of videos) {
-      const vw = words(v.title);
-      const overlap = vw.filter((w) => uw.has(w)).length / Math.max(1, vw.length);
-      const score = overlap + (num === v.n ? 0.25 : 0);
-      if (overlap >= 0.5 || (num === v.n && overlap >= 0.25)) scored.push({ u, v, score });
-    }
-  }
-  scored.sort((a, b) => b.score - a.score);
+  const map = [];
   const usedU = new Set();
   const usedV = new Set();
-  const map = [];
+  const take = (u, v, by) => {
+    usedU.add(u.uid);
+    usedV.add(v.id);
+    map.push({ upload: u, video: v, by, overlap: overlapOf(u.name, v.title) });
+  };
+  for (const v of videos) {
+    const withNumber = uploads.filter((u) => numberIn(u.name) === v.n);
+    if (withNumber.length === 1) take(withNumber[0], v, "number");
+  }
+  const scored = [];
+  for (const u of uploads.filter((x) => !usedU.has(x.uid) && numberIn(x.name) == null)) {
+    for (const v of videos.filter((x) => !usedV.has(x.id))) {
+      const overlap = overlapOf(u.name, v.title);
+      if (overlap >= 0.5) scored.push({ u, v, overlap });
+    }
+  }
+  scored.sort((a, b) => b.overlap - a.overlap);
   for (const s of scored) {
     if (usedU.has(s.u.uid) || usedV.has(s.v.id)) continue;
-    // Ambiguous: another candidate for the same lesson scores the same.
-    if (scored.some((o) => o !== s && o.v.id === s.v.id && !usedU.has(o.u.uid) && o.score === s.score)) continue;
-    usedU.add(s.u.uid);
-    usedV.add(s.v.id);
-    map.push({ upload: s.u, video: s.v });
+    if (scored.some((o) => o !== s && o.v.id === s.v.id && !usedU.has(o.u.uid) && o.overlap === s.overlap)) continue;
+    take(s.u, s.v, "title");
   }
   return map.sort((a, b) => a.video.n - b.video.n);
+}
+
+/** Lesson numbers carried by more than one upload (a duplicate to resolve by hand). */
+export function duplicateNumbers(uploads) {
+  const counts = new Map();
+  for (const u of uploads) {
+    const n = numberIn(u.name);
+    if (n) counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  return [...counts].filter(([, c]) => c > 1).map(([n]) => n);
 }
 
 async function protect() {
@@ -132,24 +172,31 @@ async function protect() {
   log(`### Cloudflare Stream: ${all.length} upload(s) in the account, ${map.length} of ${videos.length} A1 lesson videos mapped`);
   const unmapped = all.filter((v) => !map.some((m) => m.upload.uid === v.uid));
   const missing = videos.filter((v) => !map.some((m) => m.video.id === v.id));
-  for (const v of missing) log(`- **Lesson video ${v.n} (${v.title}) has no matching upload**`);
-  for (const v of unmapped) log(`- Upload "${v.meta?.name || "(untitled)"}" (\`${short(v.uid)}\`) is not an A1 lesson video: ${v.requireSignedURLs ? "signed URLs required" : "**PUBLIC — left unchanged; review it**"}`);
+  for (const v of missing) log(`- **Lesson video ${v.n} (${v.title}): no upload found** — learners see "video in production" and publication stays blocked until it is uploaded and approved`);
+  for (const n of duplicateNumbers(uploads)) log(`- **Several uploads are numbered ${n}**: none was mapped to lesson video ${n}; delete or rename the extra one`);
+  for (const v of unmapped) log(`- Upload "${v.meta?.name || "(untitled)"}" (\`${short(v.uid)}\`) matches no lesson video: protected like the others, not linked to a lesson`);
 
   const evidence = [];
   const mapping = [];
   const captions = [];
-  let failures = missing.length;
+  // Failures are protection failures only; a missing upload is a content gap
+  // (reported above, and enforced by the publication gate), not a leak.
+  let failures = 0;
   let customer = "";
   const reviewed = arg("reviewed") ? JSON.parse(readFileSync(arg("reviewed"), "utf8")) : [];
   log("");
-  log("| # | Lesson video | Upload | Id | State | Duration | Est. | Signed | Origins | Downloads | Bare id | Signed token | Expired token | Captions |");
-  log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
-  for (const { upload, video } of map) {
+  log("| # | Lesson video | Upload | Matched by | Id | State | Video length | Lesson est. | Signed | Origins | Downloads | Bare id (HLS / MP4 / thumb) | Fresh token | Expired token | Captions |");
+  log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+  // Every upload in the account is protected; mapped ones are also linked to their lesson.
+  const rows = [...map, ...unmapped.map((v) => ({ upload: { uid: v.uid, name: v.meta?.name || "" }, video: null }))];
+  for (const { upload, video, by } of rows) {
     const uid = upload.uid;
     let row;
     try {
       // 1. Protect: signed URLs only, Academy hosts only, no downloads.
-      await cf(`/stream/${uid}`, { method: "POST", body: { uid, requireSignedURLs: true, allowedOrigins: ORIGINS } });
+      const before = await cf(`/stream/${uid}`);
+      // meta is sent back unchanged so the upload keeps its name.
+      await cf(`/stream/${uid}`, { method: "POST", body: { uid, meta: before.meta || {}, requireSignedURLs: true, allowedOrigins: ORIGINS } });
       const dl = await cf(`/stream/${uid}/downloads`);
       if (dl && Object.keys(dl).length) await cf(`/stream/${uid}/downloads`, { method: "DELETE" });
       // 2. Re-read what Stream actually holds.
@@ -159,21 +206,22 @@ async function protect() {
       customer ||= /^https:\/\/customer-([a-z0-9]+)\.cloudflarestream\.com\//.exec(hls)?.[1] || "";
       const base = hls.replace(/\/[0-9a-f]{32}\/manifest\/video\.m3u8$/, "");
       // 3. Probe from outside, as a stranger would.
-      const bare = await anonymous(hls);
-      const bareMp4 = await anonymous(`${base}/${uid}/downloads/default.mp4`);
+      const bare = await refused(hls);
+      const bareMp4 = await refused(`${base}/${uid}/downloads/default.mp4`);
+      const bareThumb = await refused(`${base}/${uid}/thumbnails/thumbnail.jpg`);
       const fresh = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 300, downloadable: false } });
       const signed = await anonymous(`${base}/${fresh.token}/manifest/video.m3u8`);
       // A token that has expired (valid for 2 s, used after 5 s) must be refused.
       const brief = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 2, downloadable: false } });
       await sleep(5000);
-      const expired = await anonymous(`${base}/${brief.token}/manifest/video.m3u8`);
-      const ok = v.requireSignedURLs === true && downloads === "none" && bare >= 400 && bareMp4 >= 400 && expired >= 400 && signed === 200 && ORIGINS.every((o) => (v.allowedOrigins || []).includes(o));
+      const expired = await refused(`${base}/${brief.token}/manifest/video.m3u8`);
+      const ok = v.requireSignedURLs === true && downloads === "none" && bare >= 400 && bareMp4 >= 400 && bareThumb >= 400 && expired >= 400 && signed === 200 && ORIGINS.every((o) => (v.allowedOrigins || []).includes(o));
       if (!ok) failures++;
       const duration = Math.round(v.duration || 0);
       // 4. Captions: Stream's machine captions become drafts for review;
       // reviewed captions from the Academy replace them in the player.
       let caps = (await cf(`/stream/${uid}/captions`)) || [];
-      const mine = reviewed.find((r) => r.video_id === video.id && r.locale.split("-")[0] === "en");
+      const mine = video && reviewed.find((r) => r.video_id === video.id && r.locale.split("-")[0] === "en");
       if (mine) {
         const current = caps.find((c) => c.language === "en");
         const live = current && !current.generated ? (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text : "";
@@ -187,7 +235,7 @@ async function protect() {
       }
       caps = (await cf(`/stream/${uid}/captions`)) || [];
       const machine = caps.find((c) => c.language === "en" && c.generated && (c.status || "ready") === "ready");
-      if (machine && !mine) {
+      if (machine && video && !mine) {
         const vtt = (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text;
         if (vtt.startsWith("WEBVTT"))
           captions.push(
@@ -196,18 +244,16 @@ async function protect() {
       }
       const capDesc = caps.map((c) => `${c.language}${c.generated ? " (machine)" : ""}:${c.status || "ready"}`).join(" ") || "none";
       evidence.push(
-        `INSERT OR REPLACE INTO stream_protection (uid, title, duration_seconds, signed_required, allowed_origins, downloads, anonymous_status, checked_at) VALUES (${[uid, upload.name, duration, v.requireSignedURLs ? 1 : 0, (v.allowedOrigins || []).join(" "), downloads, ok ? Math.min(bare, bareMp4, expired) : 200, new Date().toISOString()].map(sql).join(", ")});`,
+        `INSERT OR REPLACE INTO stream_protection (uid, title, duration_seconds, signed_required, allowed_origins, downloads, anonymous_status, checked_at) VALUES (${[uid, upload.name, duration, v.requireSignedURLs ? 1 : 0, (v.allowedOrigins || []).join(" "), downloads, ok ? Math.min(bare, bareMp4, bareThumb, expired) : 200, new Date().toISOString()].map(sql).join(", ")});`,
       );
-      if (v.readyToStream && duration > 0)
+      if (video && v.readyToStream && duration > 0)
         mapping.push(
           `UPDATE video_assets SET provider = 'stream', provider_ref = ${sql(uid)}, duration_seconds = ${duration}, updated_at = ${sql(new Date().toISOString())} WHERE id = ${sql(video.id)} AND COALESCE(provider_ref, '') IN ('', ${sql(uid)}) AND (provider <> 'stream' OR COALESCE(provider_ref, '') <> ${sql(uid)} OR COALESCE(duration_seconds, 0) <> ${duration});`,
         );
-      const est = video.minutes * 60;
-      const drift = duration && Math.abs(duration - est) / est > 0.5 ? " ⚠" : "";
-      row = `| ${video.n} | ${video.title} | ${upload.name} | \`${short(uid)}\` | ${v.status?.state || "?"} | ${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")} | ${video.minutes} min${drift} | ${v.requireSignedURLs ? "yes" : "**NO**"} | ${(v.allowedOrigins || []).join(" ") || "**any**"} | ${downloads} | ${bare}${bareMp4 >= 400 ? "" : ` mp4 ${bareMp4}`} | ${signed} | ${expired} | ${capDesc} |${ok ? "" : " **NOT PROTECTED**"}`;
+      row = `| ${video ? video.n : "—"} | ${video ? video.title : "(no lesson)"} | ${upload.name.replace(/\|/g, "/")} | ${by || "—"} | \`${short(uid)}\` | ${v.status?.state || "?"} | ${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")} | ${video ? `${video.minutes} min` : "—"} | ${v.requireSignedURLs ? "yes" : "**NO**"} | ${(v.allowedOrigins || []).join(" ") || "**any**"} | ${downloads} | ${bare} / ${bareMp4} / ${bareThumb} | ${signed} | ${expired} | ${capDesc} |${ok ? " ✅" : " **NOT PROTECTED**"}`;
     } catch (e) {
       failures++;
-      row = `| ${video.n} | ${video.title} | ${upload.name} | \`${short(uid)}\` | **error: ${String(e.message).slice(0, 120)}** |`;
+      row = `| ${video ? video.n : "—"} | ${video ? video.title : "(no lesson)"} | ${upload.name} | ${by || "—"} | \`${short(uid)}\` | **error: ${String(e.message).slice(0, 120)}** |`;
     }
     log(row);
   }
@@ -216,9 +262,9 @@ async function protect() {
   writeFileSync(join(out, "captions.sql"), captions.join("\n") + "\n");
   writeFileSync(join(out, "customer-code"), customer);
   log("");
-  log(`- Bare id, expired token: HTTP status for a request without a valid token (must be 401/403). Signed token: a fresh 5-minute token (must be 200). Est.: the lesson's displayed time (⚠ when the video differs by more than half).`);
+  log(`- Bare id and expired token: HTTP status for a request without a valid token (must be 4xx). Fresh token: a 5-minute signed token (must be 200). Lesson est.: the lesson's displayed time, which includes reading the lesson text.`);
   log(`- Machine captions imported as drafts for review: ${captions.length}`);
-  log(failures ? `- **${failures} lesson video(s) not verifiably protected.**` : `- All ${map.length} mapped lesson videos verified private.`);
+  log(failures ? `- **${failures} upload(s) not verifiably protected.**` : `- All ${rows.length} uploads verified private (${map.length} linked to lesson videos).`);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
   process.exit(failures ? 1 : 0);
 }
