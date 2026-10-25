@@ -92,12 +92,11 @@ jobs:
       - name: Smoke test staging (read-only)
         working-directory: apps/academy
         run: bash scripts/smoke.sh https://academy-staging.agroai-pilot.com
-      # For the real-browser check of protected Stream playback.
-      - name: Install Playwright Chromium
+      # For the real-browser check of protected Stream playback (drives the
+      # runner's preinstalled Google Chrome, which decodes H.264).
+      - name: Install Playwright
         working-directory: apps/academy
-        run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
-          npx playwright install --with-deps chromium
+        run: npm install --no-save --no-package-lock --silent playwright@1.56.1
       # Mandatory: production (needs: staging) runs only if this passes.
       - name: Staging integration test against Cloudflare D1 over HTTP
         working-directory: apps/academy

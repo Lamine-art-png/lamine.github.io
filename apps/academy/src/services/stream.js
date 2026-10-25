@@ -18,12 +18,18 @@ export const isStreamVideo = (v) => Boolean(v && v.provider === "stream" && STRE
 // uploads and nothing else.
 export const directMediaAllowed = (env) => !["production", "staging"].includes(env?.ENVIRONMENT);
 
-/** A video with something to play: a protected Stream upload, or (development and tests only) a direct source. */
-export const hasMedia = (v, env) => Boolean(v && (isStreamVideo(v) || (v.provider !== "stream" && directMediaAllowed(env) && (v.hls_url || v.mp4_url))));
-
 export function streamConfigured(env) {
-  return Boolean(env.STREAM_SIGNING_KEY_ID && env.STREAM_SIGNING_JWK);
+  return Boolean(env?.STREAM_SIGNING_KEY_ID && env?.STREAM_SIGNING_JWK);
 }
+
+/**
+ * A video with something to play: a protected Stream upload this Worker can
+ * sign tokens for, or (development and tests only) a direct source. Without
+ * the signing key a Stream video is not playable, so it never blocks a
+ * learner's completion and never counts as ready for publication.
+ */
+export const hasMedia = (v, env) =>
+  Boolean(v && ((isStreamVideo(v) && streamConfigured(env)) || (v.provider !== "stream" && directMediaAllowed(env) && (v.hls_url || v.mp4_url))));
 
 const keyCache = new Map();
 async function signingKey(env) {

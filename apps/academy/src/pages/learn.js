@@ -6,6 +6,7 @@ import { newId, nowIso, parseJson } from "../lib/util.js";
 import { rateLimit } from "../lib/security.js";
 import { renderMarkdown, md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
+import { localeInfo } from "../lib/i18n.js";
 import { csrfField, translationNotice, contentLang, lessonTypeIcon, progressBar, alert } from "../views/components.js";
 import { getCourseBySlug, getSyllabus, getLesson, getVideo } from "../services/content.js";
 import { validInteractive } from "../lib/interactive.js";
@@ -64,15 +65,16 @@ function fileVideoType(url) {
 // media URL, file name or download link is ever written into the page.
 async function videoBlock(c, lesson, video, progress) {
   const t = c.t;
+  if (video && isStreamVideo(video) && video.status === "approved" && !streamConfigured(c.env)) {
+    // Fail closed: without the signing key there is no way to play a protected
+    // video. The video is then not playable, so the lesson completes from its text.
+    console.warn(JSON.stringify({ event: "video_token", outcome: "unconfigured", lesson: lesson.id }));
+    return html`<div class="video-pending" role="note"><div>${icon("alert", { size: 40 })}<h2>${t("lesson.video_unavailable")}</h2><p>${t("lesson.video_unavailable_body")}</p></div></div>`;
+  }
   if (video?.playable) {
     const start = progress?.status !== "completed" ? Math.floor(progress?.position_seconds || 0) : 0;
     const stream = isStreamVideo(video);
     const signed = stream ? await playbackToken(c.env, video.provider_ref) : null;
-    if (stream && !signed) {
-      // Fail closed: without the signing key there is no way to play a protected video.
-      console.warn(JSON.stringify({ event: "video_token", outcome: "unconfigured", lesson: lesson.id }));
-      return html`<div class="video-pending" role="note"><div>${icon("alert", { size: 40 })}<h2>${t("lesson.video_unavailable")}</h2><p>${t("lesson.video_unavailable_body")}</p></div></div>`;
-    }
     const captions = video.captions.filter((cap) => cap.status === "reviewed" || c.can("courses.edit"));
     return html`<div class="player${stream ? " player-stream" : ""}" data-player data-lesson="${lesson.id}" data-start="${start}"${stream ? raw(` data-stream data-expires="${signed.expiresAt}"`) : ""}>
         ${stream
@@ -237,7 +239,7 @@ export async function lessonPage(c) {
                   ${r.size_bytes ? html`<span class="tiny muted">${Math.max(1, Math.round(r.size_bytes / 1024))} KB</span>` : ""}</li>`,
                 )}</ul></section>`
               : ""}
-            ${transcript ? html`<section role="tabpanel" id="panel-transcript" aria-labelledby="tab-transcript" hidden><div class="transcript prose"${transcript.lang !== c.displayLocale ? raw(` lang="${transcript.lang}"`) : ""}>${transcript.paragraphs.map((p) => html`<p><button class="link-btn tiny muted" type="button" data-seek="${p.start}">${fmtTime(p.start)}</button> ${p.text}</p>`)}</div></section>` : ""}
+            ${transcript ? html`<section role="tabpanel" id="panel-transcript" aria-labelledby="tab-transcript" hidden><div class="transcript prose"${transcript.lang !== c.displayLocale ? raw(` lang="${transcript.lang}" dir="${localeInfo(transcript.lang).dir}"`) : ""}>${transcript.paragraphs.map((p) => html`<p><button class="link-btn tiny muted" type="button" data-seek="${p.start}">${fmtTime(p.start)}</button> ${p.text}</p>`)}</div></section>` : ""}
 
             <section class="panel mt-3 no-print" aria-labelledby="fb-h">
               <h2 class="h2" id="fb-h">${t("lesson.helpful_q")}</h2>
@@ -445,7 +447,7 @@ export async function videoToken(c) {
     log("denied");
     throw new HttpError(403, "not_enrolled");
   }
-  if (!video?.playable || !isStreamVideo(video)) throw new HttpError(404, "not_found");
+  if (!isStreamVideo(video) || video.status !== "approved") throw new HttpError(404, "not_found");
   const signed = await playbackToken(c.env, video.provider_ref);
   if (!signed) {
     log("unconfigured");
@@ -457,7 +459,7 @@ export async function videoToken(c) {
 
 export async function resourceDownload(c) {
   const r = await c.env.DB.prepare(
-    `SELECT r.*, l.course_id, l.is_preview, co.status AS course_status FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id JOIN courses co ON co.id = l.course_id WHERE r.id = ?`,
+    `SELECT r.*, l.course_id FROM lesson_resources r JOIN lessons l ON l.id = r.lesson_id WHERE r.id = ?`,
   )
     .bind(c.params.id)
     .first();

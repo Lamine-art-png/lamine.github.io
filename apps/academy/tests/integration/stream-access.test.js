@@ -119,6 +119,10 @@ test("token renewal: entitled learners only, rate limited, never cached, fails c
   assert.match(r.text, /This video is temporarily unavailable/);
   r = await off.learner.postJson("/api/video-token", { lessonId: LESSON });
   assert.equal(r.status, 503);
+  // An unplayable video never strands the learner: the lesson completes from its text.
+  r = await off.learner.post(LESSON_URL + "/complete", {});
+  assert.doesNotMatch(r.location || "", /watch=1/);
+  assert.equal((await off.env.DB.prepare("SELECT status FROM lesson_progress WHERE lesson_id = ?").bind(LESSON).first()).status, "completed");
 });
 
 test("a copied token is only as good as its expiry", async () => {
@@ -176,6 +180,10 @@ test("publication requires recent evidence that each Stream video is private", a
   let c = await check();
   assert.equal(c.ok, false);
   assert.match(c.label, /without verified Stream protection/);
+  // Optional lessons are covered too: every Stream video learners can play needs evidence.
+  await env.DB.prepare("UPDATE draft_lessons SET is_required = 0 WHERE id = ?").bind(LESSON).run();
+  assert.equal((await check()).ok, false, "optional lesson video without evidence");
+  await env.DB.prepare("UPDATE draft_lessons SET is_required = 1 WHERE id = ?").bind(LESSON).run();
   const record = (signed, anon, downloads, at = new Date().toISOString()) =>
     env.DB.prepare("INSERT OR REPLACE INTO stream_protection (uid, title, signed_required, downloads, anonymous_status, checked_at) VALUES (?, 'x', ?, ?, ?, ?)").bind(UID, signed, downloads, anon, at).run();
   await record(1, 200, "none");
@@ -196,4 +204,25 @@ test("lesson resources are for enrolled learners only, previews included", async
   const outsider = await registeredLearner(env);
   const r = await outsider.get("/resources/res1");
   assert.equal(r.status, 403);
+});
+
+test("a caption reviewer corrects Stream's machine draft in place; only the reviewed version reaches learners", async () => {
+  const { env, learner } = await setup();
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES ('cap_a1_data_en','vid_a1_data','en','English','WEBVTT\n\n00:00.000 --> 00:03.000\nsoil moister is data','machine',?)").bind(now).run();
+  let r = await learner.get(LESSON_URL);
+  assert.doesNotMatch(r.text, /soil moister/, "learners never see a machine draft");
+  // Captions are corrected before publication: a released course's media is locked.
+  await env.DB.prepare("UPDATE courses SET status = 'review', published_at = NULL WHERE id = 'crs_a1'").run();
+  const admin = await registeredLearner(env, { email: "founder@academy.test" });
+  r = await admin.get("/admin/videos/vid_a1_data");
+  assert.match(r.text, /<textarea id="a-vtt" name="vtt" rows="20" class="code" required>WEBVTT\n\n00:00.000 --&gt; 00:03.000\nsoil moister is data<\/textarea>/);
+  assert.match(r.text, /Machine draft from Stream loaded/);
+  r = await admin.post("/admin/videos/vid_a1_data/captions", { locale: "en", status: "reviewed", vtt: "WEBVTT\n\n00:00.000 --> 00:03.000\nSoil moisture is data." });
+  assert.equal(r.status, 303);
+  const row = await env.DB.prepare("SELECT status, vtt FROM video_captions WHERE video_id = 'vid_a1_data' AND locale = 'en'").first();
+  assert.equal(row.status, "reviewed");
+  await publishCourse(env, "crs_a1");
+  r = await learner.get(LESSON_URL);
+  assert.match(r.text, /Soil moisture is data\./);
 });

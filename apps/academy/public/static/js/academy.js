@@ -206,7 +206,9 @@
       // tab left open), fetch a fresh one and continue from the same moment.
       let renewing = false;
       video.addEventListener("error", async () => {
-        if (renewing || Date.parse(player.dataset.expires) - Date.now() > 60_000) return;
+        if (renewing) return;
+        // Not an expiry: tell the learner, who can continue with the lesson text.
+        if (Date.parse(player.dataset.expires) - Date.now() > 60_000) return void ($("[data-video-error]").hidden = false);
         renewing = true;
         try {
           const out = await post("/api/video-token", { lessonId: player.dataset.lesson });

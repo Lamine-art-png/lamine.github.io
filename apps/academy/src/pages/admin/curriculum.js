@@ -465,7 +465,7 @@ export async function editLesson(c) {
       ${select("status", "Status", [["draft", "draft (hidden)"], ["ready", "ready (visible in published courses)"]], l.status)}
     </div>
     ${checkbox("is_required", "Required for completion", l.is_required)}
-    ${checkbox("is_preview", "Free preview (viewable before enrolling)", l.is_preview)}
+    ${checkbox("is_preview", "Marked as introductory (label only: every lesson requires enrollment)", l.is_preview)}
     ${input("summary", "Summary", l.summary)}
     ${textarea("body_md", "Lesson content (Markdown)", l.body_md, { rows: 22, cls: "code", hint: "Supports headings (##), lists, **bold**, *italic*, links, tables, blockquotes and callouts like > **Key idea:** … Raw HTML is not allowed." })}
     ${textarea("interactive_json", "Interactive block (JSON, optional)", l.interactive_json, { rows: 5, cls: "code", hint: 'Example: {"kind":"reveal","title":"Check yourself","cards":[{"front":"Q","back":"A"}]} or {"kind":"checklist","title":"Field checklist","items":["…"]}' })}
@@ -640,6 +640,9 @@ export async function editVideo(c) {
     c.env.DB.prepare("SELECT id, name FROM instructors ORDER BY sort_order").all(),
     c.env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ?").bind(v.id).all(),
   ]);
+  // The English machine draft (from Stream) is loaded into the form, so the
+  // reviewer corrects it in place and saves it as reviewed.
+  const draft = await c.env.DB.prepare("SELECT vtt FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
   const body = html`<form class="form-card" method="post" action="/admin/videos/${v.id}">${hidden(c)}
     ${input("title", "Title", v.title, { required: true })}
     <div class="grid-2">
@@ -659,7 +662,7 @@ export async function editVideo(c) {
     ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · <form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
     <form method="post" action="/admin/videos/${v.id}/captions" class="mt-2">${hidden(c)}
       <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en", { id: "a-caption_locale" })}${select("status", "Caption status", ["machine", "reviewed"], "reviewed", { id: "a-caption_status" })}</div>
-      ${textarea("vtt", "WebVTT content", "WEBVTT\n\n", { rows: 8, cls: "code", required: true })}
+      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? "Machine draft from Stream loaded for English: correct it against the audio, then save as reviewed." : undefined })}
       <button class="btn btn-secondary btn-sm">Add captions</button></form></section>`;
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
 }

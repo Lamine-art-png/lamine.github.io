@@ -74,8 +74,10 @@ async function playback(learner, probe) {
   const anonToken = await fetch(`${BASE}/api/video-token`, { method: "POST", headers: { "content-type": "application/json", origin: BASE }, body: "{}" });
   expect(anonToken.status !== 200, "an anonymous visitor received a token");
   // A real browser, signed in as the learner, plays the video in Stream's player.
+  // Google Chrome (preinstalled on the runner), not Playwright's Chromium:
+  // Stream delivers H.264/AAC, which open-source Chromium cannot decode.
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ channel: "chrome", args: ["--autoplay-policy=no-user-gesture-required"] });
   try {
     const context = await browser.newContext();
     await context.addCookies([...learner.jar].map(([name, value]) => ({ name, value, url: BASE, secure: true, httpOnly: true, sameSite: "Lax" })));
@@ -89,6 +91,10 @@ async function playback(learner, probe) {
           const wait = () => (typeof window.Stream === "function" ? start() : setTimeout(wait, 200));
           const start = () => {
             const p = window.Stream(document.querySelector("[data-player] iframe"));
+            p.addEventListener("error", () => {
+              clearTimeout(timer);
+              reject(new Error("Stream's player reported an error"));
+            });
             p.muted = true;
             p.addEventListener("timeupdate", () => {
               if (p.currentTime > 2) {

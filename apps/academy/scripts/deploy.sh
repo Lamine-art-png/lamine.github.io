@@ -236,9 +236,9 @@ if [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_SIGNING_KEY_ID)" != "yes"
   rm -f "$WORK/stream/key-id" "$WORK/stream/key-jwk"
   echo "    Created a Stream signing key for ${SERVICE} (Worker secrets only)."
 fi
-d1 "SELECT video_id, locale, vtt FROM video_captions WHERE status = 'reviewed'" | $H rows > "$WORK/stream/reviewed.json"
+d1 "SELECT video_id, locale, status, CASE WHEN status = 'reviewed' THEN vtt END AS vtt FROM video_captions" | $H rows > "$WORK/stream/captions.json"
 STREAM_OK=0
-node "$HERE/stream.mjs" protect --out "$WORK/stream" --reviewed "$WORK/stream/reviewed.json" || STREAM_OK=$?
+node "$HERE/stream.mjs" protect --out "$WORK/stream" --captions "$WORK/stream/captions.json" || STREAM_OK=$?
 # Evidence is recorded even when a check fails, so the gate sees the failure.
 for F in evidence mapping captions; do
   if [ -s "$WORK/stream/$F.sql" ]; then

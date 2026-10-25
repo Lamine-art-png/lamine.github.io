@@ -170,7 +170,8 @@ export async function publishReadiness(env, liveCourse) {
   });
   // Stream uploads must be verified private by the deploy pipeline: signed URLs
   // required, anonymous playback refused and no downloadable rendition.
-  const exposed = needsVideo.filter((l) => l.video_id && playable(l, env) && isStreamVideo(l) && !streamProtected(l));
+  // Every Stream video learners can play, required or not.
+  const exposed = ready.filter((l) => l.video_id && playable(l, env) && isStreamVideo(l) && !streamProtected(l));
   checks.push({
     ok: exposed.length === 0,
     label: exposed.length

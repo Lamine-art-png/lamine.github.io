@@ -1,6 +1,6 @@
 # AGRO-AI Academy — staging, launch and production runbook
 
-Release candidate: PR #601 (`claude/inspiring-hypatia-gq0x5p`). Nothing in
+Release candidate: PR #618 (`claude/inspiring-hypatia-gq0x5p`). Nothing in
 this document deploys production; production needs the founder's explicit
 approval and a manual workflow run (section 6).
 
@@ -35,7 +35,7 @@ test still runs end to end (its synthetic addresses use a suppressed outbox).
 
 ## 2. Founder checklist (everything that only you can do)
 
-Required before merging PR #601 (staging):
+Staging setup (done in PR #601; kept for reference):
 
 1. **Cloudflare token: add D1 permission.** In Cloudflare → My Profile → API
    Tokens, edit the token stored as the GitHub secret `CLOUDFLARE_API_TOKEN`
@@ -59,17 +59,48 @@ Recommended for a full live staging test (each is optional):
    be tested (OAuth redirect URI
    `https://academy-staging.agroai-pilot.com/auth/google/callback`).
 
-Required before production (section 6): items 5–9.
+### Production secrets readiness (preflight run 40214066973, 2026-10-25)
 
-5. Create the `academy-production` environment with **required reviewers**.
-6. `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET`: 64 random hex characters, also
-   kept in the company password manager (escrow — a lost key invalidates every
-   certificate). Generate with `openssl rand -hex 32`.
-7. `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE`: long random passphrase, also in the
-   password manager (backups are GPG-encrypted with it).
-8. `ACADEMY_PRODUCTION_RESEND_API_KEY` and
-   `ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS`.
-9. Decisions in section 5 (reviews, video policy) and the legal review (section 7).
+GitHub environment `academy-production` exists. The preflight reports only
+presence, never values:
+
+| Secret (environment `academy-production`) | Present | What it is / how to create it |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | yes (repository secret; no production-specific token found) | The repository token **cannot read D1** (HTTP 401), so it cannot deploy the Academy. Add the same scoped Academy token used by `academy-staging` (Workers Scripts Edit, D1 Edit, Workers R2 Storage Edit, Account Settings Read; zone: Workers Routes Edit, DNS Read, Zone Read) as an **environment** secret of `academy-production`. |
+| `CLOUDFLARE_ACCOUNT_ID` | yes | — |
+| `ACADEMY_STREAM_API_TOKEN` | yes (repository secret) | Stream:Edit only. Required: no deploy starts without it. |
+| `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET` | **no** | Signs every certificate. Production has never issued one: the database `agroai-academy` does not exist (preflight D1 listing), so a new key invalidates nothing. Generate it **yourself**: `openssl rand -hex 32`. Store it first in the company password manager (escrow), then as this secret. If it is left empty, `deploy.sh` generates a key inside Cloudflare that can never be read back: no escrow. It never replaces an existing key, and it refuses to deploy if certificates exist without one. |
+| `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE` | **no** | Encrypts every pre-migration backup (GPG AES-256). A long random passphrase, e.g. `openssl rand -base64 48`, kept in the password manager. A lost passphrase makes those backups unrecoverable. |
+| `ACADEMY_PRODUCTION_RESEND_API_KEY` | **no** | Sends verification, password-reset and certificate emails from `academy@mail.agroai-pilot.com`. Create a sending-only key for the verified domain `mail.agroai-pilot.com` in Resend. Without it, production cannot verify accounts, so nobody can earn a certificate. |
+| `ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS` | **no** | The exact address(es) of the founder's production account, comma-separated (see "Administrator bootstrap" below). |
+| `ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID` / `_SECRET` | no | Optional (Google sign-in). Redirect URI `https://academy.agroai-pilot.com/auth/google/callback`. |
+
+Also before the first production run: add **required reviewers** to the
+`academy-production` environment (GitHub → Settings → Environments).
+
+### Administrator bootstrap (staging diagnosis, preflight run 40214066973)
+
+The staging secret `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS` holds one
+address, correctly formatted. It matches no account. Staging has exactly one
+real account, verified. That account shares neither the configured
+address's domain nor the part before the @, and is not a Gmail variant of it.
+The secret and the account use two different addresses. To fix it:
+
+1. Sign in to `https://academy-staging.agroai-pilot.com` and open *Account*
+   to see the exact address of your staging account.
+2. GitHub → Settings → Environments → `academy-staging` → edit
+   `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS`. Paste that exact address only,
+   with no quotes, name or `mailto:`. Use commas to separate several
+   addresses.
+3. Run *Academy Deploy* for staging (secrets are applied at deploy), then
+   sign out and sign in again: the role is granted at sign-in to a verified
+   matching address.
+4. Re-run *Academy Preflight*: "Bootstrap administrators … super_admin
+   role: 1".
+
+Alternatively, register a new staging account with the address already in
+the secret and verify it. Use the same procedure for production with
+`ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS`.
 
 ## 3. Live staging verification
 
@@ -185,7 +216,7 @@ State in the release candidate (from the seeded database):
 | Certificate | Enabled; requires all lessons and the exam (quiz passes not required) |
 | Course status | `review` (not published) |
 | Academic reviews recorded | 0 of 3 |
-| Instructor videos | 14 final videos uploaded to Cloudflare Stream by the founder (2026-10-25). The Academy's records are `scripted` until the deploy pipeline links them (needs `ACADEMY_STREAM_API_TOKEN`, §5a) and a person approves each one. Captions: none reviewed yet. |
+| Instructor videos | **12 of 14 in Cloudflare Stream, all 12 verified private** (§5a). Videos 4 (*Data: the raw material of agricultural AI*) and 9 (*Crop health monitoring from above and up close*) are not uploaded yet. The 12 records are linked to their uploads on staging and remain `scripted` until a person approves each one after watching it. Captions: none reviewed. |
 | Video policy | `required` — publication is blocked until videos are approved, playable and captioned, or the waiver below is approved |
 | Other 33 courses | `draft` (shown as upcoming / not open) |
 
@@ -200,73 +231,67 @@ voids them):
 3. **Accessibility review** — reading level, text alternatives, captions or
    transcripts for any media, keyboard and screen-reader use.
 
-**Text-first launch option (prepared, NOT activated).** If the videos are not
-ready, the founder may set A1's video policy to *Optional* (Admin → Courses →
-A1, course settings, "Video policy") with this documented reason:
-
-> Launch on 29 October 2026 as a text-first course: every lesson's complete
-> instruction is available as text; the 14 instructor videos (Joshua) are in
-> production and will be added as each is approved and captioned. Approved by
-> <founder name> on <date>.
-
-The change is audited, voids nothing already reviewed, and learners see an
-"Instructor video in production" notice on the lessons that will have video.
-The public FAQ and home page now state that videos are in production and that
-one course opens on 29 October.
+**Video policy stays `required` (founder decision, 2026-10-25).** A1 is not
+published with missing or unreviewed videos, and no certification check is
+waived to meet 29 October. The *Optional* video policy still exists in the
+admin for other courses; using it for A1 would need a new, explicit founder
+decision.
 
 ### 5a. Protected lesson videos (Cloudflare Stream)
 
-The 14 final A1 videos are in Cloudflare Stream. The Academy plays them only
-inside Stream's player, from tokens the Worker signs for an enrolled learner
-(or staff), valid 20 minutes and renewed by the player when they expire. No
-page, API or caption route exposes a video id, manifest, MP4 or download.
-Direct media URLs (`hls_url`, `mp4_url`) are ignored in staging and
-production. Without the signing key, Stream lessons show "temporarily
-unavailable" (fail closed).
+**Status (staging deploy run 40170486990, 2026-10-25; re-checked read-only by
+preflight run 40171393346): 12 of 14 uploaded, 12 of 12 verified private.**
+Videos 4 and 9 are not uploaded yet.
 
-**One credential is needed (founder, about 3 minutes):**
+The Academy plays these videos only inside Stream's player, from tokens the
+Worker signs for an enrolled learner (or staff). Tokens are valid 20 minutes
+and the player renews them when they expire. No page, API or caption route
+exposes a video id, manifest, MP4 or download. Direct media URLs (`hls_url`,
+`mp4_url`) are ignored in staging and production. Without the signing key,
+Stream lessons show "temporarily unavailable" (fail closed).
 
-1. Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom
-   token. Name: `academy-stream`. Permission: *Account → Stream → Edit*,
-   account: AGRO-AI only. Nothing else. (Free; no plan change.)
-2. GitHub → repository Settings → Secrets and variables → Actions → New
-   repository secret `ACADEMY_STREAM_API_TOKEN` with that token. (Or set it
-   as an environment secret in both `academy-staging` and
-   `academy-production`.)
-3. Re-run "Academy Deploy" for staging.
+**Every deploy does this, and fails if anything is not verified**
+(`scripts/stream.mjs`, run from `deploy.sh`). The Stream token
+(`ACADEMY_STREAM_API_TOKEN`, Stream:Edit only) is required: without it no
+deployment starts.
 
-**Until then, protect the videos by hand** (Cloudflare dashboard → Stream →
-each video → Settings): turn on *Require Signed URLs*, add
-`academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com` under
-*Allowed origins*, and remove any MP4 download. Stream's own setting is what
-protects the files; the Academy cannot see or change it without the token.
-
-**What every deploy then does** (`scripts/stream.mjs`, from `deploy.sh`):
-
-- Maps the uploads to the 14 lesson videos by title (video number as
-  tie-break); unrelated uploads are listed, never changed.
-- For each lesson video: requires signed URLs, restricts embedding to the two
-  Academy hosts, deletes downloadable renditions, then re-reads every setting
-  from Stream.
-- Probes from outside: the bare id (HLS and MP4) and an expired token must be
-  refused, a fresh signed token must play. Results go to the job summary and
-  to `stream_protection`; the publication gate requires a passing record no
-  older than 8 days for every Stream video, and the deploy fails if any video
-  is not verifiably protected.
-- Creates the Worker's own signing key on first run (Worker secrets
+- **Maps** uploads to lesson videos by the number in the upload's name
+  ("Video4- …", "video 9- …"). The final titles are reworded, so lesson
+  titles are only a fallback for unnumbered uploads. If two uploads carry the
+  same number, neither is mapped; the run reports it so one can be renamed or
+  deleted.
+- **Protects every upload in the account**: signed URLs required, embedding
+  only on `academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com`,
+  downloadable renditions deleted. Names are kept.
+- **Re-reads the settings from Stream and probes from outside.** The bare id
+  (HLS, MP4, thumbnail) and an expired token must be refused (401/403), and a
+  fresh signed token must play (200). The results go to the job summary and to
+  `stream_protection`. Publication requires a passing record no older than 8
+  days for every Stream video.
+- **Creates** the Worker's own signing key on first run (Worker secrets
   `STREAM_SIGNING_KEY_ID`, `STREAM_SIGNING_JWK`; never printed or stored
-  elsewhere) and records the playback subdomain.
-- Links each video record to its upload (`provider = stream`, Stream id,
-  duration measured by Stream). Status is untouched: a person still approves
-  each video in Admin → Videos after watching it.
-- Imports Stream's machine captions (if any) as **draft** captions for review;
-  once a reviewer marks a caption *reviewed* in the admin, the next deploy
-  replaces the machine captions in Stream's player with it. Learners never
-  receive unreviewed captions from the Academy, and the transcript tab is
-  built only from reviewed captions of the final video (never the planning
-  script). `STREAM_GENERATE_CAPTIONS=1` asks Stream to generate English
-  drafts for videos without any (founder to confirm this stays free on the
-  current plan before enabling).
+  elsewhere).
+- **Links** each video record to its upload (Stream id, duration measured by
+  Stream). It never approves one: a person approves each video in Admin →
+  Videos after watching it.
+- **Captions:** asks Stream for automatic English captions on videos that have
+  none (included for Stream customers; staging deploys set
+  `STREAM_GENERATE_CAPTIONS=1`). It imports them as **drafts** (status
+  `machine`): never shown to learners, never marked reviewed. Once a reviewer
+  corrects a draft and marks it *reviewed* in the admin, the next deploy puts
+  the reviewed file in Stream's player in place of the machine one. The
+  transcript tab is built only from reviewed captions.
+- **Real playback test** (`tests/remote/stream-playback.mjs`, mandatory staging
+  step). A synthetic learner plays one verified upload through a staging-only
+  probe lesson, which approves nothing in A1. The test checks that:
+  - the signed manifest, a rendition and a media segment play;
+  - the bare id and anonymous visitors are refused;
+  - token renewal works;
+  - headless Chromium plays the video in Stream's player.
+
+**When videos 4 and 9 are uploaded,** name them "Video4- …" and "Video9- …",
+then run *Academy Deploy* for staging. The run must report 14 of 14 lesson
+videos mapped and every upload verified private.
 
 **Residual risks (cannot be prevented by any web player):** an entitled
 learner can screen-record or photograph playback; a signed token copied out

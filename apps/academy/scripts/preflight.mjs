@@ -256,6 +256,20 @@ async function bootstrapDiagnosis(uuid, admins) {
   }
 }
 
+// Production history that decides how the certificate-signing key may be set:
+// a new key is safe only while no certificate exists. Counts only.
+async function productionHistory() {
+  out("");
+  out("## Production data (read-only, counts only)");
+  const dbs = await cf(`/accounts/${ACCOUNT}/d1/database?name=agroai-academy`);
+  if (!dbs.ok) return out(`- D1 not readable with this environment's token (HTTP ${dbs.status} ${dbs.errors}); certificate history cannot be checked`);
+  const db = (dbs.result || []).find((d) => d.name === "agroai-academy");
+  if (!db) return out("- Production database `agroai-academy` does not exist yet: no accounts and no certificates have ever been issued in production");
+  const n = await d1Query(db.uuid, `SELECT (SELECT COUNT(*) FROM certificates) AS certificates, (SELECT COUNT(*) FROM users) AS users`);
+  if (!Array.isArray(n)) return out(`- Count refused (${n})`);
+  out(`- Production database exists: ${n[0].users} account(s), ${n[0].certificates} certificate(s) ever issued`);
+}
+
 async function endpoints() {
   out("");
   out("## Live endpoints");
@@ -287,6 +301,7 @@ else if (mode === "environment") {
   out("Cloudflare access with the token this environment's deploy job receives:");
   await cloudflare();
   if (envName === "academy-staging" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await stagingAccounts();
+  if (envName === "academy-production" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await productionHistory();
 } else {
   console.error("usage: preflight.mjs repository | environment <name>");
   process.exit(2);
