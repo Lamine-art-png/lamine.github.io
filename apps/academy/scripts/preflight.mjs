@@ -6,6 +6,7 @@
 // present/absent (from PRESENT_* variables the workflow derives); Cloudflare
 // resources only by name, type and status.
 import { appendFileSync } from "node:fs";
+import { mapUploads, a1Videos } from "./stream.mjs";
 
 const [mode, envName] = process.argv.slice(2);
 const lines = [];
@@ -118,9 +119,9 @@ async function stream() {
   if (!list.ok) return out(`- Stream: unreadable with this token (HTTP ${list.status} ${list.errors}) — the token needs Stream read (and, to protect videos, Stream edit)`);
   const videos = (list.result || []).sort((a, b) => String(a.meta?.name || "").localeCompare(String(b.meta?.name || "")));
   const keys = await cf(`/accounts/${ACCOUNT}/stream/keys`);
-  out(`- Videos: ${videos.length}; signing keys: ${keys.ok ? keys.result.length : `unreadable (HTTP ${keys.status} ${keys.errors})`}`);
+  out(`- Videos: ${videos.length}; signing keys: ${keys.ok ? (keys.result || []).length : `unreadable (HTTP ${keys.status} ${keys.errors})`}`);
   const wm = await cf(`/accounts/${ACCOUNT}/stream/watermarks`);
-  out(`- Watermark profiles: ${wm.ok ? wm.result.length : `unreadable (HTTP ${wm.status})`}`);
+  out(`- Watermark profiles: ${wm.ok ? (wm.result || []).length : `unreadable (HTTP ${wm.status})`}`);
   out("");
   out("| # | Title | Id | State | Ready | Duration (s) | Signed URLs required | Allowed origins | Downloads | Captions | Anonymous HLS | Anonymous thumbnail |");
   out("|---|---|---|---|---|---|---|---|---|---|---|---|");
@@ -138,6 +139,16 @@ async function stream() {
   }
   out("");
   out(`- Videos not protected (signed URLs off, or anonymous HLS returned 200): ${open}`);
+  // The mapping the protection step would apply (nothing is changed here).
+  const map = mapUploads(videos.map((v) => ({ uid: v.uid, name: v.meta?.name || "" })));
+  out(`- Planned A1 mapping: ${map.length} of 14 lesson videos matched`);
+  out("");
+  out("| Video # | Lesson | Matched upload | Id |");
+  out("|---|---|---|---|");
+  for (const lv of a1Videos()) {
+    const m = map.find((x) => x.video.id === lv.id);
+    out(`| ${lv.n} | ${lv.title} | ${m ? String(m.upload.name).replace(/\|/g, "/") : "**none**"} | ${m ? `\`${short(m.upload.uid)}\`` : ""} |`);
+  }
 }
 
 // Read-only inventory of staging accounts for cleanup planning. No identifier,

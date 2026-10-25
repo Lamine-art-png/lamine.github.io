@@ -125,7 +125,7 @@ export function mapUploads(uploads, videos = a1Videos()) {
 async function protect() {
   const out = arg("out");
   mkdirSync(out, { recursive: true });
-  const all = await cf("/stream?limit=1000");
+  const all = (await cf("/stream?limit=1000")) || [];
   const uploads = all.map((v) => ({ uid: v.uid, name: v.meta?.name || "" }));
   const map = mapUploads(uploads);
   const videos = a1Videos();
@@ -172,7 +172,7 @@ async function protect() {
       const duration = Math.round(v.duration || 0);
       // 4. Captions: Stream's machine captions become drafts for review;
       // reviewed captions from the Academy replace them in the player.
-      let caps = await cf(`/stream/${uid}/captions`);
+      let caps = (await cf(`/stream/${uid}/captions`)) || [];
       const mine = reviewed.find((r) => r.video_id === video.id && r.locale.split("-")[0] === "en");
       if (mine) {
         const current = caps.find((c) => c.language === "en");
@@ -185,7 +185,7 @@ async function protect() {
       } else if (!caps.some((c) => c.language === "en") && process.env.STREAM_GENERATE_CAPTIONS === "1" && v.readyToStream) {
         await cf(`/stream/${uid}/captions/en/generate`, { method: "POST" });
       }
-      caps = await cf(`/stream/${uid}/captions`);
+      caps = (await cf(`/stream/${uid}/captions`)) || [];
       const machine = caps.find((c) => c.language === "en" && c.generated && (c.status || "ready") === "ready");
       if (machine && !mine) {
         const vtt = (await cf(`/stream/${uid}/captions/en/vtt`, { raw: true })).text;
