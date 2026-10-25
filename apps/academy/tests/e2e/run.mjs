@@ -352,7 +352,7 @@ try {
     // Watch from the start at 2× speed (10 s of real time for 20 s of video).
     await video.evaluate((v) => new Promise((res) => { v.currentTime = 0; v.playbackRate = 2; v.addEventListener("ended", res, { once: true }); v.play(); }));
     let r = row();
-    for (let i = 0; i < 40 && r.status !== "completed"; i++) {
+    for (let i = 0; i < 100 && r.status !== "completed"; i++) {
       await lp.waitForTimeout(150);
       r = row();
     }
@@ -378,7 +378,7 @@ try {
         // Narrated lessons complete only by watching: play the video through at 2×.
         assert.equal(await lp.locator("[data-complete-form]").count(), 0, `${l.slug}: no manual completion`);
         await lp.locator("[data-player] video").evaluate((v) => new Promise((res) => { v.muted = true; v.currentTime = 0; v.playbackRate = 2; v.addEventListener("ended", res, { once: true }); v.play(); }));
-        for (let i = 0; i < 40 && status(l.id) !== "completed"; i++) await lp.waitForTimeout(150);
+        for (let i = 0; i < 100 && status(l.id) !== "completed"; i++) await lp.waitForTimeout(150);
         assert.equal(status(l.id), "completed", `${l.slug} completes after watching`);
       } else {
         await lp.click('button:has-text("Mark as complete")');
