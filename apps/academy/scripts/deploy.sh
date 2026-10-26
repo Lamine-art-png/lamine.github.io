@@ -9,7 +9,9 @@
 # Optional secrets (read from the environment, never printed):
 #   BOOTSTRAP_ADMIN_EMAILS, RESEND_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
 #   CERT_SIGNING_SECRET (used only if the Worker has none yet),
-#   BACKUP_PASSPHRASE (encrypts backups with GPG AES-256 before upload).
+#   BACKUP_PASSPHRASE (encrypts backups with GPG AES-256 before upload;
+#   required for production, where every stored backup is decrypted again and
+#   compared before any migration).
 #
 # Safety:
 # * Staging and production use different Workers, D1 databases, hostnames,
@@ -53,6 +55,28 @@ test -n "${STREAM_API_TOKEN:-}" || { echo "::error::STREAM_API_TOKEN is required
 WORK="$(mktemp -d)"
 cleanup() { rm -rf "$WORK"; rm -f wrangler.generated.toml; }
 trap cleanup EXIT
+
+# Backup encryption. Production backups hold learner data and certificates, so
+# production never stores one unencrypted: no passphrase, no deploy. The
+# passphrase is proven to encrypt and decrypt here, before anything changes.
+gpg_encrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 -o "$2" "$1" 3<<<"$BACKUP_PASSPHRASE"; }
+gpg_decrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 -o "$2" -d "$1" 3<<<"$BACKUP_PASSPHRASE"; }
+if [ "$TARGET" = "production" ] && [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+  echo "::error::BACKUP_PASSPHRASE is required for production: backups are never stored unencrypted. Add it as the academy-production secret ACADEMY_PRODUCTION_BACKUP_PASSPHRASE and keep a copy in the company password manager." >&2
+  exit 1
+fi
+if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+  if [ "$TARGET" = "production" ] && [ "${#BACKUP_PASSPHRASE}" -lt 20 ]; then
+    echo "::error::BACKUP_PASSPHRASE must be at least 20 characters for production." >&2; exit 1
+  fi
+  head -c 4096 /dev/urandom > "$WORK/canary"
+  if ! gpg_encrypt "$WORK/canary" "$WORK/canary.gpg" 2>/dev/null || ! gpg_decrypt "$WORK/canary.gpg" "$WORK/canary.out" 2>/dev/null || ! cmp -s "$WORK/canary" "$WORK/canary.out"; then
+    echo "::error::Backup encryption self-test failed (GPG AES-256); refusing to deploy." >&2; exit 1
+  fi
+  echo "==> Backup encryption: GPG AES-256 self-test passed"
+else
+  echo "::warning::BACKUP_PASSPHRASE is not set; ${TARGET} backups are stored unencrypted in the private bucket."
+fi
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 api() { curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "${CF_API}$1"; }
@@ -155,12 +179,10 @@ if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
 
   gzip -9 -n -c "$WORK/backup.sql" > "$WORK/backup.sql.gz"
   if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
-    gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 \
-      -o "$WORK/upload" "$WORK/backup.sql.gz" 3<<<"$BACKUP_PASSPHRASE"
+    gpg_encrypt "$WORK/backup.sql.gz" "$WORK/upload" || { echo "::error::Backup encryption failed; refusing to migrate." >&2; exit 1; }
     KEY="${KEY}.gpg"; ENCRYPTED="GPG AES-256"
   else
     cp "$WORK/backup.sql.gz" "$WORK/upload"; ENCRYPTED="no (private bucket, encrypted at rest by R2)"
-    echo "::warning::BACKUP_PASSPHRASE is not set; the backup is stored unencrypted in the private bucket."
   fi
   SUM="$(sha256sum "$WORK/upload" | cut -d' ' -f1)"
 
@@ -173,6 +195,16 @@ if [ "$(printf '%s' "$TABLES_JSON" | $H has-row-name users)" = "yes" ]; then
   $WRANGLER r2 object get "${BUCKET}/${KEY}" --file "$WORK/roundtrip" --remote >/dev/null || {
     echo "::error::Could not read the stored backup back; refusing to migrate." >&2; exit 1; }
   [ "$(sha256sum "$WORK/roundtrip" | cut -d' ' -f1)" = "$SUM" ] || { echo "::error::Stored backup does not match (checksum); refusing to migrate." >&2; exit 1; }
+  if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+    # The stored object must not be readable as the plain export, and must
+    # decrypt to exactly the verified export.
+    if gunzip -t "$WORK/roundtrip" 2>/dev/null || grep -aq "CREATE TABLE" "$WORK/roundtrip"; then
+      echo "::error::Stored backup is not encrypted; refusing to migrate." >&2; exit 1
+    fi
+    { gpg_decrypt "$WORK/roundtrip" "$WORK/roundtrip.sql.gz" 2>/dev/null && cmp -s "$WORK/roundtrip.sql.gz" "$WORK/backup.sql.gz"; } || {
+      echo "::error::Stored backup does not decrypt to the verified export; refusing to migrate." >&2; exit 1; }
+    echo "    Encrypted backup decrypted from the stored copy and matches the verified export."
+  fi
   echo "    Stored ${BUCKET}/${KEY} (sha256 ${SUM}) and read it back intact."
   summary "- Backup: \`r2://${BUCKET}/${KEY}\`" "- SHA-256: \`${SUM}\` · encrypted: ${ENCRYPTED}" "- Restore check: $(node -e 'const v=require(process.argv[1]);console.log(Object.entries(v.tables).filter(([t])=>["users","enrollments","attempts","certificates"].includes(t)).map(([t,n])=>t+"="+n).join(", "))' "$WORK/verify.json")"
 else

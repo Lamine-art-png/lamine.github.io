@@ -289,7 +289,7 @@ GitHub (repository settings → Environments):
   `ACADEMY_STAGING_BACKUP_PASSPHRASE`, `ACADEMY_STAGING_GOOGLE_CLIENT_ID/SECRET`.
 - Environment **`academy-production`**: add **required reviewers**; secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS`,
-  `ACADEMY_PRODUCTION_RESEND_API_KEY`, `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE` (recommended),
+  `ACADEMY_PRODUCTION_RESEND_API_KEY`, `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE` (required),
   `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET` (recommended: generate 64 hex chars and keep a copy in
   a password manager; if omitted one is generated inside Cloudflare and cannot be recovered).
   Optional Google: `ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID/SECRET` with redirect URI

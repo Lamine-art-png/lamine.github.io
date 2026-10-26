@@ -70,7 +70,7 @@ presence, never values:
 | `CLOUDFLARE_ACCOUNT_ID` | yes | — |
 | `ACADEMY_STREAM_API_TOKEN` | yes (repository secret) | Stream:Edit only. Required: no deploy starts without it. |
 | `ACADEMY_PRODUCTION_CERT_SIGNING_SECRET` | **no** | Signs every certificate. Production has never issued one: the database `agroai-academy` does not exist (preflight D1 listing), so a new key invalidates nothing. Generate it **yourself**: `openssl rand -hex 32`. Store it first in the company password manager (escrow), then as this secret. If it is left empty, `deploy.sh` generates a key inside Cloudflare that can never be read back: no escrow. It never replaces an existing key, and it refuses to deploy if certificates exist without one. |
-| `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE` | **no** | Encrypts every pre-migration backup (GPG AES-256). A long random passphrase, e.g. `openssl rand -base64 48`, kept in the password manager. A lost passphrase makes those backups unrecoverable. |
+| `ACADEMY_PRODUCTION_BACKUP_PASSPHRASE` | **no** | **Required: the production deploy refuses to start without it** (at least 20 characters). Encrypts every pre-migration backup (GPG AES-256). Each deploy first runs an encrypt/decrypt self-test, then decrypts the stored copy and compares it with the verified export before any migration. Use a long random passphrase, e.g. `openssl rand -base64 48`, kept in the password manager. A lost passphrase makes those backups unrecoverable. |
 | `ACADEMY_PRODUCTION_RESEND_API_KEY` | **no** | Sends verification, password-reset and certificate emails from `academy@mail.agroai-pilot.com`. Create a sending-only key for the verified domain `mail.agroai-pilot.com` in Resend. Without it, production cannot verify accounts, so nobody can earn a certificate. |
 | `ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS` | **no** | The exact address(es) of the founder's production account, comma-separated (see "Administrator bootstrap" below). |
 | `ACADEMY_PRODUCTION_GOOGLE_CLIENT_ID` / `_SECRET` | no | Optional (Google sign-in). Redirect URI `https://academy.agroai-pilot.com/auth/google/callback`. |
@@ -151,8 +151,8 @@ to `academy-staging.agroai-pilot.com`. Smoke test: PASS (10 routes).
 | Password reset, learner deletion, staff deletion | PASS |
 | Real email delivery to a real inbox | NOT TESTED (no `ACADEMY_STAGING_RESEND_API_KEY`) |
 | Google sign-in | NOT TESTED (no staging OAuth client) |
-| Admin console sign-in for the founder | NOT TESTED (no `ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS`) |
-| Backup encryption | NOT CONFIGURED on staging (no passphrase; bucket is private) |
+| Admin console sign-in for the founder | Configured address now matches the founder's verified account; the role is granted on the founder's next request after a staging deploy |
+| Backup encryption | Production: ENFORCED by the deploy (no passphrase, no deploy; self-test and decrypt-and-compare of the stored copy before migrations). Staging: optional, configured only if `ACADEMY_STAGING_BACKUP_PASSPHRASE` is set |
 
 Live-only defects found and fixed on the way (local SQLite does not have these
 D1 limits; the test doubles now enforce them): compound SELECT term limit in the
