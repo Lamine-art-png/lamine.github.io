@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Must run from main" >&2; exit 1; }
-          git fetch origin main --depth=1
+          git fetch origin main  # full history: verify checks deployed-commit ancestry
           [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || { echo "Workflow SHA is not current main" >&2; exit 1; }
           [[ "$ORG_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "organization_id must be a UUID" >&2; exit 1; }
           if [[ "$MODE" == "activate" ]]; then
