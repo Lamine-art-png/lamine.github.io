@@ -1,8 +1,11 @@
 name: DMRV UAT activation
 
 # Verifies (read-only) or activates the TEST-only DMRV UAT preview for one
-# organization. Never enables LIVE projects, LIVE dmrv_advisory, billing,
-# invoice credits, webhooks or physical execution. Prints booleans only.
+# organization. Activation only ever adds to the additive allowlist
+# PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS; the original
+# PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS is read, never written. Never
+# enables LIVE projects, LIVE dmrv_advisory, billing, invoice credits, webhooks
+# or physical execution. Prints booleans and counts only; fails closed.
 
 on:
   workflow_dispatch:
@@ -27,6 +30,8 @@ permissions:
 
 env:
   API_BASE: https://api.agroai-pilot.com
+  RENDER_API: https://api.render.com/v1
+  PREVIEW_PATH: /v1/platform/recommendations/preview
 
 jobs:
   dmrv-uat:
@@ -39,48 +44,102 @@ jobs:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
       SERVICE_ID: ${{ vars.PRODUCTION_API_SERVICE_ID }}
       ORG_ID: ${{ inputs.organization_id }}
+      MODE: ${{ inputs.mode }}
+      CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Refuse stale, non-main or unconfirmed runs
+      - name: Refuse stale, non-main, unconfirmed or uncredentialed runs
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Must run from main" >&2; exit 1; }
           git fetch origin main --depth=1
           [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || { echo "Workflow SHA is not current main" >&2; exit 1; }
           [[ "$ORG_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "organization_id must be a UUID" >&2; exit 1; }
-          if [[ "${{ inputs.mode }}" == "activate" ]]; then
-            [[ "${{ inputs.confirmation }}" == "ACTIVATE_DMRV_UAT_TEST_ONLY" ]] || { echo "Exact confirmation phrase missing" >&2; exit 1; }
+          if [[ "$MODE" == "activate" ]]; then
+            [[ "$CONFIRMATION" == "ACTIVATE_DMRV_UAT_TEST_ONLY" ]] || { echo "Exact confirmation phrase missing" >&2; exit 1; }
           fi
-          [[ -n "${RENDER_API_KEY:-}" && -n "${SERVICE_ID:-}" ]] || { echo "RENDER_API_KEY and PRODUCTION_API_SERVICE_ID are required" >&2; exit 1; }
+          [[ -n "${RENDER_API_KEY:-}" ]] || { echo "RENDER_API_KEY is not configured in the production environment" >&2; exit 1; }
+          [[ "${SERVICE_ID:-}" =~ ^srv-[a-z0-9]+$ ]] || { echo "PRODUCTION_API_SERVICE_ID is missing or malformed" >&2; exit 1; }
 
-      - name: Activate TEST-only preview for the organization
+      - name: Install fail-closed Render helpers
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/render.sh" <<'SH'
+          # Sourced helpers. Values are never echoed; any unexpected response aborts.
+          render_get() {  # path -> body on stdout; exit on any non-200
+            local out code
+            out="$(mktemp)"
+            code="$(curl --silent --show-error --max-time 30 -o "$out" -w '%{http_code}' \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "$RENDER_API$1")" || { echo "Render API request failed: $1" >&2; exit 1; }
+            [[ "$code" == "200" ]] || { echo "Render API returned HTTP $code for ${1%%\?*}" >&2; exit 1; }
+            cat "$out"
+          }
+          get_env() {  # key -> value ("" only when Render reports the variable as unset)
+            local out code
+            out="$(mktemp)"
+            code="$(curl --silent --show-error --max-time 30 -o "$out" -w '%{http_code}' \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "$RENDER_API/services/$SERVICE_ID/env-vars/$1")" || { echo "Render env read failed: $1" >&2; exit 1; }
+            case "$code" in
+              200) jq -er '.value // ""' "$out" || { echo "Unreadable Render env response: $1" >&2; exit 1; } ;;
+              404) printf '' ;;
+              *) echo "Render env read for $1 returned HTTP $code" >&2; exit 1 ;;
+            esac
+          }
+          put_env() {
+            local code
+            code="$(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' -X PUT \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+              --data "$(jq -nc --arg value "$2" '{value:$value}')" \
+              "$RENDER_API/services/$SERVICE_ID/env-vars/$1")" || { echo "Render env write failed: $1" >&2; exit 1; }
+            [[ "$code" == "200" ]] || { echo "Render env write for $1 returned HTTP $code" >&2; exit 1; }
+          }
+          flag() {  # key -> true/false; a failed read aborts instead of reading as false
+            local v
+            v="$(get_env "$1")" || exit 1
+            [[ "$v" == "true" ]] && echo true || echo false
+          }
+          in_list() {  # list org -> true/false
+            [[ ",$(printf '%s' "$1" | tr -d ' ')," == *",$2,"* ]] && echo true || echo false
+          }
+          SH
+          # Prove the credential and service id before anything else.
+          source "$RUNNER_TEMP/render.sh"
+          render_get "/services/$SERVICE_ID" | jq -e --arg id "$SERVICE_ID" '.id == $id' >/dev/null || { echo "Service lookup mismatch" >&2; exit 1; }
+
+      - name: Add organization to the additive TEST allowlist (never the original)
         if: inputs.mode == 'activate'
         run: |
           set -euo pipefail
-          get_env() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" | jq -r '.value // empty' || true; }
-          put_env() {
-            curl --fail-with-body --silent --show-error -X PUT \
-              -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
-              --data "$(jq -nc --arg value "$2" '{value:$value}')" \
-              "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" >/dev/null
-          }
-          [[ "$(get_env PLATFORM_API_TEST_PROJECTS_ENABLED)" == "true" ]] || { echo "TEST projects are not enabled; refusing" >&2; exit 1; }
-          current="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
-          merged="$(printf '%s,%s' "$current" "$ORG_ID" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -E '.' | sort -u | paste -sd, -)"
-          put_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS "$merged"
+          source "$RUNNER_TEMP/render.sh"
+          test_projects="$(flag PLATFORM_API_TEST_PROJECTS_ENABLED)"
+          live_dmrv="$(flag INTELLIGENCE_DMRV_ADVISORY_ENABLED)"
+          [[ "$test_projects" == "true" ]] || { echo "TEST projects are not enabled; refusing" >&2; exit 1; }
+          [[ "$live_dmrv" == "false" ]] || { echo "LIVE dmrv_advisory is enabled; refusing TEST activation" >&2; exit 1; }
+          original_before="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
+          additive="$(get_env PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS)"
+          merged="$(printf '%s,%s' "$additive" "$ORG_ID" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -E '.' | sort -u | paste -sd, -)"
+          before_count="$(printf '%s' "$additive" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -cE '.' || true)"
+          after_count="$(printf '%s' "$merged" | tr ',' '\n' | grep -cE '.')"
+          (( after_count >= before_count )) || { echo "Refusing a write that would drop existing additive grants" >&2; exit 1; }
+          put_env PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS "$merged"
           put_env PLATFORM_API_DMRV_PREVIEW_ENABLED true
+          original_after="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
+          additive_after="$(get_env PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS)"
+          [[ "$original_after" == "$original_before" ]] || { echo "Original allowlist changed unexpectedly" >&2; exit 1; }
+          [[ "$(in_list "$additive_after" "$ORG_ID")" == "true" ]] || { echo "Additive grant not persisted" >&2; exit 1; }
 
       - name: Deploy exact main SHA
         if: inputs.mode == 'activate'
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error -X POST \
+          code="$(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
             --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
-            "https://api.render.com/v1/services/$SERVICE_ID/deploys" | jq -e '.id != null' >/dev/null
+            "$RENDER_API/services/$SERVICE_ID/deploys")"
+          [[ "$code" == "201" || "$code" == "200" || "$code" == "202" ]] || { echo "Deploy request returned HTTP $code" >&2; exit 1; }
           for attempt in $(seq 1 120); do
             body="$(curl -sS --max-time 15 "$API_BASE/v1/health" || true)"
             [[ "$(jq -r '.build_sha // empty' <<<"$body" 2>/dev/null || true)" == "$GITHUB_SHA" ]] && exit 0
@@ -89,29 +148,77 @@ jobs:
           echo "Backend did not reach exact SHA $GITHUB_SHA" >&2
           exit 1
 
-      - name: Verify flags (booleans only) and live routing
+      - name: Verify deployment, guard and TEST authorization (booleans only)
         run: |
           set -euo pipefail
-          get_env() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" | jq -r '.value // empty' || true; }
-          flag() { [[ "$(get_env "$1")" == "true" ]] && echo true || echo false; }
-          allow="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
-          allowlisted=false; [[ ",${allow// /}," == *",$ORG_ID,"* ]] && allowlisted=true
-          health="$(curl -sS --max-time 15 "$API_BASE/v1/health")"
-          preview_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"context":{"location":{"country":"IN","state":"Uttar Pradesh","district":"Gautam Buddha Nagar"},"crop":{"name":"wheat"}}}' "$API_BASE/v1/platform/recommendations/preview")"
+          source "$RUNNER_TEMP/render.sh"
+          deploy="$(render_get "/services/$SERVICE_ID/deploys?limit=5")"
+          live_sha="$(jq -r '[.[] | (.deploy // .) | select(.status == "live")][0].commit.id // empty' <<<"$deploy")"
+          live_at="$(jq -r '[.[] | (.deploy // .) | select(.status == "live")][0].finishedAt // empty' <<<"$deploy")"
+          health_sha="$(curl -fsS --max-time 15 "$API_BASE/v1/health" | jq -r '.build_sha // empty')"
+          main_sha="$(git rev-parse origin/main)"
+          payload='{"context":{"location":{"country":"IN","state":"Uttar Pradesh","district":"Gautam Buddha Nagar"},"crop":{"name":"wheat"}}}'
+          unauth="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "$payload" "$API_BASE$PREVIEW_PATH")"
+          live_schema="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$API_BASE/v1/intelligence/schemas/dmrv_advisory")"
+          original="$(get_env PLATFORM_API_DMRV_PREVIEW_ORGANIZATION_IDS)"
+          additive="$(get_env PLATFORM_API_DMRV_PREVIEW_ADDITIONAL_ORGANIZATION_IDS)"
+          in_original="$(in_list "$original" "$ORG_ID")"
+          in_additive="$(in_list "$additive" "$ORG_ID")"
+          total="$(printf '%s,%s' "$original" "$additive" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -E '.' | sort -u | grep -c . || true)"
+          test_projects="$(flag PLATFORM_API_TEST_PROJECTS_ENABLED)"
+          preview="$(flag PLATFORM_API_DMRV_PREVIEW_ENABLED)"
+          live_dmrv="$(flag INTELLIGENCE_DMRV_ADVISORY_ENABLED)"
+          invoice_credits="$(flag INTELLIGENCE_INVOICE_CREDITS_ENABLED)"
           {
-            echo "### DMRV UAT state"
-            echo "- deployed build_sha: $(jq -r .build_sha <<<"$health") (main: $GITHUB_SHA)"
-            echo "- PLATFORM_API_ENABLED: $(flag PLATFORM_API_ENABLED)"
-            echo "- PLATFORM_API_TEST_PROJECTS_ENABLED: $(flag PLATFORM_API_TEST_PROJECTS_ENABLED)"
-            echo "- PLATFORM_API_DMRV_PREVIEW_ENABLED: $(flag PLATFORM_API_DMRV_PREVIEW_ENABLED)"
-            echo "- organization allowlisted for preview: $allowlisted"
-            echo "- INTELLIGENCE_DMRV_ADVISORY_ENABLED (LIVE schema): $(flag INTELLIGENCE_DMRV_ADVISORY_ENABLED)"
-            echo "- INTELLIGENCE_INVOICE_CREDITS_ENABLED: $(flag INTELLIGENCE_INVOICE_CREDITS_ENABLED)"
-            echo "- PLATFORM_API_LIVE_PROJECTS_ENABLED: $(flag PLATFORM_API_LIVE_PROJECTS_ENABLED)"
-            echo "- unauthenticated preview POST status (route mounted => 401): $preview_status"
+            echo "### DMRV UAT state ($MODE)"
+            echo "- main SHA: $main_sha"
+            echo "- Render live deploy SHA: ${live_sha:-unknown} (finished ${live_at:-unknown})"
+            echo "- /v1/health build_sha: ${health_sha:-unknown}"
+            echo "- unauthenticated preview POST: HTTP $unauth (guard expects 401)"
+            echo "- PLATFORM_API_TEST_PROJECTS_ENABLED: $test_projects"
+            echo "- PLATFORM_API_DMRV_PREVIEW_ENABLED: $preview"
+            echo "- organization in original allowlist: $in_original"
+            echo "- organization in additive allowlist: $in_additive"
+            echo "- distinct allowlisted organizations (both lists): $total"
+            echo "- INTELLIGENCE_DMRV_ADVISORY_ENABLED (LIVE): $live_dmrv; public dmrv_advisory schema HTTP $live_schema"
+            echo "- INTELLIGENCE_INVOICE_CREDITS_ENABLED: $invoice_credits"
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          if [[ "${{ inputs.mode }}" == "activate" ]]; then
-            [[ "$(flag PLATFORM_API_DMRV_PREVIEW_ENABLED)" == "true" && "$allowlisted" == "true" ]] || { echo "Activation not reflected" >&2; exit 1; }
-            [[ "$(jq -r .build_sha <<<"$health")" == "$GITHUB_SHA" ]] || { echo "Deployed SHA mismatch" >&2; exit 1; }
-            [[ "$preview_status" == "401" ]] || { echo "Preview route not mounted as expected" >&2; exit 1; }
-          fi
+          echo "DMRV_ALLOWLIST_TOTAL=$total" >> "$GITHUB_ENV"
+          fail=0
+          [[ -n "$live_sha" && "$live_sha" == "$health_sha" ]] || { echo "::error::Render live deploy SHA does not match /v1/health"; fail=1; }
+          [[ "$health_sha" == "$main_sha" ]] || { echo "::error::Production is not serving current main"; fail=1; }
+          [[ "$unauth" == "401" ]] || { echo "::error::Preview authentication guard did not return 401"; fail=1; }
+          [[ "$test_projects" == "true" ]] || { echo "::error::TEST projects disabled"; fail=1; }
+          [[ "$preview" == "true" ]] || { echo "::error::DMRV preview disabled"; fail=1; }
+          [[ "$in_original" == "true" || "$in_additive" == "true" ]] || { echo "::error::Organization not authorized for DMRV TEST preview"; fail=1; }
+          [[ "$live_dmrv" == "false" && "$live_schema" == "404" ]] || { echo "::error::LIVE dmrv_advisory is not disabled"; fail=1; }
+          exit "$fail"
+
+      - name: Latest startup configuration log and preview request outcomes
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/render.sh"
+          owner="$(render_get "/services/$SERVICE_ID" | jq -er '.ownerId')"
+          start="$(date -u -d '-7 days' +%Y-%m-%dT%H:%M:%SZ)"
+          end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          q() { jq -rn --arg v "$1" '$v|@uri'; }
+          startup="$(render_get "/logs?ownerId=$owner&resource=$SERVICE_ID&type=app&direction=backward&limit=5&startTime=$(q "$start")&endTime=$(q "$end")&text=$(q 'DMRV TEST release configuration')")"
+          # Follow Render's pagination (hasMore / nextStartTime / nextEndTime) so counts cover the whole window.
+          pages="$(mktemp)"; page_start="$start"; page_end="$end"; truncated=false
+          for page in $(seq 1 50); do
+            body="$(render_get "/logs?ownerId=$owner&resource=$SERVICE_ID&type=request&direction=backward&limit=100&startTime=$(q "$page_start")&endTime=$(q "$page_end")&path=$(q "$PREVIEW_PATH")")"
+            jq -c '.logs // []' <<<"$body" >> "$pages"
+            [[ "$(jq -r '.hasMore // false' <<<"$body")" == "true" ]] || break
+            page_start="$(jq -er '.nextStartTime' <<<"$body")" || { echo "Render pagination cursor missing" >&2; exit 1; }
+            page_end="$(jq -er '.nextEndTime' <<<"$body")" || { echo "Render pagination cursor missing" >&2; exit 1; }
+            [[ "$page" -lt 50 ]] || truncated=true
+          done
+          requests="$(jq -cs 'add // []' "$pages")"
+          {
+            echo "### Startup configuration log (latest, redacted by design: booleans and counts only)"
+            jq -r '.logs[0] | if . == null then "- none found in the last 7 days" else "- \(.timestamp): \(.message | (try capture("(?<m>DMRV TEST release configuration:.*)").m catch "unparsed"))" end' <<<"$startup"
+            echo "### $PREVIEW_PATH requests, last 7 days (Render request logs; no tenant identifiers)"
+            [[ "$truncated" == "false" ]] || echo "- WARNING: more than 5000 requests; counts below are a truncated sample, not the full window"
+            jq -r '[.[] | ((.labels // []) | map({(.name): .value}) | add // {}) | select((.method // "POST") == "POST") | (.statusCode // "unknown")] | group_by(.) | map("- HTTP \(.[0]): \(length)") | if length == 0 then ["- no requests"] else . end | .[]' <<<"$requests"
+            echo "- distinct allowlisted organizations: $DMRV_ALLOWLIST_TOTAL (HTTP 200 attribution to one tenant is only implied when this is 1)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
