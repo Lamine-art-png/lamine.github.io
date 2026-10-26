@@ -186,7 +186,16 @@ jobs:
           echo "DMRV_ALLOWLIST_TOTAL=$total" >> "$GITHUB_ENV"
           fail=0
           [[ -n "$live_sha" && "$live_sha" == "$health_sha" ]] || { echo "::error::Render live deploy SHA does not match /v1/health"; fail=1; }
-          [[ "$health_sha" == "$main_sha" ]] || { echo "::error::Production is not serving current main"; fail=1; }
+          # Workflow-only merges do not redeploy; production is current when the deployed commit is in
+          # main's history and ships the same runtime tree (what the Dockerfile copies) as main.
+          if git cat-file -e "${health_sha}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$health_sha" "$main_sha" \
+             && git diff --quiet "$health_sha" "$main_sha" -- agroai_api agroai shared; then
+            runtime_current=true
+          else
+            runtime_current=false
+            echo "::error::Production does not serve main's runtime code"; fail=1
+          fi
+          echo "- deployed runtime tree identical to main: $runtime_current" | tee -a "$GITHUB_STEP_SUMMARY"
           [[ "$unauth" == "401" ]] || { echo "::error::Preview authentication guard did not return 401"; fail=1; }
           [[ "$test_projects" == "true" ]] || { echo "::error::TEST projects disabled"; fail=1; }
           [[ "$preview" == "true" ]] || { echo "::error::DMRV preview disabled"; fail=1; }
