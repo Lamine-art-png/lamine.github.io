@@ -203,11 +203,22 @@ jobs:
           end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           q() { jq -rn --arg v "$1" '$v|@uri'; }
           startup="$(render_get "/logs?ownerId=$owner&resource=$SERVICE_ID&type=app&direction=backward&limit=5&startTime=$(q "$start")&endTime=$(q "$end")&text=$(q 'DMRV TEST release configuration')")"
-          requests="$(render_get "/logs?ownerId=$owner&resource=$SERVICE_ID&type=request&direction=backward&limit=100&startTime=$(q "$start")&endTime=$(q "$end")&path=$(q "$PREVIEW_PATH")")"
+          # Follow Render's pagination (hasMore / nextStartTime / nextEndTime) so counts cover the whole window.
+          pages="$(mktemp)"; page_start="$start"; page_end="$end"; truncated=false
+          for page in $(seq 1 50); do
+            body="$(render_get "/logs?ownerId=$owner&resource=$SERVICE_ID&type=request&direction=backward&limit=100&startTime=$(q "$page_start")&endTime=$(q "$page_end")&path=$(q "$PREVIEW_PATH")")"
+            jq -c '.logs // []' <<<"$body" >> "$pages"
+            [[ "$(jq -r '.hasMore // false' <<<"$body")" == "true" ]] || break
+            page_start="$(jq -er '.nextStartTime' <<<"$body")" || { echo "Render pagination cursor missing" >&2; exit 1; }
+            page_end="$(jq -er '.nextEndTime' <<<"$body")" || { echo "Render pagination cursor missing" >&2; exit 1; }
+            [[ "$page" -lt 50 ]] || truncated=true
+          done
+          requests="$(jq -cs 'add // []' "$pages")"
           {
             echo "### Startup configuration log (latest, redacted by design: booleans and counts only)"
             jq -r '.logs[0] | if . == null then "- none found in the last 7 days" else "- \(.timestamp): \(.message | (try capture("(?<m>DMRV TEST release configuration:.*)").m catch "unparsed"))" end' <<<"$startup"
             echo "### $PREVIEW_PATH requests, last 7 days (Render request logs; no tenant identifiers)"
-            jq -r '[.logs[] | ((.labels // []) | map({(.name): .value}) | add // {}) | select((.method // "POST") == "POST") | (.statusCode // "unknown")] | group_by(.) | map("- HTTP \(.[0]): \(length)") | if length == 0 then ["- no requests"] else . end | .[]' <<<"$requests"
+            [[ "$truncated" == "false" ]] || echo "- WARNING: more than 5000 requests; counts below are a truncated sample, not the full window"
+            jq -r '[.[] | ((.labels // []) | map({(.name): .value}) | add // {}) | select((.method // "POST") == "POST") | (.statusCode // "unknown")] | group_by(.) | map("- HTTP \(.[0]): \(length)") | if length == 0 then ["- no requests"] else . end | .[]' <<<"$requests"
             echo "- distinct allowlisted organizations: $DMRV_ALLOWLIST_TOTAL (HTTP 200 attribution to one tenant is only implied when this is 1)"
           } | tee -a "$GITHUB_STEP_SUMMARY"
