@@ -86,7 +86,7 @@ function run(ws, target, api, extraEnv = {}) {
 
 const json = (ws, f) => JSON.parse(readFileSync(join(ws.state, f), "utf8"));
 const PASS = "synthetic test passphrase";
-const prod = { ACADEMY_DEPLOY_CONFIRM: "production", BACKUP_PASSPHRASE: PASS };
+const prod = { ACADEMY_DEPLOY_CONFIRM: "production", BACKUP_PASSPHRASE: PASS, CERT_SIGNING_SECRET: "c".repeat(64) };
 const gpgDecrypt = (ws, file) => execFileSync("gpg", ["--batch", "--quiet", "--pinentry-mode", "loopback", "--passphrase", PASS, "--homedir", ws.dir, "-d", file]);
 
 /** Production with learner data and an existing signing key. */
@@ -238,12 +238,17 @@ test("pending migrations are rehearsed on the restored copy before touching live
   assert.doesNotMatch(r.calls, /migrations apply/);
 });
 
-test("production never stores an unencrypted backup: no passphrase, no deploy", async () => {
+test("production needs an escrowed signing key and never stores an unencrypted backup: missing either, no deploy", async () => {
   const api = await cloudflareApi({ ownedHosts: [{ host: "academy.agroai-pilot.com", service: "agroai-academy" }] });
   const ws = await liveProduction(api);
   const deployedBefore = json(ws, "deployed-production.json").at;
-  for (const [pass, message] of [["", /BACKUP_PASSPHRASE is required for production/], ["too short", /at least 20 characters/]]) {
-    const r = await run(ws, "production", api, { ...prod, BACKUP_PASSPHRASE: pass });
+  for (const [extra, message] of [
+    [{ BACKUP_PASSPHRASE: "" }, /BACKUP_PASSPHRASE is required for production/],
+    [{ BACKUP_PASSPHRASE: "too short" }, /at least 20 characters/],
+    [{ CERT_SIGNING_SECRET: "" }, /CERT_SIGNING_SECRET .* is required for production/],
+    [{ CERT_SIGNING_SECRET: "short" }, /CERT_SIGNING_SECRET .* is required for production/],
+  ]) {
+    const r = await run(ws, "production", api, { ...prod, ...extra });
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, message);
     assert.equal(r.calls, "", "no Cloudflare command ran");

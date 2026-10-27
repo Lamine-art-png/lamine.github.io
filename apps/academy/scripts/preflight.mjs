@@ -1,11 +1,15 @@
 // Read-only deployment preflight, run by .github/workflows/academy-preflight.yml.
 //   node scripts/preflight.mjs repository            secrets, Cloudflare inventory, live endpoints
 //   node scripts/preflight.mjs environment <name>    secret presence inside a GitHub environment
-//                                                    (academy-staging: also a read-only account inventory)
+//                                                    (academy-staging: also a read-only account inventory;
+//                                                    academy-production: also credential checks)
 // Never creates, changes or deletes anything. Secrets are reported only as
 // present/absent (from PRESENT_* variables the workflow derives); Cloudflare
 // resources only by name, type and status.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { mapUploads, a1Videos } from "./stream.mjs";
 
 const [mode, envName] = process.argv.slice(2);
@@ -270,6 +274,86 @@ async function productionHistory() {
   out(`- Production database exists: ${n[0].users} account(s), ${n[0].certificates} certificate(s) ever issued`);
 }
 
+// Deployment protection of the production environment, read with the
+// workflow's own token (read access). Logins of required reviewers are public.
+async function protection() {
+  out("");
+  out("## Deployment protection: `academy-production`");
+  const repo = process.env.GITHUB_REPOSITORY;
+  const gh = async (path) => {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}${path}`, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
+      return { status: r.status, body: await r.json().catch(() => ({})) };
+    } catch (e) {
+      return { status: 0, body: {} };
+    }
+  };
+  if (!repo || !process.env.GITHUB_TOKEN) return out("- Not available outside GitHub Actions");
+  const env = await gh("/environments/academy-production");
+  if (env.status !== 200) return out(`- Environment unreadable (HTTP ${env.status})`);
+  const rules = env.body.protection_rules || [];
+  const reviewers = rules.find((r) => r.type === "required_reviewers");
+  const people = (reviewers?.reviewers || []).map((r) => r.reviewer?.login || r.reviewer?.slug).filter(Boolean);
+  const policy = env.body.deployment_branch_policy;
+  let branches = "any branch";
+  if (policy?.protected_branches) branches = "protected branches only";
+  else if (policy?.custom_branch_policies) {
+    const list = await gh("/environments/academy-production/deployment-branch-policies");
+    const names = (list.body.branch_policies || []).map((b) => `${b.name}${b.type === "tag" ? " (tag)" : ""}`);
+    branches = list.status === 200 ? `only: ${names.join(", ") || "none"}` : `custom (list unreadable, HTTP ${list.status})`;
+  }
+  const check = (ok, text) => out(`- ${ok ? "PASS" : "**FAIL**"}: ${text}`);
+  check(people.length > 0, `required reviewers: ${people.length ? people.join(", ") : "none"}`);
+  check(env.body.can_admins_bypass === false, `administrators can bypass: ${env.body.can_admins_bypass === false ? "no" : "yes"}`);
+  check(/^only: main$/.test(branches), `deployments allowed from ${branches}`);
+  const wait = rules.find((r) => r.type === "wait_timer");
+  out(`- Wait timer: ${wait?.wait_timer ? `${wait.wait_timer} min` : "none"}; prevent self-review: ${reviewers?.prevent_self_review ? "yes (you cannot approve your own run)" : "no"}`);
+}
+
+// Production credential checks. Values stay in memory and are never printed:
+// only pass/fail, counts and provider status codes are reported.
+async function credentials() {
+  out("");
+  out("## Production credentials (values never printed)");
+  const check = (ok, text) => out(`- ${ok ? "PASS" : "**FAIL**"}: ${text}`);
+  const pass = process.env.BACKUP_PASSPHRASE || "";
+  check(pass.length >= 20, "backup passphrase is at least 20 characters (the production deploy requires it)");
+  if (pass) {
+    const dir = mkdtempSync(join(tmpdir(), "gpg-check-"));
+    try {
+      writeFileSync(join(dir, "canary"), "academy backup encryption check");
+      const args = ["--batch", "--yes", "--quiet", "--homedir", dir, "--pinentry-mode", "loopback", "--passphrase-fd", "0"];
+      execFileSync("gpg", [...args, "--symmetric", "--cipher-algo", "AES256", "-o", join(dir, "c.gpg"), join(dir, "canary")], { input: pass, stdio: ["pipe", "ignore", "ignore"] });
+      execFileSync("gpg", [...args, "-o", join(dir, "out"), "-d", join(dir, "c.gpg")], { input: pass, stdio: ["pipe", "ignore", "ignore"] });
+      check(readFileSync(join(dir, "out"), "utf8") === "academy backup encryption check", "backup passphrase encrypts and decrypts with GPG AES-256");
+    } catch {
+      check(false, "backup passphrase encrypts and decrypts with GPG AES-256");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const cert = process.env.CERT_SIGNING_SECRET || "";
+  check(cert.length >= 32, "certificate signing secret is at least 32 characters (escrowed key; the deploy sets it once and never replaces it)");
+  const admins = String(process.env.BOOTSTRAP_ADMIN_EMAILS || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const shaped = admins.filter((a) => /^[^\s@,]+@[^\s@,]+\.[a-z]{2,}$/i.test(a)).length;
+  check(admins.length > 0 && shaped === admins.length, `administrator addresses: ${admins.length} configured, ${shaped} well-formed (no address printed)`);
+  const key = process.env.RESEND_API_KEY || "";
+  if (!key) check(false, "Resend API key present");
+  else {
+    try {
+      const r = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const d = (j.data || []).find((x) => x.name === "mail.agroai-pilot.com");
+        check(Boolean(d && d.status === "verified"), `Resend key valid (full access); sending domain mail.agroai-pilot.com: ${d ? d.status : "not in this Resend account"}`);
+      } else if (j.name === "restricted_api_key") check(true, "Resend key valid (sending-only, as recommended; the domain list is not visible to it)");
+      else check(false, `Resend key rejected (HTTP ${r.status} ${j.name || ""})`);
+    } catch (e) {
+      check(false, `Resend unreachable (${String(e.message).slice(0, 60)})`);
+    }
+  }
+}
+
 async function endpoints() {
   out("");
   out("## Live endpoints");
@@ -291,6 +375,7 @@ async function endpoints() {
 
 if (mode === "repository") {
   await repository();
+  await protection();
   await endpoints();
 }
 else if (mode === "environment") {
@@ -302,6 +387,7 @@ else if (mode === "environment") {
   await cloudflare();
   if (envName === "academy-staging" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await stagingAccounts();
   if (envName === "academy-production" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await productionHistory();
+  if (envName === "academy-production") await credentials();
 } else {
   console.error("usage: preflight.mjs repository | environment <name>");
   process.exit(2);

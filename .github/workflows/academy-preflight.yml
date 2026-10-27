@@ -18,7 +18,12 @@ jobs:
     name: Repository secrets, Cloudflare inventory, live endpoints
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # Reads the production environment's protection rules (no write access).
+      actions: read
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PRESENT_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
@@ -89,6 +94,11 @@ jobs:
       PRESENT_ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET: ${{ secrets.ACADEMY_PRODUCTION_GOOGLE_CLIENT_SECRET != '' }}
       PRESENT_ACADEMY_PRODUCTION_CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET != '' }}
       PRESENT_ACADEMY_PRODUCTION_BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE != '' }}
+      # Checked in memory only (length, GPG round trip, Resend status, address shape); never printed.
+      BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_PRODUCTION_BACKUP_PASSPHRASE }}
+      CERT_SIGNING_SECRET: ${{ secrets.ACADEMY_PRODUCTION_CERT_SIGNING_SECRET }}
+      RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY }}
+      BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

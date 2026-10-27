@@ -8,7 +8,8 @@
 # scripts/stream.mjs).
 # Optional secrets (read from the environment, never printed):
 #   BOOTSTRAP_ADMIN_EMAILS, RESEND_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-#   CERT_SIGNING_SECRET (used only if the Worker has none yet),
+#   CERT_SIGNING_SECRET (used only if the Worker has none yet; required for
+#   production, so the key is always escrowed),
 #   BACKUP_PASSPHRASE (encrypts backups with GPG AES-256 before upload;
 #   required for production, where every stored backup is decrypted again and
 #   compared before any migration).
@@ -63,6 +64,13 @@ gpg_encrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-
 gpg_decrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 -o "$2" -d "$1" 3<<<"$BACKUP_PASSPHRASE"; }
 if [ "$TARGET" = "production" ] && [ -z "${BACKUP_PASSPHRASE:-}" ]; then
   echo "::error::BACKUP_PASSPHRASE is required for production: backups are never stored unencrypted. Add it as the academy-production secret ACADEMY_PRODUCTION_BACKUP_PASSPHRASE and keep a copy in the company password manager." >&2
+  exit 1
+fi
+# The production signing key comes from the password manager (escrow) and is
+# checked before anything changes; the Worker keeps it once set.
+CERT_LEN="${CERT_SIGNING_SECRET:-}"
+if [ "$TARGET" = "production" ] && [ "${#CERT_LEN}" -lt 32 ]; then
+  echo "::error::CERT_SIGNING_SECRET (at least 32 characters, escrowed in the password manager) is required for production: add it as the academy-production secret ACADEMY_PRODUCTION_CERT_SIGNING_SECRET." >&2
   exit 1
 fi
 if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
