@@ -125,15 +125,23 @@ function mergePass(cues) {
   return out;
 }
 
+// The stored video length is rounded to the second, so a draft may end up to
+// half a second after it without being wrong.
+const LENGTH_ROUNDING = 500;
+
 /**
- * Reflow a caption. `durationMs` is the video's length (0 when unknown: no
- * cue then ends later than the draft's last cue). Returns the new WebVTT and
- * what changed; throws if any invariant would be violated.
+ * Reflow a caption. `durationMs` is the video's length: no cue is extended
+ * past it, and a draft ending more than its rounding after it is refused.
+ * When the length is unknown (0), no cue ends later than the draft's last
+ * cue. Returns the new WebVTT and what changed; throws if any invariant would
+ * be violated.
  */
 export function reflow(vtt, durationMs = 0) {
   const { header, cues: orig } = parse(vtt);
   if (!orig.length) throw new Error("no cues");
-  const limit = Math.max(durationMs || 0, ...orig.map((c) => c.end));
+  const draftEnd = Math.max(...orig.map((c) => c.end));
+  if (durationMs > 0 && draftEnd > durationMs + LENGTH_ROUNDING) throw new Error("the draft runs past the end of the video");
+  const limit = durationMs > 0 ? durationMs : draftEnd;
   let cues = orig.map((c, i) => ({ ...c, src: [i] }));
   cues = cues.flatMap(split);
   cues = mergePass(cues);
@@ -167,7 +175,9 @@ function check(orig, cues, limit) {
   const from = orig.flatMap((c, i) => c.text.split(/\s+/).filter(Boolean).map(() => i));
   const into = cues.flatMap((c, i) => c.text.split(/\s+/).filter(Boolean).map(() => i));
   cues.forEach((c, i) => {
-    if (!(c.start >= 0 && c.end > c.start && c.end <= limit)) throw new Error(`cue ${i + 1} timing out of range`);
+    // Past the video only where the draft's own speech already ended there (never cut speech, never extend).
+    const spoken = orig[from[into.lastIndexOf(i)]].end;
+    if (!(c.start >= 0 && c.end > c.start && c.end <= Math.max(limit, spoken))) throw new Error(`cue ${i + 1} timing out of range`);
     if (i && c.start < cues[i - 1].end) throw new Error(`cue ${i + 1} overlaps the previous cue`);
     if (!wrap(c.text)) throw new Error(`cue ${i + 1} does not fit two lines`);
     if (c.start < orig[from[into.indexOf(i)]].start) throw new Error(`cue ${i + 1} starts before its speech`);

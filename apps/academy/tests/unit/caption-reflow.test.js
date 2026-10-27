@@ -205,3 +205,30 @@ test("never more drafts than A1's 14 lesson videos", () => {
   assert.throws(() => reflowAll(Array.from({ length: 15 }, (_, i) => ({ ...row, id: `cap${i}` }))), /15 drafts selected, but A1 has 14 lesson videos/);
   assert.equal(reflowAll(Array.from({ length: 14 }, (_, i) => ({ ...row, id: `cap${i}` }))).sql.length, 14);
 });
+
+test("the known video length is the limit: nothing is extended past it, and a draft running past it is refused", () => {
+  const draft = (end) => `WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nOne two three four.\n\n00:00:01.000 --> ${ts(end)}\nFive six seven eight nine ten eleven twelve.`;
+  assert.throws(() => reflow(draft(6000), 5000), /runs past the end of the video/);
+  const within = parse(reflow(draft(5300), 5000).vtt).cues;
+  assert.equal(within.at(-1).end, 5300, "a draft within the length's rounding keeps its own end and is not extended");
+  const short = parse(reflow(draft(2000), 5000).vtt).cues;
+  assert.ok(short.at(-1).end <= 5000 && short.at(-1).end > 2000, "extended for reading time, never past the video");
+});
+
+test("a reviewer's saved edit survives the rollback of migration 0012; the original stays reachable until then", async () => {
+  const { env, draft } = await withDrafts();
+  await applyReflow(env);
+  const admin = await registeredLearner(env, { email: "editor-reflow@academy.test" });
+  const uid = (await env.DB.prepare("SELECT id FROM users WHERE email = 'editor-reflow@academy.test'").first()).id;
+  await env.DB.prepare("INSERT INTO user_roles (user_id, role, granted_at) VALUES (?, 'academy_admin', ?)").bind(uid, new Date().toISOString()).run();
+  const edited = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nCorrected by the reviewer.\n";
+  const r = await admin.post("/admin/videos/vid_a1_data/captions", { locale: "en", status: "machine", vtt: edited });
+  assert.equal(r.status, 303);
+  const c = await caption(env, "cap_data_en");
+  assert.equal(c.reflowed_at, null, "no longer the reflow output");
+  assert.equal(c.source_vtt, draft, "the original is still kept");
+  assert.match((await admin.get("/admin/videos/vid_a1_data")).text, /href="\/captions\/cap_data_en\.source\.vtt"/);
+  const down = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../migrations/down/0012_caption_source.down.sql"), "utf8");
+  await env.DB.exec(down);
+  assert.equal((await env.DB.prepare("SELECT vtt FROM video_captions WHERE id = 'cap_data_en'").first()).vtt, edited, "the reviewer's edit is kept");
+});
