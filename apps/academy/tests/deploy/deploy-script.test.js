@@ -151,6 +151,7 @@ test("a fresh staging deploy touches only staging resources", async () => {
   assert.deepEqual(json(ws, "buckets.json"), ["agroai-academy-staging-files"], "only the staging file bucket");
   assert.match(deployed, /bucket_name = "agroai-academy-staging-files"/);
   assert.match(r.calls, /migrations apply agroai-academy-staging --remote --config wrangler.generated.toml --env staging/);
+  assert.match(r.out, /Caption mode: read-only \(staging\)/, "staging never writes the shared caption tracks");
   assert.doesNotMatch(r.out, /test-token-not-real|re_test_not_real/, "secrets never printed");
   assert.ok(!existsSync(join(ws.dir, "wrangler.generated.toml")), "generated config removed");
 });
@@ -169,6 +170,7 @@ test("existing production data is exported, verified and stored before migration
   assert.ok(idx(/^deploy/) > idx(/^d1 migrations apply/));
   assert.match(r.out, /Restore check passed/);
   assert.match(r.out, /Time Travel bookmark: 00000085/);
+  assert.match(r.out, /Caption mode: writer \(production\)/, "production is the caption writer");
   const dir = join(ws.state, "r2", "agroai-academy-backups", "d1", "agroai-academy");
   const [file] = readdirSync(dir);
   assert.match(file, /^\d{8}T\d{6}Z-abc1234\.sql\.gz\.gpg$/);

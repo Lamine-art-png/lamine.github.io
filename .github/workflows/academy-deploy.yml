@@ -59,9 +59,8 @@ jobs:
       BACKUP_PASSPHRASE: ${{ secrets.ACADEMY_STAGING_BACKUP_PASSPHRASE }}
       # Cloudflare token scoped to Stream:Edit: protects and verifies lesson videos.
       STREAM_API_TOKEN: ${{ secrets.ACADEMY_STREAM_API_TOKEN }}
-      # Stream's automatic English captions (included for Stream customers),
-      # imported as drafts for human review; never marked reviewed.
-      STREAM_GENERATE_CAPTIONS: "1"
+      # No STREAM_GENERATE_CAPTIONS: the Stream uploads are shared, and only
+      # production writes their caption tracks (scripts/stream.mjs).
       CONFIGURED_STAGING_TEST_INBOX_TOKEN: ${{ secrets.ACADEMY_STAGING_TEST_INBOX_TOKEN }}
     steps:
       - uses: actions/checkout@v4

@@ -264,7 +264,12 @@ deployment starts.
   titles are only a fallback for unnumbered uploads. If two uploads carry the
   same number, neither is mapped; the run reports it so one can be renamed or
   deleted.
-- **Protects every upload in the account**: signed URLs required, embedding
+- **Inventory first (Stream policy, founder decision 2026-10-27).** This
+  Cloudflare Stream account is reserved for AGRO-AI Academy. An upload that
+  maps to no A1 lesson video is reported in the job summary (name, short id,
+  creation date), **left untouched**, and the deployment fails. Rename it to
+  its lesson video number, or move it to another Stream account.
+- **Protects every mapped lesson video**: signed URLs required, embedding
   only on `academy.agroai-pilot.com` and `academy-staging.agroai-pilot.com`,
   downloadable renditions deleted. Names are kept.
 - **Re-reads the settings from Stream and probes from outside.** The bare id
@@ -278,13 +283,26 @@ deployment starts.
 - **Links** each video record to its upload (Stream id, duration measured by
   Stream). It never approves one: a person approves each video in Admin →
   Videos after watching it.
-- **Captions:** asks Stream for automatic English captions on videos that have
-  none (included for Stream customers; staging deploys set
-  `STREAM_GENERATE_CAPTIONS=1`). It imports them as **drafts** (status
-  `machine`): never shown to learners, never marked reviewed. Once a reviewer
-  corrects a draft and marks it *reviewed* in the admin, the next deploy puts
-  the reviewed file in Stream's player in place of the machine one. The
-  transcript tab is built only from reviewed captions.
+- **Captions: production is the only writer.** The uploads are shared by
+  staging and production, so only a production deploy changes their caption
+  tracks. A staging deploy lists them and changes nothing: no upload,
+  deletion or generation. Staging keeps its own drafts and rehearsal reviews
+  in its own database. A production deploy:
+  - imports a finished English machine caption as a **draft** (status
+    `machine`; never shown to learners, never marked reviewed) when no
+    reviewed English caption exists, removes it from Stream, and asks Stream
+    for one when no English caption exists at all (`STREAM_GENERATE_CAPTIONS=1`);
+    a draft still generating at the end of the run is removed and requested
+    again next time;
+  - removes **every** other track, of any language, generated or uploaded by
+    hand, unless it is a reviewed production caption with identical text;
+  - uploads reviewed captions missing from the player;
+  - re-reads the tracks and **fails** if anything other than exactly the
+    reviewed captions remains.
+
+  A reviewed caption is therefore preserved across staging redeployments,
+  course revisions and machine-caption imports (an import never overwrites a
+  reviewed row). The transcript tab is built only from reviewed captions.
 - **Real playback test** (`tests/remote/stream-playback.mjs`, mandatory staging
   step). A synthetic learner plays one verified upload through a staging-only
   probe lesson, which approves nothing in A1. The test checks that:
@@ -293,9 +311,10 @@ deployment starts.
   - token renewal works;
   - headless Chromium plays the video in Stream's player.
 
-**Replacing a video:** upload the new file with the same number at the start
-of its name, delete the old upload in Stream, then run *Academy Deploy* for
-staging. The run must report 14 of 14 mapped and every upload verified
+**Replacing a video:** delete the old upload in Stream, upload the new file
+with the same number at the start of its name, then run *Academy Deploy* for
+staging. (While both exist, neither carries a unique number, so the run reports
+them as unexpected and stops.) The run must report 14 of 14 mapped and every upload verified
 private. A replaced video needs a new approval and new captions.
 
 **Residual risks (cannot be prevented by any web player):** an entitled

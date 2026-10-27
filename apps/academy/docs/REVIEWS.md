@@ -94,7 +94,7 @@ Learners never see them. For each video:
 2. Correct it against the audio, at least 99% word accuracy: agricultural terms, product names, numbers and units, and line breaks of no more than 2 lines and 42 characters.
 3. Save it with status *reviewed*.
 
-The next deploy publishes the reviewed file into Stream's player.
+The next **production** deploy publishes the reviewed file into Stream's player and removes any other track. Staging deploys never change Stream's caption tracks, so a review rehearsed on staging never reaches the player.
 
 ## 4. Legal sign-off (outside the app)
 
