@@ -71,5 +71,6 @@ export function captionQa(vtt, durationSeconds = 0) {
   if (overlaps) issues.push(`${overlaps} overlapping cue(s)`);
   if (coverage != null && (coverage < 0.9 || coverage > 1.02)) issues.push(`captions end at ${Math.round(last)} s of a ${Math.round(durationSeconds)} s video`);
   for (const [term, at] of Object.entries(terms)) issues.push(`possible misrecognition of ${term} at cue ${at.join(", ")}`);
-  return { valid, cues: cues.length, words: cues.reduce((s, c) => s + c.lines.join(" ").split(/\s+/).filter(Boolean).length, 0), lastEnd: last, coverage, issues, terms };
+  const counts = { long, tall, fast, short, lengthy, overlaps };
+  return { valid, cues: cues.length, words: cues.reduce((s, c) => s + c.lines.join(" ").split(/\s+/).filter(Boolean).length, 0), lastEnd: last, coverage, issues, terms, counts };
 }

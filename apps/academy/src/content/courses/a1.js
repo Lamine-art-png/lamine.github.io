@@ -52,7 +52,7 @@ By the end of the course you will be able to:
 
 ## How the course works
 
-The course has **four modules**. Each module contains short lessons and ends with a quiz that helps you check your understanding. Quizzes do not count toward your certificate, and you can retake them as often as you like.
+The course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.
 
 Your progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.
 
@@ -149,7 +149,7 @@ Remember: AI is a toolbox, not magic. And the decision is always yours.`,
 
 ## Pressures on the modern farm
 
-**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization, irrigated agriculture accounts for roughly 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.
+**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.
 
 **Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.
 

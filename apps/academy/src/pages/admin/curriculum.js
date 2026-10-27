@@ -638,11 +638,11 @@ export async function editVideo(c) {
   if (!v) throw new HttpError(404, "not_found");
   const [instructors, captions] = await Promise.all([
     c.env.DB.prepare("SELECT id, name FROM instructors ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ?").bind(v.id).all(),
+    c.env.DB.prepare("SELECT id, locale, label, status, source_vtt IS NOT NULL AS has_source FROM video_captions WHERE video_id = ?").bind(v.id).all(),
   ]);
   // The English machine draft (from Stream) is loaded into the form, so the
   // reviewer corrects it in place and saves it as reviewed.
-  const draft = await c.env.DB.prepare("SELECT vtt FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
+  const draft = await c.env.DB.prepare("SELECT vtt, reflowed_at FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
   const body = html`<form class="form-card" method="post" action="/admin/videos/${v.id}">${hidden(c)}
     ${input("title", "Title", v.title, { required: true })}
     <div class="grid-2">
@@ -659,10 +659,10 @@ export async function editVideo(c) {
     ${v.approved_at ? html`<p class="small muted">Approved ${v.approved_at.slice(0, 10)}.</p>` : ""}
     <button class="btn btn-primary">Save video</button></form>
   <section class="form-card mt-3"><h2 class="h2">Captions (WebVTT)</h2>
-    ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · <form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
+    ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · ${cap.has_source ? html`<a href="/captions/${cap.id}.source.vtt" title="The draft as Stream produced it, before it was reflowed for readability (same words)">Original draft</a> · ` : ""}<form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
     <form method="post" action="/admin/videos/${v.id}/captions" class="mt-2">${hidden(c)}
       <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en", { id: "a-caption_locale" })}${select("status", "Caption status", ["machine", "reviewed"], "reviewed", { id: "a-caption_status" })}</div>
-      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? "Machine draft from Stream loaded for English: correct it against the audio, then save as reviewed." : undefined })}
+      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? `Machine draft from Stream loaded for English${draft.reflowed_at ? ", with its lines and timing reflowed for readability (the words are unchanged; the original draft is kept)" : ""}. Correct it against the audio${draft.reflowed_at ? ", check the sync" : ""}, then save as reviewed.` : undefined })}
       <button class="btn btn-secondary btn-sm">Add captions</button></form></section>`;
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
 }
@@ -738,6 +738,8 @@ export async function saveVideo(c) {
   return redirect(`/admin/videos/${v.id}?ok=saved`);
 }
 
+// Saving clears reflowed_at: the caption is now a person's text, not the
+// deploy's reflow output (migration 0012's rollback then leaves it alone).
 export async function addCaptions(c) {
   const b = await c.readBody();
   const vtt = String(b.vtt || "").replace(/\r\n?/g, "\n").slice(0, 500000);
@@ -747,7 +749,7 @@ export async function addCaptions(c) {
   const loc = LOCALES.find((l) => l.code === b.locale) || LOCALES[0];
   const res = await c.env.DB.prepare(
     `INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT ${liveVideoSql("?2")}
-     ON CONFLICT(video_id, locale) DO UPDATE SET vtt = excluded.vtt, status = excluded.status, label = excluded.label`,
+     ON CONFLICT(video_id, locale) DO UPDATE SET vtt = excluded.vtt, status = excluded.status, label = excluded.label, reflowed_at = NULL`,
   )
     .bind(newId("cap_"), c.params.id, loc.code, loc.nativeName, vtt, b.status === "machine" ? "machine" : "reviewed", nowIso())
     .run();
