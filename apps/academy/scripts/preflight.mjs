@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mapUploads, a1Videos } from "./stream.mjs";
+import { captionQa } from "./caption-qa.mjs";
 
 const [mode, envName] = process.argv.slice(2);
 const lines = [];
@@ -171,6 +172,37 @@ async function d1Query(uuid, sql, params = []) {
     return String(e.message).slice(0, 80);
   }
 }
+// Caption drafts and reviews for A1, checked mechanically (scripts/caption-qa.mjs).
+// Counts and cue numbers only: caption text never reaches the log.
+async function captionReport(dbName) {
+  out("");
+  out(`## A1 captions in \`${dbName}\` (mechanical checks; a person reviews against the audio)`);
+  const dbs = await cf(`/accounts/${ACCOUNT}/d1/database?name=${dbName}`);
+  const db = dbs.ok && dbs.result?.find((d) => d.name === dbName);
+  if (!db) return out(`- Database not readable or not created yet (HTTP ${dbs.status} ${dbs.errors})`);
+  const rows = await d1Query(db.uuid, `SELECT va.id AS video_id, va.status AS video_status, va.duration_seconds AS duration, vc.locale, vc.status, vc.vtt
+    FROM video_assets va LEFT JOIN video_captions vc ON vc.video_id = va.id WHERE va.id LIKE 'vid_a1\\_%' ESCAPE '\\' ORDER BY va.id, vc.locale`);
+  if (!Array.isArray(rows)) return out(`- Query refused (${rows})`);
+  const order = new Map(a1Videos().map((v) => [v.id, v.n]));
+  out("| # | Video status | Caption | Status | Cues | Words | Coverage | Mechanical issues |");
+  out("|---|---|---|---|---|---|---|---|");
+  const tally = { videos: new Set(), approved: new Set(), reviewed: new Set(), drafts: new Set() };
+  for (const r of rows.sort((a, b) => (order.get(a.video_id) || 99) - (order.get(b.video_id) || 99))) {
+    if (!order.has(r.video_id)) continue;
+    tally.videos.add(r.video_id);
+    if (r.video_status === "approved") tally.approved.add(r.video_id);
+    if (!r.locale) {
+      out(`| ${order.get(r.video_id)} | ${r.video_status} | none | — | — | — | — | no caption yet |`);
+      continue;
+    }
+    if (r.status === "reviewed" && r.locale.startsWith("en")) tally.reviewed.add(r.video_id);
+    if (r.status === "machine") tally.drafts.add(r.video_id);
+    const q = captionQa(r.vtt || "", r.duration || 0);
+    out(`| ${order.get(r.video_id)} | ${r.video_status} | ${r.locale} | ${r.status} | ${q.cues ?? "—"} | ${q.words ?? "—"} | ${q.coverage == null ? "—" : `${Math.round(q.coverage * 100)}%`} | ${q.issues.join("; ") || "none"} |`);
+  }
+  out(`- A1 videos: ${tally.videos.size}; approved: ${tally.approved.size}; with a reviewed English caption: ${tally.reviewed.size}; with a machine draft awaiting review: ${tally.drafts.size}`);
+}
+
 async function stagingAccounts() {
   out("");
   out("## Staging accounts (read-only, no addresses)");
@@ -385,8 +417,14 @@ else if (mode === "environment") {
   out("");
   out("Cloudflare access with the token this environment's deploy job receives:");
   await cloudflare();
-  if (envName === "academy-staging" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await stagingAccounts();
-  if (envName === "academy-production" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) await productionHistory();
+  if (envName === "academy-staging" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) {
+    await stagingAccounts();
+    await captionReport("agroai-academy-staging");
+  }
+  if (envName === "academy-production" && process.env.CLOUDFLARE_API_TOKEN && ACCOUNT) {
+    await productionHistory();
+    await captionReport("agroai-academy");
+  }
   if (envName === "academy-production") await credentials();
 } else {
   console.error("usage: preflight.mjs repository | environment <name>");
