@@ -1,21 +1,26 @@
 // Cloudflare Stream protection for Academy lesson videos, run by deploy.sh.
-//   node scripts/stream.mjs protect --out DIR [--captions FILE]
+//   node scripts/stream.mjs protect --out DIR --caption-mode writer|readonly [--captions FILE]
 //   node scripts/stream.mjs create-key --out DIR
 //
+// The Stream account is reserved for the Academy (founder policy, 2026-10-27).
 // protect: maps the account's uploads to Course A1's fourteen lesson videos
-// (by title, with the video number as tie-break), then for each mapped upload
-// requires signed URLs, restricts embedding to the Academy hosts and removes
-// downloadable renditions. It re-reads every setting from Stream and probes
-// playback from outside: the bare video id and an expired token must be
-// refused, a fresh signed token must play. It writes, for deploy.sh to apply:
+// (by video number, with the title as fallback). An upload that maps to no
+// lesson video is unexpected: it is reported, never modified, and the run
+// fails. For each mapped upload it requires signed URLs, restricts embedding
+// to the Academy hosts and removes downloadable renditions. It re-reads every
+// setting from Stream and probes playback from outside: the bare video id and
+// an expired token must be refused, a fresh signed token must play. It writes,
+// for deploy.sh to apply:
 //   DIR/evidence.sql   stream_protection rows (the publication gate reads them)
 //   DIR/mapping.sql    video_assets → Stream uid and duration (status untouched:
 //                      every video is still approved by a person in the admin)
 //   DIR/captions.sql   Stream's machine captions as drafts for human review
 //   DIR/customer-code  the account's playback subdomain code
-// With --captions (the Academy's caption rows exported from D1), Stream's
-// player is kept to reviewed captions only (see syncCaptions). Released
-// course media is never changed.
+// Captions: the uploads are shared by staging and production, so production
+// is their only caption writer (--caption-mode writer): Stream's player is
+// reconciled to production's reviewed captions (see syncCaptions). Staging
+// (readonly) never uploads, deletes or generates a Stream caption track.
+// Released course media is never changed.
 // Exits 1 if any upload is not verifiably protected. Logs carry titles
 // and shortened ids only; tokens and keys are never printed.
 //
@@ -47,7 +52,9 @@ const log = (s = "") => {
 };
 const short = (uid) => `${String(uid).slice(0, 6)}…`;
 const sql = (v) => (v == null ? "NULL" : typeof v === "number" ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Time source for the playback probes, replaceable in tests to simulate a slow API.
+export const clock = { now: () => Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
+const sleep = (ms) => clock.sleep(ms);
 
 async function cf(path, { method = "GET", body, raw = false } = {}) {
   const headers = { Authorization: `Bearer ${TOKEN}` };
@@ -164,8 +171,31 @@ export function duplicateNumbers(uploads) {
   return [...counts].filter(([, c]) => c > 1).map(([n]) => n);
 }
 
-async function protect() {
-  const out = arg("out");
+/**
+ * Signed token that has expired by the time it is used; returns the status a
+ * stranger gets with it (must be refused). The token is issued with 15 s of
+ * headroom, so a slow API call never reaches Stream with its expiry already
+ * past (Stream rejects that as invalid), and it is used 5 s after it expires.
+ */
+export async function expiredTokenStatus(uid, base) {
+  let brief;
+  let exp;
+  for (let attempt = 1; ; attempt++) {
+    exp = Math.floor(clock.now() / 1000) + 15;
+    try {
+      brief = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp, downloadable: false } });
+      break;
+    } catch (e) {
+      if (attempt >= 2) throw e;
+    }
+  }
+  await sleep(Math.max(0, (exp + 5) * 1000 - clock.now()));
+  return refused(`${base}/${brief.token}/manifest/video.m3u8`);
+}
+
+export async function protect({ out, captionsFile = null, captionMode = "readonly" }) {
+  const writer = captionMode === "writer";
+  if (writer && !captionsFile) throw new Error("caption writer mode needs --captions (the reviewed caption set)");
   mkdirSync(out, { recursive: true });
   const all = (await cf("/stream?limit=1000")) || [];
   const uploads = all.map((v) => ({ uid: v.uid, name: v.meta?.name || "" }));
@@ -176,23 +206,27 @@ async function protect() {
   const missing = videos.filter((v) => !map.some((m) => m.video.id === v.id));
   for (const v of missing) log(`- **Lesson video ${v.n} (${v.title}): no upload found** — learners see "video in production" and publication stays blocked until it is uploaded and approved`);
   for (const n of duplicateNumbers(uploads)) log(`- **Several uploads are numbered ${n}**: none was mapped to lesson video ${n}; delete or rename the extra one`);
-  for (const v of unmapped) log(`- Upload "${v.meta?.name || "(untitled)"}" (\`${short(v.uid)}\`) matches no lesson video: protected like the others, not linked to a lesson`);
+  for (const v of unmapped) log(`- **Unexpected upload "${String(v.meta?.name || "(untitled)").replace(/\|/g, "/")}" (\`${short(v.uid)}\`, created ${v.created || "?"})**: it maps to no A1 lesson video. This Stream account is reserved for the Academy, so it was left untouched and the deployment stops. Rename it to its lesson video number, or move it to another account.`);
+  log(`- Caption mode: ${writer ? "writer (production): Stream's caption tracks are reconciled to production's reviewed captions" : "read-only (staging): Stream caption tracks are listed, never changed"}`);
 
   const evidence = [];
   const mapping = [];
   const captions = [];
-  // Failures are protection failures only; a missing upload is a content gap
-  // (reported above, and enforced by the publication gate), not a leak.
-  let failures = 0;
+  // Failures: an unexpected upload, a protection that cannot be verified, or
+  // (writer) a caption track that is not exactly a reviewed caption. A missing
+  // upload is a content gap (reported above, enforced by the publication
+  // gate), not a leak.
+  let failures = unmapped.length;
   let customer = "";
   const pendingCaptions = [];
+  const collectedFrom = new Set(); // every video whose machine draft this run collects
   // Every caption the Academy holds (vtt only for reviewed ones), from D1.
-  const known = arg("captions") ? JSON.parse(readFileSync(arg("captions"), "utf8")) : [];
+  const known = captionsFile ? JSON.parse(readFileSync(captionsFile, "utf8")) : [];
   log("");
   log("| # | Lesson video | Upload | Matched by | Id | State | Video length | Lesson est. | Signed | Origins | Downloads | Bare id (HLS / MP4 / thumb) | Fresh token | Expired token | Captions |");
   log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
-  // Every upload in the account is protected; mapped ones are also linked to their lesson.
-  const rows = [...map, ...unmapped.map((v) => ({ upload: { uid: v.uid, name: v.meta?.name || "" }, video: null }))];
+  // Only the uploads mapped to A1 lesson videos are touched.
+  const rows = map;
   for (const { upload, video, by } of rows) {
     const uid = upload.uid;
     let row;
@@ -213,22 +247,23 @@ async function protect() {
       const bare = await refused(hls);
       const bareMp4 = await refused(`${base}/${uid}/downloads/default.mp4`);
       const bareThumb = await refused(`${base}/${uid}/thumbnails/thumbnail.jpg`);
-      const fresh = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 300, downloadable: false } });
+      const fresh = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(clock.now() / 1000) + 300, downloadable: false } });
       const signed = await anonymous(`${base}/${fresh.token}/manifest/video.m3u8`);
-      // A token that has expired (valid for 2 s, used after 5 s) must be refused.
-      const brief = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 2, downloadable: false } });
-      await sleep(5000);
-      const expired = await refused(`${base}/${brief.token}/manifest/video.m3u8`);
+      const expired = await expiredTokenStatus(uid, base);
       const ok = v.requireSignedURLs === true && downloads === "none" && bare >= 400 && bareMp4 >= 400 && bareThumb >= 400 && expired >= 400 && signed === 200 && ORIGINS.every((o) => (v.allowedOrigins || []).includes(o));
       if (!ok) failures++;
       const duration = Math.round(v.duration || 0);
       evidence.push(evidenceRow(uid, upload.name, duration, v, downloads, ok ? Math.min(bare, bareMp4, bareThumb, expired) : 200));
-      // 4. Captions (a caption problem is reported but is not a protection failure).
+      // 4. Captions. For the writer, a track that is not exactly a reviewed
+      // caption (or a sync error) fails the run: it could be shown to learners.
       let capDesc;
       try {
-        capDesc = await syncCaptions(uid, video, v, known.filter((k) => video && k.video_id === video.id), captions, pendingCaptions);
+        const sync = await syncCaptions(uid, video, v, known.filter((k) => video && k.video_id === video.id), captions, pendingCaptions, { writer });
+        capDesc = sync.desc + (sync.problems.length ? ` **${sync.problems.join("; ")}**` : "");
+        if (sync.problems.length) failures++;
       } catch (e) {
         capDesc = `**caption sync error: ${String(e.message).slice(0, 80)}**`;
+        if (writer) failures++;
       }
       if (video && v.readyToStream && duration > 0)
         mapping.push(
@@ -243,6 +278,7 @@ async function protect() {
     }
     log(row);
   }
+  for (const p of pendingCaptions) collectedFrom.add(p);
   // Generation takes a few minutes; wait for drafts requested in this run.
   for (let i = 0; i < 30 && pendingCaptions.length; i++) {
     await sleep(10000);
@@ -252,6 +288,31 @@ async function protect() {
       if (await importDraft(p.uid, p.video, captions)) pendingCaptions.splice(pendingCaptions.indexOf(p), 1);
     }
   }
+  // A machine caption that did not finish in time is removed rather than left
+  // to become playable unreviewed; the next production deploy requests it again.
+  const collected = [...collectedFrom];
+  for (const p of pendingCaptions) {
+    try {
+      await cf(`/stream/${p.uid}/captions/en`, { method: "DELETE" });
+      log(`- Lesson video ${p.video.n}: machine caption still generating; removed from Stream, requested again by the next production deploy`);
+    } catch {
+      /* judged below */
+    }
+  }
+  // Final verdict for every video whose machine draft was collected this run:
+  // no machine track may remain in the player.
+  for (const p of collected) {
+    let left;
+    try {
+      left = ((await cf(`/stream/${p.uid}/captions`)) || []).some((c) => c.generated);
+    } catch {
+      left = true;
+    }
+    if (left) {
+      failures++;
+      log(`- **Lesson video ${p.video.n}: an unreviewed machine caption could not be removed from Stream's player.**`);
+    }
+  }
   writeFileSync(join(out, "evidence.sql"), evidence.join("\n") + "\n");
   writeFileSync(join(out, "mapping.sql"), mapping.join("\n") + "\n");
   writeFileSync(join(out, "captions.sql"), captions.join("\n") + "\n");
@@ -259,10 +320,13 @@ async function protect() {
   log("");
   log(`- Bare id and expired token: HTTP status for a request without a valid token (must be 4xx). Fresh token: a 5-minute signed token (must be 200). Lesson est.: the lesson's displayed time, which includes reading the lesson text.`);
   log(`- Machine captions imported as **drafts awaiting human review** (status "machine"; removed from Stream's player, never shown to learners): ${captions.length}`);
-  if (pendingCaptions.length) log(`- Captions still generating (imported by the next deploy): ${pendingCaptions.map((p) => p.video.n).join(", ")}`);
-  log(failures ? `- **${failures} upload(s) not verifiably protected.**` : `- All ${rows.length} uploads verified private (${map.length} linked to lesson videos).`);
+  log(
+    failures
+      ? `- **${failures} problem(s): unexpected upload(s), upload(s) not verifiably protected, or caption tracks not reviewed.**`
+      : `- All ${rows.length} uploads verified private (${map.length} linked to lesson videos); no unexpected uploads.`,
+  );
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
-  process.exit(failures ? 1 : 0);
+  return failures ? 1 : 0;
 }
 
 // Released course media is immutable (as in the admin): the pipeline never
@@ -276,39 +340,87 @@ const evidenceRow = (uid, title, duration, v, downloads, anonymousStatus) =>
 const streamLang = (locale) => String(locale).split("-")[0].toLowerCase();
 
 /**
- * Keep Stream's player showing only reviewed captions:
- * - reviewed captions (any language) from the Academy are uploaded to Stream;
- * - for English with no caption at all, Stream is asked to generate one
- *   (STREAM_GENERATE_CAPTIONS=1); the finished machine caption is imported
- *   into the Academy as a draft and then removed from Stream, so learners
- *   never see unreviewed text in the player.
- * Returns a short description of the video's captions in Stream.
+ * Caption tracks in Stream's player for one shared upload.
+ *
+ * Read-only (staging): lists the tracks and changes nothing. Production owns
+ * the tracks of the shared uploads; staging keeps its own drafts in its
+ * database only.
+ *
+ * Writer (production): the player carries exactly production's reviewed
+ * captions. In order:
+ * - a finished English machine caption, when no reviewed English exists, is
+ *   imported as an Academy draft and removed from Stream (one still
+ *   generating is left in progress and removed at the end of the run if it
+ *   has not finished);
+ * - every other track, of any language, generated or uploaded, that is not a
+ *   reviewed caption with identical text is deleted;
+ * - reviewed captions missing from Stream are uploaded;
+ * - for English with no caption row at all, Stream is asked to generate one
+ *   (STREAM_GENERATE_CAPTIONS=1);
+ * - the tracks are re-read: anything not exactly reviewed is a problem.
+ * Two reviewed locales that Stream stores under the same language (pt-BR and
+ * pt-PT) are ambiguous: neither is published and the run reports it.
+ * Returns { desc, problems }.
  */
-export async function syncCaptions(uid, video, v, rows, captions, pending) {
-  let caps = (await cf(`/stream/${uid}/captions`)) || [];
+export async function syncCaptions(uid, video, v, rows, captions, pending, { writer = false } = {}) {
+  const list = async () => (await cf(`/stream/${uid}/captions`)) || [];
+  const describe = (caps) => caps.map((c) => `${c.language}${c.generated ? " (machine)" : ""}:${c.status || "ready"}`).join(" ") || "none (in player)";
+  if (!writer) return { desc: `${describe(await list())} (read-only; production manages tracks)`, problems: [] };
+
+  const problems = [];
+  const approved = new Map();
+  const ambiguous = new Set();
   for (const r of rows.filter((x) => x.status === "reviewed" && x.vtt)) {
     const lang = streamLang(r.locale);
-    const current = caps.find((c) => c.language === lang);
-    const live = current && !current.generated ? (await cf(`/stream/${uid}/captions/${lang}/vtt`, { raw: true })).text : "";
-    if (live.trim() !== r.vtt.trim()) {
-      if (current) await cf(`/stream/${uid}/captions/${lang}`, { method: "DELETE" });
-      const fd = new FormData();
-      fd.append("file", new Blob([r.vtt], { type: "text/vtt" }), `${lang}.vtt`);
-      await cf(`/stream/${uid}/captions/${lang}`, { method: "PUT", body: fd });
-    }
+    if (approved.has(lang)) ambiguous.add(lang);
+    else approved.set(lang, r.vtt.trim());
   }
-  const hasEnglish = rows.some((r) => streamLang(r.locale) === "en");
-  if (video && !hasEnglish && !caps.some((c) => c.language === "en") && process.env.STREAM_GENERATE_CAPTIONS === "1" && v.readyToStream) {
-    await cf(`/stream/${uid}/captions/en/generate`, { method: "POST" });
+  for (const lang of ambiguous) {
+    approved.delete(lang);
+    problems.push(`several reviewed captions for "${lang}": none published`);
   }
-  caps = (await cf(`/stream/${uid}/captions`)) || [];
+  const vttOf = async (lang) => (await cf(`/stream/${uid}/captions/${lang}/vtt`, { raw: true })).text.trim();
+  // An English machine draft this run is collecting: it is imported and
+  // removed, or removed, at the end of the run, and judged there.
+  const collecting = (c) => c.generated && c.language === "en" && !approved.has("en") && pending.some((p) => p.uid === uid);
+
+  let caps = await list();
+  let drafted = false;
   const machine = caps.find((c) => c.language === "en" && c.generated);
-  if (machine && video && !rows.some((r) => streamLang(r.locale) === "en" && r.status === "reviewed")) {
-    if ((machine.status || "ready") === "ready") await importDraft(uid, video, captions);
-    else pending.push({ uid, video });
+  if (machine && video && !approved.has("en")) {
+    if ((machine.status || "ready") === "ready") {
+      drafted = await importDraft(uid, video, captions);
+      if (drafted) caps = await list();
+    } else if (!pending.some((p) => p.uid === uid)) pending.push({ uid, video });
   }
-  caps = (await cf(`/stream/${uid}/captions`)) || [];
-  return caps.map((c) => `${c.language}${c.generated ? " (machine)" : ""}:${c.status || "ready"}`).join(" ") || "none (in player)";
+  for (const c of caps) {
+    if (collecting(c)) continue;
+    const want = approved.get(c.language);
+    if (want == null || c.generated || (await vttOf(c.language)) !== want) await cf(`/stream/${uid}/captions/${c.language}`, { method: "DELETE" });
+  }
+  caps = await list();
+  for (const [lang, vtt] of approved) {
+    if (caps.some((c) => c.language === lang)) continue;
+    const fd = new FormData();
+    fd.append("file", new Blob([vtt + "\n"], { type: "text/vtt" }), `${lang}.vtt`);
+    await cf(`/stream/${uid}/captions/${lang}`, { method: "PUT", body: fd });
+  }
+  const hasEnglishRow = drafted || rows.some((r) => streamLang(r.locale) === "en");
+  caps = await list();
+  if (video && !hasEnglishRow && !caps.some((c) => c.language === "en") && process.env.STREAM_GENERATE_CAPTIONS === "1" && v.readyToStream) {
+    await cf(`/stream/${uid}/captions/en/generate`, { method: "POST" });
+    if (!pending.some((p) => p.uid === uid)) pending.push({ uid, video });
+    caps = await list();
+  }
+  // Verify what Stream now serves.
+  for (const c of caps) {
+    if (collecting(c)) continue;
+    const want = approved.get(c.language);
+    if (want == null || c.generated) problems.push(`unreviewed ${c.language} track in the player`);
+    else if ((await vttOf(c.language)) !== want) problems.push(`${c.language} track differs from the reviewed caption`);
+  }
+  for (const lang of approved.keys()) if (!caps.some((c) => c.language === lang)) problems.push(`reviewed ${lang} caption missing from the player`);
+  return { desc: describe(caps), problems };
 }
 
 /** Import Stream's finished English machine caption as an Academy draft, then remove it from the player. */
@@ -336,10 +448,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error("STREAM_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required");
     process.exit(2);
   }
-  if (cmd === "protect") await protect();
+  if (cmd === "protect") {
+    const mode = arg("caption-mode");
+    if (!["writer", "readonly"].includes(mode)) {
+      console.error("protect needs --caption-mode writer (production) or readonly (staging)");
+      process.exit(2);
+    }
+    process.exit(await protect({ out: arg("out"), captionsFile: arg("captions"), captionMode: mode }));
+  }
   else if (cmd === "create-key") await createKey();
   else {
-    console.error("usage: stream.mjs protect --out DIR [--captions FILE] | create-key --out DIR");
+    console.error("usage: stream.mjs protect --out DIR --caption-mode writer|readonly [--captions FILE] | create-key --out DIR");
     process.exit(2);
   }
 }

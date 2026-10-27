@@ -277,8 +277,12 @@ if [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_SIGNING_KEY_ID)" != "yes"
   echo "    Created a Stream signing key for ${SERVICE} (Worker secrets only)."
 fi
 d1 "SELECT video_id, locale, status, CASE WHEN status = 'reviewed' THEN vtt END AS vtt FROM video_captions" | $H rows > "$WORK/stream/captions.json"
+# The uploads are shared by both environments: production alone writes their
+# caption tracks (its reviewed captions); staging never changes them.
+CAPTION_MODE=readonly
+[ "$TARGET" = "production" ] && CAPTION_MODE=writer
 STREAM_OK=0
-node "$HERE/stream.mjs" protect --out "$WORK/stream" --captions "$WORK/stream/captions.json" || STREAM_OK=$?
+node "$HERE/stream.mjs" protect --out "$WORK/stream" --caption-mode "$CAPTION_MODE" --captions "$WORK/stream/captions.json" || STREAM_OK=$?
 # Evidence is recorded even when a check fails, so the gate sees the failure.
 for F in evidence mapping captions; do
   if [ -s "$WORK/stream/$F.sql" ]; then
@@ -292,7 +296,7 @@ if [ -n "$CODE" ] && [ "$(printf '%s' "$EXISTING" | $H has-secret STREAM_CUSTOME
   echo "    Set STREAM_CUSTOMER_CODE."
 fi
 if [ "$STREAM_OK" != "0" ]; then
-  echo "::error::One or more lesson videos are not verifiably protected in Cloudflare Stream (see the job summary)." >&2
+  echo "::error::Cloudflare Stream check failed: an unexpected upload, a lesson video not verifiably protected, or a caption track that is not reviewed (see the job summary)." >&2
   exit 1
 fi
 
