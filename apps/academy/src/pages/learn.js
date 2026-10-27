@@ -3,7 +3,7 @@
 import { html, raw, safeUrl } from "../lib/html.js";
 import { redirect, json, HttpError } from "../lib/http.js";
 import { newId, nowIso, parseJson } from "../lib/util.js";
-import { rateLimit } from "../lib/security.js";
+import { rateLimit, audit } from "../lib/security.js";
 import { renderMarkdown, md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
 import { localeInfo } from "../lib/i18n.js";
@@ -60,6 +60,17 @@ function fileVideoType(url) {
   return { webm: "video/webm", mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime" }[ext] || "video/mp4";
 }
 
+/**
+ * Who a page of course material is licensed to: the learner's name and a
+ * short account reference. Shown over the player and under the lesson text so
+ * a recording or copy can be traced to its account. It cannot stop a
+ * screenshot or screen recording; it makes one attributable.
+ */
+export function licenseMark(user) {
+  if (!user) return "";
+  return `${user.display_name || user.email?.split("@")[0] || "Learner"} · ${String(user.id).slice(-6).toUpperCase()}`;
+}
+
 // Protected lessons only: callers have already checked enrollment (or staff).
 // Stream videos play in Stream's player from a short-lived signed token; no
 // media URL, file name or download link is ever written into the page.
@@ -79,7 +90,8 @@ async function videoBlock(c, lesson, video, progress) {
     const captions = video.captions.filter((cap) => cap.status === "reviewed" || c.can("courses.edit"));
     return html`<div class="player${stream ? " player-stream" : ""}" data-player data-lesson="${lesson.id}" data-start="${start}"${stream ? raw(` data-stream data-expires="${signed.expiresAt}"`) : ""}>
         ${stream
-          ? html`<iframe src="${iframeUrl(c.env, signed.token)}" title="${t("lesson.video_player", { title: lesson.title })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+          ? html`<iframe src="${iframeUrl(c.env, signed.token)}" title="${t("lesson.video_player", { title: lesson.title })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            <div class="player-mark" aria-hidden="true" data-license-mark>${licenseMark(c.user)}</div>`
           : html`<video controls playsinline preload="metadata" controlslist="nodownload" ${video.poster_url ? html`poster="${safeUrl(video.poster_url)}"` : ""} aria-label="${lesson.title}">
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
           ${video.mp4_url ? html`<source src="${safeUrl(video.mp4_url)}" type="${fileVideoType(video.mp4_url)}">` : ""}
@@ -96,6 +108,7 @@ async function videoBlock(c, lesson, video, progress) {
         <button class="btn btn-quiet btn-sm" type="button" data-bookmark-add>${icon("bookmark", { size: 16 })} ${t("lesson.bookmark_moment")}</button>
         <span class="tiny muted grow">${t("lesson.keyboard_hint")}</span>
       </div>
+      ${video.presenter?.is_ai_avatar ? html`<p class="ai-disclosure small mt-1" data-ai-disclosure>${icon("sparkles", { size: 14 })} ${video.presenter.disclosure || t("lesson.ai_presenter", { name: video.presenter.name })}</p>` : ""}
       <p class="small muted mt-1" data-video-error hidden>${icon("alert", { size: 14 })} ${t("lesson.video_failed")}</p>`;
   }
   return html`<div class="video-pending" role="note">
@@ -188,6 +201,7 @@ export async function lessonPage(c) {
         ${rendered.toc.length > 2 ? html`<nav class="panel mt-2" aria-label="${t("lesson.on_this_page")}"><strong class="small">${t("lesson.on_this_page")}</strong>
           <ul class="small mb-0 toc-list">${rendered.toc.filter((h) => h.level <= 2).map((h) => html`<li><a href="#${h.id}">${h.text}</a></li>`)}</ul></nav>` : ""}
         <div class="prose mt-3"${contentLang(c, lesson, "body_md")}>${raw(rendered.html)}</div>
+        ${c.user ? html`<p class="license-note tiny muted" data-license-note>${icon("lock", { size: 12 })} ${t("lesson.licensed_to", { name: licenseMark(c.user) })}</p>` : ""}
         ${interactive(c, lesson)}
         ${isQuizLesson && assessment
           ? html`<section class="panel mt-3"><h2 class="h2">${assessment.title}</h2><p>${assessment.instructions}</p>
@@ -438,7 +452,13 @@ export function vttParagraphs(vtt) {
 // mid-lesson. Same entitlement as the lesson page; rate limited; never cached.
 export async function videoToken(c) {
   const b = await c.readBody();
-  await rateLimit(c, "video_token", { limit: 60, windowSeconds: 600, key: c.user.id });
+  try {
+    await rateLimit(c, "video_token", { limit: 60, windowSeconds: 600, key: c.user.id });
+  } catch (e) {
+    // Unusual playback volume is recorded for staff review (Admin → Audit log).
+    if (e?.status === 429) await audit(c, "playback.rate_limited", "user", c.user.id, { lesson: String(b.lessonId || "").slice(0, 64) });
+    throw e;
+  }
   const lesson = await c.env.DB.prepare("SELECT l.id, l.course_id, l.status, l.video_id FROM lessons l WHERE l.id = ?").bind(String(b.lessonId || "")).first();
   const staff = c.can("courses.edit");
   const enr = lesson ? await getEnrollment(c.env, c.user.id, lesson.course_id) : null;

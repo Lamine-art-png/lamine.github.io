@@ -275,3 +275,36 @@ test("an administrator address configured after sign-in takes effect on the next
   r = await unverified.get("/admin");
   assert.notEqual(r.status, 200, "an unverified address never becomes administrator");
 });
+
+test("course material is marked with the learner's licence, over the player and under the text", async () => {
+  const { env, learner } = await setup();
+  const r = await learner.get(LESSON_URL);
+  const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(learner.email).first();
+  const mark = `Ada Learner · ${user.id.slice(-6).toUpperCase()}`;
+  assert.match(r.text, new RegExp(`<div class="player-mark" aria-hidden="true" data-license-mark>${mark}</div>`), "the mark sits over the player, hidden from screen readers");
+  assert.match(r.text, new RegExp(`data-license-note>.*Licensed to ${mark} for personal study`, "s"));
+  assert.ok(!mark.includes("@"), "the mark carries a name and short reference, never the address");
+});
+
+test("a learner who exceeds the playback-token limit is refused and recorded in the audit log", async () => {
+  const { env, learner } = await setup();
+  let last;
+  for (let i = 0; i < 61; i++) last = await learner.postJson("/api/video-token", { lessonId: LESSON });
+  assert.equal(last.status, 429);
+  const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(learner.email).first();
+  const rows = (await env.DB.prepare("SELECT actor_id, entity_id, detail FROM audit_log WHERE action = 'playback.rate_limited'").all()).results;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].entity_id, user.id);
+  assert.match(rows[0].detail, /les_a1_data/);
+});
+
+test("a video presented by an AI avatar is disclosed under the player, even while the presenter's profile is hidden", async () => {
+  const { env, learner } = await setup();
+  const presenter = await env.DB.prepare("SELECT i.status, i.is_ai_avatar FROM video_assets v JOIN instructors i ON i.id = v.instructor_id WHERE v.id = 'vid_a1_data'").first();
+  assert.equal(presenter.is_ai_avatar, 1);
+  const r = await learner.get(LESSON_URL);
+  assert.match(r.text, /data-ai-disclosure>.*Joshua is an AI-generated presenter \(Synthesia\)\. He is not a real person\./s);
+  // A human presenter carries no such label.
+  await env.DB.prepare("UPDATE instructors SET is_ai_avatar = 0 WHERE id = 'ins_joshua'").run();
+  assert.doesNotMatch((await learner.get(LESSON_URL)).text, /data-ai-disclosure/);
+});

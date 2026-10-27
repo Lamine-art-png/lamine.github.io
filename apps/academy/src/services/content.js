@@ -236,5 +236,10 @@ export async function getVideo(env, videoId, locale) {
   if (!v) return null;
   v.captions = (await env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ? ORDER BY locale = ? DESC, locale").bind(videoId, locale).all()).results;
   v.playable = v.status === "approved" && hasMedia(v, env);
+  // An AI-generated presenter is always disclosed with the video, whether or
+  // not the presenter's public profile is visible yet.
+  v.presenter = v.instructor_id
+    ? await env.DB.prepare("SELECT name, is_ai_avatar, disclosure FROM instructors WHERE id = ?").bind(v.instructor_id).first()
+    : null;
   return v;
 }
