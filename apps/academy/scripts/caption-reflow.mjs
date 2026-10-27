@@ -214,8 +214,8 @@ export function reflowAll(rows, now = new Date().toISOString()) {
   const sql = [];
   const failed = [];
   const out = [
-    "| Video | Before: cues · long lines · fast · short · over 7 s · overlaps | After: cues · long lines · fast · short · over 7 s · overlaps | Merged | Estimated timing | Extended |",
-    "|---|---|---|---|---|---|",
+    "| Video | Cues before | Long lines | Fast | Short | Over 7 s | Overlaps | Cues after | Long lines | Fast | Short | Over 7 s | Overlaps | Merged | Estimated timing | Extended |",
+    `|${"---|".repeat(16)}`,
   ];
   for (const row of rows) {
     const sec = Number(row.duration) || 0;

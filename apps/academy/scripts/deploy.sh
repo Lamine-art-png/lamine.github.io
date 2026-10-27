@@ -309,7 +309,7 @@ d1 "$(node "$HERE/caption-reflow.mjs" --query)" | $H rows > "$WORK/reflow-in.jso
 node "$HERE/caption-reflow.mjs" --in "$WORK/reflow-in.json" --out "$WORK/reflow.sql" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 if [ -s "$WORK/reflow.sql" ]; then
   $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --file "$WORK/reflow.sql" >/dev/null
-  echo "    Applied reflow ($(grep -c . "$WORK/reflow.sql") statement(s))."
+  echo "    Applied reflow ($(grep -c '^UPDATE video_captions SET source_vtt' "$WORK/reflow.sql") caption(s))."
 fi
 rm -f "$WORK/reflow-in.json" "$WORK/reflow.sql"
 

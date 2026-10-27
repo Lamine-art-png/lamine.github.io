@@ -232,3 +232,17 @@ test("a reviewer's saved edit survives the rollback of migration 0012; the origi
   await env.DB.exec(down);
   assert.equal((await env.DB.prepare("SELECT vtt FROM video_captions WHERE id = 'cap_data_en'").first()).vtt, edited, "the reviewer's edit is kept");
 });
+
+test("the report is a well-formed table: every row has as many cells as the header", () => {
+  const { vtt, durationMs } = streamLikeDraft(scripts[5]);
+  const lines = reflowAll([{ id: "cap_y", video_id: "vid_y", vtt, duration: durationMs / 1000 }]).report.split("\n");
+  const cells = (l) => l.split("|").length;
+  assert.ok(lines.every((l) => cells(l) === cells(lines[0])));
+});
+
+test("each reflow write starts one line with its UPDATE, so the deploy counts captions, not caption lines", () => {
+  const { vtt, durationMs } = streamLikeDraft(scripts[6]);
+  const { sql } = reflowAll([{ id: "cap_z", video_id: "vid_z", vtt, duration: durationMs / 1000 }]);
+  const file = sql.join("\n");
+  assert.equal(file.split("\n").filter((l) => l.startsWith("UPDATE video_captions SET source_vtt")).length, 1);
+});
