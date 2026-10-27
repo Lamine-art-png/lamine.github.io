@@ -11,11 +11,11 @@ import { creditFor, mergeSegments, MAX_RATE } from "../../src/services/progress.
 const LESSON = "les_a1_data";
 const LENGTH = 200;
 
-async function setup() {
+async function setup({ lessonType = "video" } = {}) {
   const env = makeEnv();
   await publishCourse(env, "crs_a1");
   await env.DB.prepare("UPDATE video_assets SET status='approved', duration_seconds=?, mp4_url='https://media.example/a1.mp4' WHERE id='vid_a1_data'").bind(LENGTH).run();
-  await env.DB.prepare("UPDATE lessons SET type='video' WHERE id=?").bind(LESSON).run();
+  await env.DB.prepare("UPDATE lessons SET type=? WHERE id=?").bind(lessonType, LESSON).run();
   const u = await registeredLearner(env);
   await u.post("/courses/introduction-to-ai-in-agriculture/enroll", {});
   const beat = async (position, { playing = true, after = 0, extra = {} } = {}) => {
@@ -211,4 +211,33 @@ test("a delayed older heartbeat never replaces a newer anchor", async () => {
   assert.equal(after.watch.last_position, before.watch.last_position);
   assert.equal(after.watch.last_beat_at, before.watch.last_beat_at);
   assert.equal(after.watch.beats, before.watch.beats);
+});
+
+test("narrated text lessons must meet the video watch requirement before completion", async () => {
+  const { u, beat, state } = await setup({ lessonType: "text" });
+  // A1's original lessons are typed 'text' even when an approved video is attached.
+  await beat(0, { extra: { complete: true } });
+  const complete = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.match(complete.location, /\?watch=1$/);
+  assert.equal((await state()).progress, "started");
+  // The rejected explicit completion pauses the watch run; restart at zero.
+  await beat(0);
+  // A legitimate full watch still completes the lesson.
+  for (let p = 5; p <= 180; p += 5) await beat(p, { after: 5 });
+  assert.equal((await state()).progress, "completed");
+});
+
+test("the completion form neither counts as watching nor moves the resume point; it succeeds only after real watching", async () => {
+  const { env, u, beat, state } = await setup({ lessonType: "text" });
+  await beat(0);
+  for (let t = 10; t <= 100; t += 10) await beat(t, { after: 5 });
+  let r = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.match(r.location, /\?watch=1$/, "half watched: refused");
+  const p = await env.DB.prepare("SELECT position_seconds FROM lesson_progress WHERE lesson_id = ?").bind(LESSON).first();
+  assert.equal(p.position_seconds, 100, "the refused form kept the resume point");
+  assert.equal((await state()).watch.last_position, 100, "the form is not a heartbeat");
+  for (let t = 110; t <= 180; t += 10) await beat(t, { after: 5 });
+  assert.equal((await state()).progress, "completed", "90% measured watching completes it");
+  r = await u.post("/learn/introduction-to-ai-in-agriculture/data-the-raw-material/complete", {});
+  assert.doesNotMatch(r.location, /watch=1/);
 });

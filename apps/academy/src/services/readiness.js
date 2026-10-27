@@ -3,6 +3,7 @@
 import { newId, nowIso, parseJson, sha256Hex } from "../lib/util.js";
 import { auditStmt } from "../lib/security.js";
 import { draftCourse, draftVersion } from "./drafts.js";
+import { hasMedia, isStreamVideo } from "./stream.js";
 
 /** Reviews every course needs, each recorded against the exact content reviewed. */
 export const MANDATORY_REVIEWS = [
@@ -61,7 +62,7 @@ export async function courseContentHash(env, courseId) {
   // fingerprinted). Replacing a video or caption voids earlier approvals.
   const videoIds = [...new Set(lessons.map((l) => l.video_id).filter(Boolean))];
   const inVideos = (sql) => (videoIds.length ? all(sql.replace("(?)", `(${videoIds.map(() => "?").join(",")})`), ...videoIds) : []);
-  const videos = await inVideos("SELECT id, status, hls_url, mp4_url, duration_seconds, poster_url, script_md FROM video_assets WHERE id IN (?) ORDER BY id");
+  const videos = await inVideos("SELECT id, status, provider, provider_ref, hls_url, mp4_url, duration_seconds, poster_url, script_md FROM video_assets WHERE id IN (?) ORDER BY id");
   const captions = [];
   for (const { vtt, ...cap } of await inVideos("SELECT id, video_id, locale, label, status, vtt FROM video_captions WHERE video_id IN (?) ORDER BY id")) {
     captions.push({ ...cap, vtt: await sha256Hex(vtt || "") });
@@ -121,7 +122,9 @@ export async function recordReview(env, { courseId, type, decision, notes, revie
   return { id, hash };
 }
 
-const playable = (v) => v.video_status === "approved" && Boolean(v.hls_url || v.mp4_url) && v.video_duration > 0;
+const streamProtected = (l) =>
+  l.stream_signed === 1 && Number(l.stream_anonymous) >= 400 && l.stream_downloads === "none" && Date.now() - Date.parse(l.stream_checked_at || 0) < 8 * 86400_000;
+const playable = (v, env) => v.video_status === "approved" && hasMedia(v, env) && v.video_duration > 0;
 
 /**
  * Checks that must pass before the course draft can be published or
@@ -136,17 +139,18 @@ export async function publishReadiness(env, liveCourse) {
   const hash = await courseContentHash(env, course.id);
   const lessons = (
     await env.DB.prepare(
-      `SELECT l.*, v.status AS video_status, v.hls_url, v.mp4_url, v.duration_seconds AS video_duration, v.title AS video_title,
+      `SELECT l.*, v.status AS video_status, v.provider, v.provider_ref, v.hls_url, v.mp4_url, v.duration_seconds AS video_duration, v.title AS video_title,
+              sp.signed_required AS stream_signed, sp.anonymous_status AS stream_anonymous, sp.downloads AS stream_downloads, sp.checked_at AS stream_checked_at,
               (SELECT COUNT(*) FROM video_captions vc WHERE vc.video_id = l.video_id AND vc.status = 'reviewed'
                   AND (vc.locale = ? OR vc.locale LIKE ? || '-%')) AS reviewed_captions
-         FROM draft_lessons l LEFT JOIN video_assets v ON v.id = l.video_id WHERE l.course_id = ?`,
+         FROM draft_lessons l LEFT JOIN video_assets v ON v.id = l.video_id LEFT JOIN stream_protection sp ON sp.uid = v.provider_ref WHERE l.course_id = ?`,
     )
       .bind(course.source_locale || "en", (course.source_locale || "en").split("-")[0], course.id)
       .all()
   ).results;
   const ready = lessons.filter((l) => l.status === "ready");
   checks.push({ ok: ready.length > 0, label: `At least one ready lesson (${ready.length} ready of ${lessons.length})` });
-  const emptyLessons = ready.filter((l) => !l.body_md.trim() && !(l.video_id && playable(l)) && l.type !== "quiz");
+  const emptyLessons = ready.filter((l) => !l.body_md.trim() && !(l.video_id && playable(l, env)) && l.type !== "quiz");
   checks.push({ ok: emptyLessons.length === 0, label: emptyLessons.length ? `Lessons without content: ${emptyLessons.map((l) => l.title).join(", ")}` : "Every ready lesson has instructional content" });
 
   // Instructional video. Video lessons always need their approved video. When
@@ -154,8 +158,8 @@ export async function publishReadiness(env, liveCourse) {
   // approved, playable and captioned (reviewed captions in the source language).
   const videoRequired = course.video_requirement !== "optional";
   const needsVideo = ready.filter((l) => l.type === "video" || (videoRequired && l.video_id && l.is_required));
-  const missingVideo = needsVideo.filter((l) => !l.video_id || !playable(l));
-  const missingCaptions = needsVideo.filter((l) => l.video_id && playable(l) && !l.reviewed_captions);
+  const missingVideo = needsVideo.filter((l) => !l.video_id || !playable(l, env));
+  const missingCaptions = needsVideo.filter((l) => l.video_id && playable(l, env) && !l.reviewed_captions);
   checks.push({
     ok: missingVideo.length === 0,
     label: missingVideo.length
@@ -164,6 +168,16 @@ export async function publishReadiness(env, liveCourse) {
         ? `All ${needsVideo.length} required lesson videos are approved and playable`
         : "No lesson requires a video",
   });
+  // Stream uploads must be verified private by the deploy pipeline: signed URLs
+  // required, anonymous playback refused and no downloadable rendition.
+  // Every Stream video learners can play, required or not.
+  const exposed = ready.filter((l) => l.video_id && playable(l, env) && isStreamVideo(l) && !streamProtected(l));
+  checks.push({
+    ok: exposed.length === 0,
+    label: exposed.length
+      ? `Videos without verified Stream protection (signed URLs, anonymous playback refused, no downloads): ${exposed.map((l) => l.title).join(", ")}`
+      : "Stream videos verified private (signed URLs required, anonymous playback refused, downloads off)",
+  });
   checks.push({
     ok: missingCaptions.length === 0,
     label: missingCaptions.length ? `Required videos without reviewed captions: ${missingCaptions.map((l) => l.title).join(", ")}` : "Required videos have reviewed captions",
@@ -171,7 +185,7 @@ export async function publishReadiness(env, liveCourse) {
   if (!videoRequired) {
     const reason = String(course.video_waiver_reason || "").trim();
     checks.push({ ok: Boolean(reason), warn: true, label: reason ? `Instructor video optional for this course: ${reason}` : "Instructor video is marked optional but no reason is recorded" });
-    const pending = ready.filter((l) => l.video_id && !playable(l));
+    const pending = ready.filter((l) => l.video_id && !playable(l, env));
     if (pending.length) checks.push({ ok: true, warn: true, label: `${pending.length} lesson video(s) still in production — learners see an “in production” notice` });
   }
 

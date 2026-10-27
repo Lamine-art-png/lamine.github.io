@@ -4,6 +4,7 @@ import { LOCALES, interfaceStatus, localeInfo } from "../lib/i18n.js";
 import { icon } from "./icons.js";
 import { BRAND, fontOrigin } from "../brand.js";
 import { asset } from "./assets.js";
+import { STREAM_SDK, STREAM_PAGE_HEADER } from "../services/stream.js";
 
 export { asset };
 
@@ -145,7 +146,7 @@ function footer(c) {
 }
 
 export function renderPage(c, opts) {
-  const { title, description = c.t("meta.default_description"), body, active, status = 200, noindex = false, ogImage, ogType = "website", jsonLd, bodyClass = "", bare = false } = opts;
+  const { title, description = c.t("meta.default_description"), body, active, status = 200, noindex = false, ogImage, ogType = "website", jsonLd, bodyClass = "", bare = false, streamPlayer = false } = opts;
   const t = c.t;
   const fullTitle = title ? `${title} · AGRO-AI Academy` : `AGRO-AI Academy — ${t("meta.tagline")}`;
   const canonicalPath = opts.canonical ?? c.url.pathname;
@@ -184,6 +185,7 @@ ${alternates.map((l) => html`<link rel="alternate" hreflang="${l.code}" href="${
 ${fontOrigin ? html`<link rel="preconnect" href="${fontOrigin}" crossorigin>` : ""}
 <link rel="stylesheet" href="${BRAND.fontStylesheet}" media="print" data-brand-font>
 <link rel="stylesheet" href="${asset("css/academy.css")}">
+${streamPlayer ? html`<script src="${STREAM_SDK}" defer></script>` : ""}
 <script src="${asset("js/academy.js")}" defer></script>
 ${jsonLd ? html`<script type="application/ld+json">${jsonScript(jsonLd)}</script>` : ""}
 </head>
@@ -197,7 +199,7 @@ ${bare ? "" : footer(c)}
 <div class="offline-pill" role="status" data-offline hidden>${icon("wifi", { size: 14 })} ${t("offline.notice")}</div>
 </body>
 </html>`;
-  return new Response(doc.toString(), { status, headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(doc.toString(), { status, headers: { "Content-Type": "text/html; charset=utf-8", ...(streamPlayer ? { [STREAM_PAGE_HEADER]: "1" } : {}) } });
 }
 
 const ERROR_KEYS = { 400: "bad_request", 401: "auth_required", 403: "forbidden", 404: "not_found", 405: "not_found", 413: "too_large", 429: "rate_limited" };

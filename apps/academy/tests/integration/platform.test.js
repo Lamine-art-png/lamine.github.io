@@ -75,8 +75,12 @@ test("approved videos render a player and auto-complete at 90% watched", async (
   assert.match(r.text, /application\/vnd\.apple\.mpegurl/);
   assert.match(r.text, /<track kind="captions" src="\/captions\/cap1\.vtt"/);
   assert.match(r.text, /data-speed/);
-  r = await new Client(env).get("/captions/cap1.vtt");
+  // Captions are lesson material: enrolled learners only, never shared-cached.
+  r = await u.get("/captions/cap1.vtt");
   assert.equal(r.headers.get("content-type"), "text/vtt; charset=utf-8");
+  assert.equal(r.headers.get("cache-control"), "private, no-store");
+  r = await new Client(env).get("/captions/cap1.vtt");
+  assert.notEqual(r.headers.get("content-type"), "text/vtt; charset=utf-8", "anonymous visitors get no captions");
   // Unapproved videos never render a player.
   r = await u.get("/learn/introduction-to-ai-in-agriculture/welcome");
   assert.doesNotMatch(r.text, /<video/);

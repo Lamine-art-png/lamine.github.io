@@ -1,6 +1,7 @@
 // Curriculum queries and the content-translation overlay.
 import { parseJson, sha256Hex } from "../lib/util.js";
 import { HttpError } from "../lib/http.js";
+import { hasMedia } from "./stream.js";
 
 export const VISIBLE_STATUSES = ["published", "scheduled", "review"];
 
@@ -234,6 +235,6 @@ export async function getVideo(env, videoId, locale) {
   const v = await env.DB.prepare("SELECT * FROM video_assets WHERE id = ?").bind(videoId).first();
   if (!v) return null;
   v.captions = (await env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ? ORDER BY locale = ? DESC, locale").bind(videoId, locale).all()).results;
-  v.playable = v.status === "approved" && Boolean(v.hls_url || v.mp4_url);
+  v.playable = v.status === "approved" && hasMedia(v, env);
   return v;
 }

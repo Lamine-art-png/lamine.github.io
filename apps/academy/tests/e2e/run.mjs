@@ -352,7 +352,7 @@ try {
     // Watch from the start at 2× speed (10 s of real time for 20 s of video).
     await video.evaluate((v) => new Promise((res) => { v.currentTime = 0; v.playbackRate = 2; v.addEventListener("ended", res, { once: true }); v.play(); }));
     let r = row();
-    for (let i = 0; i < 40 && r.status !== "completed"; i++) {
+    for (let i = 0; i < 100 && r.status !== "completed"; i++) {
       await lp.waitForTimeout(150);
       r = row();
     }
@@ -369,11 +369,21 @@ try {
     await lp.fill("#note-body", "Ask the co-op about soil probes.");
     await lp.click('button:has-text("Save note")');
     await lp.waitForSelector("text=Ask the co-op about soil probes.");
-    const lessons = db.prepare("SELECT slug, type FROM lessons WHERE course_id='crs_a1' ORDER BY sort_order").all();
+    const lessons = db.prepare("SELECT id, slug, type, video_id FROM lessons WHERE course_id='crs_a1' ORDER BY sort_order").all();
+    const status = (id) => db.prepare("SELECT p.status FROM lesson_progress p JOIN users u ON u.id = p.user_id WHERE u.email='amina@academy.test' AND p.lesson_id = ?").get(id)?.status;
     for (const l of lessons.filter((x) => x.type !== "quiz" && x.slug !== WATCH_SLUG)) {
       await lp.goto(`${base}/learn/introduction-to-ai-in-agriculture/${l.slug}`);
-      await lp.click('button:has-text("Mark as complete")');
-      await lp.waitForLoadState();
+      if (status(l.id) === "completed") continue;
+      if (l.video_id) {
+        // Narrated lessons complete only by watching: play the video through at 2×.
+        assert.equal(await lp.locator("[data-complete-form]").count(), 0, `${l.slug}: no manual completion`);
+        await lp.locator("[data-player] video").evaluate((v) => new Promise((res) => { v.muted = true; v.currentTime = 0; v.playbackRate = 2; v.addEventListener("ended", res, { once: true }); v.play(); }));
+        for (let i = 0; i < 100 && status(l.id) !== "completed"; i++) await lp.waitForTimeout(150);
+        assert.equal(status(l.id), "completed", `${l.slug} completes after watching`);
+      } else {
+        await lp.click('button:has-text("Mark as complete")');
+        await lp.waitForLoadState();
+      }
     }
     const enr = db.prepare("SELECT progress_pct FROM enrollments e JOIN users u ON u.id = e.user_id WHERE u.email='amina@academy.test'").get();
     assert.ok(enr.progress_pct > 50, `progress ${enr.progress_pct}%`);

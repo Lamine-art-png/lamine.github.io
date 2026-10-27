@@ -5,6 +5,7 @@ import { loadSession, ensureCsrf, checkCsrf, can } from "./lib/security.js";
 import { negotiate, matchLocale, localeInfo, displayLocale, makeTranslator, loadOverrides, formatDate, formatNumber } from "./lib/i18n.js";
 import { renderPage, renderError } from "./views/layout.js";
 import { registerRoutes } from "./routes.js";
+import { STREAM_PAGE_HEADER } from "./services/stream.js";
 
 /** Minimum length of CERT_SIGNING_SECRET outside development and tests. */
 export const MIN_CERT_SECRET_LENGTH = 32;
@@ -161,7 +162,9 @@ async function finalize(response, c, setCookies, deferred) {
   const res = new Response(response.body, response);
   for (const ck of setCookies) res.headers.append("Set-Cookie", ck);
   const type = res.headers.get("content-type") || "";
-  securityHeaders(res.headers, { isHtml: type.includes("text/html"), secure: c.cfg.secure });
+  const streamPlayer = res.headers.has(STREAM_PAGE_HEADER);
+  res.headers.delete(STREAM_PAGE_HEADER);
+  securityHeaders(res.headers, { isHtml: type.includes("text/html"), secure: c.cfg.secure, streamPlayer });
   if (!res.headers.has("Cache-Control")) res.headers.set("Cache-Control", "private, no-store");
   res.headers.set("Vary", "Cookie, Accept-Language");
   if (deferred.length) await Promise.all(deferred);

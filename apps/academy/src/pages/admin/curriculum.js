@@ -12,6 +12,7 @@ import { PROFESSIONAL_ROLES } from "../../services/users.js";
 import { LOCALES } from "../../lib/i18n.js";
 import { publishReadiness, recordReview, REVIEW_TYPES, REVIEW_DECISIONS } from "../../services/readiness.js";
 import { draftCourse, draftChanged, latestRevision, liveToDraftStatements, publishDraft, pruneFiles, DraftChangedError } from "../../services/drafts.js";
+import { STREAM_UID } from "../../services/stream.js";
 
 export { publishReadiness };
 
@@ -464,7 +465,7 @@ export async function editLesson(c) {
       ${select("status", "Status", [["draft", "draft (hidden)"], ["ready", "ready (visible in published courses)"]], l.status)}
     </div>
     ${checkbox("is_required", "Required for completion", l.is_required)}
-    ${checkbox("is_preview", "Free preview (viewable before enrolling)", l.is_preview)}
+    ${checkbox("is_preview", "Marked as introductory (label only: every lesson requires enrollment)", l.is_preview)}
     ${input("summary", "Summary", l.summary)}
     ${textarea("body_md", "Lesson content (Markdown)", l.body_md, { rows: 22, cls: "code", hint: "Supports headings (##), lists, **bold**, *italic*, links, tables, blockquotes and callouts like > **Key idea:** … Raw HTML is not allowed." })}
     ${textarea("interactive_json", "Interactive block (JSON, optional)", l.interactive_json, { rows: 5, cls: "code", hint: 'Example: {"kind":"reveal","title":"Check yourself","cards":[{"front":"Q","back":"A"}]} or {"kind":"checklist","title":"Field checklist","items":["…"]}' })}
@@ -639,6 +640,9 @@ export async function editVideo(c) {
     c.env.DB.prepare("SELECT id, name FROM instructors ORDER BY sort_order").all(),
     c.env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ?").bind(v.id).all(),
   ]);
+  // The English machine draft (from Stream) is loaded into the form, so the
+  // reviewer corrects it in place and saves it as reviewed.
+  const draft = await c.env.DB.prepare("SELECT vtt FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
   const body = html`<form class="form-card" method="post" action="/admin/videos/${v.id}">${hidden(c)}
     ${input("title", "Title", v.title, { required: true })}
     <div class="grid-2">
@@ -647,18 +651,18 @@ export async function editVideo(c) {
       ${select("instructor_id", "Instructor", [["", "None"], ...instructors.results.map((i) => [i.id, i.name])], v.instructor_id)}
       ${input("duration_seconds", "Duration (seconds)", v.duration_seconds, { type: "number" })}
     </div>
-    ${input("hls_url", "HLS stream URL (.m3u8)", v.hls_url, { hint: "Adaptive streaming; played natively where supported (Safari, iOS, Android)." })}
-    ${input("mp4_url", "MP4 URL", v.mp4_url, { hint: "Progressive fallback used by other browsers." })}
+    ${input("provider_ref", "Stream video ID (or other provider reference)", v.provider_ref, { hint: "For provider “stream”: the 32-character Cloudflare Stream id. The video plays only from short-lived signed tokens; the deploy pipeline fills this in, verifies protection and reads the duration from Stream." })}
+    ${input("hls_url", "Direct HLS URL (local development only)", v.hls_url, { hint: "Direct URLs are public. Staging and production never play them; use Stream." })}
+    ${input("mp4_url", "Direct MP4 URL (local development only)", v.mp4_url, { hint: "Never offered as a download; ignored outside local development." })}
     ${input("poster_url", "Poster image URL", v.poster_url)}
-    ${input("provider_ref", "Provider reference (e.g. Synthesia video ID)", v.provider_ref)}
-    ${textarea("script_md", "Script / transcript (Markdown)", v.script_md, { rows: 14, cls: "code", hint: "Shown to learners as the transcript." })}
+    ${textarea("script_md", "Planning script (Markdown)", v.script_md, { rows: 14, cls: "code", hint: "Internal. Learners see the transcript built from reviewed captions of the final video, not this script." })}
     ${v.approved_at ? html`<p class="small muted">Approved ${v.approved_at.slice(0, 10)}.</p>` : ""}
     <button class="btn btn-primary">Save video</button></form>
   <section class="form-card mt-3"><h2 class="h2">Captions (WebVTT)</h2>
     ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · <form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
     <form method="post" action="/admin/videos/${v.id}/captions" class="mt-2">${hidden(c)}
       <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en", { id: "a-caption_locale" })}${select("status", "Caption status", ["machine", "reviewed"], "reviewed", { id: "a-caption_status" })}</div>
-      ${textarea("vtt", "WebVTT content", "WEBVTT\n\n", { rows: 8, cls: "code", required: true })}
+      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? "Machine draft from Stream loaded for English: correct it against the audio, then save as reviewed." : undefined })}
       <button class="btn btn-secondary btn-sm">Add captions</button></form></section>`;
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
 }
@@ -699,7 +703,10 @@ export async function saveVideo(c) {
   const mp4 = str(b.mp4_url, 1000);
   const poster = str(b.poster_url, 1000);
   if (![hls, mp4, poster].every(urlOk)) return redirect(`/admin/videos/${v.id}?err=Video%20URLs%20must%20use%20https`);
-  if (status === "approved" && !hls && !mp4) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs an HLS or MP4 URL.")}`);
+  const provider = ["synthesia", "r2", "stream", "external"].includes(b.provider) ? b.provider : v.provider;
+  const ref = str(b.provider_ref, 200);
+  if (provider === "stream" && ref && !STREAM_UID.test(ref)) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("A Stream video ID is 32 lowercase hexadecimal characters.")}`);
+  if (status === "approved" && !(provider === "stream" ? ref : hls || mp4)) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs its Stream video ID (or, in local development, an HLS or MP4 URL).")}`);
   // Watch-to-complete is measured against this length; the browser's report is never trusted for it.
   if (status === "approved" && !(intOrNull(b.duration_seconds) > 0)) return redirect(`/admin/videos/${v.id}?err=${encodeURIComponent("An approved video needs its duration in seconds.")}`);
   const now = nowIso();
@@ -710,14 +717,14 @@ export async function saveVideo(c) {
        WHERE id=? AND NOT ${liveVideoSql("video_assets.id")}`,
     ).bind(
       str(b.title, 200) || v.title,
-      ["synthesia", "r2", "stream", "external"].includes(b.provider) ? b.provider : v.provider,
+      provider,
       status,
       b.instructor_id || null,
       intOrNull(b.duration_seconds),
       hls || null,
       mp4 || null,
       poster || null,
-      str(b.provider_ref, 200) || null,
+      ref || null,
       String(b.script_md ?? "").slice(0, 100000),
       approving ? 1 : 0,
       c.user.id,
