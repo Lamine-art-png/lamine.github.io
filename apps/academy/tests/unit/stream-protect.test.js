@@ -171,6 +171,39 @@ test("P2: a track production cannot remove fails the run (fail closed)", async (
   assert.match(out, /caption sync error/);
 });
 
+test("production with no captions yet: drafts Stream finishes at once are collected, nothing unreviewed stays, and the run passes", async () => {
+  const { videos } = fakeAccount({ uploads: a1Uploads() });
+  process.env.STREAM_GENERATE_CAPTIONS = "1";
+  const dir = outDir();
+  const { code, out } = await quiet(() => protect({ out: dir, captionsFile: captionsFile([]), captionMode: "writer" }));
+  delete process.env.STREAM_GENERATE_CAPTIONS;
+  assert.equal(code, 0, out);
+  for (const v of videos.values()) assert.equal(v.captions.size, 0, "no machine track left in the player");
+  assert.equal(readFileSync(join(dir, "captions.sql"), "utf8").match(/^INSERT INTO video_captions/gm)?.length, 14, "14 drafts imported for review");
+});
+
+test("a machine draft that cannot be removed at the end of the run fails it", async () => {
+  fakeAccount({ uploads: a1Uploads() });
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    // Stream keeps generating (never ready) and refuses the final removal.
+    if (/\/captions$/.test(u) && (init.method || "GET") === "GET") {
+      const r = await real(url, init);
+      const j = await r.json();
+      j.result = j.result.map((c) => (c.generated ? { ...c, status: "inprogress" } : c));
+      return new Response(JSON.stringify(j), { status: 200 });
+    }
+    if (init.method === "DELETE" && /\/captions\/en$/.test(u)) return new Response(JSON.stringify({ success: false, errors: [{ code: 10000 }] }), { status: 403 });
+    return real(url, init);
+  };
+  process.env.STREAM_GENERATE_CAPTIONS = "1";
+  const { code, out } = await quiet(() => protect({ out: outDir(), captionsFile: captionsFile([]), captionMode: "writer" }));
+  delete process.env.STREAM_GENERATE_CAPTIONS;
+  assert.equal(code, 1, out);
+  assert.match(out, /could not be removed/);
+});
+
 test("production refuses to write captions without the reviewed caption set", async () => {
   fakeAccount({ uploads: a1Uploads() });
   await assert.rejects(() => protect({ out: outDir(), captionMode: "writer" }), /needs --captions/);

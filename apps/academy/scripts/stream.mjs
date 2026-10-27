@@ -219,6 +219,7 @@ export async function protect({ out, captionsFile = null, captionMode = "readonl
   let failures = unmapped.length;
   let customer = "";
   const pendingCaptions = [];
+  const collectedFrom = new Set(); // every video whose machine draft this run collects
   // Every caption the Academy holds (vtt only for reviewed ones), from D1.
   const known = captionsFile ? JSON.parse(readFileSync(captionsFile, "utf8")) : [];
   log("");
@@ -277,6 +278,7 @@ export async function protect({ out, captionsFile = null, captionMode = "readonl
     }
     log(row);
   }
+  for (const p of pendingCaptions) collectedFrom.add(p);
   // Generation takes a few minutes; wait for drafts requested in this run.
   for (let i = 0; i < 30 && pendingCaptions.length; i++) {
     await sleep(10000);
@@ -288,9 +290,28 @@ export async function protect({ out, captionsFile = null, captionMode = "readonl
   }
   // A machine caption that did not finish in time is removed rather than left
   // to become playable unreviewed; the next production deploy requests it again.
+  const collected = [...collectedFrom];
   for (const p of pendingCaptions) {
-    await cf(`/stream/${p.uid}/captions/en`, { method: "DELETE" });
-    log(`- Lesson video ${p.video.n}: machine caption still generating; removed from Stream, requested again by the next production deploy`);
+    try {
+      await cf(`/stream/${p.uid}/captions/en`, { method: "DELETE" });
+      log(`- Lesson video ${p.video.n}: machine caption still generating; removed from Stream, requested again by the next production deploy`);
+    } catch {
+      /* judged below */
+    }
+  }
+  // Final verdict for every video whose machine draft was collected this run:
+  // no machine track may remain in the player.
+  for (const p of collected) {
+    let left;
+    try {
+      left = ((await cf(`/stream/${p.uid}/captions`)) || []).some((c) => c.generated);
+    } catch {
+      left = true;
+    }
+    if (left) {
+      failures++;
+      log(`- **Lesson video ${p.video.n}: an unreviewed machine caption could not be removed from Stream's player.**`);
+    }
   }
   writeFileSync(join(out, "evidence.sql"), evidence.join("\n") + "\n");
   writeFileSync(join(out, "mapping.sql"), mapping.join("\n") + "\n");
@@ -359,7 +380,9 @@ export async function syncCaptions(uid, video, v, rows, captions, pending, { wri
     problems.push(`several reviewed captions for "${lang}": none published`);
   }
   const vttOf = async (lang) => (await cf(`/stream/${uid}/captions/${lang}/vtt`, { raw: true })).text.trim();
-  const inProgress = (c) => c.generated && c.language === "en" && (c.status || "ready") !== "ready";
+  // An English machine draft this run is collecting: it is imported and
+  // removed, or removed, at the end of the run, and judged there.
+  const collecting = (c) => c.generated && c.language === "en" && !approved.has("en") && pending.some((p) => p.uid === uid);
 
   let caps = await list();
   let drafted = false;
@@ -371,7 +394,7 @@ export async function syncCaptions(uid, video, v, rows, captions, pending, { wri
     } else if (!pending.some((p) => p.uid === uid)) pending.push({ uid, video });
   }
   for (const c of caps) {
-    if (inProgress(c) && !approved.has("en")) continue;
+    if (collecting(c)) continue;
     const want = approved.get(c.language);
     if (want == null || c.generated || (await vttOf(c.language)) !== want) await cf(`/stream/${uid}/captions/${c.language}`, { method: "DELETE" });
   }
@@ -391,7 +414,7 @@ export async function syncCaptions(uid, video, v, rows, captions, pending, { wri
   }
   // Verify what Stream now serves.
   for (const c of caps) {
-    if (inProgress(c) && !approved.has("en")) continue;
+    if (collecting(c)) continue;
     const want = approved.get(c.language);
     if (want == null || c.generated) problems.push(`unreviewed ${c.language} track in the player`);
     else if ((await vttOf(c.language)) !== want) problems.push(`${c.language} track differs from the reviewed caption`);
