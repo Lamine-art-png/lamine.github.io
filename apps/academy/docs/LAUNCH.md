@@ -151,7 +151,7 @@ to `academy-staging.agroai-pilot.com`. Smoke test: PASS (10 routes).
 | Password reset, learner deletion, staff deletion | PASS |
 | Real email delivery to a real inbox | NOT TESTED (no `ACADEMY_STAGING_RESEND_API_KEY`) |
 | Google sign-in | NOT TESTED (no staging OAuth client) |
-| Admin console sign-in for the founder | Configured address now matches the founder's verified account; the role is granted on the founder's next request after a staging deploy |
+| Admin console sign-in for the founder | PASS (2026-10-27): verified account holds super_admin (preflight run 40443017287); founder confirmed the admin console opens |
 | Backup encryption | Production: ENFORCED by the deploy (no passphrase, no deploy; self-test and decrypt-and-compare of the stored copy before migrations). Staging: optional, configured only if `ACADEMY_STAGING_BACKUP_PASSPHRASE` is set |
 
 Live-only defects found and fixed on the way (local SQLite does not have these
