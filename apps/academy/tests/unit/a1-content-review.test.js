@@ -8,6 +8,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { reviewA1, report } from "../../scripts/review-a1.mjs";
 import { makeEnv } from "../helpers.js";
+import { A1 } from "../../src/content/courses/a1.js";
 
 const migrations = join(dirname(fileURLToPath(import.meta.url)), "../../migrations");
 const up = readFileSync(join(migrations, "0010_a1_question_fixes.sql"), "utf8");
@@ -62,4 +63,42 @@ test("rolling back 0010 never changes a published course's questions", async () 
     const data = JSON.parse((await env.DB.prepare(`SELECT data_json FROM ${table} WHERE id = 'q_a1x_e8'`).first()).data_json);
     assert.equal(data.options.length, 5, `${table}: the distractor stays`);
   }
+});
+
+const lessonUp = readFileSync(join(migrations, "0011_a1_lesson_text.sql"), "utf8");
+const lessonDown = readFileSync(join(migrations, "down/0011_a1_lesson_text.down.sql"), "utf8");
+const body = async (env, table, id) => (await env.DB.prepare(`SELECT body_md FROM ${table} WHERE id = ?`).bind(id).first()).body_md;
+
+test("migration 0011 corrects the quiz statement and the FAO attribution, live and draft alike", async () => {
+  const env = makeEnv();
+  await env.DB.exec(lessonDown); // a database seeded before the corrections
+  for (const table of ["lessons", "draft_lessons"]) {
+    assert.match(await body(env, table, "les_a1_welcome"), /Each module contains short lessons and ends with a quiz/);
+    assert.match(await body(env, table, "les_a1_why_now"), /irrigated agriculture accounts for roughly 70%/);
+  }
+  await env.DB.exec(lessonUp);
+  for (const table of ["lessons", "draft_lessons"]) {
+    const welcome = await body(env, table, "les_a1_welcome");
+    assert.match(welcome, /Modules one to three each end with a practice quiz/);
+    assert.doesNotMatch(welcome, /Each module contains short lessons and ends with a quiz/);
+    const why = await body(env, table, "les_a1_why_now");
+    assert.match(why, /\(FAO AQUASTAT\), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals/);
+  }
+  await env.DB.exec(lessonUp);
+  assert.match(await body(env, "lessons", "les_a1_welcome"), /Modules one to three each end/, "idempotent");
+});
+
+test("the lesson-text statements match the course: modules 1-3 have quizzes, module 4 has none", () => {
+  const quizzes = A1.modules.map((m) => m.lessons.some((l) => l.type === "quiz"));
+  assert.deepEqual(quizzes, [true, true, true, false]);
+  assert.match(A1.modules[0].lessons[0].body, /Modules one to three each end with a practice quiz[^;]*; module four ends with a practical exercise/);
+});
+
+test("migrations 0011 and its rollback never change a published course's lessons", async () => {
+  const env = makeEnv();
+  await env.DB.prepare("UPDATE courses SET published_at = '2026-10-20T00:00:00.000Z' WHERE id = 'crs_a1'").run();
+  const before = await body(env, "lessons", "les_a1_welcome");
+  await env.DB.exec(lessonDown);
+  await env.DB.exec(lessonUp);
+  assert.equal(await body(env, "lessons", "les_a1_welcome"), before);
 });
