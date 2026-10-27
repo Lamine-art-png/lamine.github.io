@@ -2,7 +2,7 @@
 // describe the Academy's implemented data practices; they should be reviewed by
 // AGRO-AI's counsel before public launch (see apps/academy/README.md).
 
-const UPDATED = "2026-10-17";
+const UPDATED = "2026-10-27";
 
 export const LEGAL = {
   terms: {
@@ -44,7 +44,7 @@ Course material is provided for education. Agricultural decisions depend on loca
 
 ## 6. Intellectual property
 
-Course content, videos, assessments, software and branding belong to AGRO-AI or its licensors. You may use course materials for your personal learning. You may share your own certificate and its verification link freely.
+Course content, videos, assessments, software and branding belong to AGRO-AI or its licensors. You may use course materials for your personal learning. You may not copy, record, download, redistribute or publish lessons, videos, captions, transcripts or assessment questions. Course pages and the video player display your name and a short account reference so that copies can be traced to the account they came from. You may share your own certificate and its verification link freely.
 
 ## 7. Availability and changes
 
@@ -76,6 +76,7 @@ This policy explains how AGRO-AI Inc. handles personal information in AGRO-AI Ac
 | Language and theme preferences | To show the Academy in your language and chosen appearance |
 | Enrollments, lesson progress, notes, bookmarks, quiz and exam answers and scores | To provide courses, resume where you left off, grade assessments and determine certificate eligibility |
 | Certificates and their issuance history | To issue and verify credentials |
+| Security records: sign-in events, and video playback requests refused or made at unusual volume | To protect accounts and licensed course videos, and to investigate misuse |
 | Course feedback and support requests | To improve courses and answer your questions |
 | Google account identifier and email, if you choose Google sign-in | To sign you in; we never receive your Google password |
 
@@ -95,7 +96,7 @@ We send essential account and security emails (verification, password reset, sec
 
 ## Service providers
 
-The Academy runs on Cloudflare (application hosting and database). Email is sent through Resend. These providers process data on our behalf under their data-processing terms.
+The Academy runs on Cloudflare (application hosting, database, file storage and video streaming). Email is sent through Resend. These providers process data on our behalf under their data-processing terms.
 
 ## Retention and deletion
 
@@ -135,9 +136,9 @@ AGRO-AI Academy is built for learners everywhere — on farms, in classrooms and
 
 ## Known limitations
 
-- Instructor videos are still in production; lessons currently present the same instruction as text.
+- Instructional videos play in Cloudflare Stream's player. English captions are published to the player only after a person has reviewed them against the audio; until then, the lesson text presents the same instruction, and the transcript appears once reviewed captions exist.
 - Translations of the interface are machine-prepared and not yet reviewed by native speakers. Course content is available in English first, and certification exams use only reviewed translations.
-- The downloadable PDF certificate uses standard fonts that support Latin-script names. For names in other scripts, the web certificate (which can be printed or saved as PDF from your browser) shows your name exactly as written.
+- The downloadable PDF certificate embeds fonts for names in many scripts. If a name uses a script those fonts do not cover, the web certificate (which can be printed or saved as PDF from your browser) shows the name exactly as written.
 
 ## Feedback
 

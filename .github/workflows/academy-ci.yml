@@ -47,10 +47,22 @@ jobs:
       - name: Bundle the Worker exactly as Cloudflare will (dry run, no credentials)
         run: npx --yes wrangler@4.107.0 deploy --dry-run --outdir dist --config wrangler.toml
 
+      # `--with-deps` pulls ~20 MB of system font packages from the Ubuntu
+      # mirror, which has stalled deploy runs for many minutes. The tests embed
+      # their own fonts and the runner image already carries Chromium's system
+      # libraries (it ships Google Chrome), so only the browser is downloaded;
+      # system dependencies are installed only if Chromium cannot start.
       - name: Install Playwright Chromium and axe-core
+        timeout-minutes: 20
         run: |
+          set -euo pipefail
           npm install --no-save --no-package-lock playwright@1.56.1 axe-core@4.10.2
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
+          if ! node -e "require('playwright').chromium.launch().then((b) => b.close())"; then
+            echo "::warning::Chromium could not start; installing its system dependencies"
+            npx playwright install-deps chromium
+            node -e "require('playwright').chromium.launch().then((b) => b.close())"
+          fi
 
       - name: Certificate-name shaping matches Chromium (HarfBuzz) for 100+ names
         run: node tests/e2e/shaping-oracle.mjs
