@@ -215,9 +215,12 @@ async function protect() {
       const bareThumb = await refused(`${base}/${uid}/thumbnails/thumbnail.jpg`);
       const fresh = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 300, downloadable: false } });
       const signed = await anonymous(`${base}/${fresh.token}/manifest/video.m3u8`);
-      // A token that has expired (valid for 2 s, used after 5 s) must be refused.
-      const brief = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: Math.floor(Date.now() / 1000) + 2, downloadable: false } });
-      await sleep(5000);
+      // A token that has expired must be refused. It is issued with 15 s of
+      // headroom (a slow API call must not reach Stream with the expiry already
+      // past, which Stream rejects as invalid) and used 5 s after it expires.
+      const briefExp = Math.floor(Date.now() / 1000) + 15;
+      const brief = await cf(`/stream/${uid}/token`, { method: "POST", body: { exp: briefExp, downloadable: false } });
+      await sleep(Math.max(0, (briefExp + 5) * 1000 - Date.now()));
       const expired = await refused(`${base}/${brief.token}/manifest/video.m3u8`);
       const ok = v.requireSignedURLs === true && downloads === "none" && bare >= 400 && bareMp4 >= 400 && bareThumb >= 400 && expired >= 400 && signed === 200 && ORIGINS.every((o) => (v.allowedOrigins || []).includes(o));
       if (!ok) failures++;
