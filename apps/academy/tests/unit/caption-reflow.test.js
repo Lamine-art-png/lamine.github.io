@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { reflow, reflowAll, parse, wrap, DRAFTS_SQL } from "../../scripts/caption-reflow.mjs";
+import { reflow, reflowAll, parse, wrap, updateSql, DRAFTS_SQL, A1_VIDEO_COUNT } from "../../scripts/caption-reflow.mjs";
 import { captionQa, LIMITS } from "../../scripts/caption-qa.mjs";
 import { A1 } from "../../src/content/courses/a1.js";
 import { makeEnv, registeredLearner, publishCourse } from "../helpers.js";
@@ -181,4 +181,27 @@ test("rolling back migration 0012 restores the original drafts and leaves review
 test("limits are the caption QA limits", () => {
   assert.equal(LIMITS.lineChars, 42);
   assert.equal(wrap("x".repeat(43)), null, "a single overlong word cannot be wrapped");
+});
+
+test("only Course A1's drafts are reflowed: another course's machine draft is never selected or changed", async () => {
+  const { env } = await withDrafts();
+  const now = new Date().toISOString();
+  const other = streamLikeDraft(scripts[4], { seed: 13 }).vtt;
+  await env.DB.prepare("INSERT INTO video_assets (id, title, provider, status, created_at, updated_at) VALUES ('vid_other_course', 'Another course', 'stream', 'scripted', ?, ?)").bind(now, now).run();
+  await env.DB.prepare("INSERT INTO video_captions (id, video_id, locale, label, vtt, status, created_at) VALUES ('cap_other_en', 'vid_other_course', 'en', 'English', ?, 'machine', ?)").bind(other, now).run();
+  assert.deepEqual((await draftRows(env)).map((r) => r.video_id), ["vid_a1_data"], "the selection holds A1 videos only");
+  // Even a write built for it by mistake changes nothing: the UPDATE carries the A1 scope too.
+  await env.DB.prepare(updateSql({ id: "cap_other_en", vtt: other }, reflow(other).vtt, now)).run();
+  const c = await caption(env, "cap_other_en");
+  assert.equal(c.vtt, other);
+  assert.equal(c.source_vtt, null);
+  await applyReflow(env);
+  assert.equal((await caption(env, "cap_other_en")).vtt, other);
+});
+
+test("never more drafts than A1's 14 lesson videos", () => {
+  assert.equal(A1_VIDEO_COUNT, 14);
+  const row = { id: "cap", video_id: "vid", vtt: "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nA line of speech.", duration: 3 };
+  assert.throws(() => reflowAll(Array.from({ length: 15 }, (_, i) => ({ ...row, id: `cap${i}` }))), /15 drafts selected, but A1 has 14 lesson videos/);
+  assert.equal(reflowAll(Array.from({ length: 14 }, (_, i) => ({ ...row, id: `cap${i}` }))).sql.length, 14);
 });

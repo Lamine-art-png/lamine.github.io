@@ -22,6 +22,7 @@
 // written.
 import { readFileSync, writeFileSync } from "node:fs";
 import { LIMITS, captionQa } from "./caption-qa.mjs";
+import { A1 } from "../src/content/courses/a1.js";
 
 const MERGE_GAP = 500; // ms: cues further apart are separate utterances
 const len = (s) => [...s].length;
@@ -178,23 +179,28 @@ function check(orig, cues, limit) {
   });
 }
 
-/** The drafts the deploy reflows: unreviewed, never reflowed before (so a reviewer's edits are never overwritten). */
-export const DRAFTS_SQL =
-  "SELECT vc.id, vc.video_id, vc.vtt, va.duration_seconds AS duration FROM video_captions vc JOIN video_assets va ON va.id = vc.video_id WHERE vc.status = 'machine' AND vc.source_vtt IS NULL ORDER BY vc.video_id";
+// This release reflows Course A1's drafts only: the videos of A1's lessons.
+export const A1_VIDEOS_SQL = "SELECT video_id FROM lessons WHERE course_id = 'crs_a1' AND video_id IS NOT NULL";
+/** A1's narrated lessons, one video each (14): never more drafts than this are reflowed. */
+export const A1_VIDEO_COUNT = A1.modules.flatMap((m) => m.lessons).filter((l) => l.script).length;
+
+/** The drafts the deploy reflows: A1's unreviewed drafts never reflowed before (so a reviewer's edits are never overwritten). */
+export const DRAFTS_SQL = `SELECT vc.id, vc.video_id, vc.vtt, va.duration_seconds AS duration FROM video_captions vc JOIN video_assets va ON va.id = vc.video_id WHERE vc.status = 'machine' AND vc.source_vtt IS NULL AND vc.video_id IN (${A1_VIDEOS_SQL}) ORDER BY vc.video_id`;
 
 const sqlStr = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const RELEASED = (v) =>
   `EXISTS (SELECT 1 FROM lessons l JOIN courses c ON c.id = l.course_id WHERE l.video_id = ${v} AND c.published_at IS NOT NULL)`;
 
-/** Guarded write: only an unreviewed draft never reflowed before, unchanged since it was read, of an unreleased video. */
+/** Guarded write: only an A1 draft, unreviewed, never reflowed before, unchanged since it was read, of an unreleased video. */
 export function updateSql(row, vtt, now) {
-  return `UPDATE video_captions SET source_vtt = vtt, vtt = ${sqlStr(vtt)}, reflowed_at = ${sqlStr(now)} WHERE id = ${sqlStr(row.id)} AND status = 'machine' AND source_vtt IS NULL AND vtt = ${sqlStr(row.vtt)} AND NOT ${RELEASED("video_captions.video_id")};`;
+  return `UPDATE video_captions SET source_vtt = vtt, vtt = ${sqlStr(vtt)}, reflowed_at = ${sqlStr(now)} WHERE id = ${sqlStr(row.id)} AND status = 'machine' AND source_vtt IS NULL AND vtt = ${sqlStr(row.vtt)} AND video_id IN (${A1_VIDEOS_SQL}) AND NOT ${RELEASED("video_captions.video_id")};`;
 }
 
 const cell = (q) => `${q.cues} | ${q.counts.long} | ${q.counts.fast} | ${q.counts.short} | ${q.counts.lengthy} | ${q.counts.overlaps}`;
 
 /** Reflow every draft; returns the SQL and a Markdown report, or throws naming the drafts that failed. */
 export function reflowAll(rows, now = new Date().toISOString()) {
+  if (rows.length > A1_VIDEO_COUNT) throw new Error(`reflow refused, nothing written: ${rows.length} drafts selected, but A1 has ${A1_VIDEO_COUNT} lesson videos`);
   const sql = [];
   const failed = [];
   const out = [
@@ -227,7 +233,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const { sql, report } = reflowAll(rows);
     writeFileSync(arg("out"), sql.join("\n") + (sql.length ? "\n" : ""));
-    console.log(`Machine caption drafts awaiting a first reflow: ${rows.length}; reflowed: ${sql.length}. Every result stays an unreviewed draft, hidden from learners.`);
+    console.log(`Course A1 machine caption drafts awaiting a first reflow: ${rows.length} (A1 has ${A1_VIDEO_COUNT} lesson videos); reflowed: ${sql.length}. Other courses' captions are not touched. Every result stays an unreviewed draft, hidden from learners.`);
     if (rows.length) console.log(`\n${report}\n\nLong lines: a line over ${LIMITS.lineChars} characters. Fast: over ${LIMITS.cps} characters per second. Short: under ${LIMITS.minCue} s. Estimated timing: cues split from a draft cue too long for two lines, timed in proportion to their text; the reviewer checks their sync. Splitting a fast cue counts each part as fast: the speaking rate itself is unchanged, and the reviewer may condense such text.`);
   } catch (e) {
     console.error(`::error::${e.message}`);

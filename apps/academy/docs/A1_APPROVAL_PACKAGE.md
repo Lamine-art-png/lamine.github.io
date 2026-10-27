@@ -70,8 +70,9 @@ overlaps, whether the captions cover the whole video, and likely
 misrecognitions of course terms (AGRO-AI, NDVI, evapotranspiration, ET₀/ETc,
 Kc). It reports counts and cue numbers only.
 
-**Reflow before review.** The production deploy then reflows each draft once
-(`scripts/caption-reflow.mjs`): lines wrapped to at most two of 42 characters,
+**Reflow before review.** The production deploy then reflows each A1 draft
+once (`scripts/caption-reflow.mjs`; only the videos of A1's lessons, at most
+14, and the log states the count; other courses' captions are never touched): lines wrapped to at most two of 42 characters,
 sub-second fragments and fast cues merged with a close neighbour, cue ends
 extended into the silence before the next cue, and cues too long for two lines
 split at a sentence or clause break. **The words are never changed**: the tool
