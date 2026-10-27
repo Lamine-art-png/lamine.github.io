@@ -638,11 +638,11 @@ export async function editVideo(c) {
   if (!v) throw new HttpError(404, "not_found");
   const [instructors, captions] = await Promise.all([
     c.env.DB.prepare("SELECT id, name FROM instructors ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT id, locale, label, status FROM video_captions WHERE video_id = ?").bind(v.id).all(),
+    c.env.DB.prepare("SELECT id, locale, label, status, reflowed_at FROM video_captions WHERE video_id = ?").bind(v.id).all(),
   ]);
   // The English machine draft (from Stream) is loaded into the form, so the
   // reviewer corrects it in place and saves it as reviewed.
-  const draft = await c.env.DB.prepare("SELECT vtt FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
+  const draft = await c.env.DB.prepare("SELECT vtt, reflowed_at FROM video_captions WHERE video_id = ? AND locale = 'en' AND status = 'machine'").bind(v.id).first();
   const body = html`<form class="form-card" method="post" action="/admin/videos/${v.id}">${hidden(c)}
     ${input("title", "Title", v.title, { required: true })}
     <div class="grid-2">
@@ -659,10 +659,10 @@ export async function editVideo(c) {
     ${v.approved_at ? html`<p class="small muted">Approved ${v.approved_at.slice(0, 10)}.</p>` : ""}
     <button class="btn btn-primary">Save video</button></form>
   <section class="form-card mt-3"><h2 class="h2">Captions (WebVTT)</h2>
-    ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · <form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
+    ${table(["Locale", "Label", "Status", ""], captions.results.map((cap) => html`<tr><td>${cap.locale}</td><td>${cap.label}</td><td>${statusBadge(cap.status)}</td><td><a href="/captions/${cap.id}.vtt">View</a> · ${cap.reflowed_at ? html`<a href="/captions/${cap.id}.source.vtt" title="The draft as Stream produced it, before it was reflowed for readability (same words)">Original draft</a> · ` : ""}<form class="inline" method="post" action="/admin/captions/${cap.id}/delete">${hidden(c)}<button class="link-btn tiny">Remove</button></form></td></tr>`))}
     <form method="post" action="/admin/videos/${v.id}/captions" class="mt-2">${hidden(c)}
       <div class="grid-2">${select("locale", "Locale", LOCALES.map((l) => [l.code, l.englishName]), "en", { id: "a-caption_locale" })}${select("status", "Caption status", ["machine", "reviewed"], "reviewed", { id: "a-caption_status" })}</div>
-      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? "Machine draft from Stream loaded for English: correct it against the audio, then save as reviewed." : undefined })}
+      ${textarea("vtt", "WebVTT content", draft?.vtt || "WEBVTT\n\n", { rows: draft ? 20 : 8, cls: "code", required: true, hint: draft ? `Machine draft from Stream loaded for English${draft.reflowed_at ? ", with its lines and timing reflowed for readability (the words are unchanged; the original draft is kept)" : ""}. Correct it against the audio${draft.reflowed_at ? ", check the sync" : ""}, then save as reviewed.` : undefined })}
       <button class="btn btn-secondary btn-sm">Add captions</button></form></section>`;
   return adminPage(c, { title: v.title, active: "/admin/videos", body });
 }

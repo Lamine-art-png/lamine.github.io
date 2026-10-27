@@ -400,10 +400,13 @@ export async function courseFeedback(c) {
 // (machine) captions only to staff.
 export async function captions(c) {
   const id = c.params.file.replace(/\.vtt$/, "");
-  const row = await c.env.DB.prepare("SELECT id, video_id, vtt, status FROM video_captions WHERE id = ?").bind(id).first();
+  // cap_….source.vtt: the machine draft as Stream produced it, before the deploy reflowed it (staff only).
+  const source = id.endsWith(".source");
+  const row = await c.env.DB.prepare("SELECT id, video_id, vtt, source_vtt, status FROM video_captions WHERE id = ?").bind(source ? id.slice(0, -7) : id).first();
   const staff = c.can("courses.edit");
+  if (source && !(staff && row?.source_vtt)) throw new HttpError(404, "not_found");
   if (!row || (row.status !== "reviewed" && !staff) || !(staff || (await entitledToVideo(c, row.video_id)))) throw new HttpError(404, "not_found");
-  return new Response(row.vtt, { headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "private, no-store" } });
+  return new Response(source ? row.source_vtt : row.vtt, { headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "private, no-store" } });
 }
 
 /** True when the signed-in learner holds an active enrollment in a course with a ready lesson using this video. */

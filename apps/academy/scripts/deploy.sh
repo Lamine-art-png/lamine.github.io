@@ -300,5 +300,18 @@ if [ "$STREAM_OK" != "0" ]; then
   exit 1
 fi
 
+echo "==> Reflowing machine caption drafts for review (same words; originals kept)"
+# Layout and timing only, once per draft: an unreviewed draft never reflowed
+# before. It stays a machine draft (never shown to learners); a reviewer's
+# edits and reviewed captions are never touched. The tool proves the words,
+# order and speech coverage are unchanged, or writes nothing and fails.
+d1 "$(node "$HERE/caption-reflow.mjs" --query)" | $H rows > "$WORK/reflow-in.json"
+node "$HERE/caption-reflow.mjs" --in "$WORK/reflow-in.json" --out "$WORK/reflow.sql" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+if [ -s "$WORK/reflow.sql" ]; then
+  $WRANGLER d1 execute "$DB_NAME" --remote "${CONFIG[@]}" --file "$WORK/reflow.sql" >/dev/null
+  echo "    Applied reflow ($(grep -c . "$WORK/reflow.sql") statement(s))."
+fi
+rm -f "$WORK/reflow-in.json" "$WORK/reflow.sql"
+
 echo "==> ${TARGET} deployed to https://${HOST}"
 summary "- Deployed to https://${HOST}"

@@ -70,6 +70,23 @@ overlaps, whether the captions cover the whole video, and likely
 misrecognitions of course terms (AGRO-AI, NDVI, evapotranspiration, ET₀/ETc,
 Kc). It reports counts and cue numbers only.
 
+**Reflow before review.** The production deploy then reflows each draft once
+(`scripts/caption-reflow.mjs`): lines wrapped to at most two of 42 characters,
+sub-second fragments and fast cues merged with a close neighbour, cue ends
+extended into the silence before the next cue, and cues too long for two lines
+split at a sentence or clause break. **The words are never changed**: the tool
+proves the draft and the result have the same words in the same order, no
+overlapping cues, nothing past the video and every draft cue's speech still
+covered, or it writes nothing and fails the deploy. The result stays a
+`machine` draft, hidden from learners. The original Stream draft is kept and
+opens from Admin → Videos → Captions → *Original draft*. A draft is reflowed
+once only, so a reviewer's edits are never overwritten; reviewed captions are
+never touched. The deploy log shows the QA counts before and after for every
+video. Two things remain for the reviewer: cues counted as *estimated timing*
+(split from a long draft cue and timed in proportion to their text: check
+their sync), and cues still above 20 characters per second where the
+presenter simply speaks fast (accept, or condense the wording).
+
 **Caption reviewer, per video:** open the draft in Admin → Videos → Captions,
 correct it against the audio (at least 99% word accuracy; course terms spelled
 as in the lesson text; numbers and units exact; the checker's flagged cues
@@ -129,16 +146,31 @@ stated typical ranges; the irrigation scenario arithmetic (18 mm ÷ 5 mm/day ≈
 3.6 days); exam rules (20 questions, 30 minutes, 80%, one-hour retry) match the
 configured assessment. Two items for the academic reviewer to decide:
 
-1. **Course structure statement.** *Welcome to the course* says "Each module
-   contains short lessons and ends with a quiz", but Module 4 (*Using AI
-   responsibly*) has no quiz; it ends with the summary and the final exam.
-   Suggested wording: "Modules 1–3 each end with a practice quiz; Module 4
-   leads to the final exam." Check whether video 1 narrates the same sentence.
-2. **Water statistic attribution.** *Why agriculture is turning to AI now*
-   attributes "roughly 70% of global freshwater withdrawals" to *irrigated*
-   agriculture. FAO (AQUASTAT) attributes about 70% to agriculture as a whole,
-   most of it irrigation. Suggested wording: "agriculture accounts for roughly
-   70% of global freshwater withdrawals, most of it for irrigation."
+1. **Course structure statement: corrected in the lesson text.** *Welcome to
+   the course* said "Each module contains short lessons and ends with a quiz",
+   but Module 4 (*Using AI responsibly*) has no quiz. It now reads: "Modules
+   one to three each end with a practice quiz that helps you check your
+   understanding; module four ends with a practical exercise and a course
+   summary that prepare you for the final exam." **Video 1's narration script
+   says "Each module ends with a practice quiz."** (confirm against the audio) Recorded audio cannot be
+   edited and captions must match what is spoken. Reviewer to decide: accept
+   (the lesson text directly above the video is now exact), or have video 1
+   re-rendered with the corrected sentence (Synthesia; it would then need its
+   own caption review and approval).
+2. **Water statistic attribution: corrected in the lesson text.** *Why
+   agriculture is turning to AI now* said "irrigated agriculture accounts for
+   roughly 70% of global freshwater withdrawals". It now reads "according to
+   the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a
+   whole, mostly irrigation, accounts for about 70% of global freshwater
+   withdrawals." Exam question `q_a1x_e7` already asks about agriculture as a
+   whole. **Video 3's narration script says "Irrigated agriculture accounts for
+   roughly seventy percent"** (confirm against the audio). Reviewer to decide: accept (irrigation is by
+   far the largest part of agricultural withdrawals, and the text beside the
+   video is exact), or re-render video 3.
+
+Both text corrections are in the course source and, for existing databases,
+migration `0011_a1_lesson_text.sql` (live and draft lessons; applies only
+while A1 is unpublished).
 
 ### Corrections already made by engineering (2026-10-27)
 

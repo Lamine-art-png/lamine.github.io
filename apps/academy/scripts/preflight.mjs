@@ -180,25 +180,25 @@ async function captionReport(dbName) {
   const dbs = await cf(`/accounts/${ACCOUNT}/d1/database?name=${dbName}`);
   const db = dbs.ok && dbs.result?.find((d) => d.name === dbName);
   if (!db) return out(`- Database not readable or not created yet (HTTP ${dbs.status} ${dbs.errors})`);
-  const rows = await d1Query(db.uuid, `SELECT va.id AS video_id, va.status AS video_status, va.duration_seconds AS duration, vc.locale, vc.status, vc.vtt
+  const rows = await d1Query(db.uuid, `SELECT va.id AS video_id, va.status AS video_status, va.duration_seconds AS duration, vc.locale, vc.status, vc.vtt, vc.reflowed_at IS NOT NULL AS reflowed
     FROM video_assets va LEFT JOIN video_captions vc ON vc.video_id = va.id WHERE va.id LIKE 'vid_a1\\_%' ESCAPE '\\' ORDER BY va.id, vc.locale`);
   if (!Array.isArray(rows)) return out(`- Query refused (${rows})`);
   const order = new Map(a1Videos().map((v) => [v.id, v.n]));
-  out("| # | Video status | Caption | Status | Cues | Words | Coverage | Mechanical issues |");
-  out("|---|---|---|---|---|---|---|---|");
+  out("| # | Video status | Caption | Status | Reflowed | Cues | Words | Coverage | Mechanical issues |");
+  out("|---|---|---|---|---|---|---|---|---|");
   const tally = { videos: new Set(), approved: new Set(), reviewed: new Set(), drafts: new Set() };
   for (const r of rows.sort((a, b) => (order.get(a.video_id) || 99) - (order.get(b.video_id) || 99))) {
     if (!order.has(r.video_id)) continue;
     tally.videos.add(r.video_id);
     if (r.video_status === "approved") tally.approved.add(r.video_id);
     if (!r.locale) {
-      out(`| ${order.get(r.video_id)} | ${r.video_status} | none | — | — | — | — | no caption yet |`);
+      out(`| ${order.get(r.video_id)} | ${r.video_status} | none | — | — | — | — | — | no caption yet |`);
       continue;
     }
     if (r.status === "reviewed" && r.locale.startsWith("en")) tally.reviewed.add(r.video_id);
     if (r.status === "machine") tally.drafts.add(r.video_id);
     const q = captionQa(r.vtt || "", r.duration || 0);
-    out(`| ${order.get(r.video_id)} | ${r.video_status} | ${r.locale} | ${r.status} | ${q.cues ?? "—"} | ${q.words ?? "—"} | ${q.coverage == null ? "—" : `${Math.round(q.coverage * 100)}%`} | ${q.issues.join("; ") || "none"} |`);
+    out(`| ${order.get(r.video_id)} | ${r.video_status} | ${r.locale} | ${r.status} | ${r.reflowed ? "yes" : "no"} | ${q.cues ?? "—"} | ${q.words ?? "—"} | ${q.coverage == null ? "—" : `${Math.round(q.coverage * 100)}%`} | ${q.issues.join("; ") || "none"} |`);
   }
   out(`- A1 videos: ${tally.videos.size}; approved: ${tally.approved.size}; with a reviewed English caption: ${tally.reviewed.size}; with a machine draft awaiting review: ${tally.drafts.size}`);
 }
