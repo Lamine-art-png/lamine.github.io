@@ -51,3 +51,15 @@ test("migration 0010 never changes a published course's questions", async () => 
   await env.DB.exec(up);
   assert.equal((await answer(env, "questions", "q_a1x_e8")).correct.length, 4, "unchanged: publication froze it");
 });
+
+test("rolling back 0010 never changes a published course's questions", async () => {
+  const env = makeEnv(); // seeded with the corrected bank
+  await env.DB.prepare("UPDATE courses SET published_at = '2026-10-20T00:00:00.000Z' WHERE id = 'crs_a1'").run();
+  await env.DB.exec(up);
+  await env.DB.exec(down);
+  for (const table of ["questions", "draft_questions"]) {
+    assert.deepEqual((await answer(env, table, "q_a1x_e8")).correct, ["o1", "o2", "o3", "o4"], `${table}: the reviewed key stays`);
+    const data = JSON.parse((await env.DB.prepare(`SELECT data_json FROM ${table} WHERE id = 'q_a1x_e8'`).first()).data_json);
+    assert.equal(data.options.length, 5, `${table}: the distractor stays`);
+  }
+});
