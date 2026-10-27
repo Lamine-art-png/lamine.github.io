@@ -47,10 +47,21 @@ jobs:
       - name: Bundle the Worker exactly as Cloudflare will (dry run, no credentials)
         run: npx --yes wrangler@4.107.0 deploy --dry-run --outdir dist --config wrangler.toml
 
+      # Usually ~20 s, but a stalled download has hung deploy runs for many
+      # minutes; each attempt is bounded and retried rather than left to hang.
       - name: Install Playwright Chromium and axe-core
+        timeout-minutes: 15
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1 axe-core@4.10.2
-          npx playwright install --with-deps chromium
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if timeout 240 npm install --no-save --no-package-lock playwright@1.56.1 axe-core@4.10.2 \
+              && timeout 300 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "::warning::Playwright install attempt $attempt failed or timed out"
+            sleep 10
+          done
+          exit 1
 
       - name: Certificate-name shaping matches Chromium (HarfBuzz) for 100+ names
         run: node tests/e2e/shaping-oracle.mjs
