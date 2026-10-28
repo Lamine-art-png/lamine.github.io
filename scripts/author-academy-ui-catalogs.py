@@ -71,14 +71,19 @@ def main() -> None:
     failures = {}
     for code in target:
         path = CATALOG_DIR / f"{code}.json"
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            valid_catalog(code, data, en)
+        existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if set(existing) - set(en):
+            raise RuntimeError(f"{code}: deprecated/unknown source keys in existing catalog")
+        missing = {key: val for key, val in en.items() if key not in existing}
+        if not missing:
+            valid_catalog(code, existing, en)
             print(f"EXISTING {code}: {len(en)} complete fields", flush=True)
             continue
         for attempt in range(args.retry):
             try:
-                data = translate_catalog(code, en)
+                # Preserve every existing string; translate only the missing keys.
+                # The five preexisting catalogs have six new keys each.
+                data = {**existing, **translate_catalog(code, missing)}
                 valid_catalog(code, data, en)
                 path.write_text(
                     json.dumps(data, indent=2, ensure_ascii=False) + "\n",
