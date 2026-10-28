@@ -41,6 +41,11 @@ for(const lang of codes){
    check(item.type==="course"?item.id==="crs_a1":String(item.id).startsWith(item.type==="module"?"mod_a1_":"les_a1_"),lang+": unexpected non-A1 source ID");
    const key=item.type+":"+item.id+":"+item.field;
    check(!unique.has(key),lang+": duplicate field");unique.add(key);
+   if(item.status==="source_fallback"){
+     check(item.translation===item.source,lang+": source fallback must not contain unreviewed replacement text");
+     check(pack.untranslated.some(x=>x.type===item.type&&x.id===item.id&&x.field===item.field),lang+": untracked fallback");
+     omitted++;continue;
+   }
    if(item.translation===item.source){omitted++;continue;}
    if(item.field==="objectives_json"){
      const src=JSON.parse(item.source),tr=JSON.parse(item.translation);
