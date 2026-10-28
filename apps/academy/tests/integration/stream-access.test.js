@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeEnv, Client, registeredLearner, publishCourse } from "../helpers.js";
-import { playbackToken, TOKEN_TTL_SECONDS } from "../../src/services/stream.js";
+import { playbackToken, signedThumbnailUrl, TOKEN_TTL_SECONDS } from "../../src/services/stream.js";
 import { publishReadiness } from "../../src/services/readiness.js";
 
 const COURSE = "/courses/introduction-to-ai-in-agriculture";
@@ -37,6 +37,13 @@ test("an enrolled learner gets Stream's player with a short-lived token signed b
   assert.equal(r.status, 200);
   const token = tokenIn(r.text);
   assert.ok(token, "the player iframe carries a signed token in place of the video id");
+  // Each source video gets its own branded opening frame via the same token,
+  // without exposing the bare Stream UID or an anonymous thumbnail URL.
+  const expectedPoster = signedThumbnailUrl(env, token);
+  assert.ok(expectedPoster.includes(token) && expectedPoster.includes("time=2s&height=720"));
+  assert.ok(r.text.includes(encodeURIComponent(expectedPoster)), "iframe poster uses the signed thumbnail from this exact video");
+  assert.ok(!r.text.includes(`/${UID}/thumbnails/`), "no public thumbnail URL");
+
   const [h, p, s] = token.split(".");
   assert.deepEqual(decode(h), { alg: "RS256", kid: key.kid });
   const claims = decode(p);
@@ -156,6 +163,15 @@ test("playback unavailable never waives a required video: no completion from tex
   r = await learner.get(LESSON_URL);
   assert.match(r.text, /data-player data-lesson="les_a1_data" data-start="\d+"/);
   assert.doesNotMatch(r.text, /data-complete-form/);
+});
+
+test("Stream posters stay signed and are bounded to sensible times", () => {
+  const jwt = ["eyJoIjoxfQ", "eyJwIjoyfQ", "abc_def-123"].join(".");
+  assert.equal(signedThumbnailUrl({ STREAM_CUSTOMER_CODE: "abc123testcode" }, jwt),
+    `https://customer-abc123testcode.cloudflarestream.com/${jwt}/thumbnails/thumbnail.jpg?time=2s&height=720`);
+  assert.equal(signedThumbnailUrl({}, jwt, { timeSeconds: -10, height: 5000 }),
+    `https://videodelivery.net/${jwt}/thumbnails/thumbnail.jpg?time=0s&height=1080`);
+  assert.equal(signedThumbnailUrl({}, "0123456789abcdef0123456789abcdef"), null, "bare UIDs cannot be used");
 });
 
 test("a copied token is only as good as its expiry", async () => {
