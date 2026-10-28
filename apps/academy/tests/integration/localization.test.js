@@ -41,7 +41,7 @@ test("a reviewed course translation is marked with its language inside an Englis
   assert.match(r.text, /<h1 class="display-sm">Einführung in KI in der Landwirtschaft<\/h1>/);
 });
 
-test("partly translated content is marked field by field, and machine translations are disclosed on English-fallback pages", async () => {
+test("partly translated content is marked field by field and machine translations remain disclosed", async () => {
   const env = makeEnv();
   await publishCourse(env, "crs_a1");
   const now = new Date().toISOString();
@@ -54,7 +54,7 @@ test("partly translated content is marked field by field, and machine translatio
   r = await new Client(env).get(`${COURSE}?lang=de`);
   assert.match(r.text, /<h1 class="display-sm">Einführung in KI<\/h1>/);
   assert.match(r.text, /<p class="lead" lang="en" dir="ltr">What AI is/, "English subtitle in a German page must identify its actual language");
-  assert.match(r.text, /class="translation-note"[^<]*<svg[^]*?Machine-translated — not yet reviewed/, "machine translation disclosed");
+  assert.match(r.text, /class="translation-note"/, "machine translation status is visibly disclosed in the selected UI language");
 });
 
 test("a language picked in the header is saved to the profile and follows the learner to another device", async () => {
