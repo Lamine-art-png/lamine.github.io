@@ -71,6 +71,20 @@ export function streamOrigin(env) {
   return /^[a-z0-9]{8,40}$/.test(code) ? `https://customer-${code}.cloudflarestream.com` : "https://iframe.videodelivery.net";
 }
 
+/** A per-video still from its real Stream upload, protected by the same short-lived
+ * playback token as the player. Never use the bare UID or persist this URL:
+ * both the image and the playback token expire together. The two-second
+ * reference frame was verified against the fourteen final A1 video files.
+ */
+export function signedThumbnailUrl(env, token, { timeSeconds = 2, height = 720 } = {}) {
+  if (!token || !/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(token)) return null;
+  const time = Math.max(0, Math.min(60, Number.isFinite(timeSeconds) ? timeSeconds : 2));
+  const size = Math.max(144, Math.min(1080, Number.isFinite(height) ? Math.round(height) : 720));
+  const origin = streamOrigin(env);
+  const imageOrigin = origin === "https://iframe.videodelivery.net" ? "https://videodelivery.net" : origin;
+  return `${imageOrigin}/${token}/thumbnails/thumbnail.jpg?time=${time}s&height=${size}`;
+}
+
 export function iframeUrl(env, token, { poster } = {}) {
   const origin = streamOrigin(env);
   const base = origin === "https://iframe.videodelivery.net" ? `${origin}/${token}` : `${origin}/${token}/iframe`;
