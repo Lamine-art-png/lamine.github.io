@@ -34,8 +34,9 @@ number, and protected on every deploy: signed URLs required, playback only on
 the two Academy hosts, no downloads. The deploy also proves from outside that a
 bare video id (stream, MP4, thumbnail) and an expired token are refused and a
 fresh signed token plays, and fails if any of this is not true. Videos are
-presented by **Joshua, an AI-generated presenter (Synthesia)**; every lesson
-page states this under the player.
+presented by **Joshua, an AI-generated presenter (Synthesia)**. The learner
+player shows a compact localized **AI presenter** label in its controls instead
+of repeating the long performer disclosure beneath every lesson video.
 
 | # | Lesson | Video record |
 |---|---|---|

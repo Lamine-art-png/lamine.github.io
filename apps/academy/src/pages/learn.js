@@ -107,8 +107,8 @@ async function videoBlock(c, lesson, video, progress) {
         <button class="btn btn-quiet btn-sm" type="button" data-fullscreen>${icon("maximize", { size: 16 })} ${t("lesson.fullscreen")}</button>
         <button class="btn btn-quiet btn-sm" type="button" data-bookmark-add>${icon("bookmark", { size: 16 })} ${t("lesson.bookmark_moment")}</button>
         <span class="tiny muted grow">${t("lesson.keyboard_hint")}</span>
+        ${video.presenter?.is_ai_avatar ? html`<span class="small muted" role="note" data-ai-disclosure>${t("instructor.ai_avatar")}</span>` : ""}
       </div>
-      ${video.presenter?.is_ai_avatar ? html`<p class="ai-disclosure small mt-1" data-ai-disclosure>${icon("sparkles", { size: 14 })} ${video.presenter.disclosure || t("lesson.ai_presenter", { name: video.presenter.name })}</p>` : ""}
       <p class="small muted mt-1" data-video-error hidden>${icon("alert", { size: 14 })} ${t("lesson.video_failed")}</p>`;
   }
   return html`<div class="video-pending" role="note">
