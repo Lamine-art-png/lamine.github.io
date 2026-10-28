@@ -42,9 +42,9 @@ test("the staging test has no silent skip paths", () => {
 test("official Academy jobs explicitly opt into A1 machine draft import", () => {
   for (const name of ["staging", "production"]) {
     const releaseJob = job(name);
-    assert.match(releaseJob, /ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:\\s*["']1["']/,
-      name + " must generate the guarded machine translation migration on deployment");
+    assert.ok(releaseJob.includes('ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS: "1"'),
+      name + " must generate guarded machine translations on deployment");
   }
   const deploy = readFileSync(join(root, "apps/academy/scripts/deploy.sh"), "utf8");
-  assert.match(deploy, /if \\[ "\\$\\{ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:-0\\}" = "1" \\]; then/);
+  assert.ok(deploy.includes('if [ "${ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:-0}" = "1" ]; then'));
 });
