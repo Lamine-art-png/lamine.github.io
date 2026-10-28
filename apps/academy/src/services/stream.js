@@ -77,7 +77,7 @@ export function streamOrigin(env) {
  * reference frame was verified against the fourteen final A1 video files.
  */
 export function signedThumbnailUrl(env, token, { timeSeconds = 2, height = 720 } = {}) {
-  if (!token || !/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(token)) return null;
+  if (!token || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) return null;
   const time = Math.max(0, Math.min(60, Number.isFinite(timeSeconds) ? timeSeconds : 2));
   const size = Math.max(144, Math.min(1080, Number.isFinite(height) ? Math.round(height) : 720));
   const origin = streamOrigin(env);
