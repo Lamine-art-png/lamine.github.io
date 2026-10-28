@@ -8,7 +8,7 @@ import { localeInfo } from "../lib/i18n.js";
 export function courseStatusBadge(c, course) {
   if (course.status === "published") return "";
   if (course.isUpcoming) {
-    const date = course.scheduled_at || course.planned_release_date;
+    const date = course.status === "review" ? null : (course.scheduled_at || course.planned_release_date);
     return html`<span class="badge badge-lime">${icon("clock", { size: 13 })} ${date ? c.t("course.opens_on", { date: c.fmtDate(date, { dateStyle: "medium" }) }) : c.t("course.coming_soon")}</span>`;
   }
   if (course.status === "draft") return html`<span class="badge badge-warn">${c.t("status.draft")}</span>`;

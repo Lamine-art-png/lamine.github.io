@@ -66,7 +66,7 @@
   "home.featured_eyebrow": "Courses",
   "home.featured_title": "Start with a course built for real farm work",
   "home.featured_lead": "Each course combines clear lessons, practice questions and a final assessment.",
-  "home.featured_lead_upcoming": "Our first course opens on {date}. Create a free account now and you'll be ready on day one.",
+  "home.featured_lead_upcoming": "Our first course is undergoing final review. Create a free account to be ready when enrollment opens.",
   "home.view_catalog": "View the full catalog",
   "home.paths_eyebrow": "Learning paths",
   "home.paths_title": "A path for the work you do",
@@ -254,7 +254,7 @@
   "faq.data.q": "What happens to my data?",
   "faq.data.a": "We use your data only to run your learning and credentials. We don't sell it or use advertising trackers. You can download or delete your data at any time from your account settings.",
   "faq.start.q": "When do the first courses open?",
-  "faq.start.a": "The first classes are planned for {date}. Create a free account now and the courses will be ready on your dashboard as soon as they open.",
+  "faq.start.a": "The first course will open after the required reviews are complete. You can create a free account now; the course will appear in your dashboard when enrollment opens.",
 
   "help.eyebrow": "Support",
   "help.title": "Help center",

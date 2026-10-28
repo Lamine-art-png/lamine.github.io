@@ -14,7 +14,8 @@ test("an untranslated right-to-left language falls back to English laid out left
   assert.match(r.text, /<html lang="en" dir="ltr"/, "English text must not be laid out right-to-left");
   assert.match(r.text, /Persian isn(?:'|&#39;)t translated yet, so the Academy is shown in English for now/);
   assert.match(r.text, /<option value="fa" lang="fa" dir="rtl" selected>/, "the choice stays selected");
-  assert.match(r.text, /Opens October 29, 2026/);
+  assert.match(r.text, /Coming soon/);
+  assert.doesNotMatch(r.text, /Opens October 29, 2026/);
   assert.doesNotMatch(r.text, /[۰-۹]/, "no Persian digits or calendar in an English page");
   // The fallback notice no longer claims dates and direction follow the language.
   assert.doesNotMatch(r.text, /text direction follow/);
@@ -26,7 +27,8 @@ test("a translated right-to-left page marks English curriculum text as English, 
   assert.match(r.text, /<html lang="ar" dir="rtl"/);
   assert.match(r.text, /<h1 class="display-sm" lang="en" dir="ltr">Introduction to Artificial Intelligence in Agriculture<\/h1>/);
   assert.match(r.text, /<div class="prose" lang="en" dir="ltr">/);
-  assert.match(r.text, /أكتوبر/, "Gregorian month names in Arabic");
+  assert.match(r.text, /قريبًا/, "review-state course uses localized coming-soon copy");
+  assert.doesNotMatch(r.text, /أكتوبر/, "review-state course must not promise an October opening");
   // English pages carry no redundant markers.
   const en = await new Client(env).get(`${COURSE}?lang=en`);
   assert.match(en.text, /<h1 class="display-sm">Introduction to Artificial Intelligence in Agriculture<\/h1>/);
