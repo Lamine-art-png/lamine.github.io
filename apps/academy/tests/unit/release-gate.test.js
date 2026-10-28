@@ -37,3 +37,16 @@ test("the staging test has no silent skip paths", () => {
   assert.doesNotMatch(src, /::warning::/);
   assert.doesNotMatch(src, /skipped/);
 });
+
+test("production refuses a stale dispatch before backup, migration or deployment", () => {
+  const production = job("production");
+  const guard = production.indexOf("- name: Refuse stale production dispatch");
+  const deploy = production.indexOf("- name: Deploy production (verified backup before migrations)");
+  assert.ok(guard > 0 && deploy > guard, "stale-SHA guard precedes all production deployment side effects");
+  const step = production.slice(guard, deploy);
+  assert.match(step, /set -euo pipefail/);
+  assert.match(step, /git ls-remote --exit-code origin refs\\/heads\\/main/);
+  assert.match(step, /\$current_main\" != \"\$GITHUB_SHA\"/);
+  assert.match(step, /exit 1/);
+  assert.doesNotMatch(step, /continue-on-error|\\|\\| true/);
+});
