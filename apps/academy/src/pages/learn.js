@@ -13,7 +13,7 @@ import { validInteractive } from "../lib/interactive.js";
 import { getEnrollment, progressMap, recordProgress, watchRequired } from "../services/progress.js";
 import { certificationExam, activeCertificate } from "../services/certificates.js";
 import { track } from "../services/activity.js";
-import { isStreamVideo, playbackToken, iframeUrl, streamConfigured } from "../services/stream.js";
+import { isStreamVideo, playbackToken, iframeUrl, signedThumbnailUrl, streamConfigured } from "../services/stream.js";
 
 async function loadContext(c, { lessonSlug = null } = {}) {
   const staff = c.can("courses.edit");
@@ -90,7 +90,7 @@ async function videoBlock(c, lesson, video, progress) {
     const captions = video.captions.filter((cap) => cap.status === "reviewed" || c.can("courses.edit"));
     return html`<div class="player${stream ? " player-stream" : ""}" data-player data-lesson="${lesson.id}" data-start="${start}"${stream ? raw(` data-stream data-expires="${signed.expiresAt}"`) : ""}>
         ${stream
-          ? html`<iframe src="${iframeUrl(c.env, signed.token)}" title="${t("lesson.video_player", { title: lesson.title })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          ? html`<iframe src="${iframeUrl(c.env, signed.token, { poster: signedThumbnailUrl(c.env, signed.token) })}" title="${t("lesson.video_player", { title: lesson.title })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
             <div class="player-mark" aria-hidden="true" data-license-mark>${licenseMark(c.user)}</div>`
           : html`<video controls playsinline preload="metadata" controlslist="nodownload" ${video.poster_url ? html`poster="${safeUrl(video.poster_url)}"` : ""} aria-label="${lesson.title}">
           ${video.hls_url ? html`<source src="${safeUrl(video.hls_url)}" type="application/vnd.apple.mpegurl">` : ""}
