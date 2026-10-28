@@ -82,7 +82,10 @@ export function signedThumbnailUrl(env, token, { timeSeconds = 2, height = 720 }
   const size = Math.max(144, Math.min(1080, Number.isFinite(height) ? Math.round(height) : 720));
   const origin = streamOrigin(env);
   const imageOrigin = origin === "https://iframe.videodelivery.net" ? "https://videodelivery.net" : origin;
-  return `${imageOrigin}/${token}/thumbnails/thumbnail.jpg?time=${time}s&height=${size}`;
+  // The final A1 recordings are 16:9. Stream otherwise defaults width to 640
+  // and fit to crop, which would cut off the branded opening frame.
+  const width = Math.round(size * 16 / 9);
+  return `${imageOrigin}/${token}/thumbnails/thumbnail.jpg?time=${time}s&width=${width}&height=${size}&fit=clip`;
 }
 
 export function iframeUrl(env, token, { poster } = {}) {
