@@ -157,7 +157,8 @@ test("scheduled publication re-checks readiness and returns unready courses to r
   const note = await env.DB.prepare("SELECT n.* FROM notifications n JOIN users u ON u.id = n.user_id WHERE u.email = 'founder@academy.test' AND n.kind = 'admin'").first();
   assert.match(note.title, /Scheduled publication stopped/);
   r = await new Client(env).get("/courses/introduction-to-ai-in-agriculture");
-  assert.match(r.text, /Opens Oct 29, 2026/);
+  assert.match(r.text, /Coming soon/);
+  assert.doesNotMatch(r.text, /Opens Oct 29, 2026/);
   assert.doesNotMatch(r.text, /action="\/courses\/[^"]+\/enroll"/);
 });
 
