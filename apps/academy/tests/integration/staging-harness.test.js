@@ -65,7 +65,7 @@ test("the staging integration test passes end to end over HTTP", async (t) => {
   assert.match(r.out, /✔ public verification recomputes the certificate signature/);
   assert.doesNotMatch(r.out, /skipped/);
   for (const name of [
-    "language selection: Portuguese, French, Spanish, Arabic (right-to-left), untranslated fallback",
+    "language selection: Portuguese, French, Spanish, Arabic and Persian (RTL)",
     "certificate PDF download and LinkedIn sharing",
     "administration is closed to learners",
     "staff account: admin access and role restrictions",
