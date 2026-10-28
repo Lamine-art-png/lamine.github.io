@@ -479,7 +479,7 @@ export async function videoToken(c) {
     throw new HttpError(503, "video_unavailable");
   }
   log("granted");
-  return json({ ok: true, url: iframeUrl(c.env, signed.token), expiresAt: signed.expiresAt }, 200, { "Cache-Control": "private, no-store" });
+  return json({ ok: true, url: iframeUrl(c.env, signed.token, { poster: signedThumbnailUrl(c.env, signed.token) }), expiresAt: signed.expiresAt }, 200, { "Cache-Control": "private, no-store" });
 }
 
 export async function resourceDownload(c) {
