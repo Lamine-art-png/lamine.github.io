@@ -87,7 +87,7 @@ function run(ws, target, api, extraEnv = {}) {
 const json = (ws, f) => JSON.parse(readFileSync(join(ws.state, f), "utf8"));
 const PASS = "synthetic test passphrase";
 const prod = { ACADEMY_DEPLOY_CONFIRM: "production", BACKUP_PASSPHRASE: PASS, CERT_SIGNING_SECRET: "c".repeat(64) };
-const gpgDecrypt = (ws, file) => execFileSync("gpg", ["--batch", "--quiet", "--pinentry-mode", "loopback", "--passphrase", PASS, "--homedir", ws.dir, "-d", file]);
+const gpgDecrypt = (ws, file) => execFileSync("gpg", ["--batch", "--quiet", "--pinentry-mode", "loopback", "--passphrase", PASS, "--homedir", ws.dir, "-d", file], { maxBuffer: 32 * 1024 * 1024 });
 
 /** Production with learner data and an existing signing key. */
 async function liveProduction(api) {

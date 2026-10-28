@@ -50,3 +50,13 @@ test("production refuses a stale dispatch before backup, migration or deployment
   assert.match(step, /exit 1/);
   assert.doesNotMatch(step, /continue-on-error|\|\| true/);
 });
+
+test("official Academy jobs explicitly opt into A1 machine draft import", () => {
+  for (const name of ["staging", "production"]) {
+    const releaseJob = job(name);
+    assert.ok(releaseJob.includes('ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS: "1"'),
+      name + " must generate guarded machine translations on deployment");
+  }
+  const deploy = readFileSync(join(root, "apps/academy/scripts/deploy.sh"), "utf8");
+  assert.ok(deploy.includes('if [ "${ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:-0}" = "1" ]; then'));
+});

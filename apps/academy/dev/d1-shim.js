@@ -91,8 +91,8 @@ export class D1Shim {
   }
 }
 
-export function applyMigrations(db, dir) {
-  const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+export function applyMigrations(db, dir, { exclude = [] } = {}) {
+  const files = readdirSync(dir).filter((f) => f.endsWith(".sql") && !exclude.includes(f)).sort();
   for (const f of files) db.sqlite.exec(readFileSync(join(dir, f), "utf8"));
   return files;
 }

@@ -49,6 +49,7 @@ jobs:
       group: agroai-academy-staging
       cancel-in-progress: false
     env:
+      ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS: "1"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_STAGING_BOOTSTRAP_ADMIN_EMAILS }}
@@ -121,6 +122,7 @@ jobs:
       cancel-in-progress: false
     env:
       ACADEMY_DEPLOY_CONFIRM: production
+      ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS: "1"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       BOOTSTRAP_ADMIN_EMAILS: ${{ secrets.ACADEMY_PRODUCTION_BOOTSTRAP_ADMIN_EMAILS }}
