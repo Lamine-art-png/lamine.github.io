@@ -38,7 +38,7 @@ check /verify/AGA-0000-0000-0000 404 "Credential not found"
 check /register 200 "Create your account"
 check /sitemap.xml 200 "<urlset"
 check "/?lang=ar" 200 'dir="rtl"'
-check "/?lang=fa" 200 '<html lang="en" dir="ltr"'
+check "/?lang=fa" 200 '<html lang="fa" dir="rtl"'
 check /static/css/academy.css?v=smoke 200
 check /static/brand/academy-lockup-h.webp 200
 check /static/brand/og-academy.png 200

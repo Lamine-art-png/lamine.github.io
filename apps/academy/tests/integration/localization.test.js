@@ -8,17 +8,14 @@ import { queueEmail } from "../../src/services/email.js";
 
 const COURSE = "/courses/introduction-to-ai-in-agriculture";
 
-test("an untranslated right-to-left language falls back to English laid out left-to-right, with Gregorian English dates", async () => {
+test("newly cataloged Persian uses RTL UI while untranslated English curriculum remains LTR", async () => {
   const env = makeEnv();
   const r = await new Client(env).get(`${COURSE}?lang=fa`);
-  assert.match(r.text, /<html lang="en" dir="ltr"/, "English text must not be laid out right-to-left");
-  assert.match(r.text, /Persian isn(?:'|&#39;)t translated yet, so the Academy is shown in English for now/);
-  assert.match(r.text, /<option value="fa" lang="fa" dir="rtl" selected>/, "the choice stays selected");
-  assert.match(r.text, /Coming soon/);
-  assert.doesNotMatch(r.text, /Opens October 29, 2026/);
-  assert.doesNotMatch(r.text, /[۰-۹]/, "no Persian digits or calendar in an English page");
-  // The fallback notice no longer claims dates and direction follow the language.
-  assert.doesNotMatch(r.text, /text direction follow/);
+  assert.match(r.text, /<html lang="fa" dir="rtl"/, "Persian interface must be marked RTL when its catalog is authored");
+  assert.match(r.text, /<option value="fa" lang="fa" dir="rtl" selected>/, "the learner language choice stays selected");
+  assert.match(r.text, /<h1 class="display-sm" lang="en" dir="ltr">Introduction to Artificial Intelligence in Agriculture<\/h1>/, "untranslated course title must remain explicitly English");
+  assert.match(r.text, /<div class="prose" lang="en" dir="ltr">/, "untranslated curriculum body stays English and left-to-right");
+  assert.doesNotMatch(r.text, /Persian isn(?:'|&#39;)t translated yet, so the Academy is shown in English for now/, "full English UI fallback notice must disappear when catalog exists");
 });
 
 test("a translated right-to-left page marks English curriculum text as English, left-to-right", async () => {
@@ -40,11 +37,11 @@ test("a reviewed course translation is marked with its language inside an Englis
   const now = new Date().toISOString();
   await env.DB.prepare("INSERT INTO content_translations (entity_type, entity_id, field, locale, value, status, updated_at) VALUES ('course','crs_a1','title','de','Einführung in KI in der Landwirtschaft','reviewed',?)").bind(now).run();
   const r = await new Client(env).get(`${COURSE}?lang=de`);
-  assert.match(r.text, /<html lang="en" dir="ltr"/);
-  assert.match(r.text, /<h1 class="display-sm" lang="de" dir="ltr">Einführung in KI in der Landwirtschaft<\/h1>/);
+  assert.match(r.text, /<html lang="de" dir="ltr"/);
+  assert.match(r.text, /<h1 class="display-sm">Einführung in KI in der Landwirtschaft<\/h1>/);
 });
 
-test("partly translated content is marked field by field, and machine translations are disclosed on English-fallback pages", async () => {
+test("partly translated content is marked field by field and machine translations remain disclosed", async () => {
   const env = makeEnv();
   await publishCourse(env, "crs_a1");
   const now = new Date().toISOString();
@@ -53,11 +50,11 @@ test("partly translated content is marked field by field, and machine translatio
   let r = await new Client(env).get(`${COURSE}?lang=ar`);
   assert.match(r.text, /<h1 class="display-sm">مقدمة في الذكاء الاصطناعي في الزراعة<\/h1>/, "translated field: no marker in an Arabic page");
   assert.match(r.text, /<p class="lead" lang="en" dir="ltr">What AI is/, "untranslated field stays marked as English");
-  // German has no interface catalog: the page is English, the title a machine translation that must be disclosed.
+  // German now has a machine interface catalog, but untranslated course content is still explicitly English.
   r = await new Client(env).get(`${COURSE}?lang=de`);
-  assert.match(r.text, /<h1 class="display-sm" lang="de" dir="ltr">Einführung in KI<\/h1>/);
-  assert.match(r.text, /<p class="lead">What AI is/, "English subtitle in an English page needs no marker");
-  assert.match(r.text, /class="translation-note"[^<]*<svg[^]*?Machine-translated — not yet reviewed/, "machine translation disclosed");
+  assert.match(r.text, /<h1 class="display-sm">Einführung in KI<\/h1>/);
+  assert.match(r.text, /<p class="lead" lang="en" dir="ltr">What AI is/, "English subtitle in a German page must identify its actual language");
+  assert.match(r.text, /class="translation-note"/, "machine translation status is visibly disclosed in the selected UI language");
 });
 
 test("a language picked in the header is saved to the profile and follows the learner to another device", async () => {
@@ -81,8 +78,8 @@ test("emails use the learner's language when translated, otherwise English laid 
     return env.DB.prepare("SELECT locale, html FROM email_outbox WHERE to_email = ?").bind(email).first();
   };
   const fa = await row("fa", "fa@academy.test");
-  assert.equal(fa.locale, "en");
-  assert.match(fa.html, /<html lang="en" dir="ltr">/);
+  assert.equal(fa.locale, "fa");
+  assert.match(fa.html, /<html lang="fa" dir="rtl">/);
   const ar = await row("ar", "ar@academy.test");
   assert.equal(ar.locale, "ar");
   assert.match(ar.html, /<html lang="ar" dir="rtl">/);
@@ -94,8 +91,8 @@ test("only translated languages are advertised as alternates; the staff console 
   const env = makeEnv();
   const r = await new Client(env).get("/courses");
   const alternates = r.text.match(/<link rel="alternate" hreflang="(?!x-default)[^"]+"/g) || [];
-  assert.equal(alternates.length, 6, "English + the five translated catalogs");
-  assert.doesNotMatch(r.text, /hreflang="de"/);
+  assert.equal(alternates.length, 60, "all sixty Portal-matched translated UI catalogs, never the selector alone");
+  assert.match(r.text, /hreflang="de"/);
   const founder = await registeredLearner(env, { email: "founder@academy.test" });
   const admin = await founder.get("/admin?lang=ar");
   assert.match(admin.text, /<html lang="ar" dir="rtl"/);

@@ -1,0 +1,114 @@
+name: Academy Author UI Locales
+on:
+  push:
+    branches: [feature/academy-full-ui-locales-20261028]
+    paths:
+      - scripts/author-academy-ui-catalogs.py
+      - apps/academy/tests/integration/localization.test.js
+      - apps/academy/tests/integration/platform.test.js
+      - apps/academy/tests/integration/staging-harness.test.js
+      - apps/academy/tests/remote/staging.mjs
+      - apps/academy/scripts/smoke.sh
+      - .github/workflows/academy-ui-localization.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: academy-author-ui-locales-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Translate disjoint Academy UI language shard
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python - <<'PY' > /tmp/locales.txt
+          import json, os
+          from pathlib import Path
+          data=json.loads(Path('shared/supported-locales.json').read_text())
+          codes=[c for c in data['enabledUiLocales'] if c != 'auto']
+          print(*codes[int(os.environ['SHARD'])::6], sep=' ')
+          PY
+          python scripts/author-academy-ui-catalogs.py --retry 3 --only $(cat /tmp/locales.txt)
+          mkdir -p /tmp/academy-ui-shard
+          for code in $(cat /tmp/locales.txt); do
+            cp "apps/academy/src/i18n/$code.json" /tmp/academy-ui-shard/
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-ui-shard-${{ matrix.shard }}
+          path: /tmp/academy-ui-shard/*.json
+          if-no-files-found: error
+          retention-days: 5
+  validate-and-commit:
+    needs: author
+    if: ${{ github.ref == 'refs/heads/feature/academy-full-ui-locales-20261028' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: academy-ui-shard-*
+          path: apps/academy/src/i18n/
+          merge-multiple: true
+      - name: Mark catalogs as machine-prepared only and verify parity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('apps/academy/src/i18n')
+          manifest=json.loads(Path('shared/supported-locales.json').read_text())
+          codes={x for x in manifest['enabledUiLocales'] if x != 'auto'}
+          observed={p.stem for p in root.glob('*.json') if not p.name.startswith('_')}
+          assert len(codes)==60 and codes==observed, (codes-observed, observed-codes)
+          en=json.loads((root/'en.json').read_text())
+          meta=json.loads((root/'_meta.json').read_text())
+          for code in sorted(codes):
+              rows=json.loads((root/f'{code}.json').read_text())
+              assert set(rows)==set(en), f'{code}: source key parity'
+              assert all(isinstance(v,str) and v.strip() for v in rows.values()), code
+              if code!='en':
+                  # Source-language strings are safe to display, but never
+                  # represent them as translated or human-reviewed.
+                  source_fallbacks=sorted(k for k,v in rows.items() if v==en[k])
+                  meta[code]={
+                      'provenance':'machine-prepared',
+                      'reviewed':False,
+                      'source_language_fallback_keys':source_fallbacks,
+                  }
+                  if source_fallbacks:
+                      print(f'{code}: {len(source_fallbacks)} English/source fallbacks; needs language review')
+          (root/'_meta.json').write_text(json.dumps(meta,indent=2,ensure_ascii=False)+'\n')
+          PY
+          cd apps/academy
+          node scripts/build-i18n-index.mjs
+      - name: Save catalogs on authoring branch only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/academy/src/i18n/
+          if git diff --cached --quiet; then
+            echo "No catalog changes"
+          else
+            git commit -m "i18n(academy): machine-author 60 Portal-matched UI catalogs"
+            git push origin HEAD:feature/academy-full-ui-locales-20261028
+          fi
+      - name: Test committed catalogs against all Academy constraints
+        run: |
+          cd apps/academy
+          npm test

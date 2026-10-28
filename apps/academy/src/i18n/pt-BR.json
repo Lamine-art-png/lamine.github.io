@@ -810,5 +810,11 @@
   "languages.content.reviewed": "Inglês + {n} tradução(ões) de curso revisada(s)",
   "languages.exams.partial": "Inglês; algumas questões revisadas",
   "languages.help": "Fala um destes idiomas e quer ajudar a revisar uma tradução?",
-  "dash.not_earned": "Ainda não conquistada"
+  "dash.not_earned": "Ainda não conquistada",
+  "faq.instructor.a": "Os cursos são escritos e revisados pela equipe AGRO-AI. As instruções completas de cada lição estão disponíveis como texto junto com o vídeo. Os vídeos apresentados por um avatar gerado por IA são rotulados como tal no player.",
+  "lesson.video_unavailable": "Este vídeo está temporariamente indisponível",
+  "lesson.ai_presenter": "{name} é um apresentador gerado por IA, não uma pessoa real.",
+  "lesson.licensed_to": "Licenciado para {name} para estudo pessoal. Não copie, grave ou compartilhe o material do curso.",
+  "lesson.video_unavailable_body": "Esta lição é concluída assistindo ao vídeo, portanto ela permanece aberta até que o vídeo volte. Seu progresso é salvo; por favor tente novamente em breve. Enquanto isso, você pode ler o texto da lição abaixo.",
+  "lesson.video_player": "Vídeo da aula: {title}"
 }

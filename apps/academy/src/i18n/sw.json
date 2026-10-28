@@ -810,5 +810,11 @@
   "languages.content.reviewed": "Kiingereza + tafsiri {n} za kozi zilizokaguliwa",
   "languages.exams.partial": "Kiingereza; baadhi ya maswali yamekaguliwa",
   "languages.help": "Unazungumza mojawapo ya lugha hizi na ungependa kusaidia kukagua tafsiri?",
-  "dash.not_earned": "Bado haijapatikana"
+  "dash.not_earned": "Bado haijapatikana",
+  "faq.instructor.a": "Kozi huandikwa na kukaguliwa na timu ya AGRO-AI. Kila maagizo kamili ya somo yanapatikana kama maandishi kando ya video yake. Video zinazowasilishwa na avatar inayozalishwa na AI zimeandikwa hivyo chini ya kichezaji.",
+  "lesson.video_unavailable": "Video hii haipatikani kwa sasa",
+  "lesson.ai_presenter": "{name} ni mtangazaji anayezalishwa na AI, si mtu halisi.",
+  "lesson.licensed_to": "Imepewa leseni ya {name} kwa masomo ya kibinafsi. Tafadhali usiinakili, urekodi au kushiriki nyenzo za kozi.",
+  "lesson.video_unavailable_body": "Somo hili linakamilika kwa kutazama video yake, kwa hivyo hubaki wazi hadi video irudi. Maendeleo yako yamehifadhiwa; tafadhali jaribu tena baada ya muda mfupi. Unaweza kusoma maandishi ya somo hapa chini wakati huo huo.",
+  "lesson.video_player": "Video ya somo: {title}"
 }

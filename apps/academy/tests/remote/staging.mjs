@@ -80,15 +80,15 @@ async function main() {
     }
   });
 
-  await step("language selection: Portuguese, French, Spanish, Arabic (right-to-left), untranslated fallback", async () => {
-    // Persian has no interface catalog yet: the page is English, so it is marked and laid out as English.
-    for (const [q, lang, dir] of [["pt-BR", "pt-BR", "ltr"], ["fr", "fr-FR", "ltr"], ["es", "es", "ltr"], ["ar", "ar", "rtl"], ["fa", "en", "ltr"]]) {
+  await step("language selection: Portuguese, French, Spanish, Arabic and Persian (RTL)", async () => {
+    // Machine-authored Persian UI is RTL. This does not claim translated A1 lessons.
+    for (const [q, lang, dir] of [["pt-BR", "pt-BR", "ltr"], ["fr", "fr-FR", "ltr"], ["es", "es", "ltr"], ["ar", "ar", "rtl"], ["fa", "fa", "rtl"]]) {
       const r = await new RemoteClient(BASE).get(`/courses?lang=${q}`);
       expect(r.status === 200, `/courses?lang=${q} returned ${r.status}`);
       expect(new RegExp(`<html lang="${lang}" dir="${dir}"`).test(r.text), `/courses?lang=${q} did not render lang="${lang}" dir="${dir}"`);
     }
     const fa = await new RemoteClient(BASE).get("/courses?lang=fa");
-    expect(/Persian isn(?:'|&#39;)t translated yet/.test(fa.text), "untranslated language notice missing");
+    expect(/<html lang="fa" dir="rtl"/.test(fa.text), "Persian UI should render RTL");
   });
 
   await step("HTTPS only, and pages sized for mobile screens", async () => {
