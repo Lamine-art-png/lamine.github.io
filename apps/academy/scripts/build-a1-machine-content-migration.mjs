@@ -30,13 +30,13 @@ let n=0,omitted=0;
 for(const lang of codes){
  const pack=JSON.parse(readFileSync(resolve(packsDir,lang+".json"),"utf8"));
  check(pack.format==="agroai-academy-translations/v1"&&pack.status==="machine"&&pack.target_locale===lang,lang+": invalid source format");
- check(pack.total_fields===64&&pack.items.length+pack.untranslated.length===64,lang+": incomplete pack");
- omitted+=pack.untranslated.length;
+ check(pack.total_fields===64&&pack.items.length===64,lang+": incomplete pack");
+ check(pack.items.filter(it=>it.status==="source_fallback").length===pack.untranslated.length,lang+": fallback provenance mismatch");
  const unique=new Set();
  for(const item of pack.items){
    const spec=fields[item.type];
    check(spec&&spec.keys.includes(item.field),lang+": forbidden field");
-   check(item.status==="machine",lang+": inappropriate review status");
+   check(item.status==="machine"||item.status==="source_fallback",lang+": inappropriate review status");
    check(typeof item.source==="string"&&item.source.trim()&&typeof item.translation==="string"&&item.translation.trim(),lang+": invalid text");
    check(item.type==="course"?item.id==="crs_a1":String(item.id).startsWith(item.type==="module"?"mod_a1_":"les_a1_"),lang+": unexpected non-A1 source ID");
    const key=item.type+":"+item.id+":"+item.field;
