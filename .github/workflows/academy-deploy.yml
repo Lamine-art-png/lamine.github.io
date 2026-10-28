@@ -137,6 +137,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # A queued environment approval can outlive the commit it was created for.
+      # Refuse to deploy an older dispatch over a newer main release.
+      - name: Refuse stale production dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ -z "$current_main" ] || [ "$current_main" != "$GITHUB_SHA" ]; then
+            echo "::error::Academy production dispatch is stale (or main could not be verified). Start a fresh protected run from current main."
+            exit 1
+          fi
       - name: Deploy production (verified backup before migrations)
         working-directory: apps/academy
         run: bash scripts/deploy.sh production
