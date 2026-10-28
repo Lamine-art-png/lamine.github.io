@@ -40,7 +40,7 @@ test("an enrolled learner gets Stream's player with a short-lived token signed b
   // Each source video gets its own branded opening frame via the same token,
   // without exposing the bare Stream UID or an anonymous thumbnail URL.
   const expectedPoster = signedThumbnailUrl(env, token);
-  assert.ok(expectedPoster.includes(token) && expectedPoster.includes("time=2s&height=720"));
+  assert.ok(expectedPoster.includes(token) && expectedPoster.includes("time=2s&width=1280&height=720&fit=clip"));
   assert.ok(r.text.includes(encodeURIComponent(expectedPoster)), "iframe poster uses the signed thumbnail from this exact video");
   assert.ok(!r.text.includes(`/${UID}/thumbnails/`), "no public thumbnail URL");
 
@@ -168,9 +168,9 @@ test("playback unavailable never waives a required video: no completion from tex
 test("Stream posters stay signed and are bounded to sensible times", () => {
   const jwt = ["eyJoIjoxfQ", "eyJwIjoyfQ", "abc_def-123"].join(".");
   assert.equal(signedThumbnailUrl({ STREAM_CUSTOMER_CODE: "abc123testcode" }, jwt),
-    `https://customer-abc123testcode.cloudflarestream.com/${jwt}/thumbnails/thumbnail.jpg?time=2s&height=720`);
+    `https://customer-abc123testcode.cloudflarestream.com/${jwt}/thumbnails/thumbnail.jpg?time=2s&width=1280&height=720&fit=clip`);
   assert.equal(signedThumbnailUrl({}, jwt, { timeSeconds: -10, height: 5000 }),
-    `https://videodelivery.net/${jwt}/thumbnails/thumbnail.jpg?time=0s&height=1080`);
+    `https://videodelivery.net/${jwt}/thumbnails/thumbnail.jpg?time=0s&width=1920&height=1080&fit=clip`);
   assert.equal(signedThumbnailUrl({}, "0123456789abcdef0123456789abcdef"), null, "bare UIDs cannot be used");
 });
 
