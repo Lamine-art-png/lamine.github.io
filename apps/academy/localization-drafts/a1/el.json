@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "el",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Εισαγωγή στην Τεχνητή Νοημοσύνη στη Γεωργία",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Τι είναι το AI, πώς λειτουργεί στο αγρόκτημα και πώς να το χρησιμοποιείτε με υπευθυνότητα.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Η τεχνητή νοημοσύνη φτάνει στη γεωργία μέσω ελεγκτών άρδευσης, δορυφορικών υπηρεσιών, λογισμικού διαχείρισης αγροκτημάτων και τηλεφώνων στις τσέπες των καλλιεργητών. Αυτό το μάθημα σάς δίνει μια σαφή, πρακτική κατανόηση του τι είναι αυτή η τεχνολογία, πώς λειτουργεί και πώς να τη χρησιμοποιήσετε σωστά.\n\nΘα μάθετε τις βασικές ιδέες πίσω από την τεχνητή νοημοσύνη και τη μηχανική μάθηση χωρίς εξισώσεις, θα δείτε πώς τα γεωργικά δεδομένα γίνονται πρόβλεψη και μετά σύσταση και θα ακολουθήσετε την τεχνητή νοημοσύνη καθ' όλη τη διάρκεια της σεζόν — από τον σχεδιασμό και την άρδευση μέχρι την υγεία και τη συγκομιδή των καλλιεργειών. Πάνω απ 'όλα, θα μάθετε να κρίνετε την παραγωγή τεχνητής νοημοσύνης: πότε να την εμπιστεύεστε, πότε να την αμφισβητείτε και πώς να διατηρείτε υπεύθυνη την ανθρώπινη κρίση και τη γνώση της γεωργίας.\n\nΤο μάθημα έχει σχεδιαστεί για καλλιεργητές, χειριστές, γεωπόνους, διευθυντές και φοιτητές. Δεν απαιτείται τεχνικό υπόβαθρο.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Κανένας. Η περιέργεια για το πώς η τεχνολογία μπορεί να υποστηρίξει τις αγροτικές εργασίες είναι το μόνο που χρειάζεστε.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Εξηγήστε σε απλή γλώσσα τι είναι η τεχνητή νοημοσύνη, η μηχανική μάθηση και η γενετική τεχνητή νοημοσύνη\", \"Περιγράψτε τις κύριες πηγές γεωργικών δεδομένων και τι κάνει τα δεδομένα αξιόπιστα\", \"Ακολουθήστε πώς ένα μοντέλο μετατρέπει τα δεδομένα σε πρόβλεψη και μια πρόβλεψη σε σύσταση\", \"Αναγνωρίστε τις πρακτικές εφαρμογές τεχνητής νοημοσύνης κατά τη διάρκεια της καλλιεργητικής περιόδου, από τον προγραμματισμό έως τη συγκομιδή\", \"Προσδιορίστε τα όρια και τους τρόπους αποτυχίας της γεωργικής τεχνητής νοημοσύνης και πότε να αμφισβητήσετε μια σύσταση\", \"Εφαρμόστε τις αρχές της ιδιοκτησίας δεδομένων, του απορρήτου και της υπεύθυνης χρήσης στη δική σας λειτουργία\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Τι σημαίνει η τεχνητή νοημοσύνη για τη γεωργία",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Βασικές ιδέες και γιατί έχουν σημασία τώρα.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Πώς λειτουργεί η γεωργική τεχνητή νοημοσύνη",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Από δεδομένα σε μοντέλο σε σύσταση.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI καθ' όλη τη διάρκεια της σεζόν",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Πρακτικές εφαρμογές από τον προγραμματισμό μέχρι τη συγκομιδή.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Χρήση της τεχνητής νοημοσύνης με υπευθυνότητα",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Όρια, δικαιώματα δεδομένων και σίγουρη, κρίσιμη χρήση.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Παρακολούθηση της υγείας των καλλιεργειών από ψηλά και από κοντά",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Δορυφορικές εικόνες, δείκτες βλάστησης και όραση υπολογιστή για την υγεία των καλλιεργειών.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Τα υγιή φυτά και τα στρεσαρισμένα φυτά αντανακλούν το φως διαφορετικά. Η τεχνητή νοημοσύνη χρησιμοποιεί αυτή τη διαφορά - που καταγράφηκε από δορυφόρους, drones και κάμερες - για να παρακολουθήσει καλλιέργειες σε κλίμακα που καμία ομάδα ανίχνευσης δεν θα μπορούσε να καλύψει.\n\n## Πώς φαίνονται τα φυτά σε έναν δορυφόρο\n\nΤα πράσινα φύλλα απορροφούν το περισσότερο κόκκινο φως για τη φωτοσύνθεση και αντανακλούν έντονα **εγγύς υπέρυθρο (NIR)** φως. Όταν τα φυτά είναι πιεσμένα, αραιά ή γηρασμένα, η κόκκινη ανάκλαση αυξάνεται και η ανάκλαση NIR μειώνεται.\n\nΟ **Normalized Difference Vegetation Index (NDVI)** καταγράφει αυτήν την αντίθεση:\n\n**NDVI = (NIR − Κόκκινο) ÷ (NIR + Κόκκινο)**\n\nΟι τιμές κυμαίνονται από −1 έως +1. Η πυκνή, υγιής βλάστηση είναι συνήθως υψηλή (συχνά πάνω από 0,6). Το γυμνό έδαφος είναι χαμηλό (περίπου 0,1–0,2). το νερό είναι συνήθως αρνητικό.\n\n## Διαβάζοντας σοφά τους χάρτες NDVI\n\nΤο NDVI είναι χρήσιμο για τον εντοπισμό **πού** ένα πεδίο διαφέρει, όχι για τη διάγνωση **γιατί**. Ένα έμπλαστρο χαμηλής περιεκτικότητας σε NDVI μπορεί να είναι στρες στο νερό, ανεπάρκεια θρεπτικών συστατικών, ασθένεια, παράσιτα, πρόβλημα φύτευσης ή απλώς διαφορετική ποικιλία. Ο χάρτης σας λέει πού να κοιτάξετε. ο προσκοπισμός σας λέει τι βρήκατε.\n\n> **Σημαντικό:** Τα σύννεφα, οι σκιές των νεφών, η ομίχλη και η ώρα της ημέρας μπορεί να παραμορφώσουν τις δορυφορικές μετρήσεις. Οι αξιόπιστες υπηρεσίες καλύπτουν τα σύννεφα και συγκρίνουν εικόνες με την πάροδο του χρόνου αντί να εμπιστεύονται ένα μόνο στιγμιότυπο.\n\nΆλλοι δείκτες υπάρχουν για συγκεκριμένους σκοπούς — κάποιοι είναι πιο ευαίσθητοι στη χλωροφύλλη, άλλοι στην περιεκτικότητα σε νερό ή σε πυκνούς θόλους όπου το NDVI κορεσμένο.\n\n## Υπολογιστική όραση από κοντά\n\nΣτο έδαφος, τα μοντέλα **computer vision** αναλύουν φωτογραφίες από τηλέφωνα, τρακτέρ ή drones σε:\n\n- να αναγνωρίσουν ασθένειες και παράσιτα από εικόνες φύλλων.\n- διάκριση των ζιζανίων από τις καλλιέργειες για στοχευμένους ψεκασμούς.\n- μετρήστε φρούτα, λουλούδια ή φυτά για να υπολογίσετε την απόδοση.\n\nΑυτά τα μοντέλα εκπαιδεύονται σε μεγάλες συλλογές εικόνων με ετικέτα. Η ακρίβειά τους εξαρτάται σε μεγάλο βαθμό από το αν αυτές οι εικόνες μοιάζουν με τη συγκομιδή σας, τις ποικιλίες σας και τις συνθήκες φωτισμού σας.\n\n## Από την ανίχνευση στη δράση\n\nΜια καλή ροή εργασιών παρακολούθησης της καλλιέργειας μετατρέπει την ανίχνευση σε μια εργασία με προτεραιότητα: *\"Η Ζώνη 3 παρουσιάζει μείωση της ευρωστίας σε 10 ημέρες. Αναζητήστε πρώτα τη βορειοανατολική γωνία, ελέγξτε την ομοιομορφία άρδευσης και αναζητήστε σημάδια ριζικής νόσου.\"* Τα ευρήματα του ανιχνευτή στη συνέχεια ανατρέχουν στο σύστημα, βελτιώνοντας τις μελλοντικές ειδοποιήσεις.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Δεδομένα: η πρώτη ύλη της γεωργικής ΑΙ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Από πού προέρχονται τα δεδομένα του αγροκτήματος και τι τα καθιστά αξιόπιστα.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Κάθε σύστημα AI είναι κατασκευασμένο από δεδομένα. Εάν τα δεδομένα είναι ελλιπή, μεροληπτικά ή λανθασμένα, το AI θα είναι επίσης. Η κατανόηση των δεδομένων σας είναι η πιο σημαντική δεξιότητα στη γεωργική τεχνητή νοημοσύνη.\n\n## Από πού προέρχονται τα γεωργικά δεδομένα\n\n| Πηγή | Παραδείγματα | Τι σου λέει |\n|---|---|---|\n| Καιρός | Σταθμοί στο αγρόκτημα, περιφερειακά δίκτυα, προβλέψεις | Θερμοκρασία, βροχόπτωση, υγρασία, άνεμος, ηλιακή ακτινοβολία |\n| Έδαφος | Ανιχνευτές υγρασίας, δοκιμές εδάφους, χάρτες εδάφους | Νερό διαθέσιμο στις ρίζες, θρεπτικά συστατικά, υφή |\n| Τηλεπισκόπηση | Εικόνες από δορυφόρους, αεροσκάφη και drone | Σθένος καλλιέργειας, κάλυψη θόλου, μοτίβα πίεσης σε ένα χωράφι |\n| Εξοπλισμός | Ελεγκτές άρδευσης, μετρητές ροής, επιτηρητές απόδοσης, τρακτέρ | Τι εφαρμόστηκε, πού και πότε |\n| Εγγραφές | Ημερομηνίες φύτευσης, ποικιλίες, εφαρμογές εισροών, προσκοπικές σημειώσεις | Διοικητικές αποφάσεις και παρατηρήσεις |\n| Αγορές | Τιμές, συμβόλαια, σήματα ζήτησης | Οικονομικό πλαίσιο για αποφάσεις |\n\n## Οι ιδιότητες των καλών δεδομένων\n\n**Ακρίβεια** — αντικατοπτρίζει η μέτρηση την πραγματικότητα; Ένας ανιχνευτής υγρασίας τοποθετημένος σε υγρό σημείο ή ένας βροχόμετρο κάτω από ένα δέντρο, θα παραπλανήσει κάθε μοντέλο που το χρησιμοποιεί.\n\n**Πληρότητα** — υπάρχουν κενά; Ένας αισθητήρας που σταματά να αναφέρει για μια εβδομάδα κατά τη διάρκεια ενός κύματος καύσωνα αφήνει μια τρύπα ακριβώς όταν έχει μεγαλύτερη σημασία.\n\n**Επικαιρότητα** — είναι τα δεδομένα αρκετά πρόσφατα για την απόφαση; Η χθεσινή υγρασία του εδάφους είναι χρήσιμη για το σημερινό πότισμα. του περασμένου μήνα δεν είναι.\n\n**Συνέπεια** — οι μονάδες, οι μορφές και οι ορισμοί είναι ίδιοι με την πάροδο του χρόνου και στα πεδία; Η ανάμειξη ιντσών και χιλιοστών, ή δύο ονομάτων για το ίδιο πεδίο, προκαλεί σιωπηλά σφάλματα.\n\n**Αντιπροσωπευτικότητα** — καλύπτουν τα δεδομένα τις συνθήκες στις οποίες θα χρησιμοποιηθεί η τεχνητή νοημοσύνη; Ένα μοντέλο που έχει εκπαιδευτεί μόνο σε αμμώδη εδάφη μπορεί να μην λειτουργεί σε άργιλο.\n\n> **Έλεγχος πεδίου:** Πριν εμπιστευτείτε έναν πίνακα ελέγχου, κάντε τρεις ερωτήσεις: Από πού προήλθε αυτός ο αριθμός; Πότε μετρήθηκε; Τι θα έκανε λάθος;\n\n## Τα δεδομένα χρειάζονται πλαίσιο\n\nΜια ένδειξη υγρασίας εδάφους 30% σημαίνει λίγα από μόνη της. Σημασία έχει ποιος είναι ο τύπος του εδάφους, πόσο βαθιά βρίσκεται ο αισθητήρας, ποια καλλιέργεια αναπτύσσεται και σε ποιο στάδιο. Η καλή γεωργική τεχνητή νοημοσύνη συνδυάζει πηγές δεδομένων έτσι ώστε η καθεμία να προσθέτει περιεχόμενο στις άλλες — για παράδειγμα, σύζευξη δορυφορικών εικόνων με δεδομένα καιρού και το ιστορικό άρδευσης του αγρού.\n\n## Τα δεδομένα σας, οι αποφάσεις σας\n\nΤα δεδομένα του αγροκτήματος έχουν αξία — εμπορική, επιχειρησιακή και προσωπική. Πριν συνδέσετε εξοπλισμό ή μοιραστείτε αρχεία με οποιαδήποτε υπηρεσία, κατανοήστε ποιος μπορεί να έχει πρόσβαση στα δεδομένα, πώς θα χρησιμοποιηθούν και αν μπορείτε να τον πάρετε μαζί σας εάν φύγετε. Θα επιστρέψουμε στην ιδιοκτησία δεδομένων στην Ενότητα 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Ιδιοκτησία δεδομένων, απόρρητο και εμπιστοσύνη",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Πρακτικές αρχές για την κοινοποίηση των δεδομένων των εκμεταλλεύσεων με εμπιστοσύνη.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Τα δεδομένα των εκμεταλλεύσεων μπορούν να αποκαλύψουν αποδόσεις, πρακτικές, οικονομικά και την τοποθεσία των ανθρώπων και των περιουσιακών στοιχείων. Η κοινή χρήση του μπορεί να ξεκλειδώσει πολύτιμες υπηρεσίες — αλλά θα πρέπει πάντα να είναι μια σκόπιμη επιλογή.\n\n## Ερωτήσεις που πρέπει να κάνετε σε οποιονδήποτε πάροχο τεχνολογίας\n\n- **Ιδιοκτησία:** Σε ποιον ανήκει τα δεδομένα που παρέχω και τα δεδομένα που παράγει το σύστημα για το αγρόκτημά μου;\n- **Χρήση:** Για ποιο σκοπό θα χρησιμοποιηθούν τα δεδομένα; Θα χρησιμοποιηθεί για την εκπαίδευση μοντέλων; Θα συνδυαστεί με δεδομένα άλλων εκμεταλλεύσεων;\n- **Κοινή χρήση:** Θα κοινοποιηθεί ή θα πωληθεί σε τρίτους; Ποιες και γιατί;\n- **Πρόσβαση και φορητότητα:** Μπορώ να πραγματοποιήσω λήψη των δεδομένων μου σε χρησιμοποιήσιμη μορφή; Μπορώ να το πάρω μαζί μου αν φύγω;\n- **Διαγραφή:** Μπορώ να διαγράψω τα δεδομένα μου και τι απομένει μετά;\n- **Ασφάλεια:** Πώς προστατεύονται τα δεδομένα; Ποιος μέσα στην εταιρεία μπορεί να το δει;\n- **Έλεγχος:** Μπορώ να ανακαλέσω την πρόσβαση για μια συνδεδεμένη συσκευή ή συνεργάτη ανά πάσα στιγμή;\n\nΑρκετοί γεωργικοί οργανισμοί έχουν δημοσιεύσει αρχές γεωργικών δεδομένων που αντιμετωπίζουν αυτά τα ερωτήματα. Το να ρωτάτε εάν ένας πάροχος τους ακολουθεί είναι ένα καλό σημείο εκκίνησης.\n\n## Συναίνεση και δικαιώματα\n\nΤα καλά συστήματα ζητούν συγκεκριμένη, ενημερωμένη άδεια — για παράδειγμα, επιτρέποντας σε έναν σύνδεσμο να διαβάζει τα δεδομένα του ελεγκτή άρδευσης χωρίς να του εκχωρεί άδεια αλλαγής ρυθμίσεων. Παραχωρήστε τη λιγότερη πρόσβαση που απαιτείται για την εργασία και ελέγχετε τακτικά τις συνδεδεμένες υπηρεσίες.\n\n## Συγκεντρωτικά και ανώνυμα δεδομένα\n\nΟ συνδυασμός δεδομένων από πολλές φάρμες μπορεί να βελτιώσει τα μοντέλα για όλους, όπως καλύτερες περιφερειακές εκτιμήσεις χρήσης νερού. Αν έγινε καλά, η συνάθροιση αφαιρεί πληροφορίες που θα μπορούσαν να προσδιορίσουν ένα μεμονωμένο αγρόκτημα. Ρωτήστε πώς πραγματοποιείται η ανωνυμοποίηση και εάν μπορείτε να εξαιρεθείτε.\n\n## Η εμπιστοσύνη κερδίζεται\n\n> **Βασική ιδέα:** Η αξιόπιστη γεωργική τεχνητή νοημοσύνη είναι διαφανής σχετικά με τον τρόπο με τον οποίο χρησιμοποιεί δεδομένα, εξηγεί τις συστάσεις της, παραδέχεται την αβεβαιότητα και αφήνει τον αγρότη στον έλεγχο.\n\nΑυτές οι ίδιες αρχές ισχύουν και για την ίδια την Ακαδημία. Μπορείτε να κατεβάσετε ή να διαγράψετε τα δεδομένα εκμάθησής σας ανά πάσα στιγμή από τις ρυθμίσεις του λογαριασμού σας.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Πρακτική άσκηση: αξιολογήστε μια σύσταση AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Εφαρμόστε όσα μάθατε σε μια ρεαλιστική σύσταση.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Σε αυτή την άσκηση θα εξασκήσετε τις δεξιότητες κριτικής κριτικής από αυτήν την ενότητα με ρεαλιστική σύσταση.\n\n## Το σενάριο\n\nΔιαχειρίζεστε μια επιχείρηση ντομάτας με στάγδην άρδευση 60 εκταρίων. Το πρωί της Τρίτης στη μέση της σεζόν, το σύστημα υποστήριξης αποφάσεων σας δείχνει:\n\n> *\"Σύσταση: Παράλειψη άρδευσης στο τετράγωνο C για τις επόμενες 48 ώρες. Προβλεπόμενη χρήση νερού καλλιέργειας: 3,1 mm/ημέρα. Υγρασία εδάφους: 82% της χωρητικότητας του αγρού. Εμπιστοσύνη: υψηλή.\"*\n\nΌταν οδηγείτε πέρα ​​από το τετράγωνο C, παρατηρείτε ότι τα φυτά στην ανατολική άκρη φαίνονται μαραμένα στη ζέστη αργά το πρωί και η χθεσινή μέγιστη θερμοκρασία ήταν 37 °C — πολύ υψηλότερη από την πρόβλεψη 29 °C που χρησιμοποιούσε το σύστημα πριν από δύο ημέρες.\n\n## Η δουλειά σας\n\nΕργαστείτε με την παρακάτω λίστα ελέγχου. Γράψτε το σκεπτικό σας στην καρτέλα **Σημειώσεις** για να επιστρέψετε σε αυτό.\n\n1. **Ελέγξτε τις εισόδους.** Ποια είσοδο φαίνεται αμφισβητήσιμη; (Υπόδειξη: συγκρίνετε την προβλεπόμενη θερμοκρασία με αυτό που συνέβη.)\n2. **Ελέγξτε τους αισθητήρες.** Πού είναι εγκατεστημένος ο αισθητήρας υγρασίας εδάφους; Θα μπορούσε να είναι σε σημείο που δεν αντιπροσωπεύει το ανατολικό άκρο;\n3. **Κοίτα στο χωράφι.** Τι θα έλεγες στα μαραμένα φυτά; Εξετάστε το φράξιμο του εκπομπού, την πίεση στο τέλος της γραμμής και την υγεία της ρίζας.\n4. **Αποφασίστε.** Θα ακολουθούσατε, θα τροποποιούσατε ή θα παρακάμπτατε τη σύσταση; Γιατί;\n5. **Καταγραφή και αναφορά.** Τι σχόλια θα δίνατε ώστε το σύστημα — και η ομάδα σας — να μπορούν να μάθουν από αυτό;\n\n## Συζήτηση\n\nΜια ισχυρή απάντηση παρατηρεί ότι η προβλεπόμενη χρήση νερού βασίστηκε πιθανώς σε μια πρόβλεψη που αποδείχθηκε πολύ καλή, επομένως η πραγματική ζήτηση ήταν υψηλότερη. Μια μεμονωμένη ένδειξη 82% μπορεί να μην αντιπροσωπεύει το ανατολικό άκρο, ειδικά εάν οι εκπομποί είναι φραγμένοι ή η πίεση είναι χαμηλή στο άκρο του πλευρικού. Μια λογική απόφαση μπορεί να είναι να επιθεωρήσετε αμέσως το ανατολικό άκρο, να εκτελέσετε μια σύντομη άρδευση εάν η επιθεώρηση επιβεβαιώσει το ξηρό έδαφος και να αναφέρετε τόσο την πρόβλεψη απώλειας όσο και το πιθανό πρόβλημα ομοιομορφίας.\n\nΣπάνια υπάρχει μια ενιαία σωστή απάντηση — αλλά υπάρχει πάντα μια σωστή διαδικασία: έλεγχος εισροών, έλεγχος περιβάλλοντος, αναζήτηση στο πεδίο, απόφαση και εγγραφή.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Συγκομιδή, αγορές και εφοδιαστική αλυσίδα",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Πρόβλεψη απόδοσης, ευφυΐα αγοράς και logistics.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Καθώς η εποχή κινείται προς τη συγκομιδή, οι αποφάσεις μετατοπίζονται από την καλλιέργεια της καλλιέργειας στην αποτύπωση της αξίας της.\n\n## Πρόβλεψη απόδοσης\n\nΟι προβλέψεις απόδοσης συνδυάζουν μοντέλα ανάπτυξης καλλιεργειών, μέχρι σήμερα καιρικές συνθήκες και προβλέψεις, ζωηρότητα που βασίζεται σε εικόνες και μερικές φορές μετρήσεις από την όραση υπολογιστή. Οι προηγούμενες προβλέψεις είναι λιγότερο σίγουρες. η ακρίβεια βελτιώνεται όσο προχωρά η σεζόν.\n\nΟι προβλέψεις υποστηρίζουν αποφάσεις όπως:\n\n- πόσο να πουλήσετε προς τα εμπρός και πότε;\n- πόσοι εργαζόμενοι, φορτηγά και χωρητικότητα αποθήκευσης για κράτηση.\n- εάν αξίζει να εφαρμοστεί μια καθυστερημένη εισαγωγή.\n\n## Εξυπνάδα της αγοράς\n\nΤα εργαλεία πληροφοριών αγοράς συγκεντρώνουν τιμές, συμβόλαια μελλοντικής εκπλήρωσης, δεδομένα εξαγωγών, καιρικές συνθήκες σε ανταγωνιστικές περιοχές και ειδήσεις για να βοηθήσουν στην πρόβλεψη των κινήσεων των τιμών. Το AI μπορεί να συνοψίσει αυτά τα σήματα γρήγορα και να τονίσει τις ασυνήθιστες αλλαγές. Κανένα μοντέλο δεν μπορεί να προβλέψει τις αγορές με βεβαιότητα. αντιμετωπίζουν τις προβλέψεις της αγοράς ως μια εισροή σε ένα σχέδιο διαχείρισης κινδύνου, όχι ως εγγύηση.\n\n## Χρόνος και ποιότητα συγκομιδής\n\nΜοντέλα που παρακολουθούν την ωριμότητα των καλλιεργειών - επίπεδα σακχάρου στα σταφύλια, υγρασία στα δημητριακά, χρώμα στα φρούτα - βοηθούν στον προγραμματισμό της συγκομιδής για την καλύτερη ισορροπία ποιότητας, κινδύνου καιρού και υλικοτεχνικής υποστήριξης. Σε συνδυασμό με τη διαθεσιμότητα εργασίας και εξοπλισμού, μπορούν να βοηθήσουν στην αλληλουχία πεδίων σε μια λειτουργία.\n\n## Ιχνηλασιμότητα και στοιχεία\n\nΟι αγοραστές ζητούν όλο και περισσότερες αποδείξεις για το πώς παρήχθη μια καλλιέργεια: χρήση νερού, εισροές που εφαρμόστηκαν, πιστοποιήσεις. Τα συστήματα που καταγράφουν συστάσεις, ενέργειες και επαλήθευση καθ' όλη τη διάρκεια της σεζόν καθιστούν εύκολη την παραγωγή αυτών των αποδεικτικών στοιχείων — ένας άλλος λόγος που έχει σημασία το βήμα επαλήθευσης του βρόχου.\n\n> **Βασική ιδέα:** Κατά τη συγκομιδή, η αξία του AI προέρχεται από τη μείωση της αβεβαιότητας ως προς τον χρόνο, την ποσότητα και την τιμή — και από την τεκμηρίωση του τι έγινε.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Μελέτη περίπτωσης: άρδευση και διαχείριση νερού",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Πώς συνδυάζονται η εξατμισοδιαπνοή, η υγρασία του εδάφους και η τεχνητή νοημοσύνη στον προγραμματισμό άρδευσης.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Η άρδευση είναι ένα από τα πιο ξεκάθαρα παραδείγματα τεχνητής νοημοσύνης που δημιουργεί αξία σε ένα αγρόκτημα, επειδή οι αποφάσεις για το νερό είναι συχνές, δαπανηρές και μετρήσιμες.\n\n## Το ισοζύγιο νερού\n\nΣκεφτείτε τη ζώνη ρίζας ως τραπεζικό λογαριασμό για το νερό.\n\n- **Καταθέσεις:** βροχοπτώσεις και άρδευση.\n- **Αποσύρσεις:** νερό που χρησιμοποιείται από την καλλιέργεια και εξατμίζεται από το έδαφος — μαζί ονομάζεται **εξατμισοδιαπνοή (ET)** — συν αποστράγγιση κάτω από τις ρίζες.\n\nΟ στόχος του προγραμματισμού άρδευσης είναι να διατηρηθεί η ισορροπία μεταξύ ενός κατώτερου ορίου, όπου η καλλιέργεια αρχίζει να υποφέρει από πίεση, και ενός ανώτατου ορίου, πέρα ​​από το οποίο το νερό αποστραγγίζεται και σπαταλάται.\n\n## Εκτίμηση της χρήσης νερού στις καλλιέργειες\n\nΗ χρήση του νερού των καλλιεργειών συνήθως υπολογίζεται σε δύο βήματα:\n\n1. **Η εξατμισοδιαπνοή αναφοράς (ET0)** υπολογίζεται από δεδομένα καιρού — θερμοκρασία, υγρασία, άνεμος και ηλιακή ακτινοβολία — για μια τυπική καλλιέργεια αναφοράς.\n2. Ένας **συντελεστής καλλιέργειας (Kc)** προσαρμόζει την ET0 για την πραγματική καλλιέργεια και το στάδιο ανάπτυξής της: **ETc = ET0 × Kc**.\n\nΗ μηχανική εκμάθηση μπορεί να βελτιώσει αυτήν την εκτίμηση μαθαίνοντας από τοπικούς αισθητήρες, εικόνες θόλου και το ιστορικό της φάρμας, ειδικά όπου οι τυπικοί συντελεστές δεν ταιριάζουν καλά.\n\n## Ένα σενάριο προγραμματισμού\n\n> **Παράδειγμα:** Ένα μπλοκ αμπελώνα έχει 40 mm άμεσα διαθέσιμο νερό όταν η ζώνη ρίζας είναι γεμάτη. Οι ανιχνευτές υγρασίας του εδάφους δείχνουν ότι παραμένουν 18 mm. Η πρόγνωση ETc είναι 5 mm την ημέρα για τις επόμενες τέσσερις ημέρες και δεν αναμένεται βροχή.\n\nΧωρίς άρδευση, το μπλοκ φτάνει στο κατώτερο όριο σε περίπου τρεισήμισι ημέρες (18 mm ÷ 5 mm/ημέρα). Ένα σύστημα προγραμματισμού θα συνιστούσε την άρδευση τις επόμενες δύο έως τρεις ημέρες, με μέγεθος ώστε να ξαναγεμίζει τη ριζική ζώνη χωρίς να την υπεργεμίζει, χρονομετρημένη στη διαθέσιμη χωρητικότητα της αντλίας και χαμηλότερες τιμές ηλεκτρικής ενέργειας τη νύχτα.\n\nΕάν η πρόβλεψη αλλάξει σε 15 mm βροχής τη δεύτερη ημέρα, ένα καλό σύστημα ενημερώνει τη σύσταση — και εξηγεί γιατί.\n\n## Όπου η τεχνητή νοημοσύνη προσθέτει αξία\n\n- **Καλύτερες εκτιμήσεις χρήσης νερού** συνδυάζοντας τον καιρό, τους αισθητήρες και τις εικόνες.\n- **Προγραμματισμός με επίγνωση των προβλέψεων** που εξηγεί την επερχόμενη βροχή και ζέστη.\n- **Βελτιστοποίηση** σε πολλά μπλοκ, όρια αντλιών και κατανομές νερού.\n- **Επαλήθευση** — επιβεβαίωση από τους μετρητές ροής και την υγρασία του εδάφους ότι η άρδευση έγινε όπως είχε προγραμματιστεί και είχε το αναμενόμενο αποτέλεσμα.\n\n## Τι μπορεί να πάει στραβά\n\nΈνας βουλωμένος πομπός, μια σπασμένη βαλβίδα ή ένας ανιχνευτής εγκατεστημένος σε μη αντιπροσωπευτικό σημείο μπορούν όλα να παραπλανήσουν το σύστημα. Αυτός είναι ο λόγος για τον οποίο το βήμα επαλήθευσης έχει σημασία: όταν η παρατηρούμενη υγρασία του εδάφους δεν ανταποκρίνεται όπως προβλέπεται μετά από μια άρδευση, είναι ένα σήμα για τη διερεύνηση του αγρού, όχι μόνο του μοντέλου.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Όρια, λάθη και πότε να αμφισβητήσετε μια σύσταση",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Αναγνώριση των τρόπων αποτυχίας και διατήρηση της ανθρώπινης κρίσης επικεφαλής.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Κάθε σύστημα AI μερικές φορές θα είναι λάθος. Ο στόχος δεν είναι η τυφλή εμπιστοσύνη ή η γενική απόρριψη, αλλά η **βαθμονομημένη εμπιστοσύνη**: να γνωρίζουμε πότε μια σύσταση αξίζει εμπιστοσύνη και πότε αξίζει μια δεύτερη ματιά.\n\n## Συνήθεις λειτουργίες αποτυχίας\n\n**Κακές εισόδους.** Ένας αποτυχημένος αισθητήρας, ένας λανθασμένος αισθητήρας ή μια τροφοδοσία δεδομένων που λείπει παράγει σίγουρη ανοησία. *Σκουπίδια μέσα, σκουπίδια έξω.*\n\n**Συνθήκες εκτός εύρους.** Τα μοντέλα είναι λιγότερο αξιόπιστα σε καταστάσεις που σπάνια είδαν κατά τη διάρκεια της προπόνησης: υπερβολική ζέστη, νέα ποικιλία, ασυνήθιστο έδαφος.\n\n**Drift.** Οι συνθήκες αλλάζουν με την πάροδο του χρόνου και ένα μοντέλο που ήταν ακριβές πριν από τρία χρόνια μπορεί να μην είναι πλέον.\n\n**Προκατάληψη.** Εάν τα δεδομένα εκπαίδευσης αντιπροσωπεύουν υπερβολικά ορισμένες περιοχές, μεγέθη αγροκτημάτων ή καλλιέργειες, οι συστάσεις μπορεί να είναι λιγότερο ακριβείς για λειτουργίες που διαφέρουν.\n\n**Λείπει το πλαίσιο.** Το σύστημα δεν γνωρίζει για τη μετατόπιση ζιζανιοκτόνου του γείτονα, τον σπασμένο σωλήνα ή τη σύμβαση που απαιτεί συγκομιδή την επόμενη εβδομάδα.\n\n**Προκατάληψη αυτοματισμού.** Οι άνθρωποι τείνουν να εμπιστεύονται υπερβολικά την έξοδο του μηχανήματος, ειδικά όταν παρουσιάζεται με ακρίβεια. Ένας αριθμός με δύο δεκαδικά ψηφία δεν είναι απαραίτητα ακριβής.\n\n## Πότε να αμφισβητήσετε μια σύσταση\n\nΠαύση και διερεύνηση όταν:\n\n- η σύσταση έρχεται σε αντίθεση με αυτό που βλέπετε στο πεδίο.\n- είναι πολύ εκτός του κανονικού εύρους για την εποχή.\n- το σύστημα δείχνει χαμηλή εμπιστοσύνη ή δεν δείχνει καθόλου εμπιστοσύνη.\n- τα βασικά δεδομένα λείπουν, μπαγιάτικα ή προφανώς λανθασμένα.\n- οι συνέπειες ενός λάθους θα ήταν σοβαρές ή δύσκολο να αντιστραφούν.\n\n> **Επιτόπιος έλεγχος:** Ένας απλός κανόνας — όσο μεγαλύτερη και λιγότερο αναστρέψιμη είναι η απόφαση, τόσο περισσότερα αποδεικτικά στοιχεία πρέπει να απαιτήσετε πριν ενεργήσετε βάσει μιας σύστασης τεχνητής νοημοσύνης.\n\n## Πώς να προκαλέσετε καλά\n\n1. **Ελέγξτε τις εισόδους.** Αναφέρουν οι αισθητήρες; Είναι ενημερωμένα τα καιρικά δεδομένα;\n2. **Ρωτήστε τον λόγο.** Ποια δεδομένα οδήγησαν σε αυτήν την πρόταση;\n3. **Κοιτάξτε στο χωράφι.** Αναζητήστε την εν λόγω περιοχή.\n4. **Καταγράψτε τι αποφασίσατε και γιατί.** Η παράκαμψή σας είναι πολύτιμη ανατροφοδότηση που βοηθά στη βελτίωση του συστήματος.\n\nΗ αμφισβήτηση μιας σύστασης δεν είναι αποτυχία της τεχνολογίας. Είναι ο τρόπος με τον οποίο οι άνθρωποι και η τεχνητή νοημοσύνη συνεργάζονται καλά.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Μοντέλα, εκπαίδευση και προβλέψεις",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Πώς μαθαίνει ένα μοντέλο από παραδείγματα και γιατί κάθε πρόβλεψη έχει αβεβαιότητα.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "Ένα **μοντέλο** είναι μια μαθηματική περιγραφή μιας σχέσης — για παράδειγμα, μεταξύ του καιρού και της ποσότητας νερού που χρησιμοποιεί μια καλλιέργεια. Η μηχανική μάθηση δημιουργεί μοντέλα μαθαίνοντας από παραδείγματα.\n\n## Μαθαίνοντας από παραδείγματα\n\nΦανταστείτε ότι θέλετε να προβλέψετε πόσο νερό θα καταναλώσει αύριο ένας αμυγδαλόκηπος. Συλλέγετε πολλές προηγούμενες ημέρες, η καθεμία με:\n\n- οι **εισόδους** (ονομάζονται επίσης *χαρακτηριστικά*): θερμοκρασία, υγρασία, άνεμος, ηλιακή ακτινοβολία, ηλικία δέντρων, κάλυψη θόλου.\n- το **αποτέλεσμα** που θέλετε να προβλέψετε: το νερό που χρησιμοποίησε ο οπωρώνας εκείνη την ημέρα, μετρημένο με αισθητήρες.\n\nΚατά την **εκπαίδευση**, ο αλγόριθμος προσαρμόζει το μοντέλο ξανά και ξανά έως ότου οι προβλέψεις του ταιριάζουν με τα καταγεγραμμένα αποτελέσματα όσο το δυνατόν περισσότερο. Αυτό ονομάζεται **εποπτευόμενη μάθηση**, επειδή κάθε παράδειγμα συνοδεύεται από τη σωστή απάντηση.\n\n## Δοκιμή σε δεδομένα που δεν έχει δει ποτέ το μοντέλο\n\nΈνα μοντέλο μπορεί να απομνημονεύει τα παραδείγματα προπόνησής του και να αποτυγχάνει τις νέες μέρες. Αυτός είναι ο λόγος για τον οποίο οι επιστήμονες δεδομένων κρατούν ορισμένα δεδομένα στην άκρη για **επικύρωση** — δεδομένα που το μοντέλο δεν είδε ποτέ κατά τη διάρκεια της εκπαίδευσης. Η απόδοση σε αυτά τα συγκρατημένα δεδομένα είναι το ειλικρινές μέτρο του πόσο καλά λειτουργεί.\n\n> **Σημαντικό:** Ρωτήστε πώς επικυρώθηκε ένα μοντέλο. Το «ταίριαζε απόλυτα στα ιστορικά μας δεδομένα» είναι προειδοποιητικό σημάδι, όχι δύναμη.\n\n## Ακρίβεια μέτρησης\n\nΓια τις αριθμητικές προβλέψεις, τα κοινά μέτρα περιλαμβάνουν το **μέσο σφάλμα** (πόσο μακριά είναι οι προβλέψεις, κατά μέσο όρο) και πόση από τις διακυμάνσεις που εξηγεί το μοντέλο. Για ταξινομήσεις — «υπό πίεση» ή «υγιεινό» — ρωτάμε πόσο συχνά το μοντέλο είναι σωστό και πόσο συχνά προκαλεί ψευδείς συναγερμούς ή χάνει πραγματικά προβλήματα.\n\nΔεν υπάρχει ενιαία «καλή» ακρίβεια. Μια πρόβλεψη απόδοσης εντός 5% μπορεί να είναι εξαιρετική για αποφάσεις μάρκετινγκ. ένας συναγερμός παγετού που χάνει ένα συμβάν στα δέκα μπορεί να είναι απαράδεκτος.\n\n## Κάθε πρόβλεψη έχει αβεβαιότητα\n\nΟι καιρικές αλλαγές, οι αισθητήρες μετατοπίζονται και τα πεδία ποικίλλουν. Ένα αξιόπιστο σύστημα μεταδίδει την αβεβαιότητα: \"η αυριανή χρήση νερού είναι 6,2 mm, πιθανότατα μεταξύ 5,6 και 6,8 mm.\" Ένας αριθμός χωρίς εύρος κρύβει σημαντικές πληροφορίες.\n\n## Όταν τα μοντέλα μπαγιάζουν\n\nΟι συνθήκες αλλάζουν. Οι νέες ποικιλίες, ένα έτος ξηρασίας ή ένα αλλαγμένο σύστημα άρδευσης μπορεί να καταστήσουν τα δεδομένα του παρελθόντος λιγότερο αντιπροσωπευτικά. Αυτό ονομάζεται **drift**. Τα καλά συστήματα παρακολουθούν τη δική τους ακρίβεια με την πάροδο του χρόνου και επανεκπαιδεύονται όταν πέφτουν οι επιδόσεις.\n\n## Κοινοί τύποι γεωργικών μοντέλων\n\n- **Παλινδρόμηση** — προβλέπει έναν αριθμό (χρήση νερού, απόδοση, τιμή).\n- **Ταξινόμηση** — εκχωρεί μια κατηγορία (παρούσα ή απουσία ασθένειας, τύπος καλλιέργειας).\n- **Πρόβλεψη** — προβλέπει πώς κάτι θα αλλάξει με την πάροδο του χρόνου (υγρασία του εδάφους τις επόμενες πέντε ημέρες).\n- **Όραση υπολογιστή** — ερμηνεύει εικόνες (μέτρηση φρούτων, ανίχνευση ζιζανίων).\n- **Βελτιστοποίηση** — βρίσκει το καλύτερο σχέδιο εντός των περιορισμών (ένα πρόγραμμα άρδευσης που ικανοποιεί τη ζήτηση των καλλιεργειών με περιορισμένο νερό).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Σχεδιασμός και φύτευση",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Χρήση δεδομένων και τεχνητής νοημοσύνης πριν ο πρώτος σπόρος πάει στο έδαφος.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Πολλές από τις πιο πολύτιμες αποφάσεις της εποχής λαμβάνονται πριν από τη φύτευση. Η τεχνητή νοημοσύνη μπορεί να βοηθήσει φέρνοντας περισσότερα στοιχεία σε αυτές τις αποφάσεις.\n\n## Ιστορικό πεδίου και ζώνες διαχείρισης\n\nΤα πεδία δεν είναι ομοιόμορφα. Χρόνια χάρτες απόδοσης, έρευνες εδάφους και δορυφορικές εικόνες αποκαλύπτουν συχνά σταθερά μοτίβα: μια χαμηλή περιοχή που παραμένει υγρή, μια αμμώδης κορυφογραμμή που στεγνώνει πρώτη. Οι αλγόριθμοι μπορούν να ομαδοποιήσουν αυτές τις περιοχές σε **ζώνες διαχείρισης** που ανταποκρίνονται διαφορετικά στο νερό, τους σπόρους και το λίπασμα.\n\nΜε τις ζώνες, ένας καλλιεργητής μπορεί να διαφοροποιήσει τους ρυθμούς σποράς, να επιλέξει πού θα εφαρμόσει περισσότερο ή λιγότερο άζωτο ή να σχεδιάσει σετ άρδευσης που ταιριάζουν με τον τρόπο συμπεριφοράς κάθε τμήματος του χωραφιού.\n\n## Αποφάσεις για την ποικιλία και την ημερομηνία φύτευσης\n\nΤα μοντέλα που έχουν εκπαιδευτεί σε τοπικές δοκιμές και αρχεία καιρού μπορούν να εκτιμήσουν την απόδοση των ποικιλιών υπό διαφορετικές συνθήκες και πώς η ημερομηνία φύτευσης επηρεάζει τον κίνδυνο - για παράδειγμα, την πιθανότητα θερμικής καταπόνησης κατά την ανθοφορία. Αυτές οι εκτιμήσεις είναι πιο χρήσιμες όταν αντικατοπτρίζουν τοπικές δοκιμές, όχι μόνο εθνικούς μέσους όρους.\n\n## Σχεδιασμός σεναρίου\n\nΤα εργαλεία τεχνητής νοημοσύνης μπορούν να εκτελέσουν γρήγορα σενάρια «τι θα γινόταν αν»: Τι γίνεται αν η εποχή είναι ξηρή; Τι θα συμβεί αν οι χορηγήσεις νερού μειωθούν κατά 20%; Τι γίνεται αν οι τιμές των εισροών αυξηθούν; Η σύγκριση σεναρίων σάς βοηθά να επιλέξετε ένα σχέδιο που ισχύει για πολλά πιθανά μέλλοντα, όχι μόνο για το αναμενόμενο.\n\n> **Επιτόπιος έλεγχος:** Όταν ένα εργαλείο προτείνει ρυθμό σποράς ή ποικιλία, ρωτήστε σε ποια δεδομένα δημιουργήθηκε. Τα περιφερειακά δεδομένα δοκιμών από το έδαφος και το κλίμα σας είναι πολύ πιο σχετικά από έναν εθνικό μέσο όρο.\n\n## Όρια που πρέπει να έχετε υπόψη σας\n\nΟι συστάσεις πριν από τη σεζόν βασίζονται σε μακροπρόθεσμες προβλέψεις, οι οποίες είναι αβέβαιες. Αντιμετωπίστε τα ως ένα αρχικό σχέδιο που πρέπει να προσαρμόζεται καθώς εξελίσσεται η σεζόν, όχι ως μια σταθερή συνταγή.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Κουίζ ενότητας 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Ελέγξτε την κατανόησή σας για τις βασικές αρχές της τεχνητής νοημοσύνης.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Απαντήστε σε πέντε γρήγορες ερωτήσεις σχετικά με τις ιδέες στην Ενότητα 1. Τα κουίζ είναι για εξάσκηση: μπορείτε να τα επαναλάβετε όσες φορές θέλετε και θα βλέπετε εξηγήσεις μετά από κάθε προσπάθεια.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Κουίζ ενότητας 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Ελέγξτε ότι κατανοείτε τα δεδομένα, τα μοντέλα και τις προτάσεις.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Πέντε ερωτήσεις σχετικά με την ποιότητα των δεδομένων, την εκπαίδευση μοντέλων και την υποστήριξη αποφάσεων. Επαναλάβετε όσο συχνά θέλετε.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Κουίζ Ενότητας 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Ελέγξτε την κατανόηση της τεχνητής νοημοσύνης κατά τη διάρκεια της σεζόν.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Πέντε ερωτήσεις σχετικά με τον προγραμματισμό, την άρδευση, την παρακολούθηση των καλλιεργειών και τη συγκομιδή. Επαναλάβετε όσο συχνά θέλετε.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Από την πρόβλεψη στη σύσταση",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Πώς τα συστήματα υποστήριξης αποφάσεων μετατρέπουν τις προβλέψεις σε ενέργειες — και κρατούν τους ανθρώπους ενήμερους.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Μια πρόβλεψη σας λέει τι είναι πιθανό να συμβεί. Μια **σύσταση** σάς λέει τι να κάνετε για αυτό. Η μετατροπή του ενός σε άλλο απαιτεί στόχους, περιορισμούς και πλαίσιο.\n\n## Ένα παράδειγμα άρδευσης\n\nΑς υποθέσουμε ότι ένα μοντέλο προβλέπει ότι ένα χωράφι θα χρησιμοποιεί 7 mm νερό αύριο και ότι η υγρασία του εδάφους είναι ήδη κοντά στο κατώτερο όριο που ανέχεται η καλλιέργεια. Ένα σύστημα συστάσεων συνδυάζει αυτή την πρόβλεψη με:\n\n- **στόχοι** — προστασία της απόδοσης και της ποιότητας, αποφυγή σπατάλης.\n- **περιορισμοί** — η χωρητικότητα της αντλίας, η κατανομή νερού που απομένει, τα τιμολόγια ηλεκτρικής ενέργειας, το καθορισμένο πρόγραμμα άρδευσης.\n- **πλαίσιο** — πρόβλεψη βροχής, στάδιο καλλιέργειας, προγραμματισμένη συγκομιδή που χρειάζεται ξηρό έδαφος.\n\nΤο αποτέλεσμα μπορεί να είναι: *\"Ποτίστε το τετράγωνο 4 απόψε για 6 ώρες (περίπου 18 χλστ.). Παραλείψτε το τετράγωνο 7: Προβλέπεται βροχή 12 χλστ. με υψηλή σιγουριά.\"*\n\n## Οι καλές συστάσεις εξηγούνται από μόνες τους\n\nΜια σύσταση που δεν μπορείτε να κατανοήσετε είναι μια σύσταση που δεν μπορείτε να κρίνετε. Αναζητήστε συστήματα που δείχνουν:\n\n- **ο λόγος** — ποια δεδομένα και ποια πρόβλεψη οδήγησαν την πρόταση.\n- **την εμπιστοσύνη** — πόσο σίγουρο είναι το σύστημα.\n- **οι εναλλακτικές λύσεις** — τι θα συμβεί αν περιμένετε ή κάνετε λιγότερη αίτηση.\n- **το ίχνος αποδεικτικών στοιχείων** — ώστε να μπορείτε να ελέγξετε στη συνέχεια αν η δράση συνέβη και λειτούργησε.\n\n## Κρατώντας τους ανθρώπους ενήμερους\n\nΣτη γεωργία, το μεγαλύτερο μέρος της τεχνητής νοημοσύνης είναι **υποστήριξη αποφάσεων**: το σύστημα προτείνει, ένα άτομο αποφασίζει. Ακόμη και όταν ο αυτοματισμός εκτελεί ενέργειες - για παράδειγμα, ένας ελεγκτής που ανοίγει μια βαλβίδα - οι υπεύθυνοι σχεδιασμοί περιλαμβάνουν βήματα έγκρισης, όρια και τη δυνατότητα παράκαμψης.\n\n> **Βασική ιδέα:** Το άτομο που είναι υπεύθυνο για το αποτέλεσμα θα πρέπει πάντα να μπορεί να δει γιατί έγινε μια σύσταση, να την αλλάξει και να τη σταματήσει.\n\n## Κλείσιμο του βρόχου: επαλήθευση\n\nΤα πιο πολύτιμα συστήματα δεν σταματούν στη σύσταση. Ελέγχουν τι έγινε στην πραγματικότητα και τι έγινε μετά: Έτρεξε το πότισμα; Πόσο νερό εφαρμόστηκε; Η υγρασία του εδάφους ανακτήθηκε όπως αναμενόταν; Αυτό το βήμα **επαλήθευσης** δημιουργεί εμπιστοσύνη, εντοπίζει προβλήματα εξοπλισμού και παράγει τα στοιχεία που ζητούν όλο και περισσότερο οι αγοραστές, οι ελεγκτές και οι αρχές ύδρευσης.\n\nΘυμηθείτε τον βρόχο από την Ενότητα 1: ** αίσθηση → πρόβλεψη → προτείνω → επαλήθευση**. Κάθε στροφή του βρόχου βελτιώνει τόσο τις αποφάσεις όσο και τα δεδομένα για την επόμενη σεζόν.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Περίληψη του μαθήματος και επόμενα βήματα",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Βασικά συμπεράσματα και πώς να προετοιμαστείτε για την τελική εξέταση.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Συγχαρητήρια για το τέλος του μαθήματος. Ας συγκεντρώσουμε τις κύριες ιδέες.\n\n## Βασικά φαγητά\n\n- Το **AI είναι μια εργαλειοθήκη**, όχι μια ενιαία τεχνολογία. Οι κανόνες, η μηχανική μάθηση, η βαθιά μάθηση και η γενετική τεχνητή νοημοσύνη ταιριάζουν σε διαφορετικά προβλήματα.\n- **Τα δεδομένα είναι το θεμέλιο.** Η ακρίβεια, η πληρότητα, η επικαιρότητα, η συνέπεια και η αντιπροσωπευτικότητα καθορίζουν τι μπορεί να κάνει κάθε μοντέλο.\n- **Τα μοντέλα μαθαίνουν από παραδείγματα** και πρέπει να επικυρωθούν με δεδομένα που δεν έχουν δει ποτέ. Κάθε πρόβλεψη έχει αβεβαιότητα και τα μοντέλα μπορούν να παρασυρθούν.\n- **Οι συστάσεις συνδυάζουν τις προβλέψεις με τους στόχους, τους περιορισμούς και το πλαίσιο.** Οι καλές εξηγούνται.\n- **Ο βρόχος έχει σημασία:** αίσθηση → πρόβλεψη → προτείνω → επαλήθευση.\n- **Σε όλη την εποχή**, η τεχνητή νοημοσύνη υποστηρίζει τον σχεδιασμό, την άρδευση, την παρακολούθηση των καλλιεργειών, το χρονοδιάγραμμα συγκομιδής, την εμπορία και την ιχνηλασιμότητα.\n- **Χρησιμοποιήστε βαθμονομημένη εμπιστοσύνη.** Προκαλέστε συστάσεις που έρχονται σε αντίθεση με το πεδίο, βασίζονται σε ανεπαρκή δεδομένα ή φέρουν υψηλά πονταρίσματα.\n- **Τα δεδομένα σας αξίζουν προσοχή.** Μάθετε σε ποιον τα κατέχει, πώς χρησιμοποιούνται και πώς να τα πάρετε πίσω.\n\n## Προετοιμασία για την τελική εξέταση\n\nΗ τελική εξέταση καλύπτει και τις τέσσερις ενότητες. Αντλεί 20 ερωτήσεις από μια μεγαλύτερη τράπεζα και σας δίνει 30 λεπτά. Χρειάζεστε **80%** για να περάσετε.\n\n> **Συμβουλή:** Ελέγξτε τις σημειώσεις σας και τα κουίζ της ενότητας. Εάν χάσατε μια ερώτηση κουίζ, ανοίξτε το μάθημα στο οποίο υποδεικνύει πριν από την εξέταση.\n\n## Πού να πάτε μετά\n\n- Η **Βασικές αρχές Γεωργικών Δεδομένων** εμβαθύνει στις πηγές και την ποιότητα των δεδομένων.\n- Η **Τηλεπισκόπηση και η δορυφορική νοημοσύνη** επεκτείνεται σε εικόνες και δείκτες βλάστησης.\n- Η **AI-Powered Irrigation** εφαρμόζει αυτές τις ιδέες στη διαχείριση του νερού λεπτομερώς.\n\nΣας ευχαριστούμε που μάθατε με την AGRO-AI Academy. Όταν είστε έτοιμοι, ανοίξτε την τελική εξέταση από το μενού μαθημάτων.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Καλώς ήρθατε στο μάθημα",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Τι θα μάθετε, πώς λειτουργεί το μάθημα και πώς να αποκτήσετε το πιστοποιητικό σας.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Καλώς ήρθατε στο **Εισαγωγή στην Τεχνητή Νοημοσύνη στη Γεωργία**, το πρώτο μάθημα του προγράμματος AGRO-AI Academy *Foundations of Agricultural AI*.\n\nΔεν χρειάζεστε κανένα τεχνικό υπόβαθρο για να πετύχετε εδώ. Εάν έχετε δει ποτέ μια πρόγνωση καιρού, διαβάσατε μια δοκιμή εδάφους ή συγκρίνατε τις αποδόσεις μεταξύ δύο χωραφιών, χρησιμοποιείτε ήδη τις συνήθειες του μυαλού στις οποίες βασίζεται αυτό το μάθημα: συλλογή αποδεικτικών στοιχείων, εντοπισμός προτύπων και απόφαση για το τι θα κάνετε στη συνέχεια.\n\n## Τι θα μάθετε\n\nΜέχρι το τέλος του μαθήματος θα είστε σε θέση:\n\n- εξηγήστε τι είναι — και τι δεν είναι — η τεχνητή νοημοσύνη σε απλή γλώσσα·\n- περιγράψτε από πού προέρχονται τα γεωργικά δεδομένα και τι τα καθιστά αξιόπιστα.\n- παρακολουθήστε πώς τα δεδομένα γίνονται πρόβλεψη και μια πρόβλεψη γίνεται σύσταση.\n- Αναγνώριση χρήσιμων εφαρμογών τεχνητής νοημοσύνης καθ' όλη τη διάρκεια της σεζόν.\n- κρίνετε κριτικά την παραγωγή AI και χρησιμοποιήστε την με υπευθυνότητα.\n\n## Πώς λειτουργεί το μάθημα\n\nΤο μάθημα έχει **τέσσερις ενότητες** σύντομων μαθημάτων. Οι ενότητες μία έως τρεις τελειώνουν κάθε μία με ένα κουίζ πρακτικής που σας βοηθά να ελέγξετε την κατανόησή σας. Η ενότητα τέταρτη τελειώνει με μια πρακτική άσκηση και μια περίληψη του μαθήματος που σας προετοιμάζει για την τελική εξέταση. Τα κουίζ δεν υπολογίζονται στο πιστοποιητικό σας και μπορείτε να τα επαναλαμβάνετε όσο συχνά θέλετε.\n\nΗ πρόοδός σας αποθηκεύεται αυτόματα. Μπορείτε να σταματήσετε στη μέση ενός μαθήματος στο τηλέφωνό σας και να συνεχίσετε αργότερα σε έναν υπολογιστή.\n\n> **Συμβουλή:** Χρησιμοποιήστε την καρτέλα **Σημειώσεις** κάτω από κάθε μάθημα για να σημειώσετε ιδέες που ισχύουν για τη δική σας λειτουργία. Οι σημειώσεις είναι ιδιωτικές — μόνο εσείς μπορείτε να τις δείτε.\n\n## Κερδίζοντας το πιστοποιητικό σας\n\nΌταν ολοκληρώσετε κάθε απαιτούμενο μάθημα, ξεκλειδώνει η **τελική εξέταση**. Κάνει 20 ερωτήσεις από μια μεγαλύτερη τράπεζα, χρονομετρείται στα 30 λεπτά και απαιτείται βαθμολογία **80%** για να περάσει. Εάν δεν περάσετε στην πρώτη προσπάθεια, μπορείτε να διαβάσετε τα προτεινόμενα μαθήματα και να δοκιμάσετε ξανά μετά από μία ώρα.\n\nΠεράστε την εξέταση και AGRO-AI Το Academy εκδίδει αυτόματα το πιστοποιητικό σας — δωρεάν, με ένα μοναδικό αναγνωριστικό διαπιστευτηρίων και μια δημόσια σελίδα επαλήθευσης που μπορείτε να μοιραστείτε στο LinkedIn.\n\nΑς ξεκινήσουμε.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Από τους κανόνες στη μάθηση: τι είναι η τεχνητή νοημοσύνη (και δεν είναι)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Ορισμοί σε απλή γλώσσα της τεχνητής νοημοσύνης, της μηχανικής μάθησης, της βαθιάς μάθησης και της γενετικής τεχνητής νοημοσύνης.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "Η \"τεχνητή νοημοσύνη\" χρησιμοποιείται για να περιγράψει τα πάντα, από έναν απλό συναγερμό αισθητήρα έως ένα chatbot που γράφει δοκίμια. Πριν εξετάσουμε τη γεωργία, χρειαζόμαστε ξεκάθαρα λόγια.\n\n## Τεχνητή νοημοσύνη\n\n**Η Τεχνητή Νοημοσύνη (AI)** είναι το ευρύ πεδίο κατασκευής συστημάτων υπολογιστών που εκτελούν εργασίες που συνήθως συνδέουμε με την ανθρώπινη νοημοσύνη: αναγνώριση προτύπων, κάνοντας προβλέψεις, κατανόηση της γλώσσας και επιλογή ενεργειών.\n\nΑυτός ο ορισμός είναι ευρύς επίτηδες. Περιλαμβάνει πολύ διαφορετικές τεχνολογίες, επομένως βοηθά στον διαχωρισμό δύο τρόπων κατασκευής τους.\n\n## Κανόνες έναντι μάθησης\n\n**Συστήματα που βασίζονται σε κανόνες** ακολουθούν τις οδηγίες που γράφουν οι άνθρωποι. Ένας ελεγκτής άρδευσης που λέει *\"αν η υγρασία του εδάφους πέσει κάτω από 25%, ξεκινήστε την αντλία\"* ακολουθεί έναν κανόνα. Οι κανόνες είναι διαφανείς και προβλέψιμοι, αλλά κάποιος πρέπει να γνωρίζει τον σωστό κανόνα εκ των προτέρων και οι κανόνες δεν προσαρμόζονται όταν αλλάζουν οι συνθήκες.\n\nΤα συστήματα **Machine Learning (ML)** μαθαίνουν μοτίβα από παραδείγματα. Δείξτε σε ένα μοντέλο χιλιάδες προηγούμενες εποχές —καιρικές συνθήκες, έδαφος, άρδευση και οι αποδόσεις που ακολούθησαν— και μπορεί να μάθει σχέσεις που κανείς δεν έγραψε ρητά. Τα περισσότερα από αυτά που οι άνθρωποι αποκαλούν \"AI\" σήμερα είναι μηχανική μάθηση.\n\n| | Σύστημα βασισμένο σε κανόνες | Μοντέλο μηχανικής μάθησης |\n|---|---|---|\n| Από πού πηγάζει η λογική | Οι άνθρωποι το γράφουν | Έμαθα από δεδομένα |\n| Δύναμη | Διαφανές, προβλέψιμο | Βρίσκει πολύπλοκα μοτίβα, προσαρμόζεται με νέα δεδομένα |\n| Αδυναμία | Ακαμπτος; του λείπει αυτό που δεν είχαν προβλέψει οι σχεδιαστές | Μόνο τόσο καλά όσο τα δεδομένα του? μπορεί να είναι δύσκολο να εξηγηθεί |\n| Παράδειγμα αγροκτήματος | Η αντλία ξεκινά κάτω από ένα όριο υγρασίας | Το μοντέλο προβλέπει την αυριανή χρήση νερού στις καλλιέργειες |\n\n## Βαθιά μάθηση\n\nΗ **Deep Learning** είναι μια οικογένεια μεθόδων μηχανικής μάθησης που έχουν δημιουργηθεί από \"νευρωνικά δίκτυα\" πολλών επιπέδων. Είναι ιδιαίτερα καλό σε ακατάστατα δεδομένα υψηλών διαστάσεων, όπως εικόνες και ήχος. Όταν μια εφαρμογή τηλεφώνου αναγνωρίζει μια ασθένεια φύλλων από μια φωτογραφία, η βαθιά μάθηση είναι συνήθως πίσω από αυτό.\n\n## Generative AI\n\nΤο **Generative AI** δημιουργεί νέο περιεχόμενο — κείμενο, εικόνες, ήχο ή κώδικα — με βάση μοτίβα που μαθαίνονται από πολύ μεγάλα σύνολα δεδομένων. Τα μοντέλα μεγάλων γλωσσών (LLM), η τεχνολογία πίσω από τους βοηθούς συνομιλίας, είναι τεχνητή νοημοσύνη που δημιουργείται. Μπορούν να εξηγήσουν έννοιες, να συνοψίσουν αναφορές και να απαντήσουν σε ερωτήσεις σε πολλές γλώσσες.\n\nΤο Generative AI είναι ισχυρό, αλλά προβλέπει *εύλογες* λέξεις, όχι επαληθευμένα γεγονότα. Μπορεί να δηλώσει κάτι ψευδές με απόλυτη σιγουριά. Στη γεωργία, ένας βοηθός παραγωγής είναι χρήσιμος για την επεξήγηση και τη σύνταξη, αλλά σημαντικοί αριθμοί και αποφάσεις πρέπει να ελέγχονται με αξιόπιστα δεδομένα.\n\n> **Βασική ιδέα:** Το AI δεν είναι ένα μηχάνημα. Είναι μια εργαλειοθήκη. Κανόνες, στατιστικά μοντέλα, βαθιά μάθηση και παραγωγικά μοντέλα ταιριάζουν το καθένα σε διαφορετικά προβλήματα.\n\n## Τι δεν είναι η τεχνητή νοημοσύνη\n\n- **Το AI δεν είναι μαγικό.** Κάθε έξοδος προέρχεται από δεδομένα και επιλογές σχεδιασμού που γίνονται από ανθρώπους.\n- Η **AI δεν \"καταλαβαίνει\" τη φάρμα σας** όπως εσείς. Γνωρίζει μόνο τι κατέγραψαν τα δεδομένα της.\n- **Το AI δεν είναι αυτόματα σωστό.** Οι προβλέψεις φέρουν αβεβαιότητα και τα καλύτερα συστήματα σας λένε πόση.\n- Η **AI δεν αντικαθιστά την κρίση.** Είναι ένα εργαλείο υποστήριξης αποφάσεων. Η ευθύνη για την απόφαση παραμένει στους ανθρώπους.\n\n## Ελέγξτε την κατανόησή σας\n\nΣκεφτείτε ένα εργαλείο που χρησιμοποιείτε ήδη — μια εφαρμογή καιρού, μια παρακολούθηση απόδοσης, ένα υπολογιστικό φύλλο με τύπους. Είναι η λογική του γραμμένη ως κανόνες ή μαθαίνεται από δεδομένα; Γράψτε την απάντησή σας στις σημειώσεις σας. θα επιστρέψουμε σε αυτήν την ιδέα στην Ενότητα 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Γιατί η γεωργία στρέφεται τώρα στην τεχνητή νοημοσύνη",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Οι πιέσεις και οι ευκαιρίες που οδηγούν στην υιοθέτηση της τεχνητής νοημοσύνης στις φάρμες.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Οι αγρότες χρησιμοποιούσαν πάντα πληροφορίες για να λάβουν αποφάσεις. Αυτό που έχει αλλάξει είναι ο όγκος των διαθέσιμων πληροφοριών, η ταχύτητα με την οποία πρέπει να χρησιμοποιηθούν και η πίεση σε κάθε πηγή.\n\n## Πιέσεις στο σύγχρονο αγρόκτημα\n\n**Νερό.** Η γεωργία είναι ο μεγαλύτερος χρήστης γλυκού νερού παγκοσμίως. Σύμφωνα με τον Οργανισμό Τροφίμων και Γεωργίας του ΟΗΕ (FAO AQUASTAT), η γεωργία στο σύνολό της, κυρίως η άρδευση, αντιπροσωπεύει περίπου το 70% των παγκόσμιων απολήψεων γλυκού νερού. Σε πολλές περιοχές, οι κατανομές νερού συρρικνώνονται ενώ η ζήτηση αυξάνεται. Κάθε απόφαση άρδευσης έχει σημασία.\n\n**Κλιματική μεταβλητότητα.** Οι εποχές είναι λιγότερο προβλέψιμες. Τα κύματα καύσωνα, οι ακανόνιστες βροχοπτώσεις και οι νέες πιέσεις παρασίτων καθιστούν το βιβλίο παιχνιδιού του περασμένου έτους λιγότερο αξιόπιστο.\n\n**Κόστος και περιθώρια κέρδους.** Το κόστος λιπασμάτων, ενέργειας, εργασίας και εξοπλισμού μπορεί να αυξηθεί απότομα. Η εφαρμογή της σωστής ποσότητας στο σωστό μέρος προστατεύει τόσο το περιθώριο όσο και το περιβάλλον.\n\n**Εργασία.** Πολλές επιχειρήσεις αγωνίζονται να βρουν και να διατηρήσουν ειδικευμένους ανθρώπους. Η γνώση που ζει στο κεφάλι ενός έμπειρου διευθυντή κινδυνεύει όταν αυτό το άτομο δεν είναι διαθέσιμο.\n\n**Προσδοκίες από αγοραστές και ρυθμιστικές αρχές.** Οι αλυσίδες εφοδιασμού ζητούν ολοένα και περισσότερο στοιχεία: πόσο νερό χρησιμοποιήθηκε, ποιες εισροές εφαρμόστηκαν, ποιες πρακτικές ακολουθήθηκαν.\n\n## Γιατί AI, και γιατί τώρα\n\nΤρία πράγματα ενώθηκαν:\n\n1. **Τα δεδομένα έγιναν άφθονα.** Οι δορυφόροι επισκέπτονται τώρα τις περισσότερες γεωργικές εκτάσεις κάθε λίγες μέρες. Οι ανιχνευτές υγρασίας του εδάφους, οι μετεωρολογικοί σταθμοί, οι ελεγκτές άρδευσης και τα μηχανήματα παράγουν συνεχή δεδομένα.\n2. **Οι υπολογιστές έγιναν φθηνοί και συνδεδεμένοι.** Τα μοντέλα που κάποτε χρειάζονταν ερευνητικό εργαστήριο μπορούν να λειτουργούν στο cloud και να προσφέρουν αποτελέσματα σε ένα τηλέφωνο.\n3. **Οι μέθοδοι ωρίμασαν.** Τα μοντέλα μηχανικής εκμάθησης, υπολογιστικής όρασης και γλώσσας έχουν βελτιωθεί γρήγορα και αποτελούν πλέον πρακτικά εργαλεία.\n\n> **Βασική ιδέα:** Η τεχνητή νοημοσύνη δεν δημιουργεί νέους πόρους. Σας βοηθά να κάνετε καλύτερη χρήση του νερού, των εισροών, του χρόνου και των γνώσεων που ήδη έχετε.\n\n## Τι μπορεί να κάνει ρεαλιστικά η τεχνητή νοημοσύνη\n\n- **Αίσθηση** — μετατρέψτε ακατέργαστες εικόνες και δεδομένα αισθητήρων σε πληροφορίες, όπως ποιες ζώνες ενός πεδίου είναι τονισμένες.\n- **Πρόβλεψη** — υπολογίστε τι θα συμβεί, όπως η αυριανή ζήτηση νερού ή η απόδοση στο τέλος της σεζόν.\n- **Συστήνεται** — προτείνετε μια ενέργεια, όπως ένα πρόγραμμα άρδευσης, και εξηγήστε γιατί.\n- **Επαλήθευση** — ελέγξτε αν συνέβη μια ενέργεια και αν λειτούργησε.\n\nΠαρατηρήστε το μοτίβο: αίσθηση, πρόβλεψη, σύσταση, επαλήθευση. Θα χρησιμοποιήσουμε αυτόν τον βρόχο σε όλη τη διάρκεια του μαθήματος.\n\n## Τι δεν μπορεί να κάνει\n\nΗ τεχνητή νοημοσύνη δεν μπορεί να δει τι δεν καταγράφουν τα δεδομένα της: μια σπασμένη βαλβίδα, ο ψεκασμός ενός γείτονα, μια πολιτιστική πρακτική μοναδική στη φάρμα σας. Δεν μπορεί να φέρει ευθύνη για μια απόφαση. Και δεν μπορεί να αντικαταστήσει την εμπιστοσύνη μεταξύ ενός καλλιεργητή και ενός συμβούλου. Η καλή γεωργική τεχνητή νοημοσύνη έχει σχεδιαστεί για να συνεργάζεται *με* άτομα που γνωρίζουν τη γη.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

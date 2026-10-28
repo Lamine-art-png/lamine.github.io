@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "mn",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Хөдөө аж ахуй дахь хиймэл оюун ухааны танилцуулга",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "AI гэж юу вэ, энэ нь ферм дээр хэрхэн ажилладаг, хэрхэн хариуцлагатай ашиглах талаар.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Хиймэл оюун ухаан хөдөө аж ахуйд усалгааны хянагч, хиймэл дагуулын үйлчилгээ, фермийн менежментийн программ хангамж, тариаланчдын халаасан дахь утаснуудаар орж ирж байна. Энэхүү сургалт нь танд энэ технологи гэж юу болох, хэрхэн ажилладаг, хэрхэн зөв ашиглах талаар тодорхой, практик ойлголтыг өгдөг.\n\nТа хиймэл оюун ухаан, машин сургалтын үндсэн санааг тэгшитгэлгүйгээр сурч, хөдөө аж ахуйн өгөгдөл хэрхэн урьдчилан таамаглаж, дараа нь зөвлөмж болж байгааг харж, төлөвлөлт, усалгаанаас эхлээд тариалангийн эрүүл мэнд, ургац хураалт хүртэлх хугацаанд хиймэл оюун ухааныг дагаж мөрдөх болно. Хамгийн гол нь та хиймэл оюун ухааны үр дүнг дүгнэж сурах болно: үүнд хэзээ итгэх, хэзээ эргэлзэх, хүний ​​шүүлт, фермийн мэдлэгийг хэрхэн хариуцах вэ.\n\nЭнэхүү сургалт нь тариаланчид, операторууд, агрономчид, менежерүүд, оюутнуудад зориулагдсан болно. Техникийн суурь шаардлагагүй.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Байхгүй. Технологи нь хөдөө аж ахуйн ажлыг хэрхэн дэмжих талаар сонирхох нь танд хэрэгтэй зүйл юм.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Хиймэл оюун ухаан, машин сургалт, хиймэл хиймэл оюун ухаан гэж юу болохыг энгийн хэлээр тайлбарла\", \"Хөдөө аж ахуйн мэдээллийн үндсэн эх сурвалжууд болон өгөгдлийг найдвартай болгодог зүйлүүдийг тайлбарлана уу\", \"Загвар нь өгөгдлийг таамаглал, таамаглалыг зөвлөмж болгон хэрхэн хувиргадагийг дагаж мөрдөөрэй\", \"Ургац төлөвлөхөөс эхлээд ургац хураах хүртэлх хугацаанд практик хиймэл оюун ухааны хэрэглээг таньж мэдээрэй\", \"Хөдөө аж ахуйн хиймэл оюун ухааны хязгаарлалт, бүтэлгүйтлийн горим, зөвлөмжийг хэзээ эсэргүүцэх талаар тодорхойл\", \"Өгөгдлийн эзэмшил, нууцлал, хариуцлагатай ашиглалтын зарчмуудыг өөрийн үйл ажиллагаандаа хэрэгжүүлээрэй\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "ХАА-н хувьд хиймэл оюун ухаан гэж юу гэсэн үг вэ?",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Гол санаанууд ба тэдгээр нь яагаад одоо чухал болохыг.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Хөдөө аж ахуйн хиймэл оюун ухаан хэрхэн ажилладаг",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Өгөгдлөөс загвар, зөвлөмж хүртэл.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "Улирлын турш AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Төлөвлөлтөөс эхлээд ургац хураалт хүртэлх практик хэрэглээ.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "AI-г хариуцлагатай ашиглах",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Хязгаарлалт, өгөгдлийн эрх, итгэлтэй, чухал хэрэглээ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Газар тариалангийн эрүүл мэндийг дээрээс болон ойроос хянах",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Газар тариалангийн эрүүл мэндэд зориулсан хиймэл дагуулын зураг, ургамлын индекс, компьютерийн хараа.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Өгөгдөл: хөдөө аж ахуйн хиймэл оюун ухааны түүхий эд",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Фермийн мэдээлэл хаанаас ирдэг, түүнийг найдвартай болгодог зүйл.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "AI систем бүр өгөгдөл дээр тулгуурлан бүтээгдсэн. Хэрэв өгөгдөл бүрэн бус, буруу эсвэл буруу байвал хиймэл оюун ухаан ч мөн адил байх болно. Өгөгдлөө ойлгох нь хөдөө аж ахуйн хиймэл оюун ухааны хамгийн чухал ур чадвар юм.\n\n## Хөдөө аж ахуйн мэдээлэл хаанаас гардаг\n\n| Эх сурвалж | Жишээ | Энэ нь танд юу хэлэх вэ |\n|---|---|---|\n| Цаг агаар | Ферм дээрх станцууд, бүс нутгийн сүлжээ, урьдчилсан мэдээ | Температур, хур тунадас, чийгшил, салхи, нарны цацраг |\n| Хөрс | Чийгийн датчик, хөрсний сорил, хөрсний зураг | Үндэс, шим тэжээл, бүтэцтэй ус |\n| Зайнаас тандан судлах | Хиймэл дагуул, нисэх онгоц, нисгэгчгүй аппаратын зураг | Тариалангийн эрч хүч, халхавчны бүрхэвч, талбай дээрх стрессийн хэв маяг |\n| Тоног төхөөрөмж | Усалгааны зохицуулагч, урсгал хэмжигч, ургацын хяналт, трактор | Юуг хаана, хэзээ ашигласан |\n| Бичлэг | Тарих огноо, сорт, оролтын хэрэглээ, скаутын тэмдэглэл | Удирдлагын шийдвэр, ажиглалт |\n| Зах зээлүүд | Үнэ, гэрээ, эрэлтийн дохио | Шийдвэр гаргах эдийн засгийн нөхцөл байдал |\n\n## Сайн мэдээллийн чанар\n\n** Нарийвчлал** - хэмжилт нь бодит байдлыг тусгасан уу? Нойтон газар суурилуулсан чийгийн мэдрэгч эсвэл модны доорх борооны хэмжигч нь үүнийг ашигладаг загвар бүрийг төөрөгдүүлэх болно.\n\n**Бүрэн байдал** - цоорхой байна уу? Дулааны долгионы үеэр долоо хоногийн турш мэдээлэхээ больсон мэдрэгч нь яг хамгийн чухал үед нүх гаргадаг.\n\n**Цаг үеэ баримтлах** - шийдвэр гаргахад сүүлийн үеийн мэдээлэл байна уу? Өчигдрийн хөрсний чийг нь өнөөдрийн усалгааны ажилд тустай; Өнгөрсөн сард тийм биш.\n\n**Тууштай байдал** — нэгж, формат, тодорхойлолтууд нь цаг хугацаа болон талбаруудын хувьд ижил байна уу? Инч, миллиметр эсвэл нэг талбарын хоёр нэрийг холих нь чимээгүй алдаа үүсгэдэг.\n\n**Төлөөлөх чадвар** — өгөгдөл нь хиймэл оюун ухааныг ашиглах нөхцөлийг хамарч байна уу? Зөвхөн элсэрхэг хөрсөн дээр бэлтгэгдсэн загвар нь шавар дээр ажиллахгүй байж болно.\n\n> **Хээрийн шалгалт:** Хяналтын самбарт итгэхээсээ өмнө гурван асуулт асуугаарай: Энэ тоо хаанаас ирсэн бэ? Хэзээ хэмжсэн бэ? Үүнийг юу буруу болгох вэ?\n\n## Өгөгдөл контекст хэрэгтэй\n\nХөрсний чийгийн үзүүлэлт 30% байна гэдэг нь өөрөө бага гэсэн үг. Хөрсний төрөл, мэдрэгч нь хэр гүнд суудаг, ямар ургац ургаж, ямар шатандаа байгаа нь чухал. Хөдөө аж ахуйн сайн хиймэл оюун ухаан нь мэдээллийн эх сурвалжийг нэгтгэдэг бөгөөд ингэснээр тус бүр нь бусадтай холбоотой контекстийг нэмдэг - жишээлбэл, хиймэл дагуулын зургийг цаг агаарын мэдээлэл, талбайн усалгааны түүхтэй хослуулах.\n\n## Таны өгөгдөл, таны шийдвэр\n\nФермийн өгөгдөл нь арилжааны, үйл ажиллагааны болон хувийн шинж чанартай байдаг. Тоног төхөөрөмжийг холбох эсвэл ямар нэгэн үйлчилгээтэй бүртгэл хуваалцахаасаа өмнө өгөгдөлд хэн хандаж болох, түүнийг хэрхэн ашиглах, хэрэв та гарвал үүнийг авч явах эсэхээ ойлгоорой. Бид 4-р модулийн мэдээллийн өмчлөлд буцаж очих болно.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Өгөгдлийн эзэмшил, нууцлал, итгэлцэл",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Фермийн өгөгдлийг итгэлтэйгээр хуваалцах практик зарчмууд.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Фермийн мэдээлэл нь ургац, туршлага, санхүү, хүмүүс, хөрөнгийн байршлыг харуулж чадна. Үүнийг хуваалцах нь үнэ цэнэтэй үйлчилгээний түгжээг нээх боломжтой боловч энэ нь үргэлж санаатай сонголт байх ёстой.\n\n## Аливаа технологийн үйлчилгээ үзүүлэгчээс асуух асуулт\n\n- **Өмчлөх эрх:** Миний өгсөн өгөгдөл болон миний фермийн талаар системийн үүсгэсэн өгөгдлийг хэн эзэмшдэг вэ?\n- **Хэрэглэх:** Өгөгдлийг юунд ашиглах вэ? Загвар өмсөгчдийг сургахад ашиглах уу? Үүнийг бусад фермийн мэдээлэлтэй нэгтгэх үү?\n- **Хуваалцах:** Үүнийг гуравдагч этгээдтэй хуваалцах эсвэл зарах уу? Аль нь, яагаад?\n- **Хандалт ба зөөвөрлөх чадвар:** Би өөрийн өгөгдлийг ашиглах боломжтой форматаар татаж авч болох уу? Би явлаа гэхэд аваад явж болох уу?\n- **Устгах:** Би өгөгдлөө устгаж болох уу, дараа нь юу үлдэх вэ?\n- **Аюулгүй байдал:** Өгөгдөл хэрхэн хамгаалагдсан бэ? Компани доторх хэн үүнийг харж чадах вэ?\n- **Хяналт:** Би холбогдсон төхөөрөмж эсвэл түншийн хандалтыг хүссэн үедээ цуцалж болох уу?\n\nХөдөө аж ахуйн хэд хэдэн байгууллагууд эдгээр асуултыг шийдвэрлэх фермийн мэдээллийн зарчмуудыг нийтэлсэн; үйлчилгээ үзүүлэгч тэднийг дагаж байгаа эсэхийг асуух нь сайн эхлэл юм.\n\n## Зөвшөөрөл ба зөвшөөрөл\n\nСайн системүүд нь тодорхой, мэдээлэлтэй зөвшөөрөл шаарддаг - жишээлбэл, холбогч нь тохиргоог өөрчлөх зөвшөөрөлгүйгээр усалгааны хянагчийн өгөгдлийг унших боломжийг олгодог. Ажилд шаардагдах хамгийн бага хандалтыг олгож, холбогдсон үйлчилгээг тогтмол шалгаж үзээрэй.\n\n## Нэгдсэн болон нэрээ нууцалсан өгөгдөл\n\nОлон фермээс авсан өгөгдлийг нэгтгэх нь бүс нутгийн ус ашиглалтын илүү сайн тооцоолол гэх мэт хүн бүрт тохирсон загварыг сайжруулах боломжтой. Сайн хийсэн, нэгтгэх нь фермийг тодорхойлох боломжтой мэдээллийг устгадаг. Нэрээ нууцлах арга хэрхэн хийгддэг, мөн татгалзах боломжтой эсэхийг асуу.\n\n## Итгэлийг олж авдаг\n\n> **Гол санаа:** Хөдөө аж ахуйн найдвартай хиймэл оюун ухаан нь өгөгдлийг хэрхэн ашиглаж, зөвлөмжөө тайлбарлаж, тодорхойгүй байдлыг хүлээн зөвшөөрч, фермерийн хяналтыг үлдээдэг талаар ил тод байдаг.\n\nЭдгээр ижил зарчмууд нь Академид хамаарна. Та өөрийн бүртгэлийн тохиргооноос хүссэн үедээ сургалтын мэдээллээ татаж авах эсвэл устгах боломжтой.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Практик дасгал: хиймэл оюун ухааны зөвлөмжийг үнэл",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Сурсан зүйлээ бодитой зөвлөмж болгон хэрэгжүүлээрэй.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Энэ дасгалд та бодит зөвлөмжийн дагуу энэ модулийн шүүмжлэлийн ур чадварыг дадлагажуулах болно.\n\n## Сценари\n\nТа 60 га талбайд улаан лоолийн дуслын усалгааны ажлыг удирдаж байна. Улирлын дундуур мягмар гарагийн өглөө таны шийдвэр гаргахад туслах систем дараахыг харуулж байна:\n\n> *\"Зөвлөмж: С блокийн усалгааг дараагийн 48 цагийн турш алгасах. Ургамлын усны урьдчилсан тооцоо: 3.1 мм/хоног. Хөрсний чийг: талбайн багтаамжийн 82%. Итгэл үнэмшил: өндөр.\"*\n\nТа С блокийн хажуугаар машинаар явахдаа зүүн захын ургамлууд өглөө оройн халуунд гандаж, өчигдрийн хамгийн их температур 37 ° C байсан нь хоёр өдрийн өмнө системийн ашиглаж байсан 29 ° C-аас хамаагүй халуун байв.\n\n## Таны даалгавар\n\nДоорх шалгах хуудсаар ажиллана уу. Үндэслэлээ **Тэмдэглэл** таб дээр бичээд буцаж очих боломжтой.\n\n1. **Оролтыг шалгана уу.** Аль оролт эргэлзээтэй харагдаж байна вэ? (Зөвлөгөө: урьдчилсан температурыг юу болсонтой харьцуул.)\n2. **Мэдрэгүүдийг шалгана уу.** Хөрсний чийгийн мэдрэгчийг хаана суурилуулсан бэ? Энэ нь зүүн захыг төлөөлдөггүй газар байж болох уу?\n3. **Хээрийг хар.** Та хатсан ургамлаас юу шалгах вэ? Эмиттерийн бөглөрөл, шугамын төгсгөлд даралт, үндэсийн эрүүл мэндийг анхаарч үзээрэй.\n4. **Шийдвэрлэх.** Та зөвлөмжийг дагаж мөрдөх, өөрчлөх эсвэл хүчингүй болгох уу? Яагаад?\n5. **Бүртгүүлж мэдээлнэ үү.** Та систем болон танай баг үүнээс суралцахын тулд ямар санал хүсэлт өгөх вэ?\n\n## Хэлэлцүүлэг\n\nХүчтэй хариулт нь урьдчилан таамагласан усны хэрэглээ хэт хүйтэн болсон урьдчилсан таамаглал дээр үндэслэсэн байж магадгүй тул бодит эрэлт илүү өндөр байсан. Ганц датчик 82%-ийн заалт нь зүүн ирмэгийг илэрхийлэхгүй байж болно, ялангуяа ялгаруулагч нь бөглөрсөн эсвэл хажуугийн төгсгөлд даралт бага байвал. Зүүн захыг нэн даруй шалгаж, хуурай хөрс батлагдвал богино хэмжээний усалгаа хийж, урьдчилсан мэдээг алдагдуулах, жигд байдлын болзошгүй асуудлын аль алиныг нь мэдээлэх нь ухаалаг шийдвэр байж болох юм.\n\nГанц зөв хариулт ховор байдаг, гэхдээ үргэлж зөв үйл явц байдаг: оролтыг шалгах, контекстыг шалгах, талбарыг харах, шийдвэр гаргах, тэмдэглэх.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Ургац хураалт, зах зээл, нийлүүлэлтийн сүлжээ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Үр өгөөжийг урьдчилан таамаглах, зах зээлийн мэдээлэл, логистик.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Улирал нь ургац хураах дөхөж байгаа энэ үед шийдвэрүүд ургацаа ургуулахаас эхлээд үнэ цэнийг нь олж авах хүртэл өөрчлөгддөг.\n\n## Ургацын таамаглал\n\nУргацын урьдчилсан мэдээ нь ургацын өсөлтийн загвар, өнөөдрийг хүртэлх цаг агаар, урьдчилсан мэдээ, зураглалд суурилсан эрч хүч, заримдаа компьютерийн харааны тооцоог нэгтгэдэг. Өмнөх таамаглал нь тодорхой бус байна; улирал ахих тусам нарийвчлал сайжирдаг.\n\nУрьдчилан таамаглах дэмжлэг үзүүлэх шийдвэрүүд, тухайлбал:\n\n- форвард хэр их зарах, хэзээ;\n- хэдэн ажилчин, ачааны машин, хадгалах багтаамжийг захиалах;\n- хожимдсон оролт нь хэрэглэхэд үнэ цэнэтэй хэвээр байгаа эсэх.\n\n## Зах зээлийн мэдээлэл\n\nЗах зээлийн мэдээллийн хэрэгслүүд нь үнэ, фьючерс, экспортын мэдээлэл, өрсөлдөгч бүс нутгийн цаг агаар, мэдээ зэргийг цуглуулж, үнийн хөдөлгөөнийг урьдчилан таамаглахад тусалдаг. AI эдгээр дохиог хурдан нэгтгэн дүгнэж, ер бусын өөрчлөлтийг онцолж чадна. Ямар ч загвар зах зээлийг тодорхой таамаглаж чадахгүй; зах зээлийн таамаглалыг баталгаа болгон бус эрсдэлийн менежментийн төлөвлөгөөний нэг орц гэж үзэх.\n\n## Ургац хураах хугацаа, чанар\n\nУсан үзэм дэх сахарын хэмжээ, үр тарианы чийг, жимсний өнгө зэрэг ургацын боловсорч гүйцсэн хугацааг хянадаг загварууд нь чанар, цаг агаарын эрсдэл, логистикийн хамгийн сайн тэнцвэрийг хангах үүднээс ургац хураалтыг төлөвлөхөд тусалдаг. Ажиллах хүч, тоног төхөөрөмжийн олдоцтой хослуулан тэдгээр нь үйл ажиллагааны талбаруудыг дараалалд оруулахад тусална.\n\n## Мөшгих, нотлох баримт\n\nХудалдан авагчид ургацаа хэрхэн үйлдвэрлэсэн тухай нотлох баримтыг асуух нь ихэсдэг: усны хэрэглээ, ашигласан орц, гэрчилгээ. Улирлын туршид зөвлөмж, арга хэмжээ, баталгаажуулалтыг бүртгэдэг системүүд нь нотлох баримтыг гаргахад хялбар болгодог бөгөөд энэ нь давталтын баталгаажуулалтын алхам чухал байдаг.\n\n> **Гол санаа:** Ургац хураах үед хиймэл оюун ухааны үнэ цэнэ нь цаг хугацаа, тоо хэмжээ, үнийн тодорхойгүй байдлыг бууруулж, юу хийснийг баримтжуулснаар бий болдог.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Кейс судалгаа: усалгаа ба усны менежмент",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Усалгааны хуваарьт ууршилт, хөрсний чийг ба хиймэл оюун ухаан хэрхэн нийлдэг.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Усжуулалт нь хиймэл оюун ухаан нь фермд үнэ цэнийг бий болгож байгаагийн тод жишээнүүдийн нэг юм, учир нь устай холбоотой шийдвэрүүд байнга гардаг, зардал ихтэй, хэмжигдэхүйц байдаг.\n\n## Усны баланс\n\nҮндэс бүсийг усны банкны данс гэж бодоорой.\n\n- **Орд:** хур тунадас, усалгаа.\n- **Татан авалт:** газар тариаланд хэрэглэж, хөрснөөс ууршсан ус - хамтдаа **ууршилт (ET)** гэж нэрлэдэг - үндэс доор ус зайлуулах суваг.\n\nУсалгааны хуваарийн зорилго нь газар тариалангийн стресст орж эхэлдэг доод хязгаар ба түүнээс дээш ус урсаж, дэмий урсдаг дээд хязгаар хоорондын тэнцвэрийг хадгалах явдал юм.\n\n## Тариалангийн усны хэрэглээг тооцоолох\n\nГазар тариалангийн усны хэрэглээг ихэвчлэн хоёр үе шаттайгаар тооцдог.\n\n1. **Жишиг ууршилт (ET₀)**-ийг стандарт жишиг ургацын хувьд цаг агаарын мэдээлэл болох температур, чийгшил, салхи, нарны цацраг зэрэгт үндэслэн тооцдог.\n2. ** Газар тариалангийн коэффициент (Kc)** нь ET₀-ийг бодит ургац болон түүний өсөлтийн үе шатанд тохируулна: **ETc = ET₀ × Kc**.\n\nМашины сургалт нь орон нутгийн мэдрэгч, халхавчны зураг, фермийн өөрийн түүх, ялангуяа стандарт коэффициентүүд тааруухан тохирч байгаа тохиолдолд энэ тооцоог сайжруулж чадна.\n\n## Төлөвлөлтийн хувилбар\n\n> **Жишээ нь:** Усан үзмийн талбайн үндэс нь дүүрсэн үед 40 мм устай байдаг. Хөрсний чийгийн мэдрэгч нь 18 мм-ийн үлдэгдэл байгааг харуулж байна. Ойрын 4 хоногт ETc өдөртөө 5 мм байх төлөвтэй, бороо орохгүй.\n\nУсалгаагүй бол блок нь ойролцоогоор 3,5 хоногийн дотор доод хязгаартаа хүрдэг (өдөрт 18 мм ÷ 5 мм). Хуваарийн систем нь ойрын хоёроос гурван өдрийн дотор усалгааг усалгааг санал болгож, эх бүсийг хэт дүүргэхгүйгээр дүүргэх хэмжээтэй, боломжтой насосны хүчин чадалд тохируулан, шөнийн цагаар цахилгааны үнийг бууруулахыг зөвлөж байна.\n\nХэрэв урьдчилсан мэдээ хоёр дахь өдөр 15 мм бороотой болвол сайн систем зөвлөмжийг шинэчилж, шалтгааныг тайлбарладаг.\n\n## AI нь үнэ цэнийг нэмдэг газар\n\n- **Ус ашиглалтын тооцооллыг сайжруулах** цаг агаар, мэдрэгч болон зураглалыг хослуулан.\n- **Урьдчилан таамагласан хуваарь** ирэх бороо, дулааныг тооцдог.\n- **Оновчлол** олон блок, насосны хязгаарлалт, усны хуваарилалт.\n- **Баталгаажуулалт** — усалгаа төлөвлөсний дагуу явагдаж, хүлээгдэж буй үр дүнд хүрсэн гэдгийг урсгал хэмжигч ба хөрсний чийгийн үзүүлэлтээр баталгаажуулах.\n\n## Юу буруу болж болох вэ\n\nБитүү ялгаруулагч, эвдэрсэн хавхлага эсвэл үл хамаарах газарт суурилуулсан датчик нь системийг төөрөгдүүлж болзошгүй юм. Ийм учраас баталгаажуулах алхам нь чухал юм: усалгааны дараа ажиглагдсан хөрсний чийг таамагласан шиг хариу өгөхгүй бол энэ нь зөвхөн загварыг биш, талбайг судлах дохио юм.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Хязгаарлалт, алдаа, зөвлөмжийг хэзээ эсэргүүцэх вэ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Бүтэлгүйтлийн горимыг хүлээн зөвшөөрч, хүний ​​​​шүүмжийг хариуцах.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "AI систем бүр заримдаа буруу байх болно. Зорилго нь сохроор итгэх эсвэл бүрмөсөн үгүйсгэх биш, харин **шалгасан итгэл**: зөвлөмж хэзээ итгэл үнэмшилтэй байх ёстойг, хэзээ дахин харах ёстойг мэдэх явдал юм.\n\n## Алдаа гарах нийтлэг горимууд\n\n**Муу оролт.** Амжилтгүй мэдрэгч, буруу байрлуулсан датчик эсвэл мэдээлэл дутуу байгаа нь өөртөө итгэлтэй дэмий зүйл үүсгэдэг. *Хог дотогшоо, хогоо гарга.*\n\n**Хүрээнээс гадуурх нөхцөлүүд.** Загварууд нь сургалтын явцад ховор тохиолддог нөхцөл байдалд хамгийн найдвартай байдаг: хэт халуун, шинэ сорт, ер бусын хөрс.\n\n**Дрифт.** Нөхцөл байдал цаг хугацааны явцад өөрчлөгддөг бөгөөд гурван жилийн өмнө үнэн зөв байсан загвар нь цаашид байхаа больсон.\n\n**Таамаглал.** Хэрэв сургалтын өгөгдөл нь тодорхой бүс нутаг, газар тариалангийн хэмжээ эсвэл ургацыг хэт их төлөөлдөг бол өөр өөр үйл ажиллагааны зөвлөмжүүд нь үнэн зөв биш байж магадгүй.\n\n**Нөхцөл байдал дутуу байна.** Систем нь хөршийн гербицид, эвдэрсэн хоолой, дараа долоо хоногт ургац хураах шаардлагатай гэрээний талаар мэдэхгүй.\n\n**Автоматжуулалтын хазайлт.** Хүмүүс машины гаралтад хэт их итгэх хандлагатай байдаг, ялангуяа үүнийг нарийн харуулсан үед. Хоёр аравтын оронтой тоо үнэн зөв байх албагүй.\n\n## Зөвлөмжийг хэзээ эсэргүүцэх вэ\n\nДараах тохиолдолд түр зогсоож, судлаарай:\n\n- зөвлөмж нь таны харж байгаа зүйлтэй зөрчилдөж байна;\n- улирлын хэвийн хэмжээнээс хол байна;\n- систем нь өөртөө итгэх итгэл бага, эсвэл огт итгэлгүй байгааг харуулж байна;\n- гол өгөгдөл дутуу, хуучирсан эсвэл илт буруу;\n- алдааны үр дагавар нь хүнд байх эсвэл арилгахад хэцүү байх болно.\n\n> **Хээрийн шалгалт:** Энгийн дүрэм: шийдвэр нь том бөгөөд буцаах чадвар бага байх тусам хиймэл оюун ухааны зөвлөмжийн дагуу ажиллахын өмнө илүү их нотлох баримт шаардана.\n\n## Хэрхэн сайн сорих вэ\n\n1. **Оролтыг шалгана уу.** Мэдрэгчид мэдээлж байна уу? Цаг агаарын мэдээлэл одоо байгаа юу?\n2. **Шалтгааныг асуу.** Энэ саналыг ямар өгөгдөлд хүргэсэн бэ?\n3. **Талбайд хар.** Тухайн газар нутгийг скаут.\n4. **Юу, яагаад шийдсэнээ бичнэ үү.** Таны шийдвэр бол системийг сайжруулахад туслах үнэ цэнэтэй санал хүсэлт юм.\n\nЗөвлөмжийг эсэргүүцэх нь технологийн алдаа биш юм. Энэ нь хүмүүс болон хиймэл оюун ухаан хоёрын хооронд сайн ажилладаг.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Загвар, сургалт, таамаглал",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Загвар хүн жишээнүүдээс хэрхэн суралцдаг, таамаглал бүр яагаад тодорхойгүй байдаг вэ?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**загвар** гэдэг нь жишээлбэл, цаг агаар болон газар тариалангийн ашигладаг усны хэмжээ хоорондын хамаарлын математик тодорхойлолт юм. Машины сургалт нь жишээнүүдээс суралцах замаар загвар бүтээдэг.\n\n## Жишээнүүдээс суралцах\n\nМаргааш бүйлсний цэцэрлэг хэр их ус хэрэглэхийг урьдчилан таамаглахыг хүсч байна гэж төсөөлөөд үз дээ. Та олон өнгөрсөн өдрүүдийг цуглуулдаг бөгөөд тус бүр нь:\n\n- **оролт** (мөн * онцлог* гэж нэрлэдэг): температур, чийгшил, салхи, нарны цацраг, модны нас, халхавчны бүрхэвч;\n- Таны таамаглахыг хүссэн **үр дүн**: тухайн өдөр цэцэрлэгийн ашигласан усыг мэдрэгчээр хэмжсэн.\n\n**Сургалтын** явцад алгоритм нь түүний таамаглал нь бүртгэгдсэн үр дүнтэй аль болох ойртох хүртэл загварыг дахин дахин тохируулдаг. Үүнийг **хяналттай суралцах** гэж нэрлэдэг, учир нь жишээ болгон зөв хариулттай ирдэг.\n\n## Загвар хэзээ ч харж байгаагүй өгөгдөл дээр туршилт хийж байна\n\nЗагвар өмсөгч сургалтын жишээгээ цээжилсэн ч шинэ өдрүүдэд бүтэлгүйтдэг. Тийм ч учраас өгөгдлийн эрдэмтэд зарим өгөгдлийг **баталгаажуулалт**-д зориулж хадгалдаг - загвар нь сургалтын үеэр хэзээ ч харж байгаагүй. Энэ хадгалагдсан өгөгдлийн гүйцэтгэл нь хэр сайн ажиллаж байгаагийн үнэн зөв хэмжүүр юм.\n\n> **Чухал:** Загварыг хэрхэн баталгаажуулсныг асуу. \"Энэ нь бидний түүхэн өгөгдөлд бүрэн нийцэж байна\" гэдэг нь хүч биш харин анхааруулах тэмдэг юм.\n\n## Хэмжилтийн нарийвчлал\n\nТоон таамаглалын хувьд нийтлэг хэмжигдэхүүнд **дундаж алдаа** (урьдчилан таамаглал нь дунджаар хэр хол байна) болон загвар нь хэр их өөрчлөлтийг тайлбарлаж байгааг багтаадаг. \"Стресстэй\" эсвэл \"эрүүл\" гэсэн ангилалын хувьд бид загвар нь хэр олон удаа зөв болохыг асууж, энэ нь хэр олон удаа хуурамч дохиолол үүсгэдэг эсвэл бодит асуудлуудыг орхигдуулдаг.\n\nГанц \"сайн\" нарийвчлал гэж байдаггүй. 5% доторх ургацын таамаглал нь маркетингийн шийдвэр гаргахад маш сайн байж болох юм; Арав дахь үйл явдлыг орхигдуулсан хярууны дохиолол нь хүлээн зөвшөөрөгдөхгүй байж магадгүй юм.\n\n## Урьдчилан таамаглал бүр тодорхой бус байдалтай байдаг\n\nЦаг агаарын өөрчлөлт, мэдрэгчийн шилжилт, талбайнууд өөр өөр байдаг. Найдвартай систем нь \"маргаашийн усны хэрэглээ 6.2 мм, 5.6-аас 6.8 мм-ийн хооронд байх магадлалтай\" гэсэн эргэлзээг илэрхийлдэг. Ямар ч хүрээгүй ганц тоо нь чухал мэдээллийг нуудаг.\n\n## Загвар өмсөгчид хуучирсан үед\n\nНөхцөл өөрчлөлт. Шинэ сортууд, ган гачиг эсвэл усалгааны систем өөрчлөгдсөн нь өнгөрсөн үеийн мэдээллийг бага төлөөлдөг болгодог. Үүнийг **дрифт** гэж нэрлэдэг. Сайн системүүд цаг хугацааны явцад өөрсдийн нарийвчлалыг хянаж, гүйцэтгэл буурах үед дахин сургадаг.\n\n## Хөдөө аж ахуйн загваруудын нийтлэг төрлүүд\n\n- **Регресс** — тоог (усны хэрэглээ, гарц, үнэ) таамагладаг.\n- **Ангилал** — ангилал (өвчин байгаа эсвэл байхгүй, ургацын төрөл) оноодог.\n- ** Урьдчилан таамаглах** — цаг хугацааны явцад ямар нэг зүйл хэрхэн өөрчлөгдөхийг урьдчилан таамаглах (дараагийн таван өдрийн хөрсний чийг).\n- **Компьютерийн хараа** — дүрсийг тайлбарладаг (жимс тоолох, хогийн ургамлыг илрүүлэх).\n- **Оновчлол** — хязгаарлалтын хүрээнд хамгийн сайн төлөвлөгөөг олдог (хязгаарлагдмал усаар газар тариалангийн хэрэгцээг хангадаг усалгааны хуваарь).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Төлөвлөлт ба тарих",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Эхний үр хөрсөнд орохоос өмнө өгөгдөл болон хиймэл оюун ухааныг ашиглах.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Улирлын хамгийн үнэ цэнэтэй шийдвэрүүдийн ихэнх нь тарихаас өмнө гардаг. AI нь эдгээр шийдвэрт илүү олон нотлох баримт авчрахад тусалж чадна.\n\n## Талбайн түүх ба менежментийн бүсүүд\n\nFields are not uniform. Олон жилийн ургацын газрын зураг, хөрсний судалгаа, хиймэл дагуулын зураг зэрэг нь ихэвчлэн тогтмол хэв маягийг харуулдаг: нойтон хэвээр байгаа намхан газар, эхлээд хатдаг элсэрхэг нуруу. Алгоритмууд нь ус, үр, бордоонд өөр өөр хариу үйлдэл үзүүлэх эдгээр бүсүүдийг **удирдлагын бүсэд** бүлэглэж болно.\n\nБүсийн хувьд тариаланч нь тариалалтын хурдыг өөрчилдөг, хаана их эсвэл бага азот хэрэглэхээ сонгох эсвэл талбайн хэсэг бүр хэрхэн ажилладагт тохирсон усалгааны багц төлөвлөж болно.\n\n## Сорт, тарих огнооны шийдвэр\n\nБүс нутгийн туршилт, цаг агаарын бүртгэлд хамрагдсан загвар өмсөгчид янз бүрийн нөхцөлд сортууд хэрхэн ажилладаг, тарих огноо нь эрсдэлд хэрхэн нөлөөлдөг, тухайлбал, цэцэглэлтийн үед дулааны стресс үүсэх магадлал зэргийг тооцоолж чаддаг. Эдгээр тооцоолол нь зөвхөн улсын дунджаас гадна орон нутгийн туршилтуудыг тусгаснаар хамгийн ашигтай байдаг.\n\n## Сценари төлөвлөлт\n\nAI хэрэгслүүд \"яах вэ\" гэсэн хувилбаруудыг хурдан ажиллуулж чадна: Хэрэв улирал хуурай бол яах вэ? Усны хуваарилалтыг 20 хувиар хасвал яах вэ? Оролтын үнэ өсвөл яах вэ? Хувилбаруудыг харьцуулах нь зөвхөн хүлээгдэж буй ирээдүйг төдийгүй олон боломжит ирээдүйн төлөвлөгөөг сонгоход тусална.\n\n> **Хээрийн шалгалт:** Хэрэгсэл нь тариалалтын хэмжээ эсвэл сортыг санал болгох үед ямар өгөгдөл дээр суурилагдсаныг асуу. Танай хөрс, уур амьсгалаас авсан бүс нутгийн туршилтын өгөгдөл нь улсын дунджаас хамаагүй илүү хамааралтай.\n\n## Санаж байх ёстой хязгаарлалтууд\n\nУлирлын өмнөх зөвлөмжүүд нь тодорхойгүй урт хугацааны урьдчилсан мэдээнд тулгуурладаг. Тэдгээрийг тогтсон жор биш, улирал эхлэхийн хэрээр тохируулж болох эхлэлийн төлөвлөгөө гэж үз.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Модуль 1 асуулт хариулт",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "AI-ийн үндсэн ойлголтуудыг шалгана уу.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Модуль 1-ийн санаануудын талаархи таван хурдан асуултанд хариулна уу. Асуулт нь дадлага хийхэд зориулагдсан: та хүссэнээрээ давтан өгөх боломжтой бөгөөд оролдлого бүрийн дараа тайлбарыг харах болно.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Модуль 2 асуулт хариулт",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Өгөгдөл, загвар, зөвлөмжийн талаарх ойлголтоо шалгана уу.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Өгөгдлийн чанар, загварын сургалт, шийдвэр гаргахад дэмжлэг үзүүлэх таван асуулт. Хүссэн хэмжээгээрээ дахин аваарай.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Модуль 3 асуулт хариулт",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Улирлын турш хиймэл оюун ухааны талаарх ойлголтоо шалгаарай.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Төлөвлөлт, усалгаа, ургацын хяналт, ургац хураалтын талаархи таван асуулт. Хүссэн хэмжээгээрээ дахин аваарай.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Урьдчилан таамаглахаас зөвлөмж хүртэл",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Шийдвэр гаргахад дэмжлэг үзүүлэх систем нь таамаглалыг хэрхэн үйлдэл болгон хувиргаж, хүмүүсийг хяналтанд байлгадаг.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Урьдчилан таамаглал нь юу тохиолдохыг хэлж өгдөг. **зөвлөмж** танд энэ талаар юу хийхийг хэлж өгнө. Нэгийг нөгөө рүү шилжүүлэхэд зорилго, хязгаарлалт, нөхцөл байдал шаардлагатай.\n\n## Усалгааны жишээ\n\nМаргааш талбай 7 мм ус хэрэглэх бөгөөд хөрсний чийг ургацын тэсвэрлэх доод хязгаарт аль хэдийн ойрхон байна гэж нэгэн загвар таамаглаж байна гэж бодъё. Зөвлөмжийн систем нь уг таамаглалыг дараахтай хослуулдаг.\n\n- **зорилго** — ургац, чанарыг хамгаалах, хог хаягдлаас зайлсхийх;\n- **хязгаарлалт** — насосны хүчин чадал, үлдсэн усны хуваарилалт, цахилгааны тариф, усалгааны багц хуваарь;\n- **контекст** — борооны урьдчилсан мэдээ, ургацын үе шат, хуурай газар шаардлагатай төлөвлөсөн ургац.\n\nҮр дүн нь: *\"Өнөө орой 4-р блокийг 6 цагийн турш услах (ойролцоогоор 18 мм). 7-р блокыг алгасах: 12 мм бороо орохыг маш их итгэлтэйгээр тооцоолж байна.\"*\n\n## Сайн зөвлөмжүүд өөрсдийгөө тайлбарладаг\n\nТаны ойлгохгүй байгаа зөвлөмж бол шүүж чадахгүй зөвлөмж юм. Дараахыг харуулсан системийг хайж олоорой:\n\n- **шалтгаан** — ямар өгөгдөл, ямар таамаглал санал болгосон;\n- ** итгэл үнэмшил** - систем хэр итгэлтэй байна;\n- **хувилбарууд** — хэрэв та хүлээх юм уу эсвэл бага өргөдөл гаргавал юу болох вэ;\n- ** нотлох баримт** — ингэснээр та дараа нь тухайн үйлдэл болсон, үр дүнтэй эсэхийг шалгах боломжтой.\n\n## Хүмүүсийг тойрогт байлгах\n\nХөдөө аж ахуйд ихэнх хиймэл оюун ухаан нь **шийдвэр гаргахад дэмжлэг болдог**: систем санал болгодог, хүн өөрөө шийддэг. Автоматжуулалт нь үйлдлүүдийг гүйцэтгэдэг байсан ч, тухайлбал, хянагч хавхлага онгойлгодог ч гэсэн хариуцлагатай загварт батлах үе шат, хязгаарлалт, хүчингүй болгох чадварыг багтаадаг.\n\n> **Гол санаа:** Үр дүнг хариуцах хүн үргэлж яагаад зөвлөмж гаргасныг харж, өөрчлөх, зогсоох чадвартай байх ёстой.\n\n## Давталтыг хаах: баталгаажуулах\n\nХамгийн үнэ цэнэтэй системүүд нь зөвлөмжөөр зогсдоггүй. Тэд яг юу хийгдсэн, дараа нь юу болсныг шалгадаг: Усжуулалт хийгдсэн үү? Хэр их ус хэрэглэсэн бэ? Хүлээгдэж байсан шиг хөрсний чийг сэргэсэн үү? Энэхүү **баталгаажуулах** алхам нь итгэлцлийг бий болгож, тоног төхөөрөмжийн асуудалтай тулгардаг бөгөөд худалдан авагчид, аудиторууд болон усны байгууллагуудаас улам бүр хүсч буй нотлох баримтуудыг бий болгодог.\n\nМодуль 1-ийн давталтыг санаарай: **мэдрэхүй → урьдчилан таамаглах → санал болгох → баталгаажуул**. Давталтын эргэлт бүр нь дараагийн улирлын шийдвэр, өгөгдлийг хоёуланг нь сайжруулдаг.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Хичээлийн хураангуй болон дараагийн алхамууд",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Гол баримтууд болон эцсийн шалгалтанд хэрхэн бэлдэх талаар.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Сургалтын төгсгөлд хүрсэнд баяр хүргэе. Гол санаагаа нэгтгэе.\n\n## Гол санаанууд\n\n- **AI бол багажны хайрцаг** бөгөөд ганц технологи биш. Дүрэм журам, машин суралцах, гүнзгий суралцах, хиймэл хиймэл оюун ухаан нь өөр өөр асуудалд нийцдэг.\n- **Өгөгдөл бол үндэс суурь юм.** Нарийвчлал, бүрэн бүтэн байдал, цаг үеэ олсон байдал, тууштай байдал, төлөөлөх чанар нь аливаа загвар юу хийж чадахыг тодорхойлдог.\n- **Загварууд жишээнүүдээс суралцдаг** бөгөөд хэзээ ч харж байгаагүй мэдээллээр баталгаажуулсан байх ёстой. Урьдчилан таамаглал бүр тодорхой бус байдалтай байдаг бөгөөд загварууд нь хазайж болно.\n- **Зөвлөмжүүд нь таамаглалыг зорилго, хязгаарлалт, нөхцөл байдалтай хослуулсан байдаг.** Сайн нь өөрсдийгөө тайлбарладаг.\n- **Годол чухал:** мэдрэх → урьдчилан таамаглах → санал болгох → баталгаажуулах.\n- **Улиралын туршид** хиймэл оюун ухаан нь төлөвлөлт, усалгаа, ургацын хяналт, ургац хураалтын цаг, маркетинг, ул мөрийг хянах боломжийг дэмждэг.\n- **Тохируулсан итгэлцлийг ашиглана уу.** Талбартай зөрчилдсөн, муу өгөгдөлд тулгуурласан эсвэл өндөр бооцоотой зөвлөмжүүдийг сорь.\n- **Таны өгөгдөл анхаарал халамж тавих ёстой.** Хэн эзэмшдэг, хэрхэн ашигладаг, хэрхэн буцааж авахаа мэдэж аваарай.\n\n## Төгсгөлийн шалгалтанд бэлдэж байна\n\nТөгсгөлийн шалгалт нь бүх дөрвөн модулийг хамардаг. Энэ нь илүү том банкнаас 20 асуулт авч, 30 минут өгдөг. Та тэнцэхийн тулд **80%** хэрэгтэй.\n\n> **Зөвлөгөө:** Тэмдэглэлүүд болон модулийн шалгалтуудыг шалгана уу. Хэрэв та шалгалтын асуултаа алдсан бол шалгалтын өмнө зааж өгсөн хичээлийг нээнэ үү.\n\n## Дараа нь хаашаа явах вэ\n\n- **Хөдөө аж ахуйн мэдээллийн үндэс** нь мэдээллийн эх сурвалж, чанарт илүү гүнзгий ордог.\n- **Алсын зайнаас тандан судлах ба хиймэл дагуулын тагнуул** нь зураг болон ургамлын индексийг өргөжүүлдэг.\n- **AI-Powered Irrigation** нь эдгээр санааг усны менежментэд нарийвчлан ашигладаг.\n\nAGRO-AI Академид суралцсанд баярлалаа. Та бэлэн болмогц курс цэснээс эцсийн шалгалтыг нээнэ үү.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Сургалтанд тавтай морилно уу",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Та юу сурах, сургалт хэрхэн явагдах, гэрчилгээгээ хэрхэн авах талаар.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "AGRO-AI академийн *Хөдөө аж ахуйн хиймэл оюун ухааны үндэс* хөтөлбөрийн эхний курс болох **Хөдөө аж ахуй дахь хиймэл оюун ухааны танилцуулга**-д тавтай морилно уу.\n\nЭнд амжилтанд хүрэхийн тулд танд техникийн мэдлэг хэрэггүй. Хэрэв та цаг агаарын урьдчилсан мэдээг харж, хөрсний сорил уншсан эсвэл хоёр талбайн ургацыг харьцуулж үзсэн бол нотлох баримт цуглуулах, хэв маягийг олж илрүүлэх, дараа нь юу хийхээ шийдэх гэх мэт энэ хичээл дээр үндэслэсэн оюун санааны дадал зуршлыг аль хэдийн ашигласан болно.\n\n## Та юу сурах вэ\n\nХичээлийн төгсгөлд та дараахь зүйлийг хийх боломжтой болно.\n\n- хиймэл оюун ухаан гэж юу болохыг энгийн хэлээр тайлбарлах;\n- Хөдөө аж ахуйн мэдээлэл хаанаас ирдэг, түүнийг найдвартай болгодог зүйлийг тайлбарлах;\n- өгөгдөл хэрхэн таамаглал болж, таамаглал нь зөвлөмж болж байгааг дагах;\n- улирлын туршид ашиг тустай AI програмуудыг таних;\n- AI гаралтыг шүүмжлэлтэй үнэлж, хариуцлагатай ашиглах.\n\n## Хичээл хэрхэн явагддаг\n\nХичээл нь **дөрвөн модуль** богино хэмжээний хичээлтэй. Нэгээс гурав хүртэлх модуль нь ойлголтоо шалгахад туслах дадлага шалгалтаар төгсдөг; 4-р модуль нь төгсөлтийн шалгалтанд бэлтгэх практик дасгал болон хичээлийн хураангуйгаар төгсдөг. Асуулт нь таны гэрчилгээнд хамаарахгүй бөгөөд та хүссэн үедээ давтан өгөх боломжтой.\n\nТаны ахиц дэвшил автоматаар хадгалагдана. Хичээлийн дундуур утсан дээрээ зогсоод дараа нь компьютер дээр үргэлжлүүлж болно.\n\n> **Зөвлөгөө:** Хичээл бүрийн доор байрлах **Тэмдэглэл** табыг ашиглан өөрийн үйл ажиллагаанд тохирох санаануудыг бичээрэй. Тэмдэглэлүүд нь хувийнх бөгөөд зөвхөн та тэдгээрийг харах боломжтой.\n\n## Сертификатаа авч байна\n\nТа шаардлагатай хичээл бүрийг дуусгахад **эцсийн шалгалт** нээгдэнэ. Томоохон банкнаас 20 асуулт асуудаг, 30 минутаар тооцдог бөгөөд тэнцэхийн тулд **80%** оноо шаарддаг. Хэрэв та эхний оролдлогыг давж чадаагүй бол санал болгож буй хичээлүүдийг хянаж үзээд нэг цагийн дараа дахин оролдох боломжтой.\n\nШалгалтанд тэнцсэнээр AGRO-AI Академи таны гэрчилгээг автоматаар олгоно — үнэ төлбөргүй, өвөрмөц үнэмлэх, олон нийтийн баталгаажуулах хуудастай та LinkedIn дээр хуваалцах боломжтой.\n\nЭхэлцгээе.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Дүрмээс суралцах хүртэл: хиймэл оюун ухаан гэж юу вэ (мөн биш)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Хиймэл оюун ухаан, машин сургалт, гүнзгий суралцах, үүсгэсэн AI-ийн энгийн хэл дээрх тодорхойлолтууд.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Хиймэл оюун ухаан\" гэдэг нь энгийн мэдрэгчийн дохиололоос эхлээд эссэ бичдэг чатбот хүртэл бүх зүйлийг тодорхойлоход хэрэглэгддэг. Хөдөө аж ахуйг харахын өмнө бидэнд тодорхой үг хэрэгтэй.\n\n## Хиймэл оюун ухаан\n\n**Хиймэл оюун ухаан (AI)** нь хүний ​​оюун ухаантай ихэвчлэн холбоотой байдаг хэв маягийг таних, урьдчилан таамаглах, хэлийг ойлгох, үйлдлүүдийг сонгох зэрэг ажлуудыг гүйцэтгэдэг компьютерийн системийг бүтээх өргөн хүрээний салбар юм.\n\nЭнэ тодорхойлолт нь зорилгын хувьд өргөн юм. Энэ нь маш өөр технологиудыг агуулдаг тул тэдгээрийг барих хоёр аргыг салгахад тусалдаг.\n\n## Дүрмүүд сурахын эсрэг\n\n**Дүрэмд суурилсан систем** хүмүүсийн бичсэн зааврыг дагаж мөрддөг. Усалгааны хянагч *\"хөрсний чийг 25% -иас доош унавал насосыг ажиллуул\"* гэсэн дүрмийг дагаж мөрддөг. Дүрмүүд нь ил тод, урьдчилан таамаглах боломжтой боловч хэн нэгэн зөв дүрмийг урьдчилан мэдэж байх ёстой бөгөөд нөхцөл байдал өөрчлөгдөхөд дүрмүүд дасан зохицдоггүй.\n\n**Machine learning (ML)** систем нь оронд нь жишээн дээр загваруудыг сурдаг. Цаг агаар, хөрс, усалгаа, дараа нь гарсан ургац зэрэг өнгөрсөн хэдэн мянган улирлын загварыг үзүүлснээр хэн ч тодорхой бичээгүй харилцааг сурч чадна. Өнөөдөр хүмүүсийн \"AI\" гэж нэрлэдэг ихэнх зүйл бол машин сурах явдал юм.\n\n| | Дүрэмд суурилсан систем | Машин сургалтын загвар |\n|---|---|---|\n| Логик хаанаас гардаг вэ | Хүмүүс үүнийг бичдэг | Өгөгдлөөс суралцсан |\n| Хүч чадал | Ил тод, урьдчилан таамаглах боломжтой | Нарийн төвөгтэй хэв маягийг олж, шинэ өгөгдөлтэй дасан зохицдог |\n| Сул тал | Хатуу; Дизайнеруудын урьдчилан тооцоолоогүй зүйлийг санаж байна | Зөвхөн түүний өгөгдөл шиг сайн; тайлбарлахад хэцүү байж болно |\n| Фермийн жишээ | Насос чийгийн босгоос доош ажиллаж эхэлнэ | Загвар маргаашийн тариалангийн усны хэрэглээг таамаглаж байна |\n\n## Гүнзгий суралцах\n\n**Гүн суралцах** нь олон давхаргат \"мэдрэлийн сүлжээ\"-ээс бүтээгдсэн машин сургалтын аргуудын гэр бүл юм. Энэ нь ялангуяа зураг, дуу чимээ зэрэг эмх замбараагүй, өндөр хэмжээст өгөгдөлд сайн байдаг. Утасны аппликейшн зурагнаас навчны өвчнийг танихад гүн гүнзгий суралцах нь ихэвчлэн цаана нь байдаг.\n\n## Үүсгэх хиймэл оюун ухаан\n\n**Үйлдвэрлэлийн хиймэл оюун ухаан** нь маш том өгөгдлийн багцаас сурсан загвар дээр тулгуурлан текст, зураг, аудио эсвэл код зэрэг шинэ агуулгыг бий болгодог. Ярианы туслахуудын цаадах технологи болох том хэлний загварууд (LLMs) нь хиймэл хиймэл оюун ухаан юм. Тэд олон хэлээр ойлголтуудыг тайлбарлаж, тайланг нэгтгэж, асуултуудад хариулж чадна.\n\nGenerative AI нь хүчирхэг боловч баталгаатай баримт биш харин *үнэмжтэй* үгсийг урьдчилан таамагладаг. Энэ нь худал зүйлийг бүрэн итгэлтэйгээр хэлж чадна. Хөдөө аж ахуйд үүсгүүрийн туслах нь тайлбарлах, төсөл боловсруулахад тустай боловч чухал тоо, шийдвэрүүдийг найдвартай өгөгдөлтэй харьцуулах ёстой.\n\n> **Гол санаа:** AI бол нэг машин биш. Энэ нь багажны хайрцаг юм. Дүрэм, статистик загвар, гүнзгий суралцах, үүсгэгч загварууд тус бүр өөр өөр асуудалд нийцдэг.\n\n## AI гэж юу вэ\n\n- **AI бол ид шид биш.** Гаралт бүр нь хүмүүсийн хийсэн өгөгдөл, дизайны сонголтоос гардаг.\n- **AI таны фермийг таных шиг \"ойлгохгүй\"**. Энэ нь зөвхөн өөрийн өгөгдөлд юу авсныг л мэддэг.\n- **AI автоматаар зөв байдаггүй.** Урьдчилан таамаглал нь тодорхой бус байдлыг дагуулдаг бөгөөд хамгийн сайн системүүд танд хэр их байгааг хэлж өгдөг.\n- **AI нь шүүлтийг орлохгүй.** Энэ нь шийдвэр гаргахад туслах хэрэгсэл юм. Шийдвэр гаргах хариуцлага нь хүмүүст үлддэг.\n\n## Ойлголтоо шалгаарай\n\nТа аль хэдийн ашиглаж байсан хэрэглүүрийн талаар бодоорой: цаг агаарын програм, гарцын хяналт, томъёо бүхий хүснэгт. Логик нь дүрмээр бичигдсэн үү, эсвэл өгөгдлөөс суралцсан уу? Хариултаа тэмдэглэлдээ бичнэ үү; Бид Модуль 2-т энэ санаа руу буцах болно.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Яагаад хөдөө аж ахуй одоо хиймэл оюун ухаан руу шилжиж байна вэ?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Фермүүдэд хиймэл оюун ухаан нэвтрүүлэхэд хүргэж буй дарамт, боломжууд.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Тариаланчид шийдвэр гаргахдаа үргэлж мэдээллийг ашигладаг. Өөрчлөгдсөн зүйл бол байгаа мэдээллийн хэмжээ, түүнийг ашиглах хурд, нөөц болгонд үзүүлэх дарамт юм.\n\n## Орчин үеийн ферм дэх дарамт\n\n**Ус.** Хөдөө аж ахуй бол дэлхийн хэмжээнд цэвэр усны хамгийн том хэрэглэгч юм; НҮБ-ын Хүнс, Хөдөө Аж Ахуйн Байгууллагын (FAO AQUASTAT) мэдээлснээр, газар тариалан бүхэлдээ, гол төлөв усалгаа нь дэлхийн цэвэр усны татан авалтын 70 орчим хувийг эзэлдэг. Олон бүс нутагт усны хуваарилалт багасч, эрэлт нэмэгдэж байна. Услалтын шийдвэр бүр чухал.\n\n**Уур амьсгалын өөрчлөлт.** Улиралыг урьдчилан таамаглах боломжгүй. Дулааны давалгаа, тогтмол бус хур тунадас, хортон шавьжийн шинэ даралт нь өнгөрсөн жилийн тоглоомын номыг найдвартай болгожээ.\n\n**Зардал ба ашгийн хэмжээ.** Бордоо, эрчим хүч, ажиллах хүч, тоног төхөөрөмжийн зардал огцом хэлбэлздэг. Тохиромжтой хэмжээгээр зөв газартаа хэрэглэх нь маржин болон хүрээлэн буй орчныг хамгаалдаг.\n\n**Хөдөлмөр.** Олон үйл ажиллагаа нь чадварлаг хүмүүсийг олж, авч үлдэхийн төлөө тэмцдэг. Нэг туршлагатай менежерийн толгойд байдаг мэдлэг нь тухайн хүн байхгүй үед эрсдэлд ордог.\n\n**Худалдан авагчид болон зохицуулагчдаас хүлээсэн хүлээлт.** Нийлүүлэлтийн сүлжээнүүд хэр хэмжээний ус ашигласан, ямар орц ашигласан, ямар дадлагыг баримталсан зэрэг нотлох баримтыг улам бүр шаардаж байна.\n\n## Яагаад хиймэл оюун ухаан, яагаад одоо\n\nГурван зүйл нийлэв:\n\n1. **Өгөгдөл их болсон.** Хиймэл дагуулууд одоо ихэнх тариалангийн талбайг хэдэн өдөр тутам дахин үзэж байна. Хөрсний чийгийн мэдрэгч, цаг уурын станц, усалгааны хянагч, машин механизмууд бүгд тасралтгүй мэдээлэл гаргадаг.\n2. **Компьютер хямд, холбогдох болсон.** Судалгааны лаборатори шаардлагатай байсан загварууд үүлэн дотор ажиллаж, үр дүнг утсанд хүргэх боломжтой.\n3. **Арга зүй боловсорч гүйцсэн.** Машины сургалт, компьютерийн хараа, хэлний загварууд хурдацтай сайжирч, одоо практик хэрэглүүр болжээ.\n\n> **Гол санаа:** AI нь шинэ нөөц бий болгодоггүй. Энэ нь танд байгаа ус, орц, цаг хугацаа, мэдлэгээ илүү сайн ашиглахад тусална.\n\n## AI бодитойгоор юу хийж чадах вэ\n\n- **Мэдрэхүй** — талбайн аль бүсэд ачаалалтай байгаа гэх мэт түүхий зураг болон мэдрэгчийн өгөгдлийг мэдээлэл болгон хувиргана.\n- **Урьдчилан таамаглах** — маргаашийн ургацын усны хэрэгцээ эсвэл улирлын төгсгөлийн ургац зэрэг юу болохыг тооцоол.\n- **Зөвлөмж** — усалгааны хуваарь гэх мэт арга хэмжээг санал болгож, учрыг нь тайлбарла.\n- **Verify** — үйлдэл болсон эсэх, ажилласан эсэхийг шалгана.\n\nЗагварыг анзаараарай: мэдрэх, таамаглах, санал болгох, шалгах. Бид энэ гогцоог сургалтын туршид ашиглах болно.\n\n## Юу хийж чадахгүй\n\nХиймэл оюун ухаан нь түүний өгөгдөлд аваагүй зүйлийг харж чадахгүй: хагарсан хавхлага, хөршийн шүрших, танай фермд өвөрмөц соёлын үйл ажиллагаа. Энэ нь шийдвэр гаргахад хариуцлага хүлээх боломжгүй юм. Энэ нь тариалагч, зөвлөх хоёрын хоорондох итгэлцлийг орлож чадахгүй. Хөдөө аж ахуйн сайн хиймэл оюун ухаан нь газар нутгийг мэддэг * хүмүүстэй ажиллахад зориулагдсан.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

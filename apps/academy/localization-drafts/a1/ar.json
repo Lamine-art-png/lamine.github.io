@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "ar",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "مقدمة للذكاء الاصطناعي في الزراعة",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "ما هو الذكاء الاصطناعي وكيف يعمل في المزرعة وكيفية استخدامه بطريقة مسؤولة.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "ويصل الذكاء الاصطناعي إلى الزراعة من خلال أجهزة التحكم في الري، وخدمات الأقمار الصناعية، وبرامج إدارة المزارع، والهواتف الموجودة في جيوب المزارعين. تمنحك هذه الدورة فهمًا واضحًا وعمليًا لمعنى هذه التكنولوجيا وكيفية عملها وكيفية استخدامها بشكل جيد.\n\nسوف تتعلم الأفكار الأساسية وراء الذكاء الاصطناعي والتعلم الآلي بدون معادلات، وترى كيف تصبح البيانات الزراعية تنبؤًا ثم توصية، وتتبع الذكاء الاصطناعي طوال الموسم - بدءًا من التخطيط والري وحتى صحة المحاصيل والحصاد. قبل كل شيء، سوف تتعلم كيفية الحكم على مخرجات الذكاء الاصطناعي: متى تثق به، ومتى تشكك فيه، وكيف تحافظ على الحكم البشري والمعرفة الزراعية.\n\nتم تصميم الدورة للمزارعين والمشغلين والمهندسين الزراعيين والمديرين والطلاب. لا توجد خلفية تقنية مطلوبة.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "لا أحد. كل ما تحتاجه هو الفضول حول كيفية دعم التكنولوجيا للعمل الزراعي.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"اشرح بلغة واضحة ما هو الذكاء الاصطناعي والتعلم الآلي والذكاء الاصطناعي التوليدي\", \"وصف المصادر الرئيسية للبيانات الزراعية وما الذي يجعل البيانات جديرة بالثقة\", \"اتبع كيف يقوم النموذج بتحويل البيانات إلى تنبؤ والتنبؤ إلى توصية\", \"تعرف على تطبيقات الذكاء الاصطناعي العملية خلال موسم المحاصيل، بدءًا من التخطيط وحتى الحصاد\", \"تحديد حدود وأساليب فشل الذكاء الاصطناعي الزراعي ومتى يجب الاعتراض على التوصية\", \"قم بتطبيق مبادئ ملكية البيانات والخصوصية والاستخدام المسؤول على العمليات الخاصة بك\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "ماذا يعني الذكاء الاصطناعي للزراعة",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "الأفكار الأساسية وسبب أهميتها الآن.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "كيف يعمل الذكاء الاصطناعي الزراعي",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "من البيانات إلى النموذج إلى التوصية.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "الذكاء الاصطناعي طوال الموسم",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "تطبيقات عملية من التخطيط إلى الحصاد",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "استخدام الذكاء الاصطناعي بطريقة مسؤولة",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "الحدود وحقوق البيانات والاستخدام الواثق والحرج.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "مراقبة صحة المحاصيل من أعلى وعن قرب",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "صور الأقمار الصناعية ومؤشرات الغطاء النباتي والرؤية الحاسوبية لصحة المحاصيل.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "البيانات: المادة الخام للذكاء الاصطناعي الزراعي",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "من أين تأتي بيانات المزرعة وما الذي يجعلها جديرة بالثقة.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "كل نظام ذكاء اصطناعي مبني على البيانات. إذا كانت البيانات غير كاملة أو متحيزة أو خاطئة، فسيكون الذكاء الاصطناعي كذلك. إن فهم بياناتك هو أهم مهارة في الذكاء الاصطناعي الزراعي.\n\n## من أين تأتي البيانات الزراعية\n\n| المصدر | أمثلة | ما يخبرك |\n|---|---|---|\n| الطقس | محطات على المزرعة، شبكات إقليمية، تنبؤات | درجة الحرارة، الأمطار، الرطوبة، الرياح، الإشعاع الشمسي |\n| تربة | مجسات الرطوبة، اختبارات التربة، خرائط التربة | المياه المتوفرة للجذور، والمواد الغذائية، والملمس |\n| الاستشعار عن بعد | صور الأقمار الصناعية والطائرات والطائرات بدون طيار | قوة المحاصيل، وغطاء المظلة، وأنماط الضغط عبر الحقل |\n| المعدات | أجهزة التحكم في الري، عدادات التدفق، أجهزة مراقبة الإنتاجية، الجرارات | ماذا تم تطبيقه وأين ومتى |\n| السجلات | مواعيد الزراعة، الأصناف، تطبيقات الإدخال، الملاحظات الكشفية | قرارات وملاحظات إدارية |\n| أسواق | الأسعار والعقود وإشارات الطلب | السياق الاقتصادي للقرارات |\n\n## صفات البيانات الجيدة\n\n**الدقة** — هل يعكس القياس الواقع؟ إن مسبار الرطوبة المثبت في مكان مبلل، أو مقياس المطر تحت شجرة، سوف يضلل كل نموذج يستخدمه.\n\n**الاكتمال** — هل هناك فجوات؟ جهاز الاستشعار الذي يتوقف عن الإبلاغ لمدة أسبوع أثناء موجة الحر يترك فجوة بالضبط عندما يكون الأمر أكثر أهمية.\n\n**التوقيت المناسب** — هل البيانات حديثة بما يكفي لاتخاذ القرار؟ رطوبة التربة بالأمس مفيدة للري اليوم. الشهر الماضي ليس كذلك.\n\n**الاتساق** — هل الوحدات والتنسيقات والتعريفات هي نفسها بمرور الوقت وعبر الحقول؟ يؤدي خلط البوصات والمليمترات، أو اسمين لنفس الحقل، إلى حدوث أخطاء صامتة.\n\n**التمثيل** — هل تغطي البيانات الظروف التي سيتم فيها استخدام الذكاء الاصطناعي؟ النموذج الذي تم تدريبه على التربة الرملية فقط قد لا يعمل على الطين.\n\n> **التحقق الميداني:** قبل الوثوق بلوحة التحكم، اطرح ثلاثة أسئلة: من أين أتى هذا الرقم؟ متى تم قياسه؟ ما الذي قد يجعل الأمر خاطئًا؟\n\n## البيانات تحتاج إلى سياق\n\nإن قراءة رطوبة التربة بنسبة 30% لا تعني الكثير في حد ذاتها. من المهم نوع التربة، ومدى عمق جهاز الاستشعار، والمحصول الذي ينمو وفي أي مرحلة. يجمع الذكاء الاصطناعي الزراعي الجيد بين مصادر البيانات بحيث يضيف كل منها سياقًا إلى الآخرين - على سبيل المثال، إقران صور الأقمار الصناعية مع بيانات الطقس وتاريخ الري في الحقل.\n\n## بياناتك، قراراتك\n\nتتمتع بيانات المزرعة بقيمة تجارية وتشغيلية وشخصية. قبل توصيل المعدات أو مشاركة السجلات مع أي خدمة، افهم من يمكنه الوصول إلى البيانات، وكيف سيتم استخدامها، وما إذا كان يمكنك أخذها معك إذا غادرت. سنعود إلى ملكية البيانات في الوحدة الرابعة.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "ملكية البيانات والخصوصية والثقة",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "مبادئ عملية لمشاركة بيانات المزرعة بثقة.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "يمكن لبيانات المزرعة أن تكشف عن الغلة والممارسات والأمور المالية وموقع الأشخاص والأصول. يمكن أن تؤدي مشاركتها إلى فتح خدمات قيمة، ولكن يجب أن يكون ذلك اختيارًا متعمدًا دائمًا.\n\n## أسئلة يجب طرحها على أي مزود تكنولوجيا\n\n- **الملكية:** من يملك البيانات التي أقدمها والبيانات التي ينشئها النظام حول مزرعتي؟\n- **الاستخدام:** فيما سيتم استخدام البيانات؟ هل سيتم استخدامه لتدريب النماذج؟ هل سيتم دمجها مع بيانات المزارع الأخرى؟\n- **المشاركة:** هل سيتم مشاركتها مع أطراف ثالثة أم بيعها لها؟ أي منها، ولماذا؟\n- **الوصول وإمكانية النقل:** هل يمكنني تنزيل بياناتي بتنسيق قابل للاستخدام؟ هل يمكنني أخذها معي إذا غادرت؟\n- **الحذف:** هل يمكنني حذف بياناتي وما الذي يتبقى بعد ذلك؟\n- **الأمان:** كيف تتم حماية البيانات؟ من داخل الشركة يمكنه رؤيته؟\n- **التحكم:** هل يمكنني إلغاء الوصول لجهاز متصل أو شريك في أي وقت؟\n\nنشرت العديد من المنظمات الزراعية مبادئ البيانات الزراعية التي تتناول هذه الأسئلة؛ يعد السؤال عما إذا كان مقدم الخدمة يتبعهم نقطة انطلاق جيدة.\n\n## الموافقة والأذونات\n\nتتطلب الأنظمة الجيدة إذنًا محددًا ومستنيرًا - على سبيل المثال، السماح للموصل بقراءة بيانات وحدة التحكم في الري دون منحه إذنًا لتغيير الإعدادات. امنح أقل قدر ممكن من الوصول إلى المهمة، وقم بمراجعة الخدمات المتصلة بانتظام.\n\n## البيانات المجمعة ومجهولة المصدر\n\nومن الممكن أن يؤدي الجمع بين البيانات من العديد من المزارع إلى تحسين النماذج للجميع، مثل تقديرات أفضل لاستخدام المياه على المستوى الإقليمي. إذا تم القيام بذلك بشكل جيد، فإن التجميع يزيل المعلومات التي يمكن أن تحدد مزرعة فردية. اسأل عن كيفية إجراء إخفاء الهوية وما إذا كان بإمكانك إلغاء الاشتراك.\n\n## يتم اكتساب الثقة\n\n> **الفكرة الرئيسية:** يتسم الذكاء الاصطناعي الزراعي الجدير بالثقة بالشفافية فيما يتعلق بكيفية استخدامه للبيانات، وشرح توصياته، والاعتراف بعدم اليقين، وترك المزارع يتولى زمام الأمور.\n\nتنطبق هذه المبادئ نفسها على الأكاديمية نفسها. يمكنك تنزيل بيانات التعلم الخاصة بك أو حذفها في أي وقت من إعدادات حسابك.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "تمرين عملي: تقييم توصية الذكاء الاصطناعي",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "قم بتطبيق ما تعلمته على توصية واقعية.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "في هذا التمرين، ستتدرب على مهارات المراجعة النقدية من هذه الوحدة بناءً على توصية واقعية.\n\n## السيناريو\n\nأنت تدير عملية زراعة الطماطم المروية بالتنقيط بمساحة 60 هكتارًا. في صباح يوم الثلاثاء في منتصف الموسم، يظهر نظام دعم القرار الخاص بك:\n\n> *\"التوصية: تخطي الري في المنطقة C لمدة 48 ساعة القادمة. الاستخدام المتوقع لمياه المحاصيل: 3.1 ملم/يوم. رطوبة التربة: 82% من سعة الحقل. الثقة: عالية.\"*\n\nعندما تقود سيارتك بالقرب من المبنى C، تلاحظ أن النباتات الموجودة على الحافة الشرقية تبدو ذابلة بسبب حرارة الصباح المتأخر، وكانت درجة الحرارة القصوى أمس 37 درجة مئوية - وهي أعلى بكثير من 29 درجة مئوية التي توقعها النظام الذي استخدمه قبل يومين.\n\n## مهمتك\n\nالعمل من خلال القائمة المرجعية أدناه. اكتب أسبابك في علامة التبويب **ملاحظات** حتى تتمكن من العودة إليها.\n\n1. **تحقق من المدخلات.** ما هي المدخلات التي تبدو مشكوكًا فيها؟ (تلميح: قارن درجة الحرارة المتوقعة بما حدث.)\n2. **التحقق من أجهزة الاستشعار.** أين تم تركيب مسبار رطوبة التربة؟ هل يمكن أن يكون في مكان لا يمثل الحافة الشرقية؟\n3. **انظر في الحقل.** ما الذي ستفحصه على النباتات الذابلة؟ ضع في اعتبارك انسداد الباعث والضغط في نهاية السطر وصحة الجذر.\n4. **اتخذ القرار.** هل ستتبع التوصية أو تعدّلها أو تتجاوزها؟ لماذا؟\n5. **التسجيل والإبلاغ.** ما هي التعليقات التي ستقدمها حتى يتمكن النظام وفريقك من التعلم من ذلك؟\n\n## مناقشة\n\nتشير الإجابة القوية إلى أن استخدام المياه المتوقع ربما كان يعتمد على توقعات تبين أنها باردة جدًا، لذلك كان الطلب الفعلي أعلى. قد لا يمثل المسبار الواحد الذي يقرأ 82% الحافة الشرقية، خاصة إذا كانت الباعثات هناك مسدودة أو كان الضغط منخفضًا في نهاية الجانب الجانبي. قد يكون القرار المعقول هو فحص الحافة الشرقية على الفور، وإجراء عملية ري قصيرة إذا أكد الفحص جفاف التربة، والإبلاغ عن كل من الأخطاء المتوقعة ومشكلة التجانس المحتملة.\n\nنادرًا ما توجد إجابة واحدة صحيحة، ولكن هناك دائمًا عملية صحيحة: التحقق من المدخلات، والتحقق من السياق، والبحث في الميدان، واتخاذ القرار، والتسجيل.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "الحصاد والأسواق وسلسلة التوريد",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "التنبؤ بالعائدات واستخبارات السوق والخدمات اللوجستية.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "ومع اقتراب الموسم من الحصاد، تتحول القرارات من زراعة المحصول إلى تحديد قيمته.\n\n## التنبؤ بالعائد\n\nتجمع توقعات الإنتاجية بين نماذج نمو المحاصيل، والطقس حتى الآن والتنبؤات، والقوة القائمة على الصور، وأحيانًا يتم حسابها من خلال رؤية الكمبيوتر. التوقعات السابقة أقل تأكيدا. تتحسن الدقة مع تقدم الموسم.\n\nتدعم التوقعات قرارات مثل:\n\n- مقدار البيع الآجل، ومتى؛\n- عدد العمال والشاحنات وسعة التخزين للحجز؛\n- ما إذا كان الإدخال المتأخر لا يزال يستحق التقديم.\n\n## استخبارات السوق\n\nتقوم أدوات استخبارات السوق بجمع الأسعار والعقود الآجلة وبيانات التصدير والطقس في المناطق المتنافسة والأخبار للمساعدة في توقع تحركات الأسعار. يمكن للذكاء الاصطناعي تلخيص هذه الإشارات بسرعة وتسليط الضوء على التغييرات غير العادية. لا يوجد نموذج قادر على التنبؤ بالأسواق على وجه اليقين؛ تعامل مع توقعات السوق كمدخل واحد لخطة إدارة المخاطر، وليس كضمان.\n\n## توقيت الحصاد وجودته\n\nتساعد النماذج التي تتتبع نضج المحاصيل - مستويات السكر في العنب، والرطوبة في الحبوب، واللون في الفاكهة - في جدولة الحصاد لتحقيق أفضل توازن بين الجودة، ومخاطر الطقس، والخدمات اللوجستية. بالإضافة إلى توفر العمالة والمعدات، يمكنها المساعدة في تسلسل الحقول عبر العملية.\n\n## إمكانية التتبع والأدلة\n\nويطالب المشترون بشكل متزايد بإثبات كيفية إنتاج المحصول: استخدام المياه، والمدخلات المستخدمة، والشهادات. إن الأنظمة التي تسجل التوصيات والإجراءات والتحقق طوال الموسم تجعل من السهل إنتاج هذه الأدلة - وهو سبب آخر لأهمية خطوة التحقق في الحلقة.\n\n> **الفكرة الرئيسية:** عند الحصاد، تأتي قيمة الذكاء الاصطناعي من تقليل عدم اليقين في التوقيت والكمية والسعر - ومن توثيق ما تم إنجازه.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "دراسة حالة: الري وإدارة المياه",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "كيف يجتمع التبخر ورطوبة التربة والذكاء الاصطناعي في جدولة الري.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "يعد الري أحد أوضح الأمثلة على خلق قيمة للذكاء الاصطناعي في المزرعة، لأن قرارات المياه متكررة ومكلفة وقابلة للقياس.\n\n## توازن الماء\n\nفكر في منطقة الجذر كحساب مصرفي للمياه.\n\n- **الودائع:** الأمطار والري.\n- **السحب:** الماء الذي يستخدمه المحصول ويتبخر من التربة - ويسمى معًا **التبخر (ET)** - بالإضافة إلى الصرف تحت الجذور.\n\nالهدف من جدولة الري هو الحفاظ على التوازن بين الحد الأدنى، حيث يبدأ المحصول في المعاناة من الإجهاد، والحد الأعلى، الذي يتم بعده تصريف المياه وإهدارها.\n\n## تقدير استخدام مياه المحاصيل\n\nعادة ما يتم تقدير استخدام مياه المحاصيل في خطوتين:\n\n1. **يتم حساب التبخر النتحي المرجعي (ET₀)** من بيانات الطقس — درجة الحرارة والرطوبة والرياح والإشعاع الشمسي — لمحصول مرجعي قياسي.\n2. يقوم **معامل المحصول (Kc)** بضبط ET₀ للمحصول الفعلي ومرحلة نموه: **ETc = ET₀ × Kc**.\n\nيمكن للتعلم الآلي تحسين هذا التقدير من خلال التعلم من أجهزة الاستشعار المحلية، وصور المظلة، وتاريخ المزرعة، خاصة عندما تكون المعاملات القياسية غير مناسبة.\n\n## سيناريو الجدولة\n\n> **مثال:** تحتوي كتلة الكرم على 40 ملم من الماء المتوفر بسهولة عندما تكون منطقة الجذر ممتلئة. تظهر مجسات رطوبة التربة بقاء 18 ملم. توقعات الطقس 5 ملم يوميا خلال الأيام الأربعة القادمة، ولا يتوقع هطول أمطار.\n\nبدون الري، تصل الكتلة إلى الحد الأدنى خلال ثلاثة أيام ونصف تقريبًا (18 مم ÷ 5 مم/يوم). ويوصي نظام الجدولة بالري خلال اليومين أو الثلاثة أيام القادمة، وبحجم مناسب لإعادة ملء منطقة الجذر دون الإفراط في ملئها، وبتوقيت مناسب لسعة المضخة المتاحة وخفض أسعار الكهرباء ليلاً.\n\nإذا تغيرت التوقعات إلى 15 ملم من الأمطار في اليوم الثاني، فإن النظام الجيد يقوم بتحديث التوصية - ويشرح السبب.\n\n## حيث يضيف الذكاء الاصطناعي قيمة\n\n- **تقديرات أفضل لاستخدام المياه** من خلال الجمع بين الطقس وأجهزة الاستشعار والصور.\n- **جدولة مدروسة للتنبؤات** تراعي هطول الأمطار والحرارة.\n- **التحسين** عبر العديد من الكتل وحدود المضخة وتخصيصات المياه.\n- **التحقق** — التأكد من أجهزة قياس التدفق ورطوبة التربة من أن عملية الري تمت كما هو مخطط لها وكان لها التأثير المتوقع.\n\n## ما الخطأ الذي يمكن أن يحدث\n\nيمكن للباعث المسدود أو الصمام المكسور أو المسبار المثبت في مكان غير تمثيلي أن يضلل النظام. ولهذا السبب فإن خطوة التحقق مهمة: عندما لا تستجيب رطوبة التربة المرصودة كما هو متوقع بعد عملية الري، فهذه إشارة للتحقيق في الحقل، وليس فقط النموذج.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "الحدود والأخطاء ومتى يتم الطعن في التوصية",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "التعرف على أوضاع الفشل والحفاظ على الحكم البشري.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "قد يكون كل نظام ذكاء اصطناعي مخطئًا في بعض الأحيان. الهدف ليس الثقة العمياء أو الرفض الشامل، ولكن **الثقة المعايرة**: معرفة متى تستحق التوصية الثقة ومتى تستحق نظرة ثانية.\n\n## أوضاع الفشل الشائعة\n\n**مدخلات سيئة.** ينتج عن وجود جهاز استشعار فاشل أو مسبار في غير مكانه أو تغذية بيانات مفقودة هراء واثق. *القمامة في الداخل والقمامة في الخارج.*\n\n**الظروف خارج النطاق.** تكون النماذج أقل موثوقية في المواقف التي نادرًا ما تراها أثناء التدريب: الحرارة الشديدة، مجموعة متنوعة جديدة، تربة غير عادية.\n\n**الانجراف.** تتغير الظروف بمرور الوقت، والنموذج الذي كان دقيقًا قبل ثلاث سنوات قد لا يكون كذلك.\n\n**التحيز.** إذا كانت بيانات التدريب تمثل مناطق معينة أو أحجام مزارع أو محاصيل معينة بشكل مبالغ فيه، فقد تكون التوصيات أقل دقة بالنسبة للعمليات المختلفة.\n\n**سياق مفقود.** لا يعلم النظام بشأن انجراف مبيدات الأعشاب لدى الجيران، أو الأنبوب المكسور، أو العقد الذي يتطلب الحصاد الأسبوع المقبل.\n\n**تحيز الأتمتة.** يميل الأشخاص إلى الإفراط في الثقة في مخرجات الآلة، خاصة عندما يتم تقديمها بدقة. الرقم الذي يحتوي على منزلتين عشريتين ليس بالضرورة دقيقًا.\n\n## متى يجب الطعن في التوصية\n\nتوقف مؤقتًا وتحقق عندما:\n\n- التوصية تتعارض مع ما تراه على أرض الواقع؛\n- إنه خارج النطاق الطبيعي لهذا الموسم؛\n- يظهر النظام ثقة منخفضة، أو لا يظهر الثقة على الإطلاق؛\n- البيانات الأساسية مفقودة أو قديمة أو خاطئة بشكل واضح؛\n- ستكون عواقب الخطأ شديدة أو يصعب عكسها.\n\n> **الفحص الميداني:** قاعدة بسيطة - كلما كان القرار أكبر وأقل قابلية للإلغاء، زاد عدد الأدلة التي يجب أن تطلبها قبل التصرف بناءً على توصية الذكاء الاصطناعي.\n\n## كيفية التحدي بشكل جيد\n\n1. **تحقق من المدخلات.** هل تقوم أجهزة الاستشعار بالإبلاغ؟ هل بيانات الطقس حديثة؟\n2. **اسأل عن السبب.** ما هي البيانات التي أدت إلى هذا الاقتراح؟\n3. **انظر إلى الميدان.** استكشف المنطقة المعنية.\n4. **سجل ما قررته ولماذا.** يعد تجاوزك بمثابة تعليقات قيمة تساعد في تحسين النظام.\n\nإن تحدي التوصية ليس فشلاً للتكنولوجيا. هذه هي الطريقة التي يعمل بها الناس والذكاء الاصطناعي معًا بشكل جيد.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "النماذج والتدريب والتنبؤات",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "كيف يتعلم النموذج من الأمثلة ولماذا كل توقع لديه عدم اليقين.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**النموذج** هو وصف رياضي للعلاقة، على سبيل المثال، بين الطقس وكمية المياه التي يستخدمها المحصول. يبني التعلم الآلي النماذج من خلال التعلم من الأمثلة.\n\n## التعلم من الأمثلة\n\nتخيل أنك تريد التنبؤ بكمية المياه التي سيستخدمها بستان اللوز غدًا. تقوم بجمع العديد من الأيام الماضية، مع كل منها:\n\n- **المدخلات** (وتسمى أيضًا *الميزات*): درجة الحرارة، الرطوبة، الرياح، الإشعاع الشمسي، عمر الشجرة، غطاء المظلة؛\n- **النتيجة** التي تريد التنبؤ بها: المياه التي استخدمها البستان بالفعل في ذلك اليوم، والتي تم قياسها بواسطة أجهزة الاستشعار.\n\nأثناء **التدريب**، تقوم الخوارزمية بضبط النموذج مرارًا وتكرارًا حتى تتطابق توقعاتها مع النتائج المسجلة بأكبر قدر ممكن. وهذا ما يسمى **التعلم الخاضع للإشراف**، لأن كل مثال يأتي مع الإجابة الصحيحة.\n\n## اختبار البيانات التي لم يشاهدها النموذج من قبل\n\nيمكن للنموذج أن يحفظ أمثلة التدريب الخاصة به ويظل يفشل في الأيام الجديدة. ولهذا السبب يحتفظ علماء البيانات ببعض البيانات جانبًا **للتحقق** — وهي بيانات لم يراها النموذج مطلقًا أثناء التدريب. إن الأداء بناءً على تلك البيانات المحتفظ بها هو المقياس الصادق لمدى نجاحها.\n\n> **هام:** اسأل عن كيفية التحقق من صحة النموذج. إن عبارة \"إنها تناسب بياناتنا التاريخية تماما\" هي علامة تحذير، وليست قوة.\n\n## دقة القياس\n\nبالنسبة للتنبؤات الرقمية، تتضمن المقاييس الشائعة **متوسط ​​الخطأ** (مدى بُعد التوقعات في المتوسط) ومقدار التباين الذي يفسره النموذج. بالنسبة للتصنيفات - \"مجهدة\" أو \"صحية\" - نسأل عن عدد المرات التي يكون فيها النموذج صحيحًا، وكم مرة يثير إنذارات كاذبة أو يغفل مشاكل حقيقية.\n\nلا توجد دقة \"جيدة\" واحدة. قد تكون توقعات العائد في حدود 5% ممتازة لاتخاذ قرارات التسويق؛ قد يكون إنذار الصقيع الذي يفوتك حدثًا واحدًا من كل عشرة غير مقبول.\n\n## كل توقع له عدم يقين\n\nتغيرات الطقس وانجراف أجهزة الاستشعار واختلاف المجالات. يشير النظام الجدير بالثقة إلى عدم اليقين: \"سيبلغ استخدام المياه غدًا 6.2 ملم، ومن المحتمل أن يتراوح بين 5.6 و6.8 ملم\". رقم واحد بدون نطاق يخفي معلومات مهمة.\n\n## عندما تصبح النماذج قديمة\n\nالظروف تتغير. يمكن للأصناف الجديدة أو سنة الجفاف أو تغيير نظام الري أن تجعل البيانات السابقة أقل تمثيلا. وهذا ما يسمى ** الانجراف **. تراقب الأنظمة الجيدة دقتها مع مرور الوقت ويتم إعادة تدريبها عندما ينخفض ​​الأداء.\n\n## الأنواع الشائعة للنماذج الزراعية\n\n- **الانحدار** — يتنبأ برقم (استخدام المياه، والإنتاج، والسعر).\n- **التصنيف** — يعين فئة (المرض موجود أو غائب، نوع المحصول).\n- **التنبؤ** — يتنبأ بكيفية تغير شيء ما بمرور الوقت (رطوبة التربة خلال الأيام الخمسة المقبلة).\n- **رؤية الكمبيوتر** — تفسر الصور (عد الفاكهة، واكتشاف الأعشاب الضارة).\n- **التحسين** — العثور على أفضل خطة ضمن القيود (جدول ري يلبي الطلب على المحاصيل بمياه محدودة).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "التخطيط والزرع",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "استخدام البيانات والذكاء الاصطناعي قبل أن تذهب البذرة الأولى إلى الأرض.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "يتم اتخاذ العديد من القرارات الأكثر قيمة لهذا الموسم قبل الزراعة. يمكن للذكاء الاصطناعي أن يساعد من خلال تقديم المزيد من الأدلة لتلك القرارات.\n\n## التاريخ الميداني ومناطق الإدارة\n\nالحقول ليست موحدة. غالبًا ما تكشف سنوات من خرائط الإنتاج ومسوحات التربة وصور الأقمار الصناعية عن أنماط متسقة: منطقة منخفضة تظل رطبة، وسلسلة من التلال الرملية التي تجف أولاً. يمكن للخوارزميات تجميع هذه المناطق في **مناطق إدارة** تستجيب بشكل مختلف للمياه والبذور والأسمدة.\n\nمع المناطق، يمكن للمزارع تغيير معدلات البذر، واختيار مكان تطبيق كمية أكبر أو أقل من النيتروجين، أو تخطيط مجموعات الري التي تتوافق مع سلوك كل جزء من الحقل.\n\n##التنوع وقرارات موعد الزراعة\n\nيمكن للنماذج التي تم تدريبها على التجارب الإقليمية وسجلات الطقس تقدير أداء الأصناف في ظل ظروف مختلفة، وكيف يؤثر تاريخ الزراعة على المخاطر - على سبيل المثال، فرصة التعرض للإجهاد الحراري عند الإزهار. وتكون هذه التقديرات مفيدة للغاية عندما تعكس التجارب المحلية، وليس المتوسطات الوطنية فقط.\n\n## تخطيط السيناريو\n\nيمكن لأدوات الذكاء الاصطناعي تشغيل سيناريوهات \"ماذا لو\" بسرعة: ماذا لو كان الموسم جافًا؟ ماذا لو تم تخفيض مخصصات المياه بنسبة 20%؟ ماذا لو ارتفعت أسعار مستلزمات الإنتاج؟ تساعدك مقارنة السيناريوهات على اختيار خطة تصمد أمام العديد من العقود المستقبلية المحتملة، وليس فقط المتوقعة.\n\n> **الفحص الميداني:** عندما توصي إحدى الأدوات بمعدل البذر أو التنوع، اسأل عن البيانات التي بنيت عليها. تعد بيانات التجارب الإقليمية المستمدة من تربتك ومناخك أكثر أهمية بكثير من المتوسط ​​الوطني.\n\n## الحدود التي يجب وضعها في الاعتبار\n\nتعتمد توصيات ما قبل الموسم على توقعات طويلة المدى، وهي غير مؤكدة. تعامل معها كخطة بداية يمكن تعديلها مع تقدم الموسم، وليست وصفة طبية ثابتة.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "اختبار الوحدة 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "تحقق من فهمك لأساسيات الذكاء الاصطناعي.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "أجب عن خمسة أسئلة سريعة حول الأفكار الواردة في الوحدة 1. الاختبارات مخصصة للتمرين: يمكنك إعادة إجرائها عدة مرات كما تريد، وسترى التوضيحات بعد كل محاولة.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "اختبار الوحدة 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "التحقق من فهمك للبيانات والنماذج والتوصيات.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "خمسة أسئلة حول جودة البيانات والتدريب النموذجي ودعم القرار. إعادة اتخاذ في كثير من الأحيان كما تريد.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "اختبار الوحدة 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "تحقق من فهمك للذكاء الاصطناعي على مدار الموسم.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "خمسة أسئلة حول التخطيط والري ومراقبة المحاصيل والحصاد. إعادة اتخاذ في كثير من الأحيان كما تريد.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "من التنبؤ إلى التوصية",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "كيف تقوم أنظمة دعم القرار بتحويل التنبؤات إلى أفعال - وإبقاء الأشخاص على اطلاع.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "يخبرك التنبؤ بما من المحتمل أن يحدث. **التوصية** تخبرك بما يجب فعله حيال ذلك. إن تحويل أحدهما إلى الآخر يتطلب أهدافًا وقيودًا وسياقًا.\n\n## مثال للري\n\nلنفترض أن أحد النماذج يتنبأ بأن الحقل سيستخدم 7 ملم من الماء غدًا وأن رطوبة التربة تقترب بالفعل من الحد الأدنى الذي يتحمله المحصول. يجمع نظام التوصيات بين هذا التنبؤ و:\n\n- **الأهداف** — حماية الإنتاجية والجودة، وتجنب الهدر؛\n- **القيود** — سعة المضخة، وتخصيص المياه المتبقية، وتعريفات الكهرباء، والجدول الزمني المحدد للري؛\n- **السياق** — توقعات هطول الأمطار، ومرحلة المحاصيل، والحصاد المخطط الذي يحتاج إلى أرض جافة.\n\nقد تكون النتيجة: *\"ري القطعة 4 الليلة لمدة 6 ساعات (حوالي 18 ملم). تخطي القطعة 7: من المتوقع هطول أمطار 12 ملم بثقة عالية.\"*\n\n## التوصيات الجيدة تشرح نفسها\n\nالتوصية التي لا يمكنك فهمها هي توصية لا يمكنك الحكم عليها. ابحث عن الأنظمة التي تظهر:\n\n- **السبب** — ما هي البيانات والتنبؤات التي أدت إلى الاقتراح؟\n- **الثقة** — مدى يقين النظام؛\n- **البدائل** — ماذا يحدث إذا انتظرت أو تقدمت بطلب أقل؛\n- **مسار الأدلة** — حتى تتمكن بعد ذلك من التحقق مما إذا كان الإجراء قد حدث ونجح أم لا.\n\n## إبقاء الأشخاص على اطلاع\n\nفي الزراعة، معظم الذكاء الاصطناعي هو **دعم القرار**: يقترح النظام، ويقرر الشخص. حتى عندما تقوم الأتمتة بتنفيذ الإجراءات - على سبيل المثال، وحدة التحكم التي تفتح صمامًا - تتضمن التصميمات المسؤولة خطوات الموافقة والحدود والقدرة على التجاوز.\n\n> **الفكرة الرئيسية:** يجب أن يكون الشخص المسؤول عن النتيجة قادرًا دائمًا على معرفة سبب تقديم التوصية وتغييرها وإيقافها.\n\n## إغلاق الحلقة: التحقق\n\nالأنظمة الأكثر قيمة لا تتوقف عند التوصية. إنهم يتحققون مما تم فعله بالفعل وما حدث بعد ذلك: هل تم تشغيل الري؟ ما هي كمية الماء التي تم تطبيقها؟ هل استعادت رطوبة التربة كما هو متوقع؟ تعمل خطوة **التحقق** هذه على بناء الثقة والكشف عن مشاكل المعدات وإنتاج الأدلة التي يطلبها المشترون والمدققون وسلطات المياه بشكل متزايد.\n\nتذكر الحلقة من الوحدة 1: **التحسس → التنبؤ → التوصية → التحقق**. تعمل كل دورة في الحلقة على تحسين القرارات والبيانات الخاصة بالموسم التالي.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "ملخص الدورة والخطوات التالية",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "الوجبات الرئيسية وكيفية الاستعداد للامتحان النهائي.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "تهانينا على الوصول إلى نهاية الدورة. دعونا نجمع الأفكار الرئيسية معًا.\n\n## الوجبات الرئيسية\n\n- **الذكاء الاصطناعي عبارة عن صندوق أدوات**، وليس تقنية واحدة. تناسب القواعد والتعلم الآلي والتعلم العميق والذكاء الاصطناعي التوليدي المشكلات المختلفة.\n- **البيانات هي الأساس.** تحدد الدقة والاكتمال وحسن التوقيت والاتساق والتمثيل ما يمكن أن يفعله أي نموذج.\n- **تتعلم النماذج من الأمثلة** ويجب التحقق من صحتها بناءً على بيانات لم يروها من قبل. كل توقع ينطوي على عدم يقين، ويمكن للنماذج أن تنحرف.\n- ** تجمع التوصيات بين التوقعات والأهداف والقيود والسياق. ** تشرح التوصيات الجيدة نفسها.\n- **الحلقة مهمة:** الإحساس ← التنبؤ ← التوصية ← التحقق.\n- **على مدار الموسم**، يدعم الذكاء الاصطناعي التخطيط والري ومراقبة المحاصيل وتوقيت الحصاد والتسويق وإمكانية التتبع.\n- **استخدم الثقة المدروسة.** تحدى التوصيات التي تتعارض مع المجال، أو التي تعتمد على بيانات ضعيفة، أو التي تنطوي على مخاطر كبيرة.\n- **بياناتك تستحق الاهتمام.** تعرف على من يملكها، وكيف يتم استخدامها، وكيفية استعادتها.\n\n## التحضير للامتحان النهائي\n\nيغطي الاختبار النهائي جميع الوحدات الأربع. يتم سحب 20 سؤالاً من بنك أكبر ويمنحك 30 دقيقة. أنت بحاجة إلى **80%** للتمرير.\n\n> **نصيحة:** راجع ملاحظاتك واختبارات الوحدة. إذا فاتك سؤال اختبار، فافتح الدرس الذي يشير إليه قبل الاختبار.\n\n## إلى أين تذهب بعد ذلك\n\n- **أساسيات البيانات الزراعية** تتعمق في مصادر البيانات وجودتها.\n- ** الاستشعار عن بعد وذكاء الأقمار الصناعية ** يتوسع في الصور ومؤشرات الغطاء النباتي.\n- **الري المدعوم بالذكاء الاصطناعي** يطبق هذه الأفكار على إدارة المياه بالتفصيل.\n\nشكرًا لك على التعلم مع أكاديمية AGRO-AI. عندما تصبح جاهزًا، افتح الاختبار النهائي من قائمة المقرر الدراسي.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "مرحبا بكم في الدورة",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "ما ستتعلمه، وكيفية عمل الدورة، وكيفية الحصول على شهادتك.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "مرحبًا بك في **مقدمة إلى الذكاء الاصطناعي في الزراعة**، الدورة التدريبية الأولى لبرنامج أكاديمية AGRO-AI *أسس الذكاء الاصطناعي الزراعي*.\n\nلا تحتاج إلى أي خلفية تقنية لتحقيق النجاح هنا. إذا سبق لك أن نظرت إلى توقعات الطقس، أو قرأت اختبار التربة أو قارنت المحاصيل بين حقلين، فأنت بالفعل تستخدم العادات الذهنية التي تعتمد عليها هذه الدورة: جمع الأدلة، وتحديد الأنماط، وتحديد ما يجب فعله بعد ذلك.\n\n## ما سوف تتعلمه\n\nبحلول نهاية الدورة سوف تكون قادرا على:\n\n- شرح ما هو الذكاء الاصطناعي - وما ليس كذلك - بلغة واضحة؛\n- وصف مصدر البيانات الزراعية وما الذي يجعلها موثوقة؛\n- اتبع كيف تصبح البيانات تنبؤا، ويصبح التنبؤ توصية؛\n- التعرف على تطبيقات الذكاء الاصطناعي المفيدة طوال الموسم؛\n- الحكم على مخرجات الذكاء الاصطناعي بشكل نقدي واستخدامها بمسؤولية.\n\n## آلية عمل الدورة\n\nتحتوي الدورة على **أربع وحدات** من الدروس القصيرة. تنتهي الوحدات من واحد إلى ثلاثة باختبار تدريبي يساعدك على التحقق من فهمك؛ تنتهي الوحدة الرابعة بتمرين عملي وملخص الدورة التدريبية التي تؤهلك للاختبار النهائي. لا يتم احتساب الاختبارات ضمن شهادتك، ويمكنك إعادة إجرائها كلما أردت ذلك.\n\nيتم حفظ تقدمك تلقائيًا. يمكنك التوقف في منتصف الدرس على هاتفك والمتابعة لاحقًا على جهاز الكمبيوتر.\n\n> **نصيحة:** استخدم علامة التبويب **الملاحظات** الموجودة أسفل كل درس لتدوين الأفكار التي تنطبق على العملية الخاصة بك. الملاحظات خاصة، ولا يمكن لأحد سواك رؤيتها.\n\n## الحصول على شهادتك\n\nعند الانتهاء من كل درس مطلوب، يتم فتح **الاختبار النهائي**. يتم سحب 20 سؤالاً من بنك أكبر، ومدته 30 دقيقة، ويتطلب اجتيازه درجة **80%**. إذا لم تنجح في المحاولة الأولى، يمكنك مراجعة الدروس الموصى بها والمحاولة مرة أخرى بعد ساعة واحدة.\n\nاجتياز الاختبار وتصدر أكاديمية AGRO-AI شهادتك تلقائيًا - مجانًا، مع معرف اعتماد فريد وصفحة تحقق عامة يمكنك مشاركتها على LinkedIn.\n\nلنبدأ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "من القواعد إلى التعلم: ما هو الذكاء الاصطناعي (وما لا يكون)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "تعريفات اللغة البسيطة للذكاء الاصطناعي والتعلم الآلي والتعلم العميق والذكاء الاصطناعي التوليدي.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "يُستخدم \"الذكاء الاصطناعي\" لوصف كل شيء بدءًا من جهاز الإنذار البسيط الذي يعمل بجهاز استشعار وحتى برنامج الدردشة الآلي الذي يكتب المقالات. قبل أن ننظر إلى الزراعة، نحتاج إلى كلمات واضحة.\n\n## الذكاء الاصطناعي\n\n**الذكاء الاصطناعي (AI)** هو مجال واسع لبناء أنظمة الكمبيوتر التي تؤدي المهام التي نربطها عادةً بالذكاء البشري: مثل التعرف على الأنماط، والتنبؤ، وفهم اللغة، واختيار الإجراءات.\n\nوهذا التعريف واسع عن قصد. وهي تشتمل على تقنيات مختلفة تمامًا، لذا من المفيد الفصل بين طريقتين لبنائها.\n\n## القواعد مقابل التعلم\n\n**الأنظمة القائمة على القواعد** تتبع التعليمات التي يكتبها الأشخاص. إن وحدة التحكم في الري التي تقول *\"إذا انخفضت رطوبة التربة إلى أقل من 25%، قم بتشغيل المضخة\"* تتبع قاعدة. القواعد شفافة ويمكن التنبؤ بها، ولكن يجب على الشخص أن يعرف القاعدة الصحيحة مقدمًا، والقواعد لا تتكيف عندما تتغير الظروف.\n\n** تتعلم أنظمة التعلم الآلي (ML) ** الأنماط من الأمثلة بدلاً من ذلك. اعرض نموذجًا لآلاف المواسم الماضية - الطقس، والتربة، والري، والمحاصيل التي تلت ذلك - ويمكنه تعلم العلاقات التي لم يكتبها أحد صراحة. معظم ما يسميه الناس \"الذكاء الاصطناعي\" اليوم هو التعلم الآلي.\n\n| | النظام القائم على القواعد | نموذج التعلم الآلي |\n|---|---|---|\n| من أين يأتي المنطق | الناس يكتبونها | تعلمت من البيانات |\n| القوة | شفافة ويمكن التنبؤ بها | يبحث عن أنماط معقدة، ويتكيف مع البيانات الجديدة |\n| ضعف | جامد؛ يفتقد ما لم يتوقعه المصممون | فقط جيدة مثل بياناتها؛ قد يكون من الصعب شرح |\n| مثال المزرعة | تبدأ المضخة تحت عتبة الرطوبة | نموذج يتنبأ باستخدام مياه المحاصيل غدا |\n\n## التعلم العميق\n\n**التعلم العميق** هو مجموعة من أساليب التعلم الآلي المبنية على \"شبكات عصبية\" متعددة الطبقات. إنه جيد بشكل خاص في التعامل مع البيانات الفوضوية وعالية الأبعاد مثل الصور والصوت. عندما يتعرف أحد تطبيقات الهاتف على مرض يصيب الأوراق من خلال صورة ما، فإن التعلم العميق عادة ما يكون وراء ذلك.\n\n## الذكاء الاصطناعي التوليدي\n\n**الذكاء الاصطناعي التوليدي** ينشئ محتوى جديدًا — نصًا أو صورًا أو صوتًا أو كودًا — استنادًا إلى الأنماط المستفادة من مجموعات البيانات الكبيرة جدًا. نماذج اللغات الكبيرة (LLMs)، وهي التكنولوجيا التي تقف وراء مساعدي المحادثة، هي ذكاء اصطناعي توليدي. يمكنهم شرح المفاهيم وتلخيص التقارير والإجابة على الأسئلة بالعديد من اللغات.\n\nالذكاء الاصطناعي التوليدي قوي، لكنه يتنبأ بكلمات *معقولة*، وليس بالحقائق التي تم التحقق منها. يمكنه أن يذكر شيئًا كاذبًا بثقة تامة. في الزراعة، يكون المساعد التوليدي مفيدًا للشرح والصياغة، ولكن يجب التحقق من الأرقام والقرارات المهمة مقابل البيانات الموثوقة.\n\n> **الفكرة الأساسية:** الذكاء الاصطناعي ليس آلة واحدة. إنه صندوق أدوات. تناسب كل من القواعد والنماذج الإحصائية والتعلم العميق والنماذج التوليدية مشكلات مختلفة.\n\n## ما ليس الذكاء الاصطناعي\n\n- **الذكاء الاصطناعي ليس سحرًا.** كل مخرجات تأتي من البيانات واختيارات التصميم التي يتخذها الأشخاص.\n- **الذكاء الاصطناعي لا \"يفهم\" مزرعتك** بالطريقة التي تفهمها أنت. إنه يعرف فقط ما تم التقاطه من بيانات.\n- **الذكاء الاصطناعي لا يكون صحيحًا تلقائيًا.** تحمل التوقعات قدرًا من عدم اليقين، وأفضل الأنظمة تخبرك بمقدار ذلك.\n- **الذكاء الاصطناعي لا يحل محل الحكم.** إنه أداة لدعم القرار. ومسؤولية القرار تقع على عاتق الناس.\n\n## تحقق من فهمك\n\nفكر في أداة تستخدمها بالفعل - تطبيق الطقس، أو مراقب الإنتاجية، أو جدول بيانات يحتوي على الصيغ. هل منطقها مكتوب كقواعد أم مستفادة من البيانات؟ اكتب إجابتك في ملاحظاتك؛ سنعود إلى هذه الفكرة في الوحدة 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "لماذا تتجه الزراعة إلى الذكاء الاصطناعي الآن؟",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "الضغوط والفرص التي تدفع إلى اعتماد الذكاء الاصطناعي في المزارع.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "لقد استخدم المزارعون دائمًا المعلومات لاتخاذ القرارات. ما تغير هو كمية المعلومات المتاحة، والسرعة التي يجب استخدامها بها، والضغط على كل مورد.\n\n##الضغوط على المزرعة الحديثة\n\n**المياه.** تعتبر الزراعة أكبر مستخدم للمياه العذبة في جميع أنحاء العالم؛ ووفقاً لمنظمة الأمم المتحدة للأغذية والزراعة (FAO AQUASTAT)، فإن الزراعة ككل، ومعظمها من الري، تمثل حوالي 70٪ من عمليات سحب المياه العذبة في العالم. وفي العديد من المناطق، تتقلص مخصصات المياه مع نمو الطلب. كل قرار يتعلق بالري مهم.\n\n**تقلب المناخ.** الفصول أقل قابلية للتنبؤ بها. إن موجات الحر والأمطار غير المنتظمة وضغوط الآفات الجديدة تجعل قواعد اللعبة في العام الماضي أقل موثوقية.\n\n**التكاليف والهوامش.** يمكن أن تتأرجح تكاليف الأسمدة والطاقة والعمالة والمعدات بشكل حاد. إن تطبيق الكمية المناسبة في المكان المناسب يحمي كلا من الهامش والبيئة.\n\n**العمالة** تواجه العديد من العمليات صعوبة في العثور على الأشخاص المهرة والاحتفاظ بهم. المعرفة التي تعيش في رأس أحد المديرين ذوي الخبرة تكون معرضة للخطر عندما يكون هذا الشخص غير متاح.\n\n**التوقعات من المشترين والجهات التنظيمية.** تطلب سلاسل التوريد بشكل متزايد الأدلة: ما هي كمية المياه المستخدمة، وما هي المدخلات التي تم تطبيقها، وما هي الممارسات التي تم اتباعها.\n\n## لماذا الذكاء الاصطناعي، ولماذا الآن\n\nاجتمعت ثلاثة أشياء:\n\n1. **أصبحت البيانات وفيرة.** تقوم الأقمار الصناعية الآن بإعادة زيارة معظم الأراضي الزراعية كل بضعة أيام. تنتج مجسات رطوبة التربة ومحطات الأرصاد الجوية وأجهزة التحكم والآلات في الري بيانات مستمرة.\n2. **أصبحت أجهزة الكمبيوتر رخيصة ومتصلة بالإنترنت.** يمكن تشغيل النماذج التي كانت تحتاج في السابق إلى مختبر أبحاث في السحابة وإيصال النتائج إلى الهاتف.\n3. ** الأساليب الناضجة. ** لقد تحسن التعلم الآلي ورؤية الكمبيوتر ونماذج اللغة بسرعة وأصبحت الآن أدوات عملية.\n\n> **الفكرة الأساسية:** الذكاء الاصطناعي لا ينشئ موارد جديدة. فهو يساعدك على الاستفادة بشكل أفضل من المياه والمدخلات والوقت والمعرفة التي لديك بالفعل.\n\n## ما يمكن أن يفعله الذكاء الاصطناعي بشكل واقعي\n\n- **Sense** — تحويل الصور الأولية وبيانات المستشعر إلى معلومات، مثل مناطق الحقل التي تم التركيز عليها.\n- **التنبؤ** — تقدير ما سيحدث، مثل الطلب على مياه المحاصيل في الغد أو إنتاجية نهاية الموسم.\n- **التوصية** — اقترح إجراءً ما، مثل جدول الري، واشرح السبب.\n- **التحقق** — تحقق مما إذا كان الإجراء قد حدث وما إذا كان يعمل أم لا.\n\nلاحظ النمط: استشعر، توقع، أوصي، تحقق. سوف نستخدم هذه الحلقة طوال الدورة.\n\n## ما لا يستطيع فعله\n\nلا يستطيع الذكاء الاصطناعي رؤية ما لا تلتقطه بياناته: صمام مكسور، أو رش الجيران، أو ممارسة ثقافية فريدة من نوعها في مزرعتك. ولا يمكن أن يتحمل مسؤولية القرار. ولا يمكن أن يحل محل الثقة بين المزارع والمستشار. تم تصميم الذكاء الاصطناعي الزراعي الجيد للعمل *مع* الأشخاص الذين يعرفون الأرض.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

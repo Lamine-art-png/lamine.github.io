@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "sw",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Utangulizi wa Akili Bandia katika Kilimo",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "AI ni nini, jinsi inavyofanya kazi shambani, na jinsi ya kuitumia kwa uwajibikaji.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Upelelezi wa Bandia unawasili katika kilimo kupitia vidhibiti vya umwagiliaji, huduma za setilaiti, programu za usimamizi wa mashamba na simu katika mifuko ya wakulima. Kozi hii inakupa ufahamu wazi na wa vitendo wa teknolojia hiyo ni nini, jinsi inavyofanya kazi na jinsi ya kuitumia vizuri.\n\nUtajifunza mawazo ya msingi nyuma ya AI na ujifunzaji wa mashine bila milinganyo, kuona jinsi data ya kilimo inakuwa ubashiri na kisha mapendekezo, na kufuata AI kwa msimu wote - kutoka kwa kupanga na umwagiliaji hadi afya ya mazao na mavuno. Zaidi ya yote, utajifunza kuhukumu pato la AI: wakati wa kuiamini, wakati wa kuihoji, na jinsi ya kuweka hukumu ya kibinadamu na ujuzi wa shamba katika malipo.\n\nKozi hiyo imeundwa kwa ajili ya wakulima, waendeshaji, wataalamu wa kilimo, mameneja na wanafunzi. Hakuna usuli wa kiufundi unaohitajika.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Hakuna. Udadisi kuhusu jinsi teknolojia inaweza kusaidia kazi ya kilimo ndiyo unahitaji tu.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Eleza kwa lugha rahisi akili ya bandia, kujifunza kwa mashine na AI generative ni nini\", \"Eleza vyanzo vikuu vya data ya kilimo na kinachofanya data kuwa ya kuaminika\", \"Fuata jinsi mtindo unavyogeuza data kuwa utabiri na utabiri kuwa pendekezo\", \"Tambua matumizi ya vitendo ya AI katika msimu wa mazao, kuanzia kupanga hadi kuvuna\", \"Tambua vikomo na njia za kushindwa kwa AI ya kilimo na wakati wa kupinga pendekezo\", \"Tumia kanuni za umiliki wa data, faragha na matumizi ya kuwajibika kwenye uendeshaji wako mwenyewe\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Nini maana ya AI kwa kilimo",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Mawazo ya msingi na kwa nini ni muhimu sasa.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Jinsi AI ya kilimo inavyofanya kazi",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Kutoka data hadi mfano hadi mapendekezo.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI katika msimu mzima",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Maombi ya vitendo kutoka kwa kupanga hadi kuvuna.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Kutumia AI kwa kuwajibika",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Vikomo, haki za data na matumizi ya kujiamini, muhimu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Ufuatiliaji wa afya ya mazao kutoka juu na karibu",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Picha za satelaiti, fahirisi za mimea na maono ya kompyuta kwa afya ya mazao.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Mimea yenye afya na mimea iliyosisitizwa huonyesha mwanga tofauti. AI hutumia tofauti hiyo - iliyonaswa na satelaiti, ndege zisizo na rubani na kamera - kutazama mazao kwa kiwango ambacho hakuna timu ya skauti inaweza kufunika.\n\n## Jinsi mimea inavyoonekana kwenye satelaiti\n\nMajani ya kijani kibichi hunyonya mwanga mwingi nyekundu kwa usanisinuru na huakisi mwanga wa **karibu na infrared (NIR)**. Mimea inaposisitizwa, chache au kukatika, uakisi mwekundu huinuka na uakisi wa NIR huanguka.\n\n**Kielezo cha Uoto Tofauti cha Kawaida (NDVI)** kinanasa utofauti huu:\n\n**NDVI = (NIR − Nyekundu) ÷ (NIR + Nyekundu)**\n\nThamani huanzia −1 hadi +1. Mimea mnene, yenye afya ni ya juu (mara nyingi zaidi ya 0.6); udongo wazi ni chini (karibu 0.1-0.2); maji ni kawaida hasi.\n\n## Kusoma ramani za NDVI kwa busara\n\nNDVI ni muhimu kwa kutambua **ambapo** sehemu inatofautiana, si kwa kutambua **kwa nini**. Kipande cha chini cha NDVI kinaweza kuwa mkazo wa maji, upungufu wa virutubishi, magonjwa, wadudu, tatizo la upandaji, au aina tofauti tu. Ramani inakuambia mahali pa kutazama; scouting inakuambia ulichopata.\n\n> **Muhimu:** Mawingu, vivuli vya mawingu, ukungu na wakati wa mchana vinaweza kupotosha usomaji wa setilaiti. Huduma za kuaminika hufunika mawingu na kulinganisha picha kwa wakati badala ya kuamini muhtasari mmoja.\n\nFahirisi zingine zipo kwa madhumuni mahususi - zingine ni nyeti zaidi kwa klorofili, zingine kwa yaliyomo ya maji au dari mnene ambapo NDVI inajaa.\n\n## Maono ya kompyuta kwa karibu\n\nChini, miundo ya **maono ya kompyuta** huchanganua picha kutoka kwa simu, matrekta au ndege zisizo na rubani hadi:\n\n- kutambua magonjwa na wadudu kutoka kwa picha za majani;\n- kutofautisha magugu kutoka kwa mazao kwa unyunyiziaji uliolengwa;\n- kuhesabu matunda, maua au mimea ili kukadiria mavuno.\n\nMifano hizi zimefunzwa kwenye makusanyo makubwa ya picha zilizo na lebo. Usahihi wao unategemea sana ikiwa picha hizo zinafanana na mazao yako, aina zako na hali yako ya mwanga.\n\n## Kuanzia utambuzi hadi hatua\n\nMtiririko mzuri wa ufuatiliaji wa mazao hugeuza ugunduzi kuwa kazi inayopewa kipaumbele: *\"Eneo la 3 linaonyesha kupungua kwa nguvu kwa siku 10. Chunguza kona ya kaskazini-mashariki kwanza; angalia usawa wa umwagiliaji na uangalie dalili za ugonjwa wa mizizi.\"* Matokeo ya skauti kisha yanarudi kwenye mfumo, kuboresha tahadhari za siku zijazo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Data: malighafi ya AI ya kilimo",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Data ya shamba inatoka wapi na ni nini kinachoifanya iaminike.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Kila mfumo wa AI umejengwa kutoka kwa data. Ikiwa data haijakamilika, ina upendeleo au si sahihi, AI itakuwa pia. Kuelewa data yako ni ujuzi muhimu zaidi katika AI ya kilimo.\n\n## Data za kilimo zinatoka wapi\n\n| Chanzo | Mifano | Inakuambia nini |\n|---|---|---|\n| Hali ya hewa | Vituo vya shambani, mitandao ya kikanda, utabiri | Halijoto, mvua, unyevunyevu, upepo, mionzi ya jua |\n| Udongo | Uchunguzi wa unyevu, vipimo vya udongo, ramani za udongo | Maji yanayopatikana kwa mizizi, virutubisho, muundo |\n| Hisia ya mbali | Picha za satelaiti, ndege na ndege zisizo na rubani | Nguvu ya mazao, kifuniko cha dari, mifumo ya mkazo katika uwanja mzima |\n| Vifaa | Vidhibiti vya umwagiliaji, mita za mtiririko, vidhibiti vya mavuno, matrekta | Nini kilitumika, wapi na lini |\n| Rekodi | Tarehe za kupanda, aina, maombi ya pembejeo, maelezo ya scouting | Maamuzi na uchunguzi wa usimamizi |\n| Masoko | Bei, mikataba, ishara za mahitaji | Muktadha wa kiuchumi kwa maamuzi |\n\n## Sifa za data nzuri\n\n**Usahihi** — je, kipimo kinaonyesha ukweli? Kichunguzi cha unyevu kilichowekwa kwenye sehemu yenye unyevunyevu, au kipimo cha mvua chini ya mti, kitapotosha kila mtindo unaoutumia.\n\n**Ukamilifu** - kuna mapungufu? Kihisi ambacho huacha kuripoti kwa wiki wakati wa wimbi la joto huacha shimo wakati ni muhimu zaidi.\n\n**Ufaafu** — je data ya hivi majuzi inatosha kufanya uamuzi? Unyevu wa udongo wa jana ni muhimu kwa umwagiliaji wa leo; ya mwezi uliopita sio.\n\n**Uthabiti** — je vitengo, miundo na ufafanuzi ni sawa kwa wakati na katika nyanja zote? Kuchanganya inchi na milimita, au majina mawili kwa shamba moja, husababisha makosa ya kimya.\n\n**Uwakilishi** — je, data inashughulikia masharti ambapo AI itatumika? Mfano uliofunzwa kwenye udongo wa mchanga tu hauwezi kufanya kazi kwenye udongo.\n\n> **Angalia shamba:** Kabla ya kuamini dashibodi, uliza maswali matatu: Nambari hii ilitoka wapi? Ilipimwa lini? Ni nini kingefanya iwe vibaya?\n\n## Data inahitaji muktadha\n\nUsomaji wa unyevu wa udongo wa 30% unamaanisha kidogo peke yake. Inajalisha aina ya udongo ni nini, sensor inakaa kina kirefu, ni mazao gani yanayokua na kwa hatua gani. AI ya kilimo bora huchanganya vyanzo vya data ili kila kimoja kiongeze muktadha kwa vingine - kwa mfano, kuoanisha picha za setilaiti na data ya hali ya hewa na historia ya umwagiliaji shambani.\n\n## Data yako, maamuzi yako\n\nData ya shamba ina thamani - ya kibiashara, ya uendeshaji na ya kibinafsi. Kabla ya kuunganisha kifaa au kushiriki rekodi na huduma yoyote, elewa ni nani anayeweza kufikia data, jinsi itakavyotumiwa na ikiwa unaweza kuichukua ukiondoka. Tutarudi kwenye umiliki wa data katika Moduli ya 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Umiliki wa data, faragha na uaminifu",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Kanuni za vitendo za kushiriki data ya shamba kwa ujasiri.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Data ya shamba inaweza kufichua mazao, desturi, fedha na eneo la watu na mali. Kuishiriki kunaweza kufungua huduma muhimu - lakini inapaswa kuwa chaguo la makusudi kila wakati.\n\n## Maswali ya kuuliza mtoa huduma yeyote wa teknolojia\n\n- **Umiliki:** Nani anamiliki data ninayotoa na data ambayo mfumo hutoa kuhusu shamba langu?\n- **Tumia:** Data itatumika kwa ajili gani? Je, itatumika kufundisha wanamitindo? Je, itaunganishwa na data za mashamba mengine?\n- **Kushiriki:** Je, itashirikiwa au kuuzwa kwa wahusika wengine? Ni zipi, na kwa nini?\n- **Ufikivu na kubebeka:** Je, ninaweza kupakua data yangu katika umbizo linaloweza kutumika? Je, ninaweza kuichukua nikiondoka?\n- **Ufutaji:** Je, ninaweza kufuta data yangu, na nini kitasalia baadaye?\n- **Usalama:** Je, data inalindwaje? Nani ndani ya kampuni anaweza kuiona?\n- **Udhibiti:** Je, ninaweza kubatilisha ufikiaji wa kifaa kilichounganishwa au mshirika wakati wowote?\n\nMashirika kadhaa ya kilimo yamechapisha kanuni za data za kilimo zinazoshughulikia maswali haya; kuuliza kama mtoa huduma anawafuata ni hatua nzuri ya kuanzia.\n\n## Idhini na ruhusa\n\nMifumo bora huomba ruhusa mahususi, yenye taarifa - kwa mfano, kuruhusu kiunganishi kusoma data ya kidhibiti cha umwagiliaji bila kukipa ruhusa ya kubadilisha mipangilio. Toa ufikiaji mdogo unaohitajika kwa kazi, na uhakiki huduma zilizounganishwa mara kwa mara.\n\n## Data iliyojumlishwa na isiyojulikana\n\nKuchanganya data kutoka kwa mashamba mengi kunaweza kuboresha miundo kwa kila mtu, kama vile makadirio bora ya matumizi ya maji ya eneo. Ikifanywa vyema, ujumlisho huondoa taarifa zinazoweza kutambua shamba la mtu binafsi. Uliza jinsi kutokutambulisha kunafanywa na kama unaweza kujiondoa.\n\n## uaminifu hupatikana\n\n> **Wazo kuu:** AI ya kilimo inayoaminika iko wazi kuhusu jinsi inavyotumia data, inaelezea mapendekezo yake, inakubali kutokuwa na uhakika, na kumwacha mkulima kudhibiti.\n\nKanuni hizi hizi zinatumika kwa Chuo chenyewe. Unaweza kupakua au kufuta data yako ya kujifunza wakati wowote kutoka kwa mipangilio ya akaunti yako.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Zoezi la vitendo: tathmini pendekezo la AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Tumia ulichojifunza kwa pendekezo la kweli.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Katika zoezi hili utafanya mazoezi ya ustadi muhimu wa mapitio kutoka kwa moduli hii kwa pendekezo la kweli.\n\n## Mazingira\n\nUnasimamia operesheni ya nyanya ya kumwagilia kwa matone ya hekta 60. Siku ya Jumanne asubuhi katikati ya msimu, mfumo wako wa usaidizi wa maamuzi unaonyesha:\n\n> *\"Pendekezo: Ruka umwagiliaji kwenye Kitalu C kwa saa 48 zinazofuata. Matumizi yaliyotabiriwa ya maji ya mazao: 3.1 mm/siku. Unyevu wa udongo: 82% ya uwezo wa shamba. Kujiamini: juu.\"*\n\nUnapoendesha gari kupita Kitalu C, unaona mimea kwenye ukingo wa mashariki inaonekana kunyauka wakati wa joto la asubuhi sana, na kiwango cha juu cha joto cha jana kilikuwa 37 °C - joto zaidi kuliko utabiri wa 29 °C ambao mfumo ulitumia siku mbili zilizopita.\n\n## Jukumu lako\n\nFanya kazi kupitia orodha hapa chini. Andika hoja yako katika kichupo cha **Vidokezo** ili uweze kurejea kwayo.\n\n1. **Angalia pembejeo.** Ni ingizo gani linaonekana kuwa na shaka? (Kidokezo: linganisha halijoto ya utabiri na kile kilichotokea.)\n2. **Angalia vitambuzi.** Kichunguzi cha unyevu wa udongo kimesakinishwa wapi? Je, inaweza kuwa katika sehemu ambayo haiwakilishi ukingo wa mashariki?\n3. **Angalia shambani.** Je, unaweza kuangalia nini kwenye mimea iliyonyauka? Fikiria kuziba kwa emitter, shinikizo mwishoni mwa mstari, na afya ya mizizi.\n4. **Amua.** Je, unaweza kufuata, kurekebisha au kubatilisha pendekezo? Kwa nini?\n5. **Rekodi na uripoti.** Je, ungependa kutoa maoni gani ili mfumo - na timu yako - wajifunze kutoka kwa hili?\n\n## Majadiliano\n\nJibu lenye nguvu linabainisha kuwa matumizi ya maji yaliyotabiriwa huenda yalitokana na utabiri ambao uligeuka kuwa baridi sana, hivyo mahitaji halisi yalikuwa makubwa zaidi. Uchunguzi mmoja unaosoma 82% hauwezi kuwakilisha ukingo wa mashariki, hasa ikiwa emitters huko zimeziba au shinikizo ni ndogo mwishoni mwa upande. Uamuzi wa busara unaweza kuwa kukagua ukingo wa mashariki mara moja, kuendesha umwagiliaji kwa muda mfupi ikiwa ukaguzi unathibitisha udongo mkavu, na kuripoti upungufu wa utabiri na tatizo linalowezekana la usawa.\n\nMara chache hakuna jibu moja sahihi - lakini kuna mchakato sahihi kila wakati: angalia pembejeo, angalia muktadha, angalia uga, amua na urekodi.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Mavuno, masoko na ugavi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Utabiri wa mavuno, akili ya soko na vifaa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Msimu unapoelekea mavuno, maamuzi hubadilika kutoka kukuza zao hadi kufikia thamani yake.\n\n## Utabiri wa mavuno\n\nUtabiri wa mavuno unachanganya miundo ya ukuaji wa mazao, hali ya hewa hadi sasa na utabiri, nguvu inayotegemea picha, na wakati mwingine hesabu kutoka kwa maono ya kompyuta. Utabiri wa mapema hauna hakika kidogo; usahihi huimarika kadri msimu unavyoendelea.\n\nUtabiri unaunga mkono maamuzi kama vile:\n\n- ni kiasi gani cha kuuza mbele, na wakati;\n- ni wafanyikazi wangapi, lori na uwezo wa kuhifadhi kuweka nafasi;\n- ikiwa ingizo la marehemu bado linafaa kutumika.\n\n## Akili ya soko\n\nZana za akili za soko hukusanya bei, mustakabali, data ya usafirishaji, hali ya hewa katika maeneo shindani na habari ili kusaidia kutarajia mabadiliko ya bei. AI inaweza kufupisha ishara hizi haraka na kuonyesha mabadiliko yasiyo ya kawaida. Hakuna mfano unaoweza kutabiri masoko kwa uhakika; chukulia utabiri wa soko kama pembejeo moja kwa mpango unaodhibitiwa na hatari, na sio kama dhamana.\n\n## Muda na ubora wa mavuno\n\nMiundo inayofuatilia ukomavu wa mazao - viwango vya sukari katika zabibu, unyevu kwenye nafaka, rangi ya matunda - husaidia kuratibu uvunaji kwa uwiano bora wa ubora, hatari ya hali ya hewa na vifaa. Ikijumuishwa na upatikanaji wa kazi na vifaa, zinaweza kusaidia kupanga sehemu katika operesheni.\n\n## Ufuatiliaji na ushahidi\n\nWanunuzi wanazidi kuuliza uthibitisho wa jinsi mazao yalivyozalishwa: matumizi ya maji, pembejeo zilizowekwa, vyeti. Mifumo ambayo inarekodi mapendekezo, vitendo na uthibitishaji katika msimu mzima hurahisisha uwasilishaji huo - sababu nyingine ambayo ni muhimu kwa hatua ya uthibitishaji.\n\n> **Wazo kuu:** Wakati wa mavuno, thamani ya AI inatokana na kupunguza kutokuwa na uhakika katika muda, kiasi na bei - na kutokana na kuweka kumbukumbu ya kile kilichofanywa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Uchunguzi kifani: umwagiliaji na usimamizi wa maji",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Jinsi uvukizi, unyevu wa udongo na AI huchanganyika katika upangaji wa umwagiliaji.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Umwagiliaji ni mojawapo ya mifano ya wazi ya AI kujenga thamani kwenye shamba, kwa sababu maamuzi ya maji ni ya mara kwa mara, ya gharama kubwa na yanaweza kupimika.\n\n## Usawa wa maji\n\nFikiria eneo la mizizi kama akaunti ya benki ya maji.\n\n- **Amana:** mvua na umwagiliaji.\n- **Uondoaji:** maji yanayotumiwa na mmea na kuyeyushwa kutoka kwenye udongo - kwa pamoja yanaitwa **evapotranspiration (ET)** - pamoja na mifereji ya maji chini ya mizizi.\n\nLengo la kuratibu umwagiliaji ni kuweka uwiano kati ya kiwango cha chini, ambapo mazao huanza kuteseka, na kikomo cha juu, ambacho maji hutoka na kupotea.\n\n## Kukadiria matumizi ya maji ya mazao\n\nMatumizi ya maji ya mazao kawaida hukadiriwa katika hatua mbili:\n\n1. **Uvukizi wa rejeleo (ET₀)** hukokotolewa kutokana na data ya hali ya hewa - halijoto, unyevunyevu, mionzi ya upepo na jua - kwa ajili ya zao la kawaida la marejeleo.\n2. **Mgawo wa mazao (Kc)** hurekebisha ET₀ kwa zao halisi na hatua ya ukuaji wake: **ETc = ET₀ × Kc**.\n\nKujifunza kwa mashine kunaweza kuboresha makadirio haya kwa kujifunza kutoka kwa vitambuzi vya ndani, taswira ya dari na historia ya shamba yenyewe, hasa pale ambapo migawo ya kawaida hukaa vibaya.\n\n## Hali ya kuratibu\n\n> **Mfano:** Kitalu cha shamba la mizabibu kina milimita 40 ya maji yanayopatikana kwa urahisi wakati eneo la mizizi limejaa. Uchunguzi wa unyevu wa udongo unaonyesha 18 mm kubaki. Utabiri NK ni 5 mm kwa siku kwa siku nne zijazo, na hakuna mvua inayotarajiwa.\n\nBila umwagiliaji, kizuizi hufikia kikomo chake cha chini kwa siku tatu na nusu (18 mm ÷ 5 mm / siku). Mfumo wa kuratibu ungependekeza umwagiliaji katika siku mbili hadi tatu zijazo, ukubwa wa kujaza tena eneo la mizizi bila kujaza kupita kiasi, kuwekewa muda wa uwezo wa pampu unaopatikana na kupunguza bei ya umeme usiku.\n\nIkiwa utabiri utabadilika hadi 15 mm za mvua siku ya pili, mfumo mzuri husasisha pendekezo - na kuelezea kwa nini.\n\n## Ambapo AI inaongeza thamani\n\n- **Makadirio bora ya matumizi ya maji** kwa kuchanganya hali ya hewa, vitambuzi na taswira.\n- **Ratiba ya kufahamu utabiri** inayochangia mvua na joto linalokuja.\n- **Uboreshaji** katika vizuizi vingi, vikomo vya pampu na mgao wa maji.\n- **Uthibitishaji** — kuthibitisha kutoka mita za mtiririko na unyevu wa udongo kwamba umwagiliaji ulifanyika kama ilivyopangwa na ulikuwa na athari inayotarajiwa.\n\n## Nini kinaweza kwenda vibaya\n\nEmitter iliyoziba, valve iliyovunjika au probe iliyowekwa kwenye doa isiyo na uwakilishi inaweza kupotosha mfumo. Ndio maana hatua ya uthibitishaji ni muhimu: wakati unyevu wa udongo unapozingatiwa haujibu kama ilivyotabiriwa baada ya umwagiliaji, ni ishara ya kuchunguza shamba, si tu mfano.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Vikomo, makosa na wakati wa kupinga pendekezo",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Kutambua njia za kushindwa na kuweka hukumu ya kibinadamu katika malipo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Kila mfumo wa AI wakati mwingine utakuwa na makosa. Lengo si kuaminiwa kipofu au kukataliwa kabisa, lakini **imani iliyorekebishwa**: kujua wakati pendekezo linastahili kuaminiwa na wakati linastahili kutazamwa mara ya pili.\n\n## Njia za kawaida za kutofaulu\n\n**Ingizo mbovu.** Kihisi ambacho hakijafaulu, uchunguzi usiowekwa mahali pabaya au mlisho wa data unaokosekana hutoa upuuzi unaojiamini. * Taka ndani, takataka nje.*\n\n**Hali za nje ya anuwai.** Miundo haitegemeki sana katika hali ambayo hawakuona mara chache wakati wa mafunzo: joto kali, aina mpya, udongo usio wa kawaida.\n\n**Drift.** Masharti hubadilika kadiri muda unavyopita, na muundo ambao ulikuwa sahihi miaka mitatu iliyopita huenda usiwe hivyo tena.\n\n**Upendeleo.** Iwapo data ya mafunzo inawakilisha zaidi maeneo fulani, ukubwa wa mashamba au mazao, mapendekezo yanaweza kuwa na usahihi mdogo kwa uendeshaji unaotofautiana.\n\n**Muktadha unaokosekana.** Mfumo haujui kuhusu kupeperushwa kwa dawa ya magugu ya jirani, bomba lililovunjika, au mkataba unaohitaji kuvunwa wiki ijayo.\n\n**Upendeleo wa kiotomatiki.** Watu huwa na tabia ya kuamini zaidi utoaji wa mashine, hasa inapowasilishwa kwa usahihi. Nambari iliyo na nafasi mbili za desimali si lazima iwe sahihi.\n\n## Wakati wa kupinga pendekezo\n\nSitisha na uchunguze wakati:\n\n- pendekezo linapingana na kile unachokiona kwenye shamba;\n- iko mbali na safu ya kawaida ya msimu;\n- mfumo unaonyesha ujasiri mdogo, au hauonyeshi kujiamini kabisa;\n- data muhimu haipo, ni ya zamani, au kwa hakika sio sahihi;\n- matokeo ya hitilafu yatakuwa makubwa au magumu kugeuza.\n\n> **Angalia shamba:** Sheria rahisi — kadiri uamuzi unavyokuwa mkubwa na usioweza kutenduliwa, ndivyo ushahidi mwingi unaopaswa kuhitaji kabla ya kufanyia kazi pendekezo la AI.\n\n## Jinsi ya kupeana changamoto vizuri\n\n1. **Angalia ingizo.** Je, vitambuzi vinaripoti? Je, data ya hali ya hewa ni ya sasa?\n2. **Uliza sababu.** Ni data gani iliendesha pendekezo hili?\n3. **Angalia shambani.** Chunguza eneo husika.\n4. **Rekodi ulichoamua na kwa nini.** Kubatilisha kwako ni maoni muhimu ambayo husaidia kuboresha mfumo.\n\nKupinga pendekezo sio kushindwa kwa teknolojia. Ni jinsi watu na AI hufanya kazi vizuri pamoja.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Mifano, mafunzo na utabiri",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Jinsi mtindo hujifunza kutoka kwa mifano na kwa nini kila utabiri una kutokuwa na uhakika.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**Muundo** ni maelezo ya hisabati ya uhusiano — kwa mfano, kati ya hali ya hewa na kiasi cha maji ambacho mmea hutumia. Kujifunza kwa mashine hujenga miundo kwa kujifunza kutoka kwa mifano.\n\n## Kujifunza kutoka kwa mifano\n\nFikiria unataka kutabiri ni kiasi gani cha maji ambacho bustani ya mlozi itatumia kesho. Unakusanya siku nyingi zilizopita, kila moja ikiwa na:\n\n- **pembejeo** (pia huitwa *sifa*): halijoto, unyevunyevu, upepo, mionzi ya jua, umri wa miti, kifuniko cha dari;\n- **matokeo** unayotaka kutabiri: maji ambayo bustani ilitumia siku hiyo, yakipimwa kwa vitambuzi.\n\nWakati wa **mafunzo**, algoriti hurekebisha muundo tena na tena hadi utabiri wake ulingane na matokeo yaliyorekodiwa kwa karibu iwezekanavyo. Hii inaitwa **kusimamiwa kujifunza**, kwa sababu kila mfano huja na jibu sahihi.\n\n## Kujaribu data ambayo mtindo haujawahi kuona\n\nMfano unaweza kukariri mifano yake ya mafunzo na bado kushindwa siku mpya. Ndiyo maana wanasayansi wa data huweka baadhi ya data kando kwa **uthibitishaji** - data ambayo mtindo haujawahi kuona wakati wa mafunzo. Utendaji kwenye data hiyo iliyoshikiliwa ni kipimo cha uaminifu cha jinsi inavyofanya kazi vizuri.\n\n> **Muhimu:** Uliza jinsi mtindo ulivyothibitishwa. \"Inafaa data yetu ya kihistoria kikamilifu\" ni ishara ya onyo, sio nguvu.\n\n## Usahihi wa kupima\n\nKwa utabiri wa nambari, hatua za kawaida ni pamoja na **kosa la wastani** (utabiri ulivyo mbali, kwa wastani) na ni kiasi gani cha tofauti ambacho mtindo unaelezea. Kwa uainishaji - \"imesisitizwa\" au \"afya\" - tunauliza ni mara ngapi mfano huo ni sawa, na ni mara ngapi huinua kengele za uwongo au hukosa shida halisi.\n\nHakuna usahihi \"nzuri\" moja. Utabiri wa mavuno ambao uko ndani ya 5% unaweza kuwa bora kwa maamuzi ya uuzaji; kengele ya baridi ambayo hukosa tukio moja kati ya kumi inaweza kuwa haikubaliki.\n\n## Kila utabiri una uhakika\n\nMabadiliko ya hali ya hewa, vitambuzi vinasogea na sehemu hutofautiana. Mfumo unaoaminika unawasiliana na kutokuwa na uhakika: \"matumizi ya maji ya kesho ni 6.2 mm, uwezekano kati ya 5.6 na 6.8 mm.\" Nambari moja isiyo na masafa huficha taarifa muhimu.\n\n## Miundo inapochakaa\n\nMasharti yanabadilika. Aina mpya, mwaka wa ukame au mfumo wa umwagiliaji uliobadilishwa unaweza kufanya data ya zamani isiwakilishe sana. Hii inaitwa **drift**. Mifumo bora hufuatilia usahihi wao wenyewe baada ya muda na hufunzwa tena utendaji unaposhuka.\n\n## Aina za kawaida za mifano ya kilimo\n\n- **Regression** — inatabiri idadi (matumizi ya maji, mavuno, bei).\n- **Ainisho** — inapeana kategoria (ugonjwa uliopo au haupo, aina ya mazao).\n- **Utabiri** — hutabiri jinsi kitu kitabadilika kwa wakati (unyevu wa udongo kwa siku tano zijazo).\n- **Maono ya Kompyuta** - hutafsiri picha (kuhesabu matunda, kugundua magugu).\n- **Uboreshaji** — hupata mpango bora ndani ya vikwazo (ratiba ya umwagiliaji inayokidhi mahitaji ya mazao kwa kutumia maji machache).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Kupanga na kupanda",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Kutumia data na AI kabla ya mbegu ya kwanza kuingia ardhini.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Maamuzi mengi muhimu zaidi ya msimu hufanywa kabla ya kupanda. AI inaweza kusaidia kwa kuleta ushahidi zaidi kwa maamuzi hayo.\n\n## Historia ya uga na kanda za usimamizi\n\nMashamba si sare. Miaka ya ramani za mazao, uchunguzi wa udongo na taswira za satelaiti mara nyingi hufichua mifumo thabiti: eneo la chini ambalo hukaa na unyevu, kingo cha mchanga ambacho hukauka kwanza. Algorithms inaweza kuweka maeneo haya katika **maeneo ya usimamizi** ambayo yanajibu tofauti kwa maji, mbegu na mbolea.\n\nKwa kanda, mkulima anaweza kubadilisha viwango vya mbegu, kuchagua mahali pa kuweka nitrojeni zaidi au kidogo, au kupanga seti za umwagiliaji zinazolingana na jinsi kila sehemu ya shamba inavyofanya kazi.\n\n## Maamuzi mbalimbali na tarehe ya kupanda\n\nMiundo iliyofunzwa kuhusu majaribio ya kikanda na rekodi za hali ya hewa inaweza kukadiria jinsi aina zinavyofanya kazi chini ya hali tofauti na jinsi tarehe ya kupanda huathiri hatari - kwa mfano, uwezekano wa shinikizo la joto wakati wa maua. Makadirio haya yanafaa zaidi yanapoakisi majaribio ya ndani, sio tu wastani wa kitaifa.\n\n## Kupanga mazingira\n\nZana za AI zinaweza kuendesha matukio ya \"vipi ikiwa\" haraka: Je, ikiwa msimu ni kavu? Je, ikiwa mgao wa maji utapunguzwa kwa 20%? Je, ikiwa bei ya pembejeo itapanda? Kulinganisha hali hukusaidia kuchagua mpango ambao utadumu katika siku zijazo nyingi zinazowezekana, sio tu inayotarajiwa.\n\n> **Angalia shamba:** Zana inapopendekeza kiwango cha mbegu au aina, uliza iliundwa juu ya data gani. Data ya majaribio ya kikanda kutoka kwa udongo na hali ya hewa yako ni muhimu zaidi kuliko wastani wa kitaifa.\n\n## Vikomo vya kuzingatia\n\nMapendekezo ya kabla ya msimu hutegemea utabiri wa masafa marefu, ambao hauna uhakika. Zichukulie kama mpango wa kuanzia utakaorekebishwa msimu unapoendelea, wala si agizo lisilobadilika.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Maswali ya moduli ya 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Angalia uelewa wako wa misingi ya AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Jibu maswali matano ya haraka kuhusu mawazo katika Moduli ya 1. Maswali ni ya mazoezi: unaweza kuyajibu mara nyingi upendavyo, na utaona maelezo baada ya kila jaribio.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Maswali ya moduli ya 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Angalia uelewa wako wa data, miundo na mapendekezo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Maswali matano kuhusu ubora wa data, mafunzo ya kielelezo na usaidizi wa maamuzi. Rudia mara nyingi upendavyo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Maswali ya moduli ya 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Angalia uelewa wako wa AI katika msimu mzima.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Maswali matano kuhusu upangaji, umwagiliaji, ufuatiliaji wa mazao na uvunaji. Rudia mara nyingi upendavyo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Kutoka kwa utabiri hadi mapendekezo",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Jinsi mifumo ya usaidizi wa maamuzi inavyogeuza ubashiri kuwa vitendo - na kuwaweka watu katika kitanzi.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Utabiri unakuambia kile kinachowezekana kutokea. **Pendekezo** hukuambia la kufanya kulihusu. Kugeuza moja kuwa nyingine kunahitaji malengo, vikwazo na muktadha.\n\n## Mfano wa umwagiliaji\n\nTuseme mfano unatabiri kuwa shamba litatumia milimita 7 za maji kesho na kwamba unyevu wa udongo tayari uko karibu na kiwango cha chini ambacho mazao hustahimili. Mfumo wa mapendekezo unachanganya utabiri huo na:\n\n- **malengo** - kulinda mavuno na ubora, kuepuka upotevu;\n- **vikwazo ** - uwezo wa pampu, mgao wa maji uliobaki, ushuru wa umeme, ratiba ya kuweka umwagiliaji;\n- **muktadha** — utabiri wa mvua, hatua ya mazao, mavuno yaliyopangwa ambayo yanahitaji ardhi kavu.\n\nMatokeo yanaweza kuwa: *\"Mwagilia kitalu cha 4 usiku wa leo kwa saa 6 (kama milimita 18). Ruka kizuizi cha 7: 12 mm ya mvua inatabiriwa kwa ujasiri wa hali ya juu.\"*\n\n## Mapendekezo mazuri yanajieleza\n\nPendekezo ambalo huwezi kuelewa ni pendekezo ambalo huwezi kuhukumu. Tafuta mifumo inayoonyesha:\n\n- **sababu** — ni data gani na utabiri gani uliendesha pendekezo;\n- **ujasiri ** - jinsi mfumo ni wa uhakika;\n- **njia mbadala** - nini kitatokea ikiwa unasubiri, au uomba kidogo;\n- **njia ya ushahidi** - ili uweze kuangalia baadaye kama kitendo kilifanyika na kilifanya kazi.\n\n## Kuweka watu katika kitanzi\n\nKatika kilimo, AI nyingi ni **msaada wa uamuzi**: mfumo unapendekeza, mtu anaamua. Hata pale ambapo otomatiki hutekeleza vitendo - kwa mfano, kidhibiti kinachofungua vali - miundo inayowajibika inajumuisha hatua za uidhinishaji, vikomo na uwezo wa kubatilisha.\n\n> **Wazo kuu:** Mtu anayewajibika kwa matokeo lazima kila wakati aweze kuona ni kwa nini pendekezo lilitolewa, kulibadilisha, na kulisimamisha.\n\n## Kufunga kitanzi: uthibitishaji\n\nMifumo ya thamani zaidi haiishii kwenye pendekezo. Wanaangalia ni nini hasa kilifanyika na nini kilifanyika baadaye: Je, umwagiliaji ulifanyika? Ni kiasi gani cha maji kiliwekwa? Je, unyevu wa udongo ulirejea kama ilivyotarajiwa? Hatua hii ya **uthibitishaji** hujenga uaminifu, hupata matatizo ya vifaa, na hutoa ushahidi ambao wanunuzi, wakaguzi na mamlaka za maji wanazidi kuuliza.\n\nKumbuka kitanzi kutoka kwa Moduli ya 1: **hisia → tabiri → pendekeza → thibitisha**. Kila zamu ya kitanzi huboresha maamuzi na data ya msimu ujao.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Muhtasari wa kozi na hatua zinazofuata",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Mambo muhimu ya kuchukua na jinsi ya kujiandaa kwa mtihani wa mwisho.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Hongera kwa kufika mwisho wa kozi. Wacha tulete mawazo makuu pamoja.\n\n## Mambo muhimu ya kuchukua\n\n- **AI ni kisanduku cha zana**, si teknolojia moja. Sheria, kujifunza kwa mashine, kujifunza kwa kina na AI ya kuzalisha inalingana na matatizo tofauti.\n- **Data ndio msingi.** Usahihi, ukamilifu, ufaao, uthabiti na uwakilishi huamua kile ambacho mtindo wowote unaweza kufanya.\n- **Miundo hujifunza kutokana na mifano** na lazima ithibitishwe kwenye data ambayo hawajawahi kuona. Kila utabiri una kutokuwa na uhakika, na mifano inaweza kuteleza.\n- **Mapendekezo yanachanganya ubashiri na malengo, vikwazo na muktadha.** Mazuri yanajieleza.\n- **Kitanzi ni muhimu:** maana → tabiri → pendekeza → thibitisha.\n- **Katika msimu mzima**, AI inasaidia kupanga, umwagiliaji, ufuatiliaji wa mazao, muda wa mavuno, uuzaji na ufuatiliaji.\n- **Tumia uaminifu uliorekebishwa.** Changamoto mapendekezo ambayo yanakinzana na uga, hutegemea data duni, au yana viwango vya juu.\n- **Data yako inastahili kutunzwa.** Jua ni nani anayeimiliki, jinsi inavyotumiwa na jinsi ya kuirudisha.\n\n## Kujitayarisha kwa mtihani wa mwisho\n\nMtihani wa mwisho unashughulikia moduli zote nne. Inatoa maswali 20 kutoka kwa benki kubwa na inakupa dakika 30. Unahitaji **80%** ili kupita.\n\n> **Kidokezo:** Kagua madokezo yako na maswali ya moduli. Ikiwa ulikosa swali la chemsha bongo, fungua somo ambalo linaelekeza kabla ya mtihani.\n\n## Wapi pa kwenda\n\n- **Misingi ya Data ya Kilimo** inaingia ndani zaidi katika vyanzo na ubora wa data.\n- **Vitambuaji kwa Mbali na Akili ya Setilaiti** hupanuka kwenye fahirisi za taswira na mimea.\n- **Umwagiliaji Unaoendeshwa na AI** unatumia mawazo haya kwa usimamizi wa maji kwa kina.\n\nAsante kwa kujifunza na AGRO-AI Academy. Ukiwa tayari, fungua mtihani wa mwisho kutoka kwenye menyu ya kozi.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Karibu kwenye kozi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Utajifunza nini, jinsi kozi inavyofanya kazi, na jinsi ya kupata cheti chako.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Karibu **Utangulizi wa Ujasusi Bandia katika Kilimo**, kozi ya kwanza ya programu ya AGRO-AI Academy *Foundations of Agricultural AI*.\n\nHuhitaji usuli wowote wa kiufundi ili kufanikiwa hapa. Ikiwa umewahi kutazama utabiri wa hali ya hewa, kusoma mtihani wa udongo au kulinganisha mavuno kati ya mashamba mawili, tayari unatumia tabia za akili ambazo kozi hii inajenga: kukusanya ushahidi, kuona mifumo na kuamua nini cha kufanya baadaye.\n\n##Utajifunza nini\n\nKufikia mwisho wa kozi utaweza:\n\n- eleza AI ni nini - na sio - kwa lugha rahisi;\n- kuelezea ambapo data ya kilimo inatoka na nini inafanya kuaminika;\n- kufuata jinsi data inakuwa utabiri, na utabiri unakuwa pendekezo;\n- tambua programu muhimu za AI katika msimu wote;\n- amua matokeo ya AI kwa umakini na uitumie kwa uwajibikaji.\n\n## Jinsi kozi inavyofanya kazi\n\nKozi ina **moduli nne** za masomo mafupi. Moduli moja hadi tatu kila mwisho na jaribio la mazoezi ambalo hukusaidia kuangalia uelewa wako; moduli ya nne inaishia kwa mazoezi ya vitendo na muhtasari wa kozi unaokutayarisha kwa mtihani wa mwisho. Maswali hayahesabiki kwenye cheti chako, na unaweza kuyajibu mara nyingi upendavyo.\n\nMaendeleo yako yanahifadhiwa kiotomatiki. Unaweza kuacha katikati ya somo kwenye simu yako na uendelee baadaye kwenye kompyuta.\n\n> **Kidokezo:** Tumia kichupo cha **Vidokezo** chini ya kila somo ili kuandika mawazo ambayo yanahusu uendeshaji wako mwenyewe. Vidokezo ni vya faragha - ni wewe tu unayeweza kuviona.\n\n## Kupata cheti chako\n\nUnapomaliza kila somo linalohitajika, **mtihani wa mwisho** utafunguliwa. Inatoa maswali 20 kutoka kwa benki kubwa zaidi, imeratibiwa kwa dakika 30, na inahitaji alama **80%** ili kupita. Ikiwa hutafaulu jaribio la kwanza, unaweza kukagua masomo yaliyopendekezwa na ujaribu tena baada ya saa moja.\n\nFaulu mtihani na AGRO-AI Chuo hutoa cheti chako kiotomatiki — bila malipo, ukiwa na kitambulisho cha kipekee na ukurasa wa uthibitishaji wa umma unayoweza kushiriki kwenye LinkedIn.\n\nHebu tuanze.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Kutoka kwa sheria hadi kujifunza: AI ni nini (na sio)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Ufafanuzi wa lugha rahisi wa AI, kujifunza kwa mashine, kujifunza kwa kina na AI ya uzalishaji.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Akili Bandia\" hutumiwa kuelezea kila kitu kuanzia kengele ya kihisi rahisi hadi chatbot inayoandika insha. Kabla ya kuangalia kilimo, tunahitaji maneno wazi.\n\n## Akili bandia\n\n**Akili Bandia (AI)** ni uwanja mpana wa kujenga mifumo ya kompyuta ambayo hufanya kazi ambazo kwa kawaida tunahusisha na akili ya binadamu: kutambua ruwaza, kufanya ubashiri, kuelewa lugha na kuchagua vitendo.\n\nUfafanuzi huo ni mpana kwa makusudi. Inajumuisha teknolojia tofauti sana, hivyo husaidia kutenganisha njia mbili za kuzijenga.\n\n## Kanuni dhidi ya kujifunza\n\n**Mifumo inayozingatia kanuni** hufuata maagizo yaliyoandikwa na watu. Kidhibiti cha umwagiliaji kinachosema *\"ikiwa unyevu wa udongo utaanguka chini ya 25%, washa pampu\"* unafuata sheria. Sheria ni wazi na zinaweza kutabirika, lakini mtu anapaswa kujua sheria sahihi mapema, na sheria hazibadiliki wakati hali zinabadilika.\n\n**Mifumo ya kujifunza kwa mashine (ML)** hujifunza ruwaza kutoka kwa mifano badala yake. Onyesha mfano wa maelfu ya misimu iliyopita - hali ya hewa, udongo, umwagiliaji na mazao yaliyofuata - na inaweza kujifunza uhusiano ambao hakuna mtu aliyeandika kwa uwazi. Wengi wa kile ambacho watu huita \"AI\" leo ni kujifunza kwa mashine.\n\n| | Mfumo unaotegemea kanuni | Muundo wa kujifunza mashine |\n|---|---|---|\n| Mantiki inatoka wapi | Watu wanaandika | Kujifunza kutoka kwa data |\n| Nguvu | Uwazi, kutabirika | Hupata mifumo changamano, inabadilika na data mpya |\n| Udhaifu | Imara; hukosa kile ambacho wabunifu hawakutarajia | Nzuri tu kama data yake; inaweza kuwa ngumu kuelezea |\n| Mfano wa shamba | Pampu huanza chini ya kizingiti cha unyevu | Model anatabiri matumizi ya maji ya mazao ya kesho |\n\n## Kujifunza kwa kina\n\n**Kujifunza kwa kina** ni familia ya mbinu za kujifunza kwa mashine zilizojengwa kutoka kwa \"mitandao ya neva\" yenye tabaka nyingi. Inafaa haswa katika data ya fujo, ya hali ya juu kama vile picha na sauti. Programu ya simu inapotambua ugonjwa wa majani kutoka kwa picha, kujifunza kwa kina huwa nyuma yake.\n\n## AI ya Kuzalisha\n\n**AI ya Kuzalisha** huunda maudhui mapya - maandishi, picha, sauti au msimbo - kulingana na mifumo iliyojifunza kutoka kwa seti kubwa za data. Miundo mikubwa ya lugha (LLMs), teknolojia nyuma ya wasaidizi wa mazungumzo, ni AI ya uzalishaji. Wanaweza kueleza dhana, kufupisha ripoti na kujibu maswali katika lugha nyingi.\n\nAI ya Kuzalisha ina nguvu, lakini inatabiri *maneno yanayokubalika*, si ukweli uliothibitishwa. Inaweza kusema kitu cha uwongo kwa ujasiri kamili. Katika kilimo, msaidizi generative ni muhimu kwa kueleza na kuandika, lakini nambari muhimu na maamuzi lazima yakaguliwe dhidi ya data inayoaminika.\n\n> **Wazo kuu:** AI sio mashine moja. Ni sanduku la zana. Sheria, miundo ya takwimu, ujifunzaji wa kina na mifano ya uzalishaji kila moja inafaa matatizo tofauti.\n\n## Kile ambacho AI sio\n\n- **AI si uchawi.** Kila matokeo hutoka kwa data na chaguo za muundo zinazofanywa na watu.\n- **AI \"haielewi\" shamba lako ** jinsi unavyoelewa. Inajua tu data yake ilitekwa.\n- **AI si sahihi kiotomatiki.** Utabiri hubeba kutokuwa na uhakika, na mifumo bora zaidi inakuambia ni kiasi gani.\n- **AI haichukui nafasi ya hukumu.** Ni chombo cha usaidizi wa maamuzi. Wajibu wa uamuzi unabaki kwa watu.\n\n## Angalia uelewa wako\n\nFikiria zana ambayo tayari unatumia - programu ya hali ya hewa, kidhibiti cha mavuno, lahajedwali iliyo na fomula. Mantiki yake imeandikwa kama sheria, au imejifunza kutoka kwa data? Andika jibu lako katika maelezo yako; tutarejea kwa wazo hili katika Moduli ya 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Kwa nini kilimo kinageukia AI sasa",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Shinikizo na fursa zinazoongoza kupitishwa kwa AI kwenye mashamba.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Wakulima wamewahi kutumia taarifa kufanya maamuzi. Kilichobadilika ni kiasi cha habari inayopatikana, kasi ambayo lazima itumike, na shinikizo kwa kila rasilimali.\n\n## Shinikizo kwenye shamba la kisasa\n\n**Maji.** Kilimo ndicho mtumiaji mkubwa wa maji safi duniani kote; kulingana na Shirika la Chakula na Kilimo la Umoja wa Mataifa (FAO AQUASTAT), kilimo kwa ujumla, hasa umwagiliaji, kinachangia takriban 70% ya uondoaji wa maji baridi duniani. Katika mikoa mingi, mgao wa maji unapungua wakati mahitaji yanakua. Kila uamuzi wa umwagiliaji ni muhimu.\n\n**Kubadilika kwa hali ya hewa.** Misimu haitabiriki sana. Mawimbi ya joto, mvua isiyo ya kawaida na shinikizo mpya za wadudu hufanya kitabu cha michezo cha mwaka jana kutokuwa cha kutegemewa.\n\n**Gharama na kando.** Mbolea, nishati, nguvu kazi na gharama za vifaa zinaweza kubadilika sana. Utumiaji wa kiasi kinachofaa mahali pazuri hulinda ukingo na mazingira.\n\n**Kazi.** Shughuli nyingi zinatatizika kutafuta na kuhifadhi watu wenye ujuzi. Ujuzi unaoishi katika kichwa cha meneja mmoja mwenye uzoefu uko hatarini wakati mtu huyo hayupo.\n\n**Matarajio kutoka kwa wanunuzi na wadhibiti.** Minyororo ya ugavi inazidi kuuliza ushahidi: ni kiasi gani cha maji kilitumika, ni pembejeo gani zilitumika, mbinu gani zilifuatwa.\n\n## Kwa nini AI, na kwa nini sasa\n\nMambo matatu yalikuja pamoja:\n\n1. **Data zimekuwa nyingi.** Satelaiti sasa hutembelea mashamba mengi kila baada ya siku chache. Uchunguzi wa unyevu wa udongo, vituo vya hali ya hewa, vidhibiti vya umwagiliaji na mashine zote hutoa data endelevu.\n2. **Kompyuta imekuwa nafuu na kuunganishwa.** Miundo ambayo hapo awali ilihitaji maabara ya utafiti inaweza kuendeshwa katika wingu na kutoa matokeo kwa simu.\n3. **Mbinu zilizopevuka.** Kujifunza kwa mashine, uoni wa kompyuta na miundo ya lugha imeboreshwa kwa kasi na sasa ni zana za vitendo.\n\n> **Wazo kuu:** AI haiundi rasilimali mpya. Inakusaidia kutumia vizuri maji, pembejeo, muda na maarifa ambayo tayari unayo.\n\n## Kile AI inaweza kufanya kihalisi\n\n- **Sense** — geuza taswira ghafi na data ya vitambuzi kuwa taarifa, kama vile maeneo ya sehemu ambayo yamesisitizwa.\n- **Bashiri** — kadiria kitakachotokea, kama vile mahitaji ya maji ya mazao ya kesho au mavuno ya mwisho wa msimu.\n- **Pendekeza** — pendekeza kitendo, kama vile ratiba ya umwagiliaji, na ueleze ni kwa nini.\n- **Thibitisha** - angalia ikiwa kitendo kilifanyika na ikiwa kilifanya kazi.\n\nAngalia muundo: hisi, tabiri, pendekeza, thibitisha. Tutatumia kitanzi hiki katika kipindi chote.\n\n## Kile ambacho hakiwezi kufanya\n\nAI haiwezi kuona ni nini data yake haichukui: vali iliyovunjika, unyunyiziaji wa jirani, utamaduni wa kipekee kwa shamba lako. Haiwezi kubeba jukumu la uamuzi. Na haiwezi kuchukua nafasi ya uaminifu kati ya mkulima na mshauri. AI nzuri ya kilimo imeundwa kufanya kazi *na* watu wanaojua ardhi.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

@@ -1,0 +1,562 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "so",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 58,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Hordhac Sirdoonka Artificial ee Beeraha",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Waa maxay AI, sida ay uga shaqeyso beerta, iyo sida loo isticmaalo si mas'uuliyad leh.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Sirdoonka macmalka ahi waxa ay ku imanayaan beeralayda iyaga oo isticmaalaya kontaroolayaasha waraabka, adeega dayax-gacmeedka, software maamulka beeraha iyo telefoonada ku jira jeebabka beeralayda. Koorasku wuxuu ku siinayaa faham cad, oo la taaban karo oo ku saabsan waxa tignoolajiyadaasi tahay, sida ay u shaqeyso, iyo sida si wanaagsan loogu isticmaalo.\n\nWaxaad baran doontaa fikradaha asaasiga ah ee ka dambeeya AI iyo barashada mashiinka iyada oo aan isla'egayn, arag sida xogta beeruhu u noqoto saadaal ka dibna talobixin, oo raac AI ilaa xilliga - laga bilaabo qorsheynta iyo waraabka ilaa caafimaadka dalagga iyo goosashada. Isku soo wada duuboo, waxaad baran doontaa inaad xukunto wax soo saarka AI: goorta la aamino, goorta la su'aalo, iyo sida loo ilaaliyo xukunka aadanaha iyo aqoonta beeraha.\n\nKoorsada waxaa loogu talagalay beeraleyda, hawl-wadeennada, beeraleyda, maamulayaasha iyo ardayda. Looma baahna asal farsamo",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Midna. Xiisaha ku saabsan sida tignoolajiyadu u taageeri karto shaqada beeraha waa waxa kaliya ee aad u baahan tahay.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"U sharax luqad cad waxa ay yihiin garaadka macmalka ah, barashada mashiinka iyo curinta AI\", \"Sharax ilaha ugu muhiimsan ee xogta beeraha iyo waxa ka dhigaya xog la aamini karo\", \"Raac sida uu moodalku xogta ugu beddelo saadaal iyo saadaalin u beddelo talo\", \"Aqoonso codsiyada wax ku oolka ah ee AI xilliga dalagga oo dhan, laga bilaabo qorsheynta ilaa goosashada\", \"Aqoonso xadka iyo hababka guul-darreysiga ee beeraha AI iyo goorta laga doodi karo talada\", \"Dalbo mabaadi'da lahaanshaha xogta, sirta iyo isticmaalka xilkasnimada leh ee hawlgalkaaga\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Maxay AI uga dhigan tahay beeraha",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Fikradaha muhiimka ah iyo sababta ay hadda muhiim u yihiin.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Sida beeralayda AI u shaqeyso",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Laga soo bilaabo xog ilaa moodal ilaa talo bixin",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI xilliga oo dhan",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Codsiyada la taaban karo laga bilaabo qorsheynta ilaa goosashada.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Isticmaalka AI si mas'uuliyadi ku jirto",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Xaddid, xuquuqaha xogta iyo kalsoonida, isticmaalka muhiimka ah.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "La socodka caafimaadka dalagga kor iyo hoosba",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Sawirka dayax-gacmeedka, tusmooyinka dhirta iyo aragtida kombiyuutarka ee caafimaadka dalagga.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Dhirta caafimaadka qabta iyo dhirta walaacsan ayaa si kala duwan uga tarjumaysa iftiinka. AI waxay isticmaashaa farqigaas - oo ay qabteen dayax gacmeedyada, diyaaradaha aan duuliyaha lahayn iyo kamaradaha - si ay u daawato dalagyada qiyaasta ma jirto koox wax indha indheeya oo dabooli karta.\n\n## Sida dhirtu u ekaato dayax-gacmeedka\n\nCaleemaha cagaaran waxay nuugaan iftiinka cas ee ugu badan ee sawir-qaadista waxayna si adag uga tarjumayaan ** nuur-ku-dhow (NIR)** iftiinka. Marka dhirtu cidhiidhi gasho, yaraato ama miirto, milicsiga cas ayaa kor u kaca oo milicsiga NIR ayaa hoos u dhaca.\n\n** Tusmada Kala Duwanaanta Dhirta Caadiga ah (NDVI)** waxay qabtaa kala duwanaanshahan:\n\n**NDVI = (NIR - Cas) ÷ (NIR + Casaan)**\n\nQiimaha ayaa u dhexeeya -1 ilaa +1. Dhirta cufan, caafimaadka qabta ayaa caadi ahaan sare (badanaa ka sarreeya 0.6); ciidda qaawan waa mid hooseeya (qiyaastii 0.1-0.2); biyuhu inta badan waa taban.\n\n## U akhrinta khariidadaha NDVI si xikmad leh\n\nNDVI waxay faa'iido u leedahay in la ogaado **meesha *** goobtu ku kala duwan tahay, maaha in la ogaado **sababta**. Qalab yar oo NDVI ah ayaa laga yaabaa inuu noqdo walbahaarka biyaha, nafaqo yaraan, cudur, cayayaanka, dhibaatada beeritaanka, ama si fudud nooc ka duwan. Khariidaddu waxay kuu sheegaysaa meesha aad ka eegi karto; sahamintu waxay kuu sheegaysaa waxaad heshay.\n\n> **Muhiim:** Daruuraha, hadhyada daruuriga ah, cadceedda iyo wakhtiga maalintii waxay qalloocin karaan akhrinta dayax-gacmeedka. Adeegyada la isku halayn karo waxay qariyaan daruuraha waxayna isbarbardhigaan sawirada wakhti ka dib halkii la aamini lahaa hal sawir.\n\nTilmaamayaal kale ayaa u jira ujeeddooyin gaar ah - qaar ayaa aad ugu nugul chlorophyll, kuwa kale waxay u nugul yihiin biyaha ama daboolyada cufan ee NDVI ay ku dheregsan tahay.\n\n## Aragtida kombuyuutarka oo dhow\n\nDhulka dhexdiisa, ** aragga kombuyuutarka *** moodooyinka waxay falanqeeyaan sawirrada taleefannada, cagafyada ama diyaaradaha aan duuliyaha lahayn si ay:\n\n- in la ogaado cudurrada iyo cayayaanka sawirada caleenta;\n- kala saar haramaha iyo dalagyada loogu talagalay buufinta bartilmaameedka ah;\n- tiri midhaha, ubaxa ama dhirta si loo qiyaaso wax-soo-saarka.\n\nMoodooyinkaan waxaa lagu tababaray uruurin badan oo sawirro calaamadeysan. Saxnimadooda waxay si weyn ugu xiran tahay haddii sawiradaasi ay u eg yihiin dalaggaaga, noocyadaaga iyo xaaladaha iftiinkaaga.\n\n## Laga bilaabo ogaanshaha ilaa ficil\n\nKormeerka dalagga wanaagsan ee socodka shaqada wuxuu u beddelaa ogaanshaha hawl mudnaan leh: * \"Aagga 3 wuxuu muujinayaa hoos u dhac ku yimid xoogga 10 maalmood. Marka hore fiiri geeska waqooyi-bari; hubi isku-duubnaanta waraabka oo raadi calaamadaha cudurka xididka.\"",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Xog: alaabta ceeriin ee beeraha AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Xaggee xogta beeruhu ka timaaddaa iyo waxa ka dhigaya mid la aamini karo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Nidaam kasta oo AI ah ayaa laga dhisay xogta. Haddii xogtu ay tahay mid aan dhammaystirnayn, eex ama khalad ah, AI sidoo kale wuu noqon doonaa. Fahamka xogtaada waa xirfadda ugu muhiimsan ee beeraha AI.\n\n## Halka xogta beeruhu ka timaaddo\n\n| Xigasho | Tusaalooyinka | Waxa ay kuu sheegayso |\n|---|---|---|\n| Cimilada | Saldhigyada beerta, shabakadaha gobolka, saadaasha | Heerkulka, roobka, qoyaanka, dabaysha, shucaaca qorraxda |\n| Ciid | Baarista qoyaanka, baaritaanka ciidda, maabka ciidda | Biyaha la heli karo xididdada, nafaqooyinka, texture |\n| Dareen fog | Sawirrada Satelite-ka, Diyaaradaha iyo Drones | Firfircoonida dalagga, daboolka daboolka, qaababka walbahaarka ee guud ahaan beerta |\n| Qalabka | Xakamaynta waraabka, mitirka socodka, kormeerayaasha wax soo saarka, cagafyada | Maxaa lagu dabaqay, goobta iyo goorta |\n| Diiwaanada | Taariikhaha beeritaanka, noocyada kala duwan, codsiyada wax gelinta, qoraalada indha indheynta | Go'aannada maamulka iyo indho-indheynta |\n| Suuqyada | Qiimaha, qandaraasyada, calaamadaha dalabka | Xaaladda dhaqaale ee go'aannada |\n\n## Tayada xogta wanaagsan\n\n** Saxsanaanta *** - cabbirku ma ka tarjumayaa xaqiiqada? Baarista qoyaanka ee lagu rakibay meel qoyan, ama cabirka roobka geedka hoostiisa, ayaa marin habaabinaya nooc kasta oo isticmaala.\n\n**Dhamaystir *** - ma jiraan daldaloolo? Dareemka joojiya warbixinta toddobaadka inta lagu jiro mowjadda kulaylka ayaa ka tagaya godka saxda ah marka ay ugu muhiimsan tahay.\n\n**Waqtiga ku habboon *** - xogta dhawaanahan ma ku filnaatay go'aanka? Qoyaanka ciidda ee shalay ayaa faa’iido u leh waraabka maanta; bishii hore maaha.\n\n** Joogteynta *** — ma isku mid yihiin halbeegyada, qaababka iyo qeexitaannada waqtiga iyo dhammaan goobaha? Isku darka injis iyo milimitir, ama laba magac oo isku mid ah, waxay sababtaa khaladaad aamusnaan ah.\n\n**Matalaad *** - xogtu miyay dabooshaa shuruudaha AI lagu isticmaali doono? Qaabka lagu tababaray carrada bacaadka ah ayaa laga yaabaa inuusan ku shaqayn dhoobada.\n\n> ** Jeeg goobeedka:** Kahor intaadan aaminin dashboard-ka, weydii saddex su'aalood: Halkee buu ka yimid lambarkan? Goorma ayaa la qiyaasay? Maxaa qalad ka dhigi lahaa?\n\n## Xogtu waxay u baahan tahay macnaha guud\n\nAqrinta qoyaanka ciidda ee 30% macnaheedu waa wax yar oo keli ah. Waa arrin muhiim ah nooca carradu yahay, sida qoto dheer ee dareemayaasha u fadhiyo, dalaggee ayaa koraya iyo marxaladdee. Beeraha wanaagsan AI waxay isku daraa ilaha xogta si mid kastaa ugu daro macnaha kuwa kale - tusaale ahaan, isku-darka sawirka dayax-gacmeedka iyo xogta cimilada iyo taariikhda waraabka ee goobta.\n\n## Xogtaada, go'aamadaada\n\nXogta beeruhu waxay leedahay qiimo - ganacsi, hawleed iyo mid gaar ahaaneed. Kahor intaadan ku xidhin qalabka ama la wadaagin diiwaanka adeeg kasta, fahan cidda geli karta xogta, sida loo isticmaali doono, iyo haddii aad kaxaysan karto. Waxaan ku soo laaban doonaa lahaanshaha xogta ee Module 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Lahaanshaha xogta, sirnimada iyo aaminaadda",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Mabaadi'da wax ku oolka ah ee wadaaga xogta beeraha si kalsooni leh.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Xogta beeruhu waxay muujin kartaa wax-soo-saarka, ku-dhaqanka, dhaqaalaha iyo meesha ay joogaan dadka iyo hantida. Wadaagista waxay furi kartaa adeegyo qiimo leh - laakiin had iyo jeer waa inay noqotaa doorasho ula kac ah.\n\n## Su'aalaha lagu waydiinayo bixiye tignoolajiyada\n\n- **Lahaanshaha:** Yaa iska leh xogta aan bixiyo iyo xogta nidaamku ka soo saaro beertayda?\n- **Isticmaal:** Maxaa xogta loo isticmaali doonaa? Ma loo isticmaali doonaa in lagu tababaro moodooyinka? Ma lagu dari doonaa xogta beeraha kale?\n- ** Wadaagista:** Ma lala wadaagi doonaa ama laga iibin doonaa qolo saddexaad? Kuwee, iyo sababta?\n- ** Gelitaanka iyo qaadista:** Ma soo dejisan karaa xogtayda qaab la isticmaali karo? Ma ila qaadan karaa haddaan baxo?\n- ** Tirtiridda:** Ma tirtiri karaa xogtayda, maxaase hadhaya ka dib?\n- **Amniga:** Sidee loo ilaaliyaa xogta? Yaa arki kara gudaha shirkadda?\n- ** Xakamaynta:** Ma ka noqon karaa gelitaanka aaladda ama lammaanaha wakhti kasta?\n\nDhowr urur oo beeralayda ayaa daabacay mabaadi'da xogta-beeraha kuwaas oo ka hadlaya su'aalahan; Weydiinta haddii bixiyaha uu raaco iyaga waa bar bilow wanaagsan.\n\n## Oggolaanshaha iyo oggolaanshaha\n\nNidaamyada wanaagsani waxay weydiiyaan ogolaansho gaar ah, oo xog ogaal ah - tusaale ahaan, u oggolaanaya xiriiriyaha inuu akhriyo xogta kantaroolaha waraabka iyadoo aan loo oggolaan inuu beddelo goobaha. Sii fursadda ugu yar ee looga baahan yahay shaqada, oo si joogto ah dib u eeg adeegyada ku xiran.\n\n## Xogta la isku daray iyo kuwa qarsoon\n\nIsku darka xogta beero badan ayaa wanaajin karta moodooyinka qof walba, sida qiyaasaha isticmaalka biyaha ee gobolka oo wanaagsan. Si fiican loo qabtay, isu geynta ayaa meesha ka saaraysa macluumaadka tilmaami kara beer shakhsi ah. Weydii sida qarsoodi la'aanta loo sameeyo iyo haddii aad iska bixi karto.\n\n## Kalsoonida waa la kasbaday\n\n> ** Fikradda muhiimka ah:** Beeraha la aamini karo AI waa daah-furan sida ay u isticmaasho xogta, u sharaxdo talooyinkeeda, qirto hubanti la'aan, waxayna ka tagtaa beeralayda maamulka.\n\nMabaadi'daas la mid ah waxay khuseeyaan Akadeemiyada lafteeda. Waxaad ka soo dejisan kartaa ama ka tirtiri kartaa xogtaada barashada wakhti kasta goobaha akoonkaaga.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Jimicsi la taaban karo: qiimee talada AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Ku dabaq waxa aad baratay talo bixin dhab ah.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Goynta, suuqyada iyo silsiladaha sahayda",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Saadaasha wax-soo-saarka, sirdoonka suuqa iyo saadka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Marka uu xilligu u sii socdo dhinaca goosashada, go'aamadu waxa ay ka beddelaan beerista dalagga oo ay qabsadaan qiimahooda.\n\n## Saadaasha wax-soo-saarka\n\nSaadaasha wax-soo-saarka waxay isku daraysaa moodooyinka koritaanka dalagga, cimilada ilaa taariikhda iyo saadaasha, firfircoonida sawir-ku-salaysan, iyo mararka qaarkood waxaa lagu tiriyaa aragtida kombuyuutarka. Saadaasha hore ayaa aad loo hubaa; saxnaanta ayaa soo hagaagaysa marka xilligu sii socdo.\n\nSaadaasha waxay taageertaa go'aamada sida:\n\nIntee in le'eg ayaa horay loo sii iibin karaa, iyo goorta;\n- inta shaqaale ah, baabuur xamuul ah iyo awoodda kaydinta si loo ballansado;\n- haddii gelinta dambe ay weli mudan tahay in la codsado.\n\n## Sirdoonka suuqa\n\nQalabka sirta ah ee suuqu wuxuu ururiyaa qiimaha, mustaqbalka, xogta dhoofinta, cimilada gobollada tartamaya iyo wararka si loo saadaaliyo dhaqdhaqaaqa qiimaha. AI waxay si dhakhso ah u soo koobi kartaa calaamadahan waxayna muujin kartaa isbeddellada aan caadiga ahayn. No model ma saadaalin karo suuqyada si hubaal ah; ula dhaqmaan saadaasha suuqa sidii hal fikrad oo ku saabsan qorshaha khatarta lagu maareeyo, ee ma aha dammaanad ahaan.\n\n## Waqtiga goosashada iyo tayada\n\nQaababka raadraaca qaangaadhka dalagga - heerarka sonkorta canabka, qoyaanka hadhuudhka, midabka miraha - waxay caawiyaan jadwalka goosashada dheelitirka ugu fiican ee tayada, khatarta cimilada iyo saadka. Marka lagu daro helitaanka shaqada iyo qalabka, waxay kaa caawin karaan isku xigxiga qaybaha hawlgalka.\n\n## Raadinta iyo caddaynta\n\nIibsadayaasha ayaa si sii kordheysa u weydiiya caddaynta sida dalagga loo soo saaray: isticmaalka biyaha, agabka la geliyay, shahaadooyinka. Nidaamyada diiwaangeliya talooyinka, ficillada iyo xaqiijinta inta lagu jiro xilliga oo dhan ayaa caddayntaas ka dhigaya mid sahlan in la soo saaro - sabab kale oo caddaynaysa tallaabada loop arrimaha.\n\n** Fikradda muhiimka ah: ** Xilliga goosashada, qiimaha AI wuxuu ka yimaadaa hoos u dhigida hubin la'aanta waqtiga, tirada iyo qiimaha - iyo diiwaangelinta wixii la qabtay.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Daraasad xaaladeed: maareynta waraabka iyo biyaha",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Sida uumi-baxa, qoyaanka ciidda iyo AI ay isugu daraan jadwalka waraabka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Waraabka waa mid ka mid ah tusaalooyinka ugu cad ee AI abuurista qiimaha beerta, sababtoo ah go'aamada biyuhu waa kuwo soo noqnoqda, qaali ah oo la qiyaasi karo.\n\n## dheelitirka biyaha\n\nKa fakar aagga xididku inuu yahay xisaab bangi oo biyo ah.\n\n- **Debaajiga:** Roobabka iyo waraabka.\n- **Ka-baxa:** biyaha uu isticmaalo dalagga oo ka soo baxa carrada - oo la isku daray **evapotranspiration (ET)** - iyo dheecaan ka hooseeya xididdada.\n\nHadafka jadwalka waraabka waa in la ilaaliyo dheelitirka inta u dhaxaysa xadka hoose, halkaas oo dalagga uu bilaabo inuu ku dhaco diiqad, iyo xadka sare, oo ka baxsan taas oo biyuhu ka baxaan oo la khasaariyo.\n\n## Qiyaasida isticmaalka biyaha dalagga\n\nIsticmaalka biyaha dalagga waxaa badanaa lagu qiyaasaa laba tallaabo:\n\n1. **Tixraaca uumi-baxa (ET₀)** waxaa laga xisaabiyaa xogta cimilada - heerkulka, qoyaanka, dabaysha iyo shucaaca qorraxda - dalagga tixraaca caadiga ah.\n2. A ** dalaga dalagga (Kc)** wuxuu hagaajiyaa ET₀ dalagga dhabta ah iyo heerka korriimadiisa: **ETc = ET₀ × Kc**.\n\nBarashada mishiinku waxa ay wanaajin kartaa qiyaastan iyada oo wax laga barto dareemayaasha deegaanka, sawir-qaadaha dusha sare iyo taariikhda beerta, gaar ahaan halka isku-dheelitirnaanta caadiga ahi ay liidato.\n\n## Xaalad jadwal ah\n\n** Tusaale:** Beerta canabka ah waxay leedahay 40 mm oo biyo diyaar ah marka aagga xididku buuxo. Baarayaasha qoyaanka carrada waxay muujinayaan 18 mm inay harsan yihiin. Saadaasha ETc waa 5 mm maalintii afarta maalmood ee soo socota, roobna lama filayo.\n\nLa'aanta waraabka, balooggu wuxuu gaaraa xadka hoose ee ku saabsan saddex maalmood iyo badh (18 mm ÷ 5 mm/maalintii). Nidaamka jadwalku wuxuu ku talin lahaa waraabinta labada ilaa seddexda maalmood ee soo socda, cabbirka si loo buuxiyo aagga xididka iyada oo aan la buuxin, waqtiga la heli karo awoodda bamka iyo hoos u dhigista qiimaha korontada habeenkii.\n\nHaddii saadaasha ay isu beddesho 15 mm oo roob ah maalinta labaad, nidaam wanaagsan ayaa cusbooneysiiya talada - oo sharaxaya sababta.\n\n## Halka AI ay ku kordhiso qiimaha\n\n- ** Qiyaasta isticmaalka biyaha ee ka wanaagsan ** iyadoo la isku darayo cimilada, dareemayaasha iyo sawirada.\n- **Jadwalka odoroska ah ee saadaalinta** kaasoo xisaabiya roobka iyo kulaylka soo socda.\n- ** Hagaajinta** ee qaybo badan, xadka bamka iyo qoondaynta biyaha.\n- ** Xaqiijinta *** - xaqiijinta mitir socodka socodka iyo qoyaanka ciidda in waraabku u dhacay sidii loo qorsheeyay oo uu yeeshay saamayntii la filayay.\n\n## Maxaa khaldami kara\n\nDheecaan xiran, waalka jaban ama baaraha lagu rakibay meel aan matali karin dhamaantood waxay marin habaabiyaan nidaamka. Taasi waa sababta tallaabada xaqiijinta ay muhiim u tahay: marka la arkay qoyaanka ciidda uusan ka jawaabin sida la saadaaliyay ka dib waraabka, waa calaamad muujinaysa beerta, ma aha oo kaliya qaabka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Xaddid, khaladaad iyo goorta laga doodi karo talada",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Aqoonsiga hababka fashilka iyo ilaalinta xukunka aadanaha.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Qaababka, tababarka iyo saadaalinta",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Sida tusaaluhu wax uga barto tusaalooyinka iyo sababta ay saadaal kasta u leedahay hubaal la'aan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Qorshaynta iyo beerista",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Isticmaalka xogta iyo AI ka hor inta abuurku ugu horreeyaa dhulka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Qaar badan oo ka mid ah go'aamada ugu qiimaha badan ee xilliga ayaa la sameeyaa ka hor intaan la beerin. AI waxay ku caawin kartaa inay keento caddayn dheeraad ah go'aamadaas.\n\n## Taariikhda garoonka iyo aagagga maamulka\n\nGaroomadu ma aha labis. Sannadaha khariidadaha wax-soo-saarka, sahaminta ciidda iyo sawirka dayax-gacmeedku waxay inta badan muujinayaan qaabab joogto ah: meel hoose oo qoyan, cidhif cammuud ah oo marka hore engega. Algorithm-yadu waxay u kala qaybin karaan meelahan ** aagagga maamulka ** kuwaas oo si ka duwan uga jawaaba biyaha, abuur iyo bacriminta.\n\nAagagga, beeraleygu wuu kala duwanaan karaa heerka abuurka, dooran karaa meesha laga codsado in ka badan ama ka yar nitrogen, ama qorshee dejinta waraabka u dhigma sida qayb kasta oo beerta ka mid ah u dhaqmo.\n\n## Kala duwanaansho iyo go'aannada taariikhda beeritaanka\n\nMoodooyinka loo tababaray tijaabooyinka gobolka iyo diiwaannada cimilada waxay qiyaasi karaan sida noocyada ay u shaqeeyaan xaalado kala duwan iyo sida taariikhda beeritaanka ay u saamayso khatarta - tusaale ahaan, fursada diiqada kulaylka ee ubaxa. Qiyaasahan ayaa aad waxtar u leh marka ay ka tarjumayaan tijaabooyinka maxalliga ah, ma aha oo kaliya celceliska qaranka.\n\n## Qorshaynta muuqaalka\n\nAaladaha AI waxay u socon karaan \"ka waran haddii\" xaaladaha degdega ah: Maxaa dhacaya haddii xilligu qalalan yahay? Maxaa dhacaya haddii qoondaynta biyaha la gooyo 20%? Maxaa dhacaya haddii qiimaha wax soo gelinta uu kordho? Isbarbardhigga xaaladaha waxay kaa caawineysaa inaad doorato qorshe ilaalinaya mustaqbalka badan ee suurtogalka ah, ma aha oo kaliya midka la filayo.\n\n> ** Hubinta goobta:** Marka qalabku kugula taliyo heerka abuurka ama noocyada kala duwan, weydii xogta lagu dhisay. Xogta tijaabada gobolka ee carradaada iyo cimilada ayaa aad uga khuseeya marka loo eego celceliska qaranka.\n\n## Xadka in maskaxda lagu hayo\n\nTalooyinka xilli-ciyaareedka ka horreeya waxay ku tiirsan yihiin saadaasha fog, kuwaas oo aan la hubin. Ula dhaqan sidii qorshe bilow ah oo lagu hagaajinayo marka uu xilligu soo baxayo, ee ma aha warqad go'an.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Module 1 kedis",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Hubi fahamkaaga aasaaska AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Ka jawaab shan su'aalood oo degdeg ah oo ku saabsan fikradaha ku jira Module 1. Su'aalaha waa ku celcelinta: waxaad dib u soo celin kartaa inta jeer ee aad rabto, waxaadna arki doontaa sharaxaad isku day kasta ka dib.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Module 2 kedis",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Hubi fahamkaaga xogta, moodooyinka iyo talooyinka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Shan su'aalood oo ku saabsan tayada xogta, tababarka moodeelka iyo taageerada go'aanka. Dib u qaado inta jeer ee aad rabto.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Module 3 kedis",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Hubi fahamkaaga AI xilliga oo dhan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Shan su'aalood oo ku saabsan qorsheynta, waraabka, la socodka dalagga iyo goosashada. Dib u qaado inta jeer ee aad rabto.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Laga soo bilaabo saadaasha ilaa talada",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Sida nidaamyada taageerada go'aanku u beddelaan saadaasha ficil - oo ay dadka ku hayaan wareegga.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Saadaasha ayaa kuu sheegaysa waxa dhici kara. **talo soo jeedin** ayaa kuu sheegaysa waxa laga sameeyo. Midba midka kale u rogo wuxuu u baahan yahay yoolal, caqabado iyo macnaha guud.\n\n## Tusaale waraabka\n\nKa soo qaad tusaale inuu saadaaliyo in berrito beertu isticmaali doonto 7 mm oo biyo ah iyo in qoyaanka carradu mar horeba ku dhowdahay xadka hoose ee dalagga u dulqaadanayo. Nidaamka talo bixinta wuxuu ku daraa saadaashaas:\n\n- ** hadafyada *** - ilaalinta wax soo saarka iyo tayada, iska ilaali qashinka;\n- ** caqabadaha *** - awoodda bamka, qoondaynta biyaha ee hadhay, qiimaha korontada, jadwalka waraabka;\n- ** macnaha guud *** - saadaalinta roobka, heerka dalagga, goosashada qorshaysan ee u baahan dhul engegan.\n\nNatiijadu waxay noqon kartaa: *\"Boolka waraabka 4 caawa 6 saacadood (qiyaastii 18 mm) ka bood 7: 12 mm roobka waxaa la saadaalinayaa kalsooni sare.\"*\n\n## Talooyin wanaagsan ayaa isu sharaxaya\n\nTalo aadan fahmi karin waa talo aadan xukumi karin. Raadi nidaamyada muujinaya:\n\n- **sababta *** - xogta iyo saadaasha keentay soo jeedinta;\n- **kalsoonida *** - sida loo hubo nidaamku;\n- **ka beddelka *** - maxaa dhacaya haddii aad sugto, ama aad codsato wax yar;\n- ** raad-raac caddaynta *** - si aad u hubiso in falku dhacay iyo in kale.\n\n##Dadka oo layska ilaaliyo\n\nBeeraha, inta badan AI waa ** taageerada go'aanka ***: nidaamku wuxuu soo jeedinayaa, qofku wuu go'aansadaa. Xataa halka otomaatiggu uu fuliyo ficilada - tusaale ahaan, kontaroolaha furaya waalka - naqshadaha mas'uulka ka ah waxaa ka mid ah tillaabooyinka oggolaanshaha, xaddidaadaha, iyo awoodda lagu xakameynayo.\n\n> **Fikradda muhiimka ah:** Qofka la xisaabtamaya natiijada waa in uu mar walba arki karaa sababta talada loo soo jeediyay, beddelo, oo joojiyo.\n\n## Xiritaanka wareegga: xaqiijinta\n\nNidaamyada ugu qiimaha badan kuma joogsadaan talada. Waxay hubiyaan waxa dhabta ah ee la qabtay iyo wixii ka dambeeyay: Waraabkii miyuu socday? Immisa biyo ah ayaa la marsaday? Qoyaanka carradu ma soo kabteen sidii la filayey? Tillaabadan **xaqiijinta** waxay dhistaa kalsooni, qabsata dhibaatooyinka qalabka, waxayna soo saartaa caddaymaha ay iibsadayaasha, hanti-dhawrka iyo maamulka biyuhu si isa soo taraysa u waydiiyaan.\n\nXusuusnow wareegga Module 1: ** dareen → saadaal → ku talin → xaqiiji ***. Wareeg kasta oo wareeg ah wuxuu hagaajiyaa labadaba go'aamada iyo xogta xilli ciyaareedka soo socda.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Kooban koorsada iyo talaabooyinka xiga",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Qodobbada muhiimka ah ee qaadashada iyo sida loogu diyaargaroobo imtixaanka ugu dambeeya.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Ku soo dhawoow koorsada",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Waxa aad baran doonto, sida koorsadu u shaqeyso, iyo sida loo kasbado shahaadadaada.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Ku soo dhawoow **Hordhaca Sirdoonka Artificial ee Beeraha**, koorsadii ugu horeysay ee AGRO-AI Academy *Founds of Agricultural AI* barnaamijka.\n\nUma baahnid asal farsamo si aad halkan ugu guulaysato. Haddii aad waligaa eegtay saadaasha cimilada, akhriday tijaabada ciidda ama aad is barbardhigtay wax-soo-saarka labada goobood, waxaad horayba u isticmaashay caadooyinka maskaxda ee koorsadani ku dhismayso: ururinta caddaynta, muujinta qaababka iyo go'aaminta waxa xiga ee la samaynayo.\n\n## Waxaad baran doontaa\n\nDhamaadka koorsada waxaad awoodi doontaa inaad:\n\n- ku sharax waxa AI yahay - oo aan ahayn - luqad cad;\n- in uu sharaxo halka xogta beeruhu ka timi iyo waxa ka dhigaya in la isku halayn karo;\n- la soco sida xogtu u noqoto saadaal, oddoroskuna u noqdo talo;\n- aqoonsado codsiyada faa'iido leh ee AI xilli kasta;\n- u garsoor wax soo saarka AI si adag oo u isticmaal si mas'uuliyadi ku jirto.\n\n## Sida koorsadu u shaqeyso\n\nKoorasku wuxuu leeyahay **afar qaybood** oo casharo gaagaaban ah. Modules hal ilaa seddex dhamaad kasta oo leh kedis tababar oo kaa caawinaya inaad hubiso fahamkaaga; cutubka afraad wuxuu ku dhamaanayaa layli wax ku ool ah iyo koorso kooban oo kuu diyaarinaya imtixaanka ugu dambeeya. Su'aalaha laguma xisaabin karo shahaadadaada, oo dib ayaad u qaadan kartaa mar kasta oo aad rabto.\n\nHorumarkaaga si toos ah ayaa loo kaydiyaa. Waxaad ku istaagi kartaa badhtamaha casharka taleefankaaga oo aad ka sii wadi kartaa kombayutarka.\n\n> **Talo:** Isticmaal tabka **Xusuusin** ee cashar kasta hoostiisa si aad u qorto fikradaha khuseeya hawlgalkaaga. Qoraaladu waa kuwo gaar ah - kaliya adiga ayaa arki kara.\n\n## Helitaanka shahaadadaada\n\nMarka aad dhammayso cashar kasta oo loo baahan yahay, **imtixaanka ugu dambeeya** ayaa furmaya. Waxay ka soo saartaa 20 su'aalood oo ka yimid bangi weyn, waxa lagu qabtaa 30 daqiiqo, waxayna u baahan tahay dhibco ah **80%** si loo gudbo. Haddii aadan gudbin isku daygii ugu horreeyay, waxaad dib u eegi kartaa casharrada lagu taliyay oo isku day mar kale hal saac ka dib.\n\nGudub imtixaanka oo AGRO-AI Akadeemiyada ayaa si toos ah u soo saarta shahaadadaada - bilaash, wata aqoonsi aqoonsi oo gaar ah iyo bogga xaqiijinta dadweynaha oo aad ku wadaagi karto LinkedIn.\n\nAan bilowno.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Laga soo bilaabo sharciyada ilaa barashada: waa maxay AI (iyo ma aha)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Qeexitaannada luqadda cad ee AI, barashada mashiinka, barashada qoto dheer iyo AI abuurista.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Waa maxay sababta beeruhu hadda ugu soo jeesteen AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Cadaadiska iyo fursadaha keenaya korsashada AI ee beeraha.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "status": "source_fallback"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "tl",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Panimula sa Artipisyal na Katalinuhan sa Agrikultura",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Ano ang AI, kung paano ito gumagana sa bukid, at kung paano ito gamitin nang responsable.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Ang artificial intelligence ay dumarating sa agrikultura sa pamamagitan ng irigasyon controllers, satellite services, farm management software at ang mga teleponong nasa bulsa ng mga grower. Ang kursong ito ay nagbibigay sa iyo ng malinaw, praktikal na pag-unawa sa kung ano ang teknolohiyang iyon, kung paano ito gumagana, at kung paano ito magagamit nang maayos.\n\nMatututuhan mo ang mga pangunahing ideya sa likod ng AI at machine learning na walang mga equation, tingnan kung paano nagiging hula ang data ng agrikultura at pagkatapos ay isang rekomendasyon, at sundin ang AI sa buong season — mula sa pagpaplano at patubig hanggang sa kalusugan ng pag-crop at pag-aani. Higit sa lahat, matututo kang husgahan ang output ng AI: kung kailan ito dapat pagtitiwalaan, kailan ito tatanungin, at kung paano panatilihing namamahala ang paghatol ng tao at kaalaman sa bukid.\n\nAng kurso ay idinisenyo para sa mga grower, operator, agronomist, manager at mag-aaral. Walang kinakailangang teknikal na background.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "wala. Ang pag-uusisa kung paano masusuportahan ng teknolohiya ang gawaing pang-agrikultura ang kailangan mo.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Ipaliwanag sa simpleng wika kung ano ang artificial intelligence, machine learning at generative AI\", \"Ilarawan ang mga pangunahing pinagmumulan ng data ng agrikultura at kung bakit mapagkakatiwalaan ang data\", \"Sundin kung paano ginagawa ng isang modelo ang data sa isang hula at isang hula sa isang rekomendasyon\", \"Kilalanin ang mga praktikal na aplikasyon ng AI sa buong panahon ng pananim, mula sa pagpaplano hanggang sa pag-aani\", \"Tukuyin ang mga limitasyon at mga mode ng pagkabigo ng agrikultura AI at kung kailan hamunin ang isang rekomendasyon\", \"Ilapat ang mga prinsipyo ng pagmamay-ari ng data, privacy at responsableng paggamit sa iyong sariling operasyon\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Ano ang ibig sabihin ng AI para sa agrikultura",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Mga pangunahing ideya at kung bakit mahalaga ang mga ito ngayon.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Paano gumagana ang agrikultura AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Mula sa data hanggang sa modelo hanggang sa rekomendasyon.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI sa buong season",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Mga praktikal na aplikasyon mula sa pagpaplano hanggang sa pag-aani.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Paggamit ng AI nang responsable",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Mga limitasyon, mga karapatan sa data at tiwala, kritikal na paggamit.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Pagsubaybay sa kalusugan ng crop mula sa itaas at malapitan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Satellite imagery, vegetation index at computer vision para sa kalusugan ng pananim.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Ang mga malulusog na halaman at naka-stress na halaman ay nagpapakita ng liwanag sa ibang paraan. Ginagamit ng AI ang pagkakaibang iyon - na nakunan ng mga satellite, drone at camera - upang panoorin ang mga pananim sa sukat na hindi masakop ng koponan ng scouting.\n\n## Paano tumingin ang mga halaman sa isang satellite\n\nAng mga berdeng dahon ay sumisipsip ng karamihan sa pulang ilaw para sa photosynthesis at malakas na sumasalamin sa **near-infrared (NIR)** na liwanag. Kapag ang mga halaman ay na-stress, kalat-kalat o senescing, tumataas ang red reflectance at bumababa ang reflectance ng NIR.\n\nKinukuha ng **Normalized Difference Vegetation Index (NDVI)** ang contrast na ito:\n\n**NDVI = (NIR − Pula) ÷ (NIR + Pula)**\n\nAng mga halaga ay mula −1 hanggang +1. Ang siksik, malusog na mga halaman ay karaniwang mataas (kadalasan ay nasa itaas ng 0.6); mababa ang hubad na lupa (sa paligid ng 0.1–0.2); ang tubig ay kadalasang negatibo.\n\n## Marunong magbasa ng mga mapa ng NDVI\n\nAng NDVI ay kapaki-pakinabang para sa pagtukoy **kung saan** naiiba ang isang field, hindi para sa pag-diagnose **bakit**. Ang isang low-NDVI patch ay maaaring stress sa tubig, kakulangan sa sustansya, sakit, mga peste, problema sa pagtatanim, o ibang uri lamang. Sinasabi sa iyo ng mapa kung saan titingin; Sinasabi sa iyo ng pagmamanman kung ano ang iyong nahanap.\n\n> **Mahalaga:** Maaaring i-distort ng mga ulap, cloud shadow, haze at oras ng araw ang mga pagbabasa ng satellite. Ang mga maaasahang serbisyo ay nagtatakip sa mga ulap at naghahambing ng mga larawan sa paglipas ng panahon sa halip na magtiwala sa isang snapshot.\n\nUmiiral ang iba pang mga indeks para sa mga partikular na layunin — ang ilan ay mas sensitibo sa chlorophyll, ang iba sa nilalaman ng tubig o sa mga siksik na canopy kung saan nababad ang NDVI.\n\n## Computer vision sa malapitan\n\nSa lupa, sinusuri ng mga **computer vision** ang mga larawan mula sa mga telepono, traktora o drone sa:\n\n- kilalanin ang mga sakit at peste mula sa mga larawan ng dahon;\n- makilala ang mga damo mula sa mga pananim para sa target na pagsabog;\n- bilangin ang prutas, bulaklak o halaman upang matantya ang ani.\n\nAng mga modelong ito ay sinanay sa malalaking koleksyon ng mga larawang may label. Ang kanilang katumpakan ay lubos na nakasalalay sa kung ang mga larawang iyon ay kahawig ng iyong pananim, ang iyong mga uri at ang iyong mga kondisyon ng pag-iilaw.\n\n## Mula sa pagtuklas hanggang sa pagkilos\n\nAng isang mahusay na crop-monitoring workflow ay nagiging isang pagtuklas sa isang priyoridad na gawain: *\"Ang Zone 3 ay nagpapakita ng pagbaba ng sigla sa loob ng 10 araw. I-scout muna ang hilagang-silangan na sulok; suriin ang pagkakapareho ng irigasyon at hanapin ang mga palatandaan ng sakit sa ugat.\"* Ang mga natuklasan ng scout ay bumalik sa system, na nagpapahusay sa mga alerto sa hinaharap.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Data: ang hilaw na materyal ng agrikultura AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Saan nagmula ang data ng sakahan at kung bakit ito mapagkakatiwalaan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Ang bawat AI system ay binuo mula sa data. Kung ang data ay hindi kumpleto, bias o mali, magiging ganoon din ang AI. Ang pag-unawa sa iyong data ay ang pinakamahalagang kasanayan sa agrikultura AI.\n\n## Saan nagmumula ang data ng agrikultura\n\n| Pinagmulan | Mga halimbawa | Ano ang sinasabi nito sa iyo |\n|---|---|---|\n| Panahon | On-farm stations, regional networks, forecasts | Temperatura, pag-ulan, halumigmig, hangin, solar radiation |\n| Lupa | Moisture probe, mga pagsusuri sa lupa, mga mapa ng lupa | Magagamit ang tubig sa mga ugat, sustansya, texture |\n| Remote sensing | Imagery ng satellite, sasakyang panghimpapawid at drone | Lakas ng crop, canopy cover, mga pattern ng stress sa isang field |\n| Kagamitan | Mga controller ng irigasyon, flow meter, yield monitor, tractors | Ano ang inilapat, saan at kailan |\n| Mga Tala | Mga petsa ng pagtatanim, mga uri, mga aplikasyon ng pag-input, mga tala sa pagmamanman | Mga desisyon at obserbasyon sa pamamahala |\n| Mga merkado | Mga presyo, kontrata, signal ng demand | Konteksto ng ekonomiya para sa mga desisyon |\n\n## Ang mga katangian ng magandang data\n\n**Katumpakan** — ang pagsukat ba ay nagpapakita ng katotohanan? Ang isang moisture probe na naka-install sa isang basang lugar, o isang rain gauge sa ilalim ng isang puno, ay ililigaw ang bawat modelo na gumagamit nito.\n\n**Completeness** — may mga gaps ba? Ang isang sensor na humihinto sa pag-uulat sa loob ng isang linggo sa panahon ng isang heat wave ay nag-iiwan ng isang butas nang eksakto kung kailan ito pinakamahalaga.\n\n**Pagiging napapanahon** — sapat ba ang kamakailang data para sa desisyon? Ang kahalumigmigan ng lupa kahapon ay kapaki-pakinabang para sa patubig ngayon; ang nakaraang buwan ay hindi.\n\n**Consistency** — pareho ba ang mga unit, format at kahulugan sa paglipas ng panahon at sa mga field? Ang paghahalo ng mga pulgada at milimetro, o dalawang pangalan para sa parehong field, ay nagdudulot ng mga tahimik na error.\n\n**Pagiging kinatawan** — sinasaklaw ba ng data ang mga kundisyon kung saan gagamitin ang AI? Ang isang modelo na sinanay lamang sa mabuhangin na mga lupa ay maaaring hindi gumana sa luad.\n\n> **Pagsusuri sa field:** Bago magtiwala sa isang dashboard, magtanong ng tatlong tanong: Saan nanggaling ang numerong ito? Kailan ito sinukat? Ano ang gagawing mali?\n\n## Ang data ay nangangailangan ng konteksto\n\nAng pagbabasa ng kahalumigmigan ng lupa na 30% ay nangangahulugan ng kaunti sa sarili nito. Mahalaga kung ano ang uri ng lupa, kung gaano kalalim ang sensor, kung aling pananim ang lumalaki at sa anong yugto. Pinagsasama ng mahusay na pang-agrikulturang AI ang mga mapagkukunan ng data upang ang bawat isa ay magdagdag ng konteksto sa iba — halimbawa, pagpapares ng satellite imagery sa data ng panahon at kasaysayan ng patubig ng field.\n\n## Ang iyong data, ang iyong mga desisyon\n\nAng data ng sakahan ay may halaga — komersyal, pagpapatakbo at personal. Bago magkonekta ng kagamitan o magbahagi ng mga tala sa anumang serbisyo, unawain kung sino ang makaka-access sa data, kung paano ito gagamitin, at kung maaari mo itong dalhin kung aalis ka. Babalik kami sa pagmamay-ari ng data sa Module 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Pagmamay-ari ng data, privacy at tiwala",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Mga praktikal na prinsipyo para sa pagbabahagi ng data ng sakahan nang may kumpiyansa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Maaaring ipakita ng data ng sakahan ang mga ani, kasanayan, pananalapi at lokasyon ng mga tao at asset. Ang pagbabahagi nito ay maaaring mag-unlock ng mga mahahalagang serbisyo — ngunit dapat itong palaging isang sinadya na pagpipilian.\n\n## Mga tanong na itatanong sa sinumang provider ng teknolohiya\n\n- **Pagmamay-ari:** Sino ang nagmamay-ari ng data na ibinibigay ko at ang data na nabuo ng system tungkol sa aking sakahan?\n- **Gamitin:** Para saan gagamitin ang data? Gagamitin ba ito para sanayin ang mga modelo? Isasama ba ito sa data ng ibang mga sakahan?\n- **Pagbabahagi:** Ibabahagi ba ito o ibebenta sa mga ikatlong partido? Alin sa mga ito, at bakit?\n- **Access at portability:** Maaari ko bang i-download ang aking data sa isang magagamit na format? Maaari ko bang dalhin ito kung aalis ako?\n- **Pagtanggal:** Maaari ko bang tanggalin ang aking data, at ano ang natitira pagkatapos?\n- **Seguridad:** Paano pinoprotektahan ang data? Sino sa loob ng kumpanya ang makakakita nito?\n- **Control:** Maaari ko bang bawiin ang access para sa isang konektadong device o partner anumang oras?\n\nIlang organisasyong pang-agrikultura ang nag-publish ng mga prinsipyo ng data ng sakahan na tumutugon sa mga tanong na ito; ang pagtatanong kung ang isang provider ay sumusunod sa kanila ay isang magandang panimulang punto.\n\n## Pahintulot at pahintulot\n\nAng mga mahuhusay na system ay humihingi ng tukoy at may kaalamang pahintulot — halimbawa, nagpapahintulot sa isang connector na basahin ang data ng controller ng irigasyon nang hindi ito binibigyan ng pahintulot na baguhin ang mga setting. Bigyan ng pinakamababang access na kailangan para sa trabaho, at regular na suriin ang mga konektadong serbisyo.\n\n## Pinagsama-sama at hindi nakikilalang data\n\nAng pagsasama-sama ng data mula sa maraming mga sakahan ay maaaring mapabuti ang mga modelo para sa lahat, tulad ng mas mahusay na panrehiyong pagtatantya sa paggamit ng tubig. Mahusay, ang pagsasama-sama ay nag-aalis ng impormasyon na maaaring makilala ang isang indibidwal na sakahan. Itanong kung paano ginagawa ang anonymization at kung maaari kang mag-opt out.\n\n## Ang tiwala ay nakukuha\n\n> **Mahalagang ideya:** Ang mapagkakatiwalaang AI sa agrikultura ay malinaw tungkol sa kung paano ito gumagamit ng data, ipinapaliwanag ang mga rekomendasyon nito, inaamin ang kawalan ng katiyakan, at hinahayaan ang magsasaka sa kontrol.\n\nAng parehong mga prinsipyo ay nalalapat sa Academy mismo. Maaari mong i-download o tanggalin ang iyong data sa pag-aaral anumang oras mula sa mga setting ng iyong account.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Praktikal na ehersisyo: suriin ang isang rekomendasyon ng AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Ilapat ang iyong natutunan sa isang makatotohanang rekomendasyon.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Sa pagsasanay na ito ay isasagawa mo ang mga kritikal na kasanayan sa pagsusuri mula sa modyul na ito sa isang makatotohanang rekomendasyon.\n\n## Ang senaryo\n\nPinamamahalaan mo ang isang 60-ektaryang operasyon ng drip-irrigated tomato. Sa Martes ng umaga sa kalagitnaan ng season, ipinapakita ng iyong sistema ng pagsuporta sa desisyon ang:\n\n> *\"Rekomendasyon: Laktawan ang irigasyon sa Block C para sa susunod na 48 oras. Hinulaang paggamit ng tubig sa pananim: 3.1 mm/araw. Halumigmig ng lupa: 82% ng kapasidad sa bukid. Kumpiyansa: mataas.\"*\n\nKapag dumaan ka sa Block C, mapapansin mo na ang mga halaman sa silangang gilid ay mukhang nalanta sa init ng hapon, at ang pinakamataas na temperatura kahapon ay 37 °C — mas mainit kaysa sa 29 °C na pagtataya na ginamit ng system dalawang araw na ang nakakaraan.\n\n## Ang iyong gawain\n\nGawin ang checklist sa ibaba. Isulat ang iyong pangangatwiran sa **Mga Tala** na tab para makabalik ka dito.\n\n1. **Suriin ang mga input.** Aling input ang mukhang kaduda-dudang? (Pahiwatig: ihambing ang forecast na temperatura sa nangyari.)\n2. **Suriin ang mga sensor.** Saan naka-install ang soil moisture probe? Maaari ba itong nasa isang lugar na hindi kumakatawan sa silangang gilid?\n3. **Tumingin ka sa bukid.** Ano ang susuriin mo sa mga lantang halaman? Isaalang-alang ang pagbara ng emitter, presyon sa dulo ng linya, at kalusugan ng ugat.\n4. **Magpasya.** Gusto mo bang sundin, baguhin o i-override ang rekomendasyon? bakit naman\n5. **Mag-record at mag-ulat.** Anong feedback ang ibibigay mo para matuto rito ang system — at ang iyong team?\n\n## Talakayan\n\nAng isang malakas na sagot ay napansin na ang hinulaang paggamit ng tubig ay maaaring batay sa isang hula na naging masyadong cool, kaya ang aktwal na demand ay mas mataas. Ang isang solong probe na nagbabasa ng 82% ay maaaring hindi kumakatawan sa silangang gilid, lalo na kung ang mga naglalabas doon ay barado o mababa ang presyon sa dulo ng lateral. Ang isang makatwirang desisyon ay maaaring inspeksyunin kaagad ang silangang gilid, patakbuhin ang isang maikling patubig kung ang inspeksyon ay nagpapatunay ng tuyong lupa, at iulat ang parehong hula sa miss at ang posibleng problema sa pagkakapareho.\n\nBihira ang isang solong tamang sagot — ngunit palaging may tamang proseso: suriin ang mga input, suriin ang konteksto, tumingin sa field, magpasya, at magtala.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Pag-aani, mga pamilihan at ang supply chain",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Pagtataya ng ani, market intelligence at logistics.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Habang umuusad ang panahon patungo sa pag-aani, nagbabago ang mga desisyon mula sa pagpapalaki ng pananim patungo sa pagkuha ng halaga nito.\n\n## Pagtataya ng ani\n\nPinagsasama ng mga pagtataya ng ani ang mga modelo ng paglago ng pananim, lagay ng panahon hanggang sa kasalukuyan at mga pagtataya, siglang nakabatay sa imahe, at kung minsan ay binibilang mula sa computer vision. Ang mga naunang pagtataya ay hindi gaanong tiyak; nagpapabuti ang katumpakan habang umuusad ang panahon.\n\nSinusuportahan ng mga pagtataya ang mga desisyon tulad ng:\n\n- magkano ang ibebenta pasulong, at kailan;\n- kung gaano karaming mga manggagawa, mga trak at kapasidad ng imbakan ang magbu-book;\n- kung ang isang late input ay sulit pa ring ilapat.\n\n## Market intelligence\n\nAng mga tool sa market intelligence ay nagtitipon ng mga presyo, futures, data ng pag-export, lagay ng panahon sa mga nakikipagkumpitensyang rehiyon at mga balita upang makatulong na asahan ang mga paggalaw ng presyo. Mabilis na maibubuod ng AI ang mga signal na ito at i-highlight ang mga hindi pangkaraniwang pagbabago. Walang modelo ang maaaring mahulaan ang mga merkado nang may katiyakan; ituring ang mga pagtataya sa merkado bilang isang input sa isang planong pinamamahalaan ng panganib, hindi bilang isang garantiya.\n\n## Timing at kalidad ng ani\n\nAng mga modelong sumusubaybay sa maturity ng crop — mga antas ng asukal sa mga ubas, kahalumigmigan sa butil, kulay sa prutas — ay tumutulong sa pag-iskedyul ng ani para sa pinakamahusay na balanse ng kalidad, panganib sa panahon at logistik. Pinagsama sa pagkakaroon ng paggawa at kagamitan, makakatulong ang mga ito sa pagkakasunud-sunod ng mga field sa isang operasyon.\n\n## Traceability at ebidensya\n\nAng mga mamimili ay lalong humihingi ng patunay kung paano ginawa ang isang pananim: paggamit ng tubig, mga input na inilapat, mga sertipikasyon. Ang mga system na nagtatala ng mga rekomendasyon, pagkilos at pag-verify sa buong season ay ginagawang madaling makagawa ng ebidensyang iyon — isa pang dahilan kung bakit mahalaga ang hakbang sa pag-verify ng loop.\n\n> **Mahalagang ideya:** Sa pag-aani, ang halaga ng AI ay nagmumula sa pagbabawas ng kawalan ng katiyakan sa timing, dami at presyo — at mula sa pagdodokumento kung ano ang ginawa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Pag-aaral ng kaso: irigasyon at pamamahala ng tubig",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Paano pinagsama ang evapotranspiration, soil moisture at AI sa pag-iiskedyul ng patubig.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Ang irigasyon ay isa sa mga pinakamalinaw na halimbawa ng AI na lumilikha ng halaga sa isang sakahan, dahil ang mga pagpapasya sa tubig ay madalas, magastos at masusukat.\n\n## Ang balanse ng tubig\n\nIsipin ang root zone bilang isang bank account para sa tubig.\n\n- **Mga deposito:** ulan at patubig.\n- **Withdrawals:** tubig na ginagamit ng pananim at sumingaw mula sa lupa — sama-samang tinatawag na **evapotranspiration (ET)** — kasama ang drainage sa ibaba ng mga ugat.\n\nAng layunin ng pag-iiskedyul ng patubig ay panatilihin ang balanse sa pagitan ng isang mas mababang limitasyon, kung saan ang pananim ay nagsisimulang dumanas ng stress, at isang pinakamataas na limitasyon, kung saan ang tubig ay umaagos at nasasayang.\n\n## Pagtatantya ng paggamit ng tubig sa pananim\n\nAng paggamit ng tubig sa pananim ay karaniwang tinatantya sa dalawang hakbang:\n\n1. Ang **Reference evapotranspiration (ET₀)** ay kinakalkula mula sa data ng panahon — temperatura, halumigmig, hangin at solar radiation — para sa isang karaniwang reference na crop.\n2. Ang **crop coefficient (Kc)** ay nagsasaayos ng ET₀ para sa aktwal na crop at ang yugto ng paglago nito: **ETc = ET₀ × Kc**.\n\nMapapahusay ng machine learning ang pagtatantya na ito sa pamamagitan ng pag-aaral mula sa mga lokal na sensor, canopy imagery at sariling kasaysayan ng sakahan, lalo na kung saan ang mga karaniwang coefficient ay hindi angkop.\n\n## Isang senaryo sa pag-iiskedyul\n\n> **Halimbawa:** Ang isang bloke ng ubasan ay may 40 mm na madaling magagamit na tubig kapag puno ang root zone. Ang mga probe ng kahalumigmigan ng lupa ay nagpapakita ng 18 mm na natitira. Ang Forecast ETc ay 5 mm bawat araw para sa susunod na apat na araw, at walang inaasahang pag-ulan.\n\nKung walang irigasyon, maaabot ng bloke ang mas mababang limitasyon nito sa loob ng halos tatlo at kalahating araw (18 mm ÷ 5 mm/araw). Ang isang sistema ng pag-iiskedyul ay magrerekomenda ng patubig sa susunod na dalawa hanggang tatlong araw, na may sukat upang muling punuin ang root zone nang hindi ito labis na pinupuno, na nag-time sa magagamit na kapasidad ng bomba at babaan ang mga presyo ng kuryente sa gabi.\n\nKung magbabago ang hula sa 15 mm ng ulan sa ikalawang araw, ina-update ng magandang system ang rekomendasyon — at ipinapaliwanag kung bakit.\n\n## Kung saan ang AI ay nagdaragdag ng halaga\n\n- **Mas mahusay na mga pagtatantya sa paggamit ng tubig** sa pamamagitan ng pagsasama-sama ng panahon, mga sensor at koleksyon ng imahe.\n- **Pag-iiskedyul na alam ang hula** na tumutukoy sa paparating na ulan at init.\n- **Pag-optimize** sa maraming bloke, limitasyon ng bomba at paglalaan ng tubig.\n- **Verification** — pagkumpirma mula sa flow meter at moisture ng lupa na nangyari ang irigasyon gaya ng binalak at nagkaroon ng inaasahang epekto.\n\n## Ano ang maaaring magkamali\n\nAng isang barado na emitter, isang sirang balbula o isang probe na naka-install sa isang hindi kinatawan na lugar ay maaaring iligaw lahat ang system. Iyon ang dahilan kung bakit mahalaga ang hakbang sa pag-verify: kapag ang naobserbahang kahalumigmigan ng lupa ay hindi tumutugon gaya ng hinulaang pagkatapos ng isang patubig, ito ay isang senyales upang siyasatin ang field, hindi lamang ang modelo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Mga limitasyon, mga pagkakamali at kung kailan hamunin ang isang rekomendasyon",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Kinikilala ang mga mode ng kabiguan at pinapanatili ang paghuhusga ng tao.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Ang bawat AI system ay minsan ay mali. Ang layunin ay hindi bulag na pagtitiwala o blankong pagtanggi, ngunit **naka-calibrate na tiwala**: ang pag-alam kung kailan karapat-dapat ng kumpiyansa ang isang rekomendasyon at kung kailan ito nararapat sa pangalawang pagtingin.\n\n## Mga karaniwang mode ng pagkabigo\n\n**Masamang mga input.** Ang isang nabigong sensor, isang maling lugar na probe o isang nawawalang data feed ay gumagawa ng kumpiyansa na kalokohan. *Basura sa, basura sa labas.*\n\n**Out-of-range na mga kondisyon.** Ang mga modelo ay hindi gaanong maaasahan sa mga sitwasyong bihira nilang makita sa panahon ng pagsasanay: matinding init, bagong uri, hindi pangkaraniwang lupa.\n\n**Dift.** Nagbabago ang mga kundisyon sa paglipas ng panahon, at maaaring hindi na ang isang modelo na tumpak tatlong taon na ang nakalipas.\n\n**Bias.** Kung ang data ng pagsasanay ay labis na kumakatawan sa ilang partikular na rehiyon, laki ng sakahan o pananim, maaaring hindi gaanong tumpak ang mga rekomendasyon para sa mga operasyong naiiba.\n\n**Nawawalang konteksto.** Hindi alam ng system ang tungkol sa herbicide drift ng kapitbahay, ang sirang tubo, o ang kontrata na nangangailangan ng ani sa susunod na linggo.\n\n**Automation bias.** Ang mga tao ay madalas na labis na nagtitiwala sa output ng makina, lalo na kapag ito ay ipinakita nang tumpak. Ang isang numero na may dalawang decimal na lugar ay hindi kinakailangang tumpak.\n\n## Kailan hamunin ang isang rekomendasyon\n\nI-pause at imbestigahan kapag:\n\n- ang rekomendasyon ay sumasalungat sa nakikita mo sa field;\n- ito ay malayo sa normal na hanay para sa season;\n- ang sistema ay nagpapakita ng mababang kumpiyansa, o hindi nagpapakita ng kumpiyansa sa lahat;\n- nawawala, lipas, o maliwanag na mali ang pangunahing data;\n- ang mga kahihinatnan ng isang error ay magiging malubha o mahirap ibalik.\n\n> **Pagsusuri sa field:** Isang simpleng panuntunan — kung mas malaki at hindi na mababawi ang desisyon, mas maraming ebidensya ang dapat mong kailanganin bago kumilos sa isang rekomendasyon ng AI.\n\n## Paano hamunin nang maayos\n\n1. **Suriin ang mga input.** Nag-uulat ba ang mga sensor? Napapanahon ba ang data ng panahon?\n2. **Itanong ang dahilan.** Anong data ang nagdulot ng mungkahing ito?\n3. **Tumingin sa patlang.** I-scout ang lugar na pinag-uusapan.\n4. **I-record kung ano ang iyong napagpasyahan at kung bakit.** Ang iyong pag-override ay mahalagang feedback na tumutulong sa pagpapabuti ng system.\n\nAng paghamon sa isang rekomendasyon ay hindi isang kabiguan ng teknolohiya. Ito ay kung paano gumagana nang maayos ang mga tao at AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Mga modelo, pagsasanay at hula",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Paano natututo ang isang modelo mula sa mga halimbawa at kung bakit walang katiyakan ang bawat hula.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "Ang **modelo** ay isang mathematical na paglalarawan ng isang relasyon — halimbawa, sa pagitan ng panahon at ang dami ng tubig na ginagamit ng isang pananim. Ang machine learning ay bumubuo ng mga modelo sa pamamagitan ng pag-aaral mula sa mga halimbawa.\n\n## Pag-aaral mula sa mga halimbawa\n\nIsipin na gusto mong hulaan kung gaano karaming tubig ang gagamitin ng isang almond orchard bukas. Nangongolekta ka ng maraming nakaraang araw, bawat isa ay may:\n\n- ang **mga input** (tinatawag ding *mga tampok*): temperatura, halumigmig, hangin, solar radiation, edad ng puno, takip ng canopy;\n- ang **kinalabasan** na gusto mong hulaan: ang tubig na aktwal na ginamit ng halamanan noong araw na iyon, na sinusukat ng mga sensor.\n\nSa panahon ng **pagsasanay**, paulit-ulit na inaayos ng algorithm ang modelo hanggang sa tumugma ang mga hula nito sa mga naitalang resulta nang mas malapit hangga't maaari. Ito ay tinatawag na **supervised learning**, dahil ang bawat halimbawa ay may kasamang tamang sagot.\n\n## Pagsubok sa data na hindi pa nakikita ng modelo\n\nMaaaring kabisaduhin ng isang modelo ang mga halimbawa ng pagsasanay nito at mabibigo pa rin sa mga bagong araw. Kaya naman ang data scientist ay nagtabi ng ilang data para sa **validation** — data na hindi nakita ng modelo sa panahon ng pagsasanay. Ang performance sa hold-out na data na iyon ay ang tapat na sukatan kung gaano ito gumagana.\n\n> **Mahalaga:** Itanong kung paano na-validate ang isang modelo. \"Ito ay akma sa aming makasaysayang data\" ay isang tanda ng babala, hindi isang lakas.\n\n## Katumpakan ng pagsukat\n\nPara sa mga numerical na hula, kasama sa mga karaniwang sukat ang **average na error** (kung gaano kalayo ang mga hula, sa average) at kung gaano karami ang variation na ipinapaliwanag ng modelo. Para sa mga klasipikasyon — \"stressed\" o \"healthy\" — itinatanong namin kung gaano kadalas tama ang modelo, at kung gaano ito kadalas nagdudulot ng mga maling alarma o nakakaligtaan ang mga totoong problema.\n\nWalang iisang \"magandang\" katumpakan. Ang pagtataya ng ani na nasa loob ng 5% ay maaaring maging mahusay para sa mga desisyon sa marketing; ang isang frost alarm na nakakaligtaan ang isang kaganapan sa sampu ay maaaring hindi katanggap-tanggap.\n\n## Bawat hula ay may kawalang-katiyakan\n\nPagbabago ng panahon, pag-anod ng mga sensor at iba-iba ang mga field. Ang isang mapagkakatiwalaang sistema ay nagsasabi ng kawalan ng katiyakan: \"Ang paggamit ng tubig bukas ay 6.2 mm, malamang sa pagitan ng 5.6 at 6.8 mm.\" Itinatago ng isang solong numero na walang hanay ang mahalagang impormasyon.\n\n## Kapag nasira ang mga modelo\n\nNagbabago ang mga kundisyon. Ang mga bagong varieties, isang taon ng tagtuyot o isang binagong sistema ng irigasyon ay maaaring gawing hindi gaanong kinatawan ang nakaraang data. Ito ay tinatawag na **drift**. Sinusubaybayan ng mahuhusay na system ang kanilang sariling katumpakan sa paglipas ng panahon at muling sinasanay kapag bumaba ang pagganap.\n\n## Mga karaniwang uri ng mga modelo ng agrikultura\n\n- **Regression** — hinuhulaan ang isang numero (paggamit ng tubig, ani, presyo).\n- **Pag-uuri** — nagtatalaga ng kategorya (may sakit o wala, uri ng pananim).\n- **Pagtataya** — hinuhulaan kung paano magbabago ang isang bagay sa paglipas ng panahon (moisture ng lupa sa susunod na limang araw).\n- **Computer vision** — binibigyang-kahulugan ang mga larawan (nagbibilang ng prutas, nakakakita ng mga damo).\n- **Pag-optimize** — hinahanap ang pinakamahusay na plano sa loob ng mga limitasyon (isang iskedyul ng patubig na nakakatugon sa pangangailangan ng pananim na may limitadong tubig).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Pagpaplano at pagtatanim",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Paggamit ng data at AI bago mapunta ang unang binhi sa lupa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Marami sa mga pinakamahalagang desisyon ng panahon ay ginawa bago itanim. Makakatulong ang AI sa pamamagitan ng pagdadala ng higit pang ebidensya sa mga desisyong iyon.\n\n## Kasaysayan ng field at mga zone ng pamamahala\n\nAng mga patlang ay hindi pare-pareho. Ang mga taon ng mga mapa ng ani, mga survey sa lupa at satellite imagery ay kadalasang nagpapakita ng mga pare-parehong pattern: isang mababang lugar na nananatiling basa, isang mabuhanging tagaytay na unang natutuyo. Maaaring pangkatin ng mga algorithm ang mga lugar na ito sa **management zones** na iba ang pagtugon sa tubig, buto at pataba.\n\nSa mga zone, ang isang grower ay maaaring mag-iba-iba ng mga rate ng seeding, pumili kung saan maglalagay ng mas marami o mas kaunting nitrogen, o magplano ng mga set ng irigasyon na tumutugma sa kung paano kumikilos ang bawat bahagi ng field.\n\n## Iba't-ibang at mga desisyon sa petsa ng pagtatanim\n\nMaaaring matantya ng mga modelong sinanay sa mga panrehiyong pagsubok at talaan ng panahon kung paano gumaganap ang mga varieties sa ilalim ng iba't ibang kundisyon at kung paano nakakaapekto ang petsa ng pagtatanim sa panganib - halimbawa, ang pagkakataon ng heat stress sa pamumulaklak. Ang mga pagtatantya na ito ay pinakakapaki-pakinabang kapag ipinapakita ng mga ito ang mga lokal na pagsubok, hindi lamang ang mga pambansang average.\n\n## Pagpaplano ng senaryo\n\nAng mga tool ng AI ay maaaring tumakbo nang mabilis sa mga sitwasyong \"paano kung\": Paano kung tuyo ang panahon? Paano kung ang mga alokasyon ng tubig ay bawasan ng 20%? Paano kung tumaas ang presyo ng input? Ang paghahambing ng mga sitwasyon ay nakakatulong sa iyo na pumili ng isang plano na magagamit sa maraming posibleng hinaharap, hindi lamang sa inaasahan.\n\n> **Pagsusuri sa field:** Kapag nagrekomenda ang isang tool ng rate ng seeding o iba't-ibang, itanong kung saang data ito binuo. Ang data ng pagsubok sa rehiyon mula sa iyong mga lupa at klima ay higit na nauugnay kaysa sa isang pambansang average.\n\n## Mga limitasyon na dapat tandaan\n\nAng mga rekomendasyon sa pre-season ay nakasalalay sa mga pangmatagalang pagtataya, na hindi tiyak. Tratuhin ang mga ito bilang panimulang plano na iaakma habang lumalabas ang panahon, hindi isang nakapirming reseta.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Pagsusulit sa Modyul 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Suriin ang iyong pag-unawa sa mga pangunahing kaalaman sa AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Sagutin ang limang mabilis na tanong tungkol sa mga ideya sa Modyul 1. Ang mga pagsusulit ay para sa pagsasanay: maaari mong ulitin ang mga ito hangga't gusto mo, at makakakita ka ng mga paliwanag pagkatapos ng bawat pagsubok.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Pagsusulit sa Modyul 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Suriin ang iyong pag-unawa sa data, modelo at rekomendasyon.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Limang tanong sa kalidad ng data, pagsasanay sa modelo at suporta sa desisyon. Ulitin nang madalas hangga't gusto mo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Pagsusulit sa Modyul 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Suriin ang iyong pag-unawa sa AI sa buong season.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Limang tanong sa pagpaplano, patubig, pagsubaybay sa pananim at pag-aani. Ulitin nang madalas hangga't gusto mo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Mula sa hula hanggang sa rekomendasyon",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Paano ginagawa ng mga sistemang sumusuporta sa desisyon ang mga hula sa mga aksyon — at panatilihing nakasubaybay ang mga tao.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Ang isang hula ay nagsasabi sa iyo kung ano ang malamang na mangyari. Isang **rekomendasyon** ang nagsasabi sa iyo kung ano ang gagawin tungkol dito. Ang paggawa ng isa sa isa ay nangangailangan ng mga layunin, hadlang at konteksto.\n\n## Isang halimbawa ng patubig\n\nIpagpalagay na ang isang modelo ay hinuhulaan na ang isang patlang ay gagamit ng 7 mm ng tubig bukas at ang kahalumigmigan ng lupa ay malapit na sa mas mababang limitasyon na pinahihintulutan ng pananim. Pinagsasama ng isang sistema ng rekomendasyon ang hulang iyon sa:\n\n- **goals** — protektahan ang ani at kalidad, iwasan ang basura;\n- **mga hadlang** — ang kapasidad ng bomba, ang natitirang alokasyon ng tubig, mga singil sa kuryente, ang iskedyul ng irigasyon;\n- **context** — pagtataya ng ulan, yugto ng pag-crop, isang nakaplanong ani na nangangailangan ng tuyong lupa.\n\nAng resulta ay maaaring: *\"Patubigan ang bloke 4 ngayong gabi sa loob ng 6 na oras (mga 18 mm). Laktawan ang bloke 7: Ang 12 mm ng ulan ay tinatayang may mataas na kumpiyansa.\"*\n\n## Ipinapaliwanag ng mga magagandang rekomendasyon ang kanilang mga sarili\n\nAng isang rekomendasyon na hindi mo maintindihan ay isang rekomendasyon na hindi mo maaaring hatulan. Maghanap ng mga system na nagpapakita ng:\n\n- **ang dahilan** — kung aling data at aling hula ang nagdulot ng mungkahi;\n- **ang kumpiyansa** — gaano katiyak ang sistema;\n- **ang mga alternatibo** — ano ang mangyayari kung maghintay ka, o mag-apply nang mas kaunti;\n- **the evidence trail** — para masuri mo pagkatapos kung nangyari at gumana ang aksyon.\n\n## Panatilihin ang mga tao sa loop\n\nSa agrikultura, karamihan sa AI ay **suporta sa pagpapasya**: ang sistema ay nagmumungkahi, ang isang tao ang nagpapasya. Kahit na ang automation ay nagsasagawa ng mga aksyon — halimbawa, isang controller na nagbubukas ng balbula — ang mga responsableng disenyo ay kinabibilangan ng mga hakbang sa pag-apruba, limitasyon, at kakayahang mag-override.\n\n> **Mahalagang ideya:** Ang taong may pananagutan sa kinalabasan ay dapat palaging makita kung bakit ginawa ang isang rekomendasyon, baguhin ito, at ihinto ito.\n\n## Pagsasara ng loop: pag-verify\n\nAng pinakamahalagang sistema ay hindi humihinto sa rekomendasyon. Sinusuri nila kung ano talaga ang ginawa at kung ano ang sumunod na nangyari: Tumakas ba ang patubig? Gaano karaming tubig ang inilapat? Nabawi ba ang kahalumigmigan ng lupa gaya ng inaasahan? Ang **pag-verify** na hakbang na ito ay bumubuo ng tiwala, nakakakuha ng mga problema sa kagamitan, at gumagawa ng ebidensya na lalong hinihiling ng mga mamimili, auditor at awtoridad sa tubig.\n\nTandaan ang loop mula sa Module 1: **sense → predict → recommend → verify**. Ang bawat pagliko ng loop ay nagpapabuti sa mga desisyon at data para sa susunod na season.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Buod ng kurso at mga susunod na hakbang",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Mga mahahalagang takeaway at kung paano maghanda para sa huling pagsusulit.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Binabati kita sa pagtatapos ng kurso. Pagsama-samahin natin ang mga pangunahing ideya.\n\n## Mga pangunahing takeaway\n\n- **AI ay isang toolbox**, hindi isang teknolohiya. Ang mga panuntunan, machine learning, deep learning at generative AI ay nababagay sa iba't ibang problema.\n- **Ang data ang pundasyon.** Tinutukoy ng katumpakan, pagkakumpleto, pagiging maagap, pagkakapare-pareho at pagiging kinatawan kung ano ang magagawa ng anumang modelo.\n- **Natututo ang mga modelo mula sa mga halimbawa** at dapat ma-validate sa data na hindi pa nila nakita. Ang bawat hula ay may kawalan ng katiyakan, at ang mga modelo ay maaaring maanod.\n- **Pinagsasama ng mga rekomendasyon ang mga hula sa mga layunin, hadlang at konteksto.** Ipinapaliwanag ng mga mahuhusay ang kanilang sarili.\n- **Mahalaga ang loop:** sense → predict → recommend → verify.\n- **Sa buong season**, sinusuportahan ng AI ang pagpaplano, irigasyon, pagsubaybay sa pananim, timing ng ani, marketing at traceability.\n- **Gumamit ng naka-calibrate na tiwala.** Hamunin ang mga rekomendasyon na sumasalungat sa field, nakasalalay sa mahinang data, o may mataas na stake.\n- **Ang iyong data ay nararapat sa pangangalaga.** Alamin kung sino ang nagmamay-ari nito, kung paano ito ginagamit, at kung paano ito babawiin.\n\n## Paghahanda para sa huling pagsusulit\n\nSakop ng huling pagsusulit ang lahat ng apat na module. Ito ay kumukuha ng 20 tanong mula sa isang mas malaking bangko at nagbibigay sa iyo ng 30 minuto. Kailangan mo **80%** para makapasa.\n\n> **Tip:** Suriin ang iyong mga tala at ang mga pagsusulit sa module. Kung napalampas mo ang isang tanong sa pagsusulit, buksan ang aralin na itinuturo nito bago ang pagsusulit.\n\n## Saan susunod na pupuntahan\n\n- **Agricultural Data Fundamentals** ay mas malalim sa mga pinagmumulan ng data at kalidad.\n- **Remote Sensing at Satellite Intelligence** ay lumalawak sa mga index ng imagery at vegetation.\n- Inilalapat ng **AI-Powered Irrigation** ang mga ideyang ito sa pamamahala ng tubig nang detalyado.\n\nSalamat sa pag-aaral sa AGRO-AI Academy. Kapag handa ka na, buksan ang huling pagsusulit mula sa menu ng kurso.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Maligayang pagdating sa kurso",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Ano ang iyong matututunan, kung paano gumagana ang kurso, at kung paano makuha ang iyong sertipiko.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Maligayang pagdating sa **Introduction to Artificial Intelligence in Agriculture**, ang unang kurso ng AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nHindi mo kailangan ng anumang teknikal na background upang magtagumpay dito. Kung sakaling tumingin ka sa isang taya ng panahon, nagbasa ng isang pagsubok sa lupa o naghambing ng mga ani sa pagitan ng dalawang larangan, ginagamit mo na ang mga gawi ng pag-iisip na nabuo sa kursong ito: pagkolekta ng ebidensya, pagtukoy ng mga pattern at pagpapasya kung ano ang susunod na gagawin.\n\n## Ano ang matututuhan mo\n\nSa pagtatapos ng kurso, magagawa mong:\n\n- ipaliwanag kung ano ang AI — at hindi — sa simpleng wika;\n- ilarawan kung saan nagmumula ang data ng agrikultura at kung bakit ito maaasahan;\n- sundan kung paano nagiging hula ang data, at nagiging rekomendasyon ang isang hula;\n- kilalanin ang mga kapaki-pakinabang na AI application sa buong season;\n- husgahan ang output ng AI nang kritikal at gamitin ito nang responsable.\n\n## Paano gumagana ang kurso\n\nAng kurso ay may **apat na module** ng mga maiikling aralin. Ang bawat isa hanggang tatlo ay nagtatapos sa mga module na may isang pagsusulit sa pagsasanay na makakatulong sa iyong suriin ang iyong pag-unawa; Ang ikaapat na module ay nagtatapos sa isang praktikal na ehersisyo at isang buod ng kurso na naghahanda sa iyo para sa huling pagsusulit. Ang mga pagsusulit ay hindi binibilang sa iyong sertipiko, at maaari mong kunin muli ang mga ito hangga't gusto mo.\n\nAwtomatikong nase-save ang iyong pag-unlad. Maaari kang huminto sa gitna ng isang aralin sa iyong telepono at magpatuloy sa ibang pagkakataon sa isang computer.\n\n> **Tip:** Gamitin ang **Mga Tala** na tab sa ilalim ng bawat aralin upang isulat ang mga ideyang naaangkop sa sarili mong operasyon. Ang mga tala ay pribado — ikaw lang ang makakakita sa kanila.\n\n## Pagkamit ng iyong sertipiko\n\nKapag natapos mo na ang bawat kinakailangang aralin, magbubukas ang **panghuling pagsusulit**. Kumuha ito ng 20 tanong mula sa isang mas malaking bangko, na-time sa 30 minuto, at nangangailangan ng marka na **80%** upang makapasa. Kung hindi ka makapasa sa unang pagsubok, maaari mong suriin ang mga inirerekomendang aralin at subukang muli pagkatapos ng isang oras.\n\nIpasa ang pagsusulit at AGRO-AI Awtomatikong ibibigay ng Academy ang iyong certificate — libre, na may natatanging ID ng kredensyal at isang pahina ng pampublikong pag-verify na maaari mong ibahagi sa LinkedIn.\n\nMagsimula tayo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Mula sa mga panuntunan hanggang sa pag-aaral: kung ano ang AI (at hindi)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Mga payak na kahulugan ng AI, machine learning, deep learning at generative AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "Ginagamit ang \"artipisyal na katalinuhan\" upang ilarawan ang lahat mula sa isang simpleng alarma ng sensor hanggang sa isang chatbot na nagsusulat ng mga sanaysay. Bago natin tingnan ang agrikultura, kailangan natin ng malinaw na salita.\n\n## Artipisyal na katalinuhan\n\nAng **Artificial intelligence (AI)** ay ang malawak na larangan ng pagbuo ng mga computer system na gumaganap ng mga gawain na karaniwan naming iniuugnay sa katalinuhan ng tao: pagkilala sa mga pattern, paggawa ng mga hula, pag-unawa sa wika at pagpili ng mga aksyon.\n\nAng kahulugan na iyon ay malawak sa layunin. Kabilang dito ang ibang mga teknolohiya, kaya nakakatulong ito upang paghiwalayin ang dalawang paraan ng pagbuo ng mga ito.\n\n## Mga panuntunan laban sa pag-aaral\n\n**Ang mga sistemang nakabatay sa panuntunan** ay sumusunod sa mga tagubiling isinulat ng mga tao. Ang isang irrigation controller na nagsasabing *\"kung ang kahalumigmigan ng lupa ay bumaba sa ibaba 25%, simulan ang pump\"* ay sumusunod sa isang panuntunan. Ang mga panuntunan ay transparent at predictable, ngunit kailangang malaman ng isang tao ang tamang panuntunan nang maaga, at ang mga panuntunan ay hindi umaangkop kapag nagbabago ang mga kondisyon.\n\nAng **Machine learning (ML)** system ay natututo ng mga pattern mula sa mga halimbawa sa halip. Magpakita ng modelo ng libu-libong nakalipas na panahon — lagay ng panahon, lupa, irigasyon at ang mga sumunod na ani — at maaari itong matuto ng mga relasyon na walang sinumang tahasang isinulat. Karamihan sa tinatawag ng mga tao ngayon na \"AI\" ay machine learning.\n\n| | Sistemang nakabatay sa panuntunan | Machine learning model |\n|---|---|---|\n| Saan nagmula ang lohika | Sinusulat ito ng mga tao | Natutunan mula sa data |\n| Lakas | Transparent, predictable | Nakahanap ng mga kumplikadong pattern, umaangkop sa bagong data |\n| Kahinaan | matigas; nakakaligtaan ang hindi naisip ng mga designer | Tanging kasing ganda ng data nito; maaaring mahirap ipaliwanag |\n| Halimbawa ng bukid | Nagsisimula ang pump sa ibaba ng moisture threshold | Hinulaan ng modelo ang paggamit ng tubig sa pananim bukas |\n\n## Malalim na pag-aaral\n\nAng **Deep learning** ay isang pamilya ng mga pamamaraan ng machine learning na binuo mula sa maraming layered na \"neural networks\". Ito ay lalo na mahusay sa magulo, high-dimensional na data tulad ng mga imahe at tunog. Kapag nakilala ng app ng telepono ang isang sakit sa dahon mula sa isang larawan, kadalasang nasa likod nito ang malalim na pag-aaral.\n\n## Generative AI\n\nGumagawa ang **Generative AI** ng bagong content — text, mga larawan, audio o code — batay sa mga pattern na natutunan mula sa napakalaking dataset. Ang mga malalaking modelo ng wika (LLM), ang teknolohiya sa likod ng mga katulong sa pakikipag-usap, ay generative AI. Maaari nilang ipaliwanag ang mga konsepto, ibuod ang mga ulat at sagutin ang mga tanong sa maraming wika.\n\nMakapangyarihan ang Generative AI, ngunit hinuhulaan nito ang mga *posibleng* salita, hindi na-verify na mga katotohanan. Maaari itong magpahayag ng isang bagay na hindi totoo nang may kumpletong pagtitiwala. Sa agrikultura, ang isang generative assistant ay kapaki-pakinabang para sa pagpapaliwanag at pagbalangkas, ngunit ang mahahalagang numero at desisyon ay dapat suriin laban sa pinagkakatiwalaang data.\n\n> **Mahalagang ideya:** Ang AI ay hindi isang makina. Ito ay isang toolbox. Ang mga panuntunan, istatistikal na modelo, malalim na pag-aaral at generative na modelo ay magkasya sa iba't ibang problema.\n\n## Ano ang hindi AI\n\n- **Ang AI ay hindi magic.** Ang bawat output ay nagmumula sa data at mga pagpipilian sa disenyo na ginawa ng mga tao.\n- **Hindi \"naiintindihan\" ng AI ang iyong sakahan** sa paraang ginagawa mo. Alam lamang nito kung ano ang nakuha ng data nito.\n- **Ang AI ay hindi awtomatikong tama.** Ang mga hula ay nagdadala ng kawalan ng katiyakan, at ang pinakamahusay na mga system ay nagsasabi sa iyo kung magkano.\n- **Hindi pinapalitan ng AI ang paghatol.** Ito ay isang tool na sumusuporta sa desisyon. Ang responsibilidad para sa desisyon ay nananatili sa mga tao.\n\n## Suriin ang iyong pang-unawa\n\nMag-isip ng isang tool na ginagamit mo na — isang weather app, isang yield monitor, isang spreadsheet na may mga formula. Ang lohika ba nito ay nakasulat bilang mga panuntunan, o natutunan mula sa data? Isulat ang iyong sagot sa iyong mga tala; babalik tayo sa ideyang ito sa Modyul 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Bakit nagiging AI ngayon ang agrikultura",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Ang mga panggigipit at pagkakataong nagtutulak ng AI adoption sa mga bukid.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Ang mga magsasaka ay palaging gumagamit ng impormasyon upang gumawa ng mga desisyon. Ang nagbago ay ang dami ng impormasyong magagamit, ang bilis kung saan dapat itong gamitin, at ang presyon sa bawat mapagkukunan.\n\n## Mga presyon sa modernong sakahan\n\n**Tubig.** Ang agrikultura ay ang pinakamalaking gumagamit ng sariwang tubig sa buong mundo; ayon sa UN Food and Agriculture Organization (FAO AQUASTAT), ang agrikultura sa kabuuan, karamihan sa irigasyon, ay bumubuo ng humigit-kumulang 70% ng mga global freshwater withdrawal. Sa maraming rehiyon, lumiliit ang mga alokasyon ng tubig habang lumalaki ang demand. Bawat desisyon sa patubig ay mahalaga.\n\n**Pagbabago-bago ng klima.** Hindi gaanong mahuhulaan ang mga panahon. Dahil sa mga heat wave, hindi regular na pag-ulan at mga bagong presyur ng peste, hindi gaanong maaasahan ang playbook noong nakaraang taon.\n\n**Mga gastos at margin.** Ang mga gastos sa pataba, enerhiya, paggawa at kagamitan ay maaaring umigo nang husto. Ang paglalapat ng tamang halaga sa tamang lugar ay pinoprotektahan ang margin at ang kapaligiran.\n\n**Paggawa.** Maraming mga operasyon ang nagpupumilit na mahanap at mapanatili ang mga bihasang tao. Ang kaalaman na nabubuhay sa isang may karanasang tagapamahala ay nasa panganib kapag ang taong iyon ay hindi available.\n\n**Mga inaasahan mula sa mga mamimili at regulator.** Ang mga supply chain ay lalong humihingi ng katibayan: kung gaano karaming tubig ang ginamit, kung aling mga input ang inilapat, anong mga kasanayan ang sinunod.\n\n## Bakit AI, at bakit ngayon\n\nTatlong bagay ang pinagsama-sama:\n\n1. **Naging sagana ang data.** Binibisita na ngayon ng mga satellite ang karamihan sa mga lupang sakahan kada ilang araw. Soil moisture probe, weather stations, irrigation controllers at makinarya lahat ay gumagawa ng tuluy-tuloy na data.\n2. **Naging mura at konektado ang pag-compute.** Ang mga modelong minsan nang kailangan ng research lab ay maaaring tumakbo sa cloud at maghatid ng mga resulta sa isang telepono.\n3. **Nag-mature na ang mga pamamaraan.** Ang machine learning, computer vision at mga modelo ng wika ay mabilis na umunlad at ngayon ay praktikal na mga tool.\n\n> **Mahalagang ideya:** Ang AI ay hindi gumagawa ng mga bagong mapagkukunan. Tinutulungan ka nitong mas mahusay na magamit ang tubig, mga input, oras at kaalaman na mayroon ka na.\n\n## Ang makatotohanang magagawa ng AI\n\n- **Sense** — gawing impormasyon ang raw imagery at data ng sensor, gaya ng kung aling mga zone ng isang field ang binibigyang diin.\n- **Hulaan** — tantyahin kung ano ang mangyayari, gaya ng pangangailangan ng tubig sa pananim bukas o ani sa pagtatapos ng panahon.\n- **Magrekomenda** — magmungkahi ng aksyon, gaya ng iskedyul ng patubig, at ipaliwanag kung bakit.\n- **I-verify** — tingnan kung may naganap na aksyon at kung ito ay gumana.\n\nPansinin ang pattern: sense, predict, recommend, verify. Gagamitin namin ang loop na ito sa buong kurso.\n\n## Ano ang hindi nito magagawa\n\nHindi nakikita ng AI kung ano ang hindi nakukuha ng data nito: isang sirang balbula, pag-spray ng isang kapitbahay, isang kultural na kasanayan na natatangi sa iyong sakahan. Hindi ito maaaring magdala ng responsibilidad para sa isang desisyon. At hindi nito mapapalitan ang tiwala sa pagitan ng isang grower at isang tagapayo. Ang mahusay na pang-agrikulturang AI ay idinisenyo upang magtrabaho *kasama* ang mga taong nakakaalam ng lupain.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

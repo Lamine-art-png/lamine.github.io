@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "te",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "వ్యవసాయంలో ఆర్టిఫిషియల్ ఇంటెలిజెన్స్ పరిచయం",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "AI అంటే ఏమిటి, ఇది వ్యవసాయ క్షేత్రంలో ఎలా పని చేస్తుంది మరియు దానిని బాధ్యతాయుతంగా ఎలా ఉపయోగించాలి.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "నీటిపారుదల నియంత్రికలు, ఉపగ్రహ సేవలు, వ్యవసాయ నిర్వహణ సాఫ్ట్‌వేర్ మరియు సాగుదారుల జేబులో ఉన్న ఫోన్‌ల ద్వారా కృత్రిమ మేధస్సు వ్యవసాయంలోకి చేరుతోంది. ఈ కోర్సు మీకు ఆ సాంకేతికత అంటే ఏమిటి, అది ఎలా పని చేస్తుంది మరియు దానిని ఎలా ఉపయోగించాలి అనే విషయాలపై స్పష్టమైన, ఆచరణాత్మక అవగాహనను అందిస్తుంది.\n\nమీరు సమీకరణాలు లేకుండా AI మరియు మెషిన్ లెర్నింగ్ వెనుక ఉన్న ప్రధాన ఆలోచనలను నేర్చుకుంటారు, వ్యవసాయ డేటా ఎలా అంచనా మరియు సిఫార్సుగా మారుతుందో చూడండి మరియు సీజన్లో AIని అనుసరించండి - ప్రణాళిక మరియు నీటిపారుదల నుండి పంట ఆరోగ్యం మరియు పంట వరకు. అన్నింటికంటే మించి, మీరు AI అవుట్‌పుట్‌ను నిర్ధారించడం నేర్చుకుంటారు: దానిని ఎప్పుడు విశ్వసించాలి, ఎప్పుడు ప్రశ్నించాలి మరియు మానవ తీర్పు మరియు వ్యవసాయ పరిజ్ఞానాన్ని ఎలా నిర్వహించాలి.\n\nఈ కోర్సు సాగుదారులు, ఆపరేటర్లు, వ్యవసాయ శాస్త్రవేత్తలు, నిర్వాహకులు మరియు విద్యార్థుల కోసం రూపొందించబడింది. సాంకేతిక నేపథ్యం అవసరం లేదు.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "ఏదీ లేదు. వ్యవసాయ పనులకు సాంకేతికత ఎలా తోడ్పడుతుందనే ఉత్సుకత మీకు కావలసిందల్లా.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"కృత్రిమ మేధస్సు, యంత్ర అభ్యాసం మరియు ఉత్పాదక AI అంటే ఏమిటో సాదా భాషలో వివరించండి\", \"వ్యవసాయ డేటా యొక్క ప్రధాన వనరులను వివరించండి మరియు డేటాను నమ్మదగినదిగా చేస్తుంది\", \"మోడల్ డేటాను ప్రిడిక్షన్‌గా మరియు ప్రిడిక్షన్‌ని సిఫార్సుగా ఎలా మారుస్తుందో అనుసరించండి\", \"ప్లానింగ్ నుండి పంట వరకు పంట సీజన్‌లో ఆచరణాత్మక AI అప్లికేషన్‌లను గుర్తించండి\", \"వ్యవసాయ AI యొక్క పరిమితులు మరియు వైఫల్య మోడ్‌లను గుర్తించండి మరియు సిఫార్సును ఎప్పుడు సవాలు చేయాలో\", \"మీ స్వంత ఆపరేషన్‌లో డేటా యాజమాన్యం, గోప్యత మరియు బాధ్యతాయుత వినియోగం యొక్క సూత్రాలను వర్తింపజేయండి\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "వ్యవసాయానికి AI అంటే ఏమిటి",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "ప్రధాన ఆలోచనలు మరియు అవి ఇప్పుడు ఎందుకు ముఖ్యమైనవి.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "వ్యవసాయ AI ఎలా పనిచేస్తుంది",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "డేటా నుండి మోడల్ నుండి సిఫార్సు వరకు.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "సీజన్ అంతటా AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "ప్రణాళిక నుండి పంట వరకు ఆచరణాత్మక అప్లికేషన్లు.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "AIని బాధ్యతాయుతంగా ఉపయోగించడం",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "పరిమితులు, డేటా హక్కులు మరియు నమ్మకంగా, క్లిష్టమైన ఉపయోగం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "పై నుండి మరియు దగ్గర నుండి పంట ఆరోగ్య పర్యవేక్షణ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "పంట ఆరోగ్యం కోసం ఉపగ్రహ చిత్రాలు, వృక్షసంపద సూచికలు మరియు కంప్యూటర్ దృష్టి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "ఆరోగ్యకరమైన మొక్కలు మరియు ఒత్తిడితో కూడిన మొక్కలు కాంతిని భిన్నంగా ప్రతిబింబిస్తాయి. ఏ స్కౌటింగ్ బృందం కవర్ చేయలేని స్థాయిలో పంటలను చూడటానికి ఉపగ్రహాలు, డ్రోన్‌లు మరియు కెమెరాల ద్వారా సంగ్రహించబడిన ఆ వ్యత్యాసాన్ని AI ఉపయోగిస్తుంది.\n\n## మొక్కలు ఉపగ్రహానికి ఎలా కనిపిస్తాయి\n\nఆకుపచ్చ ఆకులు కిరణజన్య సంయోగక్రియ కోసం చాలా ఎరుపు కాంతిని గ్రహిస్తాయి మరియు **ఇన్‌ఫ్రారెడ్ (NIR)** కాంతిని బలంగా ప్రతిబింబిస్తాయి. మొక్కలు ఒత్తిడికి గురైనప్పుడు, అరుదుగా లేదా వృద్ధాప్యంలో ఉన్నప్పుడు, ఎరుపు ప్రతిబింబం పెరుగుతుంది మరియు NIR ప్రతిబింబం పడిపోతుంది.\n\n**నార్మలైజ్డ్ డిఫరెన్స్ వెజిటేషన్ ఇండెక్స్ (NDVI)** ఈ కాంట్రాస్ట్‌ని క్యాప్చర్ చేస్తుంది:\n\n**NDVI = (NIR - ఎరుపు) ÷ (NIR + ఎరుపు)**\n\nవిలువలు −1 నుండి +1 వరకు ఉంటాయి. దట్టమైన, ఆరోగ్యకరమైన వృక్షసంపద సాధారణంగా ఎక్కువగా ఉంటుంది (తరచుగా 0.6 కంటే ఎక్కువ); బేర్ నేల తక్కువగా ఉంటుంది (సుమారు 0.1-0.2); నీరు సాధారణంగా ప్రతికూలంగా ఉంటుంది.\n\n## NDVI మ్యాప్‌లను తెలివిగా చదవడం\n\n**ఎక్కడ** ఫీల్డ్ తేడా ఉందో గుర్తించడానికి NDVI ఉపయోగపడుతుంది, **ఎందుకు**ని నిర్ధారించడానికి కాదు. తక్కువ-NDVI ప్యాచ్ నీటి ఒత్తిడి, పోషకాల లోపం, వ్యాధి, తెగుళ్లు, నాటడం సమస్య లేదా వేరే రకం కావచ్చు. ఎక్కడ చూడాలో మ్యాప్ మీకు చెబుతుంది; స్కౌటింగ్ మీరు కనుగొన్న వాటిని మీకు తెలియజేస్తుంది.\n\n> **ముఖ్యమైనది:** మేఘాలు, మేఘాల ఛాయలు, పొగమంచు మరియు రోజు సమయం ఉపగ్రహ రీడింగ్‌లను వక్రీకరించవచ్చు. విశ్వసనీయ సేవలు మేఘాలను కప్పివేస్తాయి మరియు ఒకే స్నాప్‌షాట్‌ను విశ్వసించకుండా కాలక్రమేణా చిత్రాలను సరిపోల్చుతాయి.\n\nఇతర సూచికలు నిర్దిష్ట ప్రయోజనాల కోసం ఉన్నాయి - కొన్ని క్లోరోఫిల్‌కు, మరికొన్ని నీటి విషయానికి లేదా NDVI సంతృప్తమయ్యే దట్టమైన పందిరికి మరింత సున్నితంగా ఉంటాయి.\n\n## కంప్యూటర్ దృష్టి దగ్గరగా\n\nనేలపై, **కంప్యూటర్ విజన్** మోడల్‌లు ఫోన్‌లు, ట్రాక్టర్‌లు లేదా డ్రోన్‌ల నుండి ఫోటోలను విశ్లేషిస్తాయి:\n\n- ఆకు చిత్రాల నుండి వ్యాధులు మరియు తెగుళ్ళను గుర్తించండి;\n- లక్ష్యంగా స్ప్రేయింగ్ కోసం పంటల నుండి కలుపు మొక్కలను వేరు చేయండి;\n- దిగుబడిని అంచనా వేయడానికి పండ్లు, పువ్వులు లేదా మొక్కలను లెక్కించండి.\n\nఈ నమూనాలు లేబుల్ చేయబడిన చిత్రాల యొక్క పెద్ద సేకరణలపై శిక్షణ పొందాయి. వాటి ఖచ్చితత్వం ఆ చిత్రాలు మీ పంట, మీ రకాలు మరియు మీ లైటింగ్ పరిస్థితులను పోలి ఉన్నాయా లేదా అనే దానిపై ఎక్కువగా ఆధారపడి ఉంటుంది.\n\n## గుర్తింపు నుండి చర్య వరకు\n\nమంచి పంట-పర్యవేక్షణ వర్క్‌ఫ్లో గుర్తింపును ప్రాధాన్య పనిగా మారుస్తుంది: *\"జోన్ 3 10 రోజులలో శక్తి క్షీణతను చూపుతుంది. ముందుగా ఈశాన్య మూలను స్కౌట్ చేయండి; నీటిపారుదల ఏకరూపతను తనిఖీ చేయండి మరియు మూల వ్యాధి సంకేతాల కోసం చూడండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "డేటా: వ్యవసాయ AI యొక్క ముడి పదార్థం",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "వ్యవసాయ డేటా ఎక్కడ నుండి వస్తుంది మరియు దానిని నమ్మదగినదిగా చేస్తుంది.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "ప్రతి AI సిస్టమ్ డేటా నుండి నిర్మించబడింది. డేటా అసంపూర్ణంగా ఉంటే, పక్షపాతంగా లేదా తప్పుగా ఉంటే, AI కూడా ఉంటుంది. వ్యవసాయ AIలో మీ డేటాను అర్థం చేసుకోవడం అత్యంత ముఖ్యమైన నైపుణ్యం.\n\n## వ్యవసాయ డేటా ఎక్కడ నుండి వస్తుంది\n\n| మూలం | ఉదాహరణలు | ఇది మీకు ఏమి చెబుతుంది |\n|---|---|---|\n| వాతావరణం | ఆన్-ఫార్మ్ స్టేషన్‌లు, ప్రాంతీయ నెట్‌వర్క్‌లు, అంచనాలు | ఉష్ణోగ్రత, వర్షపాతం, తేమ, గాలి, సౌర వికిరణం |\n| నేల | తేమ ప్రోబ్స్, మట్టి పరీక్షలు, మట్టి పటాలు | మూలాలు, పోషకాలు, ఆకృతికి అందుబాటులో ఉన్న నీరు |\n| రిమోట్ సెన్సింగ్ | ఉపగ్రహం, విమానం మరియు డ్రోన్ చిత్రాలు | పంట శక్తి, పందిరి కవర్, పొలంలో ఒత్తిడి నమూనాలు |\n| సామగ్రి | ఇరిగేషన్ కంట్రోలర్లు, ఫ్లో మీటర్లు, దిగుబడి మానిటర్లు, ట్రాక్టర్లు | ఏమి వర్తించబడింది, ఎక్కడ మరియు ఎప్పుడు |\n| రికార్డులు | నాటడం తేదీలు, రకాలు, ఇన్‌పుట్ అప్లికేషన్‌లు, స్కౌటింగ్ నోట్స్ | నిర్వహణ నిర్ణయాలు మరియు పరిశీలనలు |\n| మార్కెట్లు | ధరలు, ఒప్పందాలు, డిమాండ్ సంకేతాలు | నిర్ణయాలకు ఆర్థిక సందర్భం |\n\n## మంచి డేటా యొక్క లక్షణాలు\n\n** ఖచ్చితత్వం** — కొలత వాస్తవికతను ప్రతిబింబిస్తుందా? తడి ప్రదేశంలో ఇన్‌స్టాల్ చేయబడిన తేమ ప్రోబ్ లేదా చెట్టు కింద రెయిన్ గేజ్, దానిని ఉపయోగించే ప్రతి మోడల్‌ను తప్పుదారి పట్టిస్తుంది.\n\n**పూర్తి** — ఖాళీలు ఉన్నాయా? హీట్ వేవ్ సమయంలో ఒక వారం పాటు రిపోర్టింగ్‌ను నిలిపివేసే సెన్సార్, అది చాలా ముఖ్యమైన సమయంలో ఖచ్చితంగా ఒక రంధ్రం వదిలివేస్తుంది.\n\n**సమయం** — ఇటీవలి డేటా నిర్ణయానికి సరిపోతుందా? నిన్నటి నేల తేమ నేటి నీటిపారుదలకి ఉపయోగపడుతుంది; గత నెల కాదు.\n\n** స్థిరత్వం** — యూనిట్‌లు, ఫార్మాట్‌లు మరియు నిర్వచనాలు కాలానుగుణంగా మరియు ఫీల్డ్‌లలో ఒకేలా ఉంటాయా? అంగుళాలు మరియు మిల్లీమీటర్లు లేదా ఒకే ఫీల్డ్‌కు రెండు పేర్లను కలపడం వలన నిశ్శబ్ద దోషాలు ఏర్పడతాయి.\n\n**ప్రాతినిధ్యత** — AI ఉపయోగించబడే పరిస్థితులను డేటా కవర్ చేస్తుందా? ఇసుక నేలల్లో మాత్రమే శిక్షణ పొందిన మోడల్ మట్టిపై పని చేయకపోవచ్చు.\n\n> **ఫీల్డ్ చెక్:** డాష్‌బోర్డ్‌ను విశ్వసించే ముందు, మూడు ప్రశ్నలు అడగండి: ఈ నంబర్ ఎక్కడ నుండి వచ్చింది? ఎప్పుడు కొలుస్తారు? ఏమి తప్పు చేస్తుంది?\n\n## డేటాకు సందర్భం అవసరం\n\n30% నేల తేమ పఠనం దాని స్వంతంగా తక్కువగా ఉంటుంది. నేల రకం ఏమిటి, సెన్సార్ ఎంత లోతుగా ఉంది, ఏ పంట పెరుగుతోంది మరియు ఏ దశలో ఉంది అనేది ముఖ్యం. మంచి వ్యవసాయ AI డేటా మూలాలను మిళితం చేస్తుంది, తద్వారా ప్రతి ఒక్కటి ఇతరులకు సందర్భాన్ని జోడిస్తుంది - ఉదాహరణకు, వాతావరణ డేటా మరియు ఫీల్డ్ యొక్క నీటిపారుదల చరిత్రతో ఉపగ్రహ చిత్రాలను జత చేయడం.\n\n## మీ డేటా, మీ నిర్ణయాలు\n\nవ్యవసాయ డేటా విలువను కలిగి ఉంటుంది - వాణిజ్య, కార్యాచరణ మరియు వ్యక్తిగత. పరికరాలను కనెక్ట్ చేయడానికి లేదా ఏదైనా సేవతో రికార్డ్‌లను భాగస్వామ్యం చేయడానికి ముందు, డేటాను ఎవరు యాక్సెస్ చేయగలరో, అది ఎలా ఉపయోగించబడుతుందో మరియు మీరు వెళ్లిపోతే దానిని మీతో తీసుకెళ్లవచ్చో అర్థం చేసుకోండి. మేము మాడ్యూల్ 4లో డేటా యాజమాన్యానికి తిరిగి వస్తాము.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "డేటా యాజమాన్యం, గోప్యత మరియు నమ్మకం",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "వ్యవసాయ డేటాను విశ్వాసంతో పంచుకోవడానికి ఆచరణాత్మక సూత్రాలు.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "వ్యవసాయ డేటా దిగుబడి, పద్ధతులు, ఆర్థిక మరియు వ్యక్తులు మరియు ఆస్తుల స్థానాన్ని వెల్లడిస్తుంది. దీన్ని భాగస్వామ్యం చేయడం విలువైన సేవలను అన్‌లాక్ చేయగలదు - కానీ ఇది ఎల్లప్పుడూ ఉద్దేశపూర్వక ఎంపికగా ఉండాలి.\n\n## ఏదైనా సాంకేతికత ప్రదాతని అడిగే ప్రశ్నలు\n\n- **యాజమాన్యం:** నేను అందించే డేటా మరియు నా పొలం గురించి సిస్టమ్ ఉత్పత్తి చేసే డేటా ఎవరిది?\n- **ఉపయోగం:** డేటా దేనికి ఉపయోగించబడుతుంది? మోడల్‌లకు శిక్షణ ఇవ్వడానికి ఇది ఉపయోగించబడుతుందా? ఇది ఇతర వ్యవసాయ క్షేత్రాల డేటాతో కలపబడుతుందా?\n- **భాగస్వామ్యం:** ఇది మూడవ పక్షాలతో భాగస్వామ్యం చేయబడుతుందా లేదా విక్రయించబడుతుందా? ఏవి, ఎందుకు?\n- **యాక్సెస్ మరియు పోర్టబిలిటీ:** నేను నా డేటాను ఉపయోగించదగిన ఫార్మాట్‌లో డౌన్‌లోడ్ చేయవచ్చా? నేను వెళ్లిపోతే నాతో తీసుకెళ్లవచ్చా?\n- **తొలగింపు:** నేను నా డేటాను తొలగించవచ్చా మరియు తర్వాత ఏమి మిగిలి ఉంది?\n- **భద్రత:** డేటా ఎలా రక్షించబడుతుంది? కంపెనీ లోపల ఎవరు దీన్ని చూడగలరు?\n- **నియంత్రణ:** నేను ఎప్పుడైనా కనెక్ట్ చేయబడిన పరికరం లేదా భాగస్వామికి యాక్సెస్‌ని ఉపసంహరించుకోవచ్చా?\n\nఅనేక వ్యవసాయ సంస్థలు ఈ ప్రశ్నలను పరిష్కరించే వ్యవసాయ-డేటా సూత్రాలను ప్రచురించాయి; ప్రొవైడర్ వాటిని అనుసరిస్తున్నారా అని అడగడం మంచి ప్రారంభ స్థానం.\n\n## సమ్మతి మరియు అనుమతులు\n\nమంచి సిస్టమ్‌లు నిర్దిష్ట, సమాచార అనుమతి కోసం అడుగుతాయి - ఉదాహరణకు, సెట్టింగ్‌లను మార్చడానికి అనుమతిని మంజూరు చేయకుండా నీటిపారుదల కంట్రోలర్ డేటాను చదవడానికి కనెక్టర్‌ను అనుమతిస్తుంది. ఉద్యోగానికి అవసరమైన కనీస యాక్సెస్‌ను మంజూరు చేయండి మరియు కనెక్ట్ చేయబడిన సేవలను క్రమం తప్పకుండా సమీక్షించండి.\n\n## సమగ్ర మరియు అనామక డేటా\n\nఅనేక పొలాల నుండి డేటాను కలపడం వలన ప్రతి ఒక్కరికి మెరుగైన ప్రాంతీయ నీటి వినియోగ అంచనాల వంటి నమూనాలను మెరుగుపరచవచ్చు. బాగా చేసారు, అగ్రిగేషన్ వ్యక్తిగత వ్యవసాయాన్ని గుర్తించగల సమాచారాన్ని తీసివేస్తుంది. అనామకీకరణ ఎలా జరుగుతుంది మరియు మీరు నిలిపివేయవచ్చా అని అడగండి.\n\n## విశ్వాసం లభిస్తుంది\n\n> **ముఖ్య ఆలోచన:** విశ్వసనీయమైన వ్యవసాయ AI డేటాను ఎలా ఉపయోగిస్తుంది, దాని సిఫార్సులను వివరిస్తుంది, అనిశ్చితిని అంగీకరిస్తుంది మరియు రైతును నియంత్రణలో ఉంచుతుంది అనే దాని గురించి పారదర్శకంగా ఉంటుంది.\n\nఇదే సూత్రాలు అకాడమీకి కూడా వర్తిస్తాయి. మీరు మీ ఖాతా సెట్టింగ్‌ల నుండి ఎప్పుడైనా మీ లెర్నింగ్ డేటాను డౌన్‌లోడ్ చేసుకోవచ్చు లేదా తొలగించవచ్చు.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "ఆచరణాత్మక వ్యాయామం: AI సిఫార్సును మూల్యాంకనం చేయండి",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "మీరు నేర్చుకున్న వాటిని వాస్తవిక సిఫార్సుకు వర్తింపజేయండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "ఈ వ్యాయామంలో మీరు వాస్తవిక సిఫార్సుపై ఈ మాడ్యూల్ నుండి క్లిష్టమైన సమీక్ష నైపుణ్యాలను అభ్యసిస్తారు.\n\n## దృశ్యం\n\nమీరు 60-హెక్టార్ల బిందు-సేద్యం టొమాటో ఆపరేషన్‌ను నిర్వహిస్తున్నారు. మిడ్-సీజన్‌లో మంగళవారం ఉదయం, మీ నిర్ణయ-మద్దతు సిస్టమ్ చూపిస్తుంది:\n\n> *\"సిఫార్సు: తదుపరి 48 గంటలు బ్లాక్ C పై నీటిపారుదలని దాటవేయండి. పంట నీటి వినియోగం: 3.1 మిమీ/రోజు. నేల తేమ: క్షేత్ర సామర్థ్యంలో 82%. విశ్వాసం: అధికం.\"*\n\nమీరు C బ్లాక్‌ని దాటి వెళ్లినప్పుడు, తూర్పు అంచున ఉన్న మొక్కలు తెల్లవారుజామున వేడికి వాడిపోయినట్లు మీరు గమనించవచ్చు మరియు నిన్నటి గరిష్ట ఉష్ణోగ్రత 37 °C - రెండు రోజుల క్రితం సిస్టమ్ ఉపయోగించిన 29 °C అంచనా కంటే చాలా ఎక్కువ వేడిగా ఉంది.\n\n## మీ పని\n\nదిగువ చెక్‌లిస్ట్ ద్వారా పని చేయండి. మీ వాదనను **గమనికలు** ట్యాబ్‌లో వ్రాయండి, తద్వారా మీరు దానికి తిరిగి రావచ్చు.\n\n1. **ఇన్‌పుట్‌లను తనిఖీ చేయండి.** ఏ ఇన్‌పుట్ సందేహాస్పదంగా కనిపిస్తోంది? (సూచన: ఏమి జరిగిందో దానితో సూచన ఉష్ణోగ్రతను సరిపోల్చండి.)\n2. **సెన్సర్‌లను తనిఖీ చేయండి.** మట్టి తేమ ప్రోబ్ ఎక్కడ వ్యవస్థాపించబడింది? ఇది తూర్పు అంచుని సూచించని ప్రదేశంలో ఉండవచ్చా?\n3. **పొలంలో చూడండి.** వాడిపోయిన మొక్కలను మీరు ఏమి తనిఖీ చేస్తారు? ఉద్గారిణి అడ్డుపడటం, లైన్ చివరిలో ఒత్తిడి మరియు రూట్ ఆరోగ్యాన్ని పరిగణించండి.\n4. **నిర్ణయించండి.** మీరు సిఫార్సును అనుసరిస్తారా, సవరించారా లేదా భర్తీ చేస్తారా? ఎందుకు?\n5. **రికార్డ్ చేయండి మరియు నివేదించండి.** దీని నుండి సిస్టమ్ — మరియు మీ బృందం — నేర్చుకోవడానికి మీరు ఏ అభిప్రాయాన్ని అందిస్తారు?\n\n## చర్చ\n\nఊహించిన నీటి వినియోగం బహుశా చాలా చల్లగా మారిన సూచనపై ఆధారపడి ఉంటుందని బలమైన సమాధానం గమనిస్తుంది, కాబట్టి వాస్తవ డిమాండ్ ఎక్కువగా ఉంది. 82% రీడింగ్ ఒకే ప్రోబ్ తూర్పు అంచుని సూచించకపోవచ్చు, ప్రత్యేకించి ఉద్గారకాలు అడ్డుపడే లేదా పార్శ్వ చివర పీడనం తక్కువగా ఉంటే. తక్షణమే తూర్పు అంచుని తనిఖీ చేయడం, తనిఖీ పొడి నేలను నిర్ధారిస్తే చిన్న నీటిపారుదలని అమలు చేయడం మరియు సూచన మిస్ మరియు సాధ్యమయ్యే ఏకరూప సమస్య రెండింటినీ నివేదించడం సరైన నిర్ణయం.\n\nచాలా అరుదుగా ఒకే సరైన సమాధానం ఉంటుంది - కానీ ఎల్లప్పుడూ సరైన ప్రక్రియ ఉంటుంది: ఇన్‌పుట్‌లను తనిఖీ చేయండి, సందర్భాన్ని తనిఖీ చేయండి, ఫీల్డ్‌లో చూడండి, నిర్ణయించండి మరియు రికార్డ్ చేయండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "హార్వెస్ట్, మార్కెట్లు మరియు సరఫరా గొలుసు",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "దిగుబడి అంచనా, మార్కెట్ ఇంటెలిజెన్స్ మరియు లాజిస్టిక్స్.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "సీజన్ పంట వైపు కదులుతున్నప్పుడు, నిర్ణయాలు పంటను పండించడం నుండి దాని విలువను సంగ్రహించడం వరకు మారతాయి.\n\n## దిగుబడి అంచనా\n\nదిగుబడి అంచనాలు పంట వృద్ధి నమూనాలు, వాతావరణం నుండి నేటి వరకు మరియు అంచనాలు, చిత్రాల ఆధారిత శక్తి మరియు కొన్నిసార్లు కంప్యూటర్ దృష్టి నుండి గణనలను మిళితం చేస్తాయి. మునుపటి అంచనాలు తక్కువ ఖచ్చితమైనవి; సీజన్ పెరుగుతున్న కొద్దీ ఖచ్చితత్వం మెరుగుపడుతుంది.\n\nఅంచనాలు ఇలాంటి నిర్ణయాలకు మద్దతు ఇస్తాయి:\n\n- ఎంత ముందుకు అమ్మాలి, ఎప్పుడు;\n- బుక్ చేయడానికి ఎంత మంది కార్మికులు, ట్రక్కులు మరియు నిల్వ సామర్థ్యం;\n- ఆలస్యమైన ఇన్‌పుట్ ఇప్పటికీ దరఖాస్తు చేయడం విలువైనదేనా.\n\n## మార్కెట్ ఇంటెలిజెన్స్\n\nమార్కెట్ ఇంటెలిజెన్స్ సాధనాలు ధరలు, ఫ్యూచర్‌లు, ఎగుమతి డేటా, పోటీ ప్రాంతాలలో వాతావరణం మరియు ధరల కదలికలను అంచనా వేయడంలో సహాయపడే వార్తలను సేకరిస్తాయి. AI ఈ సంకేతాలను త్వరగా సంగ్రహించగలదు మరియు అసాధారణ మార్పులను హైలైట్ చేస్తుంది. ఏ మోడల్ మార్కెట్‌ను ఖచ్చితంగా అంచనా వేయదు; మార్కెట్ అంచనాలను రిస్క్-మేనేజ్డ్ ప్లాన్‌కి ఒక ఇన్‌పుట్‌గా పరిగణించండి, హామీగా కాదు.\n\n## పంట సమయం మరియు నాణ్యత\n\nపంట పరిపక్వతను ట్రాక్ చేసే నమూనాలు - ద్రాక్షలో చక్కెర స్థాయిలు, ధాన్యంలో తేమ, పండ్లలో రంగు - నాణ్యత, వాతావరణ ప్రమాదం మరియు లాజిస్టిక్స్ యొక్క ఉత్తమ సమతుల్యత కోసం పంటను షెడ్యూల్ చేయడంలో సహాయపడతాయి. లేబర్ మరియు ఎక్విప్‌మెంట్ లభ్యతతో కలిపి, అవి ఆపరేషన్‌లో ఫీల్డ్‌లను క్రమం చేయడంలో సహాయపడతాయి.\n\n## ట్రేస్బిలిటీ మరియు సాక్ష్యం\n\nకొనుగోలుదారులు పంట ఎలా ఉత్పత్తి చేయబడిందో రుజువు కోసం ఎక్కువగా అడుగుతారు: నీటి వినియోగం, దరఖాస్తు చేసిన ఇన్‌పుట్‌లు, ధృవపత్రాలు. సీజన్ అంతటా సిఫార్సులు, చర్యలు మరియు ధృవీకరణను రికార్డ్ చేసే సిస్టమ్‌లు ఆ సాక్ష్యాన్ని సులభంగా ఉత్పత్తి చేస్తాయి - మరొక కారణం లూప్ యొక్క ధృవీకరణ దశ.\n\n> **ముఖ్య ఆలోచన:** పంట సమయంలో, AI యొక్క విలువ సమయం, పరిమాణం మరియు ధరలో అనిశ్చితిని తగ్గించడం ద్వారా వస్తుంది - మరియు ఏమి జరిగిందో డాక్యుమెంట్ చేయడం ద్వారా.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "కేస్ స్టడీ: నీటిపారుదల మరియు నీటి నిర్వహణ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "నీటిపారుదల షెడ్యూలింగ్‌లో బాష్పీభవనం, నేల తేమ మరియు AI ఎలా మిళితం అవుతాయి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "నీటిపారుదల అనేది పొలంలో AI విలువను సృష్టించడానికి స్పష్టమైన ఉదాహరణలలో ఒకటి, ఎందుకంటే నీటి నిర్ణయాలు తరచుగా, ఖరీదైనవి మరియు కొలవదగినవి.\n\n## నీటి సమతుల్యత\n\nరూట్ జోన్‌ను నీటి కోసం బ్యాంక్ ఖాతాగా భావించండి.\n\n- **నిక్షేపాలు:** వర్షపాతం మరియు నీటిపారుదల.\n- **ఉపసంహరణలు:** పంట ఉపయోగించిన మరియు నేల నుండి ఆవిరైన నీరు - కలిపి **బాష్పవాయు ప్రేరణ (ET)** అని పిలుస్తారు - అదనంగా మూలాల క్రింద పారుదల.\n\nనీటిపారుదల షెడ్యూలింగ్ యొక్క లక్ష్యం తక్కువ పరిమితి మధ్య బ్యాలెన్స్‌ను ఉంచడం, ఇక్కడ పంట ఒత్తిడికి గురవుతుంది మరియు ఎగువ పరిమితిని మించి నీరు పారుతుంది మరియు వృధా అవుతుంది.\n\n## పంట నీటి వినియోగాన్ని అంచనా వేయడం\n\nపంట నీటి వినియోగం సాధారణంగా రెండు దశల్లో అంచనా వేయబడుతుంది:\n\n1. **రిఫరెన్స్ ఎవాపోట్రాన్స్పిరేషన్ (ET₀)** వాతావరణ డేటా నుండి గణించబడుతుంది - ఉష్ణోగ్రత, తేమ, గాలి మరియు సౌర వికిరణం - ప్రామాణిక సూచన పంట కోసం.\n2. A **క్రాప్ కోఎఫీషియంట్ (Kc)** అసలు పంట మరియు దాని వృద్ధి దశ కోసం ET₀ని సర్దుబాటు చేస్తుంది: **ETc = ET₀ × Kc**.\n\nమెషిన్ లెర్నింగ్ స్థానిక సెన్సార్లు, పందిరి ఇమేజరీ మరియు వ్యవసాయ స్వంత చరిత్ర నుండి నేర్చుకోవడం ద్వారా ఈ అంచనాను మెరుగుపరుస్తుంది, ముఖ్యంగా ప్రామాణిక గుణకాలు సరిగా సరిపోని చోట.\n\n## షెడ్యూలింగ్ దృశ్యం\n\n> **ఉదాహరణ:** రూట్ జోన్ నిండినప్పుడు ఒక వైన్యార్డ్ బ్లాక్‌లో 40 మి.మీ నీరు సులభంగా అందుబాటులో ఉంటుంది. నేల తేమ ప్రోబ్స్ 18 మిమీ మిగిలి ఉన్నట్లు చూపుతాయి. రాబోయే నాలుగు రోజులలో ETc రోజుకు 5 మి.మీ, మరియు వర్షం ఆశించబడదు.\n\nనీటిపారుదల లేకుండా, బ్లాక్ దాదాపు మూడున్నర రోజులలో దాని దిగువ పరిమితిని చేరుకుంటుంది (18 మిమీ ÷ 5 మిమీ/రోజు). ఒక షెడ్యూలింగ్ సిస్టమ్ రాబోయే రెండు మూడు రోజులలో నీటిపారుదలని సిఫార్సు చేస్తుంది, రూట్ జోన్‌ను అధికంగా నింపకుండా రీఫిల్ చేసేలా పరిమాణంలో ఉంటుంది, అందుబాటులో ఉన్న పంపు సామర్థ్యానికి సమయం నిర్ణయించబడుతుంది మరియు రాత్రిపూట విద్యుత్ ధరలను తగ్గిస్తుంది.\n\nరెండవ రోజున 15 మిమీ వర్షం కురిసే సూచన మారితే, మంచి సిస్టమ్ సిఫార్సును అప్‌డేట్ చేస్తుంది - మరియు ఎందుకు వివరిస్తుంది.\n\n## ఇక్కడ AI విలువను జోడిస్తుంది\n\n- **మెరుగైన నీటి వినియోగ అంచనాలు** వాతావరణం, సెన్సార్‌లు మరియు చిత్రాలను కలపడం ద్వారా.\n- **ఫోర్కాస్ట్-ఎవేర్ షెడ్యూలింగ్** ఇది రాబోయే వర్షం మరియు వేడికి కారణమవుతుంది.\n- **ఆప్టిమైజేషన్** అనేక బ్లాక్‌లు, పంపు పరిమితులు మరియు నీటి కేటాయింపులు.\n- **ధృవీకరణ** — నీటిపారుదల ప్రణాళిక ప్రకారం జరిగిందని మరియు ఆశించిన ప్రభావాన్ని కలిగి ఉందని ఫ్లో మీటర్లు మరియు నేల తేమ నుండి నిర్ధారిస్తుంది.\n\n## ఏమి తప్పు కావచ్చు\n\nఅడ్డుపడే ఉద్గారిణి, విరిగిన వాల్వ్ లేదా ప్రాతినిధ్యం లేని ప్రదేశంలో ఇన్‌స్టాల్ చేయబడిన ప్రోబ్ అన్నీ సిస్టమ్‌ను తప్పుదారి పట్టించగలవు. అందుకే ధృవీకరణ దశ ముఖ్యమైనది: నీటిపారుదల తర్వాత అంచనా వేసినట్లుగా నేల తేమ స్పందించనప్పుడు, ఇది మోడల్‌ను మాత్రమే కాకుండా క్షేత్రాన్ని పరిశోధించడానికి ఒక సంకేతం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "పరిమితులు, లోపాలు మరియు సిఫార్సును ఎప్పుడు సవాలు చేయాలి",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "వైఫల్య మోడ్‌లను గుర్తించడం మరియు మానవ తీర్పును ఛార్జ్‌లో ఉంచడం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "ప్రతి AI సిస్టమ్ కొన్నిసార్లు తప్పుగా ఉంటుంది. లక్ష్యం బ్లైండ్ ట్రస్ట్ లేదా బ్లాంకెట్ తిరస్కరణ కాదు, కానీ ** క్రమాంకనం చేసిన నమ్మకం**: ఒక సిఫార్సు ఎప్పుడు విశ్వాసానికి అర్హమైనది మరియు అది ఎప్పుడు రెండవ రూపానికి అర్హమైనదో తెలుసుకోవడం.\n\n## సాధారణ వైఫల్య మోడ్‌లు\n\n**చెడు ఇన్‌పుట్‌లు.** విఫలమైన సెన్సార్, తప్పుగా ఉంచబడిన ప్రోబ్ లేదా డేటా ఫీడ్ మిస్ అయినవి నమ్మకంగా అర్ధంలేనివి. *చెత్త లోపల, చెత్త బయటకు.*\n\n**పరిధిలో లేని పరిస్థితులు.** శిక్షణ సమయంలో వారు అరుదుగా చూసే పరిస్థితుల్లో మోడల్‌లు తక్కువ విశ్వసనీయత కలిగి ఉంటాయి: విపరీతమైన వేడి, కొత్త రకం, అసాధారణ నేల.\n\n**డ్రిఫ్ట్.** కాలానుగుణంగా పరిస్థితులు మారుతాయి మరియు మూడు సంవత్సరాల క్రితం ఖచ్చితమైన మోడల్ ఇకపై ఉండకపోవచ్చు.\n\n**పక్షపాతం.** శిక్షణ డేటా నిర్దిష్ట ప్రాంతాలు, వ్యవసాయ పరిమాణాలు లేదా పంటలను ఎక్కువగా సూచిస్తే, విభిన్నమైన కార్యకలాపాలకు సిఫార్సులు తక్కువ ఖచ్చితమైనవి కావచ్చు.\n\n**సందర్భం లేదు.** పొరుగువారి హెర్బిసైడ్ డ్రిఫ్ట్, విరిగిన పైపు లేదా వచ్చే వారం పంట కోత అవసరమయ్యే ఒప్పందం గురించి సిస్టమ్‌కి తెలియదు.\n\n**ఆటోమేషన్ బయాస్.** మెషీన్ అవుట్‌పుట్‌ను ప్రజలు ఎక్కువగా విశ్వసిస్తారు, ప్రత్యేకించి అది ఖచ్చితంగా ప్రదర్శించబడినప్పుడు. రెండు దశాంశ స్థానాలు ఉన్న సంఖ్య తప్పనిసరిగా ఖచ్చితమైనది కాదు.\n\n## సిఫార్సును ఎప్పుడు సవాలు చేయాలి\n\nపాజ్ చేసి దర్యాప్తు చేసినప్పుడు:\n\n- సిఫార్సు మీరు ఫీల్డ్‌లో చూసేదానికి విరుద్ధంగా ఉంది;\n- ఇది సీజన్‌లో సాధారణ పరిధికి దూరంగా ఉంది;\n- సిస్టమ్ తక్కువ విశ్వాసాన్ని చూపుతుంది, లేదా విశ్వాసాన్ని చూపదు;\n- కీ డేటా లేదు, పాతది లేదా స్పష్టంగా తప్పు;\n- లోపం యొక్క పరిణామాలు తీవ్రంగా ఉంటాయి లేదా రివర్స్ చేయడం కష్టం.\n\n> **ఫీల్డ్ చెక్:** ఒక సాధారణ నియమం — పెద్దది మరియు తక్కువ రివర్సిబుల్ నిర్ణయం, AI సిఫార్సుపై చర్య తీసుకునే ముందు మీకు మరింత సాక్ష్యం అవసరం.\n\n## బాగా సవాలు చేయడం ఎలా\n\n1. **ఇన్‌పుట్‌లను తనిఖీ చేయండి.** సెన్సార్‌లు నివేదిస్తున్నాయా? వాతావరణ డేటా ప్రస్తుతం ఉందా?\n2. **కారణాన్ని అడగండి.** ఈ సూచనను ఏ డేటా అందించింది?\n3. ** ఫీల్డ్‌లో చూడండి.** సందేహాస్పద ప్రాంతాన్ని స్కౌట్ చేయండి.\n4. **మీరు ఏమి నిర్ణయించుకున్నారు మరియు ఎందుకు అని రికార్డ్ చేయండి.** మీ ఓవర్‌రైడ్ అనేది సిస్టమ్‌ను మెరుగుపరచడంలో సహాయపడే విలువైన అభిప్రాయం.\n\nసిఫార్సును సవాలు చేయడం సాంకేతికత వైఫల్యం కాదు. ఇది వ్యక్తులు మరియు AI కలిసి బాగా పని చేసే విధానం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "నమూనాలు, శిక్షణ మరియు అంచనాలు",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "ఉదాహరణల నుండి మోడల్ ఎలా నేర్చుకుంటుంది మరియు ప్రతి అంచనాకు అనిశ్చితి ఎందుకు ఉంటుంది.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**మోడల్** అనేది ఒక సంబంధం యొక్క గణిత వివరణ - ఉదాహరణకు, వాతావరణం మరియు పంట ఉపయోగించే నీటి పరిమాణం మధ్య. మెషిన్ లెర్నింగ్ ఉదాహరణల నుండి నేర్చుకోవడం ద్వారా నమూనాలను రూపొందిస్తుంది.\n\n## ఉదాహరణల నుండి నేర్చుకోవడం\n\nరేపు బాదం తోట ఎంత నీటిని ఉపయోగిస్తుందో మీరు అంచనా వేయాలనుకుంటున్నారని ఊహించుకోండి. మీరు చాలా గత రోజులను సేకరిస్తారు, ప్రతి ఒక్కటి:\n\n- ** ఇన్‌పుట్‌లు** (*లక్షణాలు* అని కూడా పిలుస్తారు): ఉష్ణోగ్రత, తేమ, గాలి, సౌర వికిరణం, చెట్టు వయస్సు, పందిరి కవర్;\n- మీరు అంచనా వేయాలనుకుంటున్న **ఫలితం**: నిజానికి ఆ రోజు తోటలో ఉపయోగించిన నీరు, సెన్సార్‌ల ద్వారా కొలుస్తారు.\n\n**శిక్షణ** సమయంలో, అల్గోరిథం దాని అంచనాలు రికార్డ్ చేసిన ఫలితాలతో సాధ్యమైనంత దగ్గరగా సరిపోలే వరకు మోడల్‌ను మళ్లీ మళ్లీ సర్దుబాటు చేస్తుంది. దీన్ని **పర్యవేక్షించే అభ్యాసం** అంటారు, ఎందుకంటే ప్రతి ఉదాహరణ సరైన సమాధానంతో వస్తుంది.\n\n## మోడల్ ఎప్పుడూ చూడని డేటాపై పరీక్ష\n\nఒక మోడల్ దాని శిక్షణా ఉదాహరణలను గుర్తుంచుకోగలదు మరియు కొత్త రోజుల్లో విఫలమవుతుంది. అందుకే డేటా సైంటిస్టులు ** ధ్రువీకరణ** కోసం కొంత డేటాను పక్కన పెడతారు - శిక్షణ సమయంలో మోడల్ ఎప్పుడూ చూడని డేటా. ఆ హోల్డ్-అవుట్ డేటాపై పనితీరు అది ఎంత బాగా పనిచేస్తుందనేది నిజాయితీ ప్రమాణం.\n\n> **ముఖ్యమైనది:** మోడల్ ఎలా ధృవీకరించబడిందో అడగండి. \"ఇది మా చారిత్రక డేటాకు సరిగ్గా సరిపోతుంది\" అనేది ఒక హెచ్చరిక సంకేతం, బలం కాదు.\n\n## ఖచ్చితత్వాన్ని కొలవడం\n\nసంఖ్యాపరమైన అంచనాల కోసం, సాధారణ కొలతలలో **సగటు లోపం** (అంచనాలు ఎంత దూరంలో ఉన్నాయి, సగటున) మరియు మోడల్ ఎంత వైవిధ్యాన్ని వివరిస్తుంది. వర్గీకరణల కోసం - \"ఒత్తిడి\" లేదా \"ఆరోగ్యకరమైన\" - మోడల్ ఎంత తరచుగా సరైనదని మరియు ఎంత తరచుగా తప్పుడు అలారాలను లేవనెత్తుతుంది లేదా నిజమైన సమస్యలను కోల్పోతుంది అని మేము అడుగుతాము.\n\nఏ ఒక్క \"మంచి\" ఖచ్చితత్వం లేదు. 5% లోపు దిగుబడి సూచన మార్కెటింగ్ నిర్ణయాలకు అద్భుతమైనది కావచ్చు; పదిలో ఒక ఈవెంట్‌ను కోల్పోయే మంచు అలారం ఆమోదయోగ్యం కాదు.\n\n## ప్రతి అంచనాకు అనిశ్చితి ఉంటుంది\n\nవాతావరణ మార్పులు, సెన్సార్లు డ్రిఫ్ట్ మరియు ఫీల్డ్‌లు మారుతూ ఉంటాయి. విశ్వసనీయ వ్యవస్థ అనిశ్చితిని తెలియజేస్తుంది: \"రేపటి నీటి వినియోగం 6.2 మిమీ, 5.6 మరియు 6.8 మిమీ మధ్య ఉండవచ్చు.\" పరిధి లేని ఒకే సంఖ్య ముఖ్యమైన సమాచారాన్ని దాచిపెడుతుంది.\n\n## మోడల్‌లు పాతబడినప్పుడు\n\nపరిస్థితులు మారతాయి. కొత్త రకాలు, కరువు సంవత్సరం లేదా మారిన నీటిపారుదల వ్యవస్థ గత డేటాను తక్కువ ప్రాతినిధ్యాన్ని కలిగిస్తుంది. దీనినే **డ్రిఫ్ట్** అంటారు. మంచి వ్యవస్థలు కాలక్రమేణా వారి స్వంత ఖచ్చితత్వాన్ని పర్యవేక్షిస్తాయి మరియు పనితీరు పడిపోయినప్పుడు తిరిగి శిక్షణ పొందుతాయి.\n\n## వ్యవసాయ నమూనాల సాధారణ రకాలు\n\n- **రిగ్రెషన్** — సంఖ్యను అంచనా వేస్తుంది (నీటి వినియోగం, దిగుబడి, ధర).\n- **వర్గీకరణ** - ఒక వర్గాన్ని కేటాయిస్తుంది (వ్యాధి ఉంది లేదా లేకపోవడం, పంట రకం).\n- **ఫోర్‌కాస్టింగ్** — కాలక్రమేణా ఏదైనా ఎలా మారుతుందో అంచనా వేస్తుంది (రాబోయే ఐదు రోజులలో నేల తేమ).\n- **కంప్యూటర్ విజన్** — చిత్రాలను వివరిస్తుంది (పండ్లను లెక్కించడం, కలుపు మొక్కలను గుర్తించడం).\n- **ఆప్టిమైజేషన్** — పరిమితులలో అత్యుత్తమ ప్రణాళికను కనుగొంటుంది (పరిమిత నీటితో పంట డిమాండ్‌ను తీర్చే నీటిపారుదల షెడ్యూల్).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "ప్లానింగ్ మరియు నాటడం",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "మొదటి విత్తనం భూమిలోకి వెళ్ళే ముందు డేటా మరియు AIని ఉపయోగించడం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "సీజన్‌లో చాలా విలువైన నిర్ణయాలు మొక్కలు నాటడానికి ముందే తీసుకోబడతాయి. ఆ నిర్ణయాలకు మరిన్ని ఆధారాలను తీసుకురావడం ద్వారా AI సహాయపడుతుంది.\n\n## ఫీల్డ్ హిస్టరీ మరియు మేనేజ్‌మెంట్ జోన్‌లు\n\nక్షేత్రాలు ఏకరీతిగా ఉండవు. సంవత్సరాల దిగుబడి పటాలు, నేల సర్వేలు మరియు ఉపగ్రహ చిత్రాలు తరచుగా స్థిరమైన నమూనాలను వెల్లడిస్తాయి: తడిగా ఉండే తక్కువ ప్రాంతం, ముందుగా ఎండిపోయే ఇసుక శిఖరం. అల్గారిథమ్‌లు ఈ ప్రాంతాలను **నిర్వహణ మండలాలు**గా సమూహపరచగలవు, ఇవి నీరు, విత్తనం మరియు ఎరువులకు భిన్నంగా ప్రతిస్పందిస్తాయి.\n\nజోన్‌లతో, పెంపకందారుడు విత్తనాల రేట్లు మారవచ్చు, ఎక్కువ లేదా తక్కువ నత్రజనిని ఎక్కడ వేయాలో ఎంచుకోవచ్చు లేదా పొలంలో ప్రతి భాగం ఎలా ప్రవర్తిస్తుందో సరిపోయే నీటిపారుదల సెట్‌లను ప్లాన్ చేయవచ్చు.\n\n## వెరైటీ మరియు నాటడం తేదీ నిర్ణయాలు\n\nప్రాంతీయ ట్రయల్స్ మరియు వాతావరణ రికార్డులపై శిక్షణ పొందిన నమూనాలు వివిధ పరిస్థితులలో రకాలు ఎలా పనిచేస్తాయో మరియు నాటడం తేదీ ప్రమాదాన్ని ఎలా ప్రభావితం చేస్తుందో అంచనా వేయవచ్చు - ఉదాహరణకు, పుష్పించే సమయంలో వేడి ఒత్తిడికి అవకాశం. ఈ అంచనాలు జాతీయ సగటులను మాత్రమే కాకుండా స్థానిక ట్రయల్స్‌ను ప్రతిబింబించినప్పుడు చాలా ఉపయోగకరంగా ఉంటాయి.\n\n## దృశ్య ప్రణాళిక\n\nAI సాధనాలు \"ఏమిటి ఉంటే\" దృశ్యాలను త్వరగా అమలు చేయగలవు: సీజన్ పొడిగా ఉంటే ఏమి చేయాలి? నీటి కేటాయింపుల్లో 20% కోత పెడితే? ఇన్‌పుట్ ధరలు పెరిగితే? దృష్టాంతాలను సరిపోల్చడం వలన మీరు ఊహించినది మాత్రమే కాకుండా, అనేక ఫ్యూచర్‌లలో ఉండే ప్లాన్‌ను ఎంచుకోవడానికి సహాయపడుతుంది.\n\n> **ఫీల్డ్ చెక్:** ఒక సాధనం విత్తనాల రేటు లేదా రకాన్ని సిఫార్సు చేసినప్పుడు, అది ఏ డేటాపై నిర్మించబడిందో అడగండి. మీ నేలలు మరియు వాతావరణం నుండి ప్రాంతీయ ట్రయల్ డేటా జాతీయ సగటు కంటే చాలా సందర్భోచితమైనది.\n\n## గుర్తుంచుకోవలసిన పరిమితులు\n\nప్రీ-సీజన్ సిఫార్సులు అనిశ్చితమైన దీర్ఘ-శ్రేణి సూచనలపై ఆధారపడి ఉంటాయి. సీజన్ ముగుస్తున్నప్పుడు వాటిని సర్దుబాటు చేయడానికి ప్రారంభ ప్రణాళికగా పరిగణించండి, స్థిరమైన ప్రిస్క్రిప్షన్ కాదు.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "మాడ్యూల్ 1 క్విజ్",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "AI ఫండమెంటల్స్‌పై మీ అవగాహనను తనిఖీ చేయండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "మాడ్యూల్ 1లోని ఆలోచనల గురించిన ఐదు శీఘ్ర ప్రశ్నలకు సమాధానం ఇవ్వండి. క్విజ్‌లు ప్రాక్టీస్ కోసం: మీరు వాటిని మీకు నచ్చినన్ని సార్లు తిరిగి తీసుకోవచ్చు మరియు ప్రతి ప్రయత్నం తర్వాత మీకు వివరణలు కనిపిస్తాయి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "మాడ్యూల్ 2 క్విజ్",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "డేటా, మోడల్‌లు మరియు సిఫార్సులపై మీ అవగాహనను తనిఖీ చేయండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "డేటా నాణ్యత, మోడల్ శిక్షణ మరియు నిర్ణయ మద్దతుపై ఐదు ప్రశ్నలు. మీకు నచ్చినంత తరచుగా తిరిగి తీసుకోండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "మాడ్యూల్ 3 క్విజ్",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "సీజన్ అంతటా AI గురించి మీ అవగాహనను తనిఖీ చేయండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "ప్రణాళిక, నీటిపారుదల, పంట పర్యవేక్షణ మరియు పంటపై ఐదు ప్రశ్నలు. మీకు నచ్చినంత తరచుగా తిరిగి తీసుకోండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "అంచనా నుండి సిఫార్సు వరకు",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "నిర్ణయం-మద్దతు వ్యవస్థలు అంచనాలను ఎలా చర్యలుగా మారుస్తాయి - మరియు వ్యక్తులను లూప్‌లో ఉంచుతాయి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "ఏమి జరుగుతుందో ఒక అంచనా మీకు తెలియజేస్తుంది. దాని గురించి ఏమి చేయాలో **సిఫార్సు** మీకు తెలియజేస్తుంది. ఒకదానిని మరొకటిగా మార్చుకోవడానికి లక్ష్యాలు, పరిమితులు మరియు సందర్భం అవసరం.\n\n## నీటిపారుదల ఉదాహరణ\n\nరేపటి రోజున ఒక పొలంలో 7 మిల్లీమీటర్ల నీరు ఉపయోగించబడుతుందని మరియు నేలలో తేమ ఇప్పటికే పంట తట్టుకోగల తక్కువ పరిమితికి సమీపంలో ఉందని ఒక నమూనా అంచనా వేసింది. ఒక సిఫార్సు వ్యవస్థ ఆ అంచనాను దీనితో మిళితం చేస్తుంది:\n\n- ** లక్ష్యాలు ** - దిగుబడి మరియు నాణ్యతను రక్షించండి, వ్యర్థాలను నివారించండి;\n- ** పరిమితులు** — పంపు సామర్థ్యం, ​​మిగిలిన నీటి కేటాయింపు, విద్యుత్ టారిఫ్‌లు, నీటిపారుదల సెట్ షెడ్యూల్;\n- **సందర్భం** — సూచన వర్షం, పంట దశ, పొడి నేల అవసరమయ్యే ప్రణాళికాబద్ధమైన పంట.\n\nఫలితం ఇలా ఉండవచ్చు: *\"ఈరోజు రాత్రి 6 గంటల పాటు (సుమారు 18 మి.మీ.) బ్లాక్ 4ను నీటిపారుదల చేయండి. బ్లాక్ 7ని దాటవేయండి: 12 మి.మీ వర్షం అధిక విశ్వాసంతో అంచనా వేయబడింది.\"*\n\n## మంచి సిఫార్సులు తమను తాము వివరిస్తాయి\n\nమీరు అర్థం చేసుకోలేని సిఫార్సు మీరు తీర్పు చెప్పలేని సిఫార్సు. చూపించే సిస్టమ్‌ల కోసం చూడండి:\n\n- **కారణం** — ఏ డేటా మరియు ఏ అంచనా సూచనను అందించింది;\n- **విశ్వాసం** — వ్యవస్థ ఎంత ఖచ్చితంగా ఉంది;\n- **ప్రత్యామ్నాయాలు** — మీరు వేచి ఉంటే లేదా తక్కువ దరఖాస్తు చేస్తే ఏమి జరుగుతుంది;\n- **సాక్ష్యం ట్రయల్** — కాబట్టి మీరు చర్య జరిగిందా మరియు పని చేసిందా అని తర్వాత తనిఖీ చేయవచ్చు.\n\n## వ్యక్తులను లూప్‌లో ఉంచడం\n\nవ్యవసాయంలో, చాలా AI అనేది **నిర్ణయ మద్దతు**: సిస్టమ్ ప్రతిపాదిస్తుంది, ఒక వ్యక్తి నిర్ణయిస్తాడు. ఆటోమేషన్ చర్యలను అమలు చేసే చోట కూడా - ఉదాహరణకు, ఒక కంట్రోలర్ వాల్వ్‌ను తెరవడం - బాధ్యతాయుతమైన డిజైన్‌లలో ఆమోదం దశలు, పరిమితులు మరియు ఓవర్‌రైడ్ సామర్థ్యం ఉంటాయి.\n\n> **ముఖ్య ఆలోచన:** ఫలితం కోసం జవాబుదారీగా ఉన్న వ్యక్తి ఎల్లప్పుడూ ఎందుకు సిఫార్సు చేయబడిందో చూడగలగాలి, దానిని మార్చాలి మరియు దానిని ఆపాలి.\n\n## లూప్‌ను మూసివేయడం: ధృవీకరణ\n\nఅత్యంత విలువైన వ్యవస్థలు సిఫార్సు వద్ద ఆగవు. వాస్తవానికి ఏమి జరిగింది మరియు తరువాత ఏమి జరిగింది అని వారు తనిఖీ చేస్తారు: నీటిపారుదల నడిచిందా? ఎంత నీరు అందించారు? ఆశించిన విధంగా నేల తేమ కోలుకుందా? ఈ **ధృవీకరణ** దశ నమ్మకాన్ని పెంచుతుంది, పరికరాల సమస్యలను పట్టుకుంటుంది మరియు కొనుగోలుదారులు, ఆడిటర్లు మరియు నీటి అధికారులు ఎక్కువగా అడిగే సాక్ష్యాలను ఉత్పత్తి చేస్తుంది.\n\nమాడ్యూల్ 1 నుండి లూప్‌ను గుర్తుంచుకో: **సెన్స్ → ప్రిడిక్ట్ → సిఫార్సు → వెరిఫై**. లూప్ యొక్క ప్రతి మలుపు తదుపరి సీజన్ కోసం నిర్ణయాలు మరియు డేటా రెండింటినీ మెరుగుపరుస్తుంది.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "కోర్సు సారాంశం మరియు తదుపరి దశలు",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "కీలక టేకావేలు మరియు చివరి పరీక్షకు ఎలా సిద్ధం కావాలి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "కోర్సు ముగింపు దశకు చేరుకున్నందుకు అభినందనలు. ప్రధాన ఆలోచనలను ఒకచోట చేర్చుదాం.\n\n## కీలక టేకావేలు\n\n- **AI ఒక టూల్‌బాక్స్**, ఒక్క సాంకేతికత కాదు. నియమాలు, యంత్ర అభ్యాసం, లోతైన అభ్యాసం మరియు ఉత్పాదక AI వివిధ సమస్యలకు సరిపోతాయి.\n- **డేటా పునాది.** ఖచ్చితత్వం, సంపూర్ణత, సమయస్ఫూర్తి, స్థిరత్వం మరియు ప్రాతినిధ్యత ఏ మోడల్ చేయగలదో నిర్ణయిస్తాయి.\n- **నమూనాలు ఉదాహరణల నుండి నేర్చుకుంటాయి** మరియు వారు ఎప్పుడూ చూడని డేటాపై తప్పనిసరిగా ధృవీకరించబడాలి. ప్రతి అంచనాకు అనిశ్చితి ఉంటుంది మరియు నమూనాలు డ్రిఫ్ట్ కావచ్చు.\n- **సిఫార్సులు లక్ష్యాలు, పరిమితులు మరియు సందర్భంతో అంచనాలను మిళితం చేస్తాయి.** మంచివారు తమను తాము వివరిస్తారు.\n- **లూప్ ముఖ్యమైనది:** సెన్స్ → అంచనా → సిఫార్సు → ధృవీకరించండి.\n- **సీజన్ అంతటా**, AI ప్లానింగ్, నీటిపారుదల, పంట పర్యవేక్షణ, పంట సమయం, మార్కెటింగ్ మరియు ట్రేస్‌బిలిటీకి మద్దతు ఇస్తుంది.\n- **కాలిబ్రేటెడ్ ట్రస్ట్‌ని ఉపయోగించండి.** ఫీల్డ్‌తో విభేదించే, పేలవమైన డేటాపై విశ్రాంతి తీసుకునే లేదా అధిక వాటాలను కలిగి ఉండే సిఫార్సులను సవాలు చేయండి.\n- **మీ డేటా సంరక్షణకు అర్హమైనది.** దానిని ఎవరు కలిగి ఉన్నారో, అది ఎలా ఉపయోగించబడుతుందో మరియు దానిని తిరిగి ఎలా తీసుకోవాలో తెలుసుకోండి.\n\n## చివరి పరీక్షకు సిద్ధమవుతున్నారు\n\nచివరి పరీక్ష మొత్తం నాలుగు మాడ్యూళ్లను కవర్ చేస్తుంది. ఇది పెద్ద బ్యాంక్ నుండి 20 ప్రశ్నలను తీసుకుంటుంది మరియు మీకు 30 నిమిషాల సమయం ఇస్తుంది. ఉత్తీర్ణత సాధించడానికి మీకు **80%** అవసరం.\n\n> **చిట్కా:** మీ గమనికలు మరియు మాడ్యూల్ క్విజ్‌లను సమీక్షించండి. మీరు క్విజ్ ప్రశ్నను కోల్పోయినట్లయితే, పరీక్షకు ముందు అది సూచించే పాఠాన్ని తెరవండి.\n\n## తర్వాత ఎక్కడికి వెళ్లాలి\n\n- **వ్యవసాయ డేటా ఫండమెంటల్స్** డేటా మూలాలు మరియు నాణ్యతకు లోతుగా వెళ్తుంది.\n- **రిమోట్ సెన్సింగ్ మరియు శాటిలైట్ ఇంటెలిజెన్స్** చిత్రాలు మరియు వృక్ష సూచికలపై విస్తరిస్తుంది.\n- **AI-ఆధారిత నీటిపారుదల** ఈ ఆలోచనలను నీటి నిర్వహణకు వివరంగా వర్తిస్తుంది.\n\nAGRO-AI అకాడమీతో నేర్చుకున్నందుకు ధన్యవాదాలు. మీరు సిద్ధంగా ఉన్నప్పుడు, కోర్సు మెను నుండి చివరి పరీక్షను తెరవండి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "కోర్సుకు స్వాగతం",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "మీరు ఏమి నేర్చుకుంటారు, కోర్సు ఎలా పని చేస్తుంది మరియు మీ ప్రమాణపత్రాన్ని ఎలా సంపాదించాలి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "AGRO-AI అకాడమీ *ఫౌండేషన్స్ ఆఫ్ అగ్రికల్చరల్ AI* ప్రోగ్రామ్ యొక్క మొదటి కోర్సు అయిన **వ్యవసాయంలో ఆర్టిఫిషియల్ ఇంటెలిజెన్స్ పరిచయం**కి స్వాగతం.\n\nఇక్కడ విజయవంతం కావడానికి మీకు ఎలాంటి సాంకేతిక నేపథ్యం అవసరం లేదు. మీరు ఎప్పుడైనా వాతావరణ సూచనను చూసినట్లయితే, మట్టి పరీక్షను చదివి లేదా రెండు క్షేత్రాల మధ్య దిగుబడిని పోల్చి ఉంటే, మీరు ఇప్పటికే ఈ కోర్సులో రూపొందించిన మనస్సు యొక్క అలవాట్లను ఉపయోగిస్తున్నారు: సాక్ష్యాలను సేకరించడం, నమూనాలను గుర్తించడం మరియు తదుపరి ఏమి చేయాలో నిర్ణయించడం.\n\n## మీరు ఏమి నేర్చుకుంటారు\n\nకోర్సు ముగిసే సమయానికి మీరు వీటిని చేయగలరు:\n\n- AI అంటే ఏమిటి — మరియు కాదు — సాధారణ భాషలో వివరించండి;\n- వ్యవసాయ డేటా ఎక్కడ నుండి వస్తుంది మరియు దానిని నమ్మదగినదిగా చేస్తుంది;\n- డేటా ఎలా ప్రిడిక్షన్‌గా మారుతుందో అనుసరించండి మరియు ప్రిడిక్షన్ సిఫార్సుగా మారుతుంది;\n- సీజన్ అంతటా ఉపయోగకరమైన AI అప్లికేషన్‌లను గుర్తించండి;\n- AI అవుట్‌పుట్‌ను విమర్శనాత్మకంగా నిర్ధారించండి మరియు దానిని బాధ్యతాయుతంగా ఉపయోగించండి.\n\n## కోర్సు ఎలా పనిచేస్తుంది\n\nకోర్సులో **నాలుగు మాడ్యూల్స్** చిన్న పాఠాలు ఉన్నాయి. మీ అవగాహనను తనిఖీ చేయడంలో మీకు సహాయపడే ప్రాక్టీస్ క్విజ్‌తో ప్రతి చివర ఒకటి నుండి మూడు వరకు మాడ్యూల్స్; మాడ్యూల్ నాలుగు చివరలను ఆచరణాత్మక వ్యాయామం మరియు చివరి పరీక్షకు సిద్ధం చేసే కోర్సు సారాంశంతో ఉంటుంది. క్విజ్‌లు మీ సర్టిఫికేట్‌లో లెక్కించబడవు మరియు మీరు వాటిని మీకు కావలసినంత తరచుగా తిరిగి తీసుకోవచ్చు.\n\nమీ పురోగతి స్వయంచాలకంగా సేవ్ చేయబడుతుంది. మీరు మీ ఫోన్‌లో పాఠాన్ని మధ్యలో ఆపి, తర్వాత కంప్యూటర్‌లో కొనసాగించవచ్చు.\n\n> **చిట్కా:** మీ స్వంత ఆపరేషన్‌కు వర్తించే ఆలోచనలను వ్రాయడానికి ప్రతి పాఠం క్రింద **గమనికలు** ట్యాబ్‌ను ఉపయోగించండి. గమనికలు ప్రైవేట్ - మీరు మాత్రమే వాటిని చూడగలరు.\n\n## మీ సర్టిఫికేట్ సంపాదించడం\n\nమీరు అవసరమైన ప్రతి పాఠాన్ని పూర్తి చేసినప్పుడు, **చివరి పరీక్ష** అన్‌లాక్ అవుతుంది. ఇది పెద్ద బ్యాంక్ నుండి 20 ప్రశ్నలను తీసుకుంటుంది, 30 నిమిషాలకు సమయం నిర్ణయించబడుతుంది మరియు ఉత్తీర్ణత సాధించడానికి **80%** స్కోర్ అవసరం. మీరు మొదటి ప్రయత్నంలో ఉత్తీర్ణులు కాకపోతే, మీరు సిఫార్సు చేసిన పాఠాలను సమీక్షించవచ్చు మరియు ఒక గంట తర్వాత మళ్లీ ప్రయత్నించవచ్చు.\n\nపరీక్షలో ఉత్తీర్ణత సాధించి, AGRO-AI అకాడమీ మీ సర్టిఫికేట్‌ను స్వయంచాలకంగా జారీ చేస్తుంది — ఉచితంగా, ప్రత్యేకమైన క్రెడెన్షియల్ ID మరియు పబ్లిక్ వెరిఫికేషన్ పేజీతో మీరు లింక్డ్‌ఇన్‌లో భాగస్వామ్యం చేయవచ్చు.\n\nప్రారంభిద్దాం.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "నియమాల నుండి నేర్చుకోవడం వరకు: AI అంటే ఏమిటి (మరియు అది కాదు)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "AI, మెషిన్ లెర్నింగ్, డీప్ లెర్నింగ్ మరియు జెనరేటివ్ AI యొక్క సాదా భాషా నిర్వచనాలు.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"కృత్రిమ మేధస్సు\" అనేది సాధారణ సెన్సార్ అలారం నుండి వ్యాసాలు వ్రాసే చాట్‌బాట్ వరకు ప్రతిదీ వివరించడానికి ఉపయోగించబడుతుంది. వ్యవసాయం గురించి చూసే ముందు స్పష్టమైన మాటలు కావాలి.\n\n## కృత్రిమ మేధస్సు\n\n**ఆర్టిఫిషియల్ ఇంటెలిజెన్స్ (AI)** అనేది మనం సాధారణంగా మానవ మేధస్సుతో అనుబంధించే విధులను నిర్వర్తించే కంప్యూటర్ సిస్టమ్‌లను నిర్మించే విస్తృత క్షేత్రం: నమూనాలను గుర్తించడం, అంచనాలు వేయడం, భాషను అర్థం చేసుకోవడం మరియు చర్యలను ఎంచుకోవడం.\n\nఆ నిర్వచనం ఉద్దేశపూర్వకంగా విస్తృతమైనది. ఇది చాలా భిన్నమైన సాంకేతికతలను కలిగి ఉంటుంది, కాబట్టి వాటిని నిర్మించే రెండు మార్గాలను వేరు చేయడానికి ఇది సహాయపడుతుంది.\n\n## నియమాలు మరియు అభ్యాసం\n\n**నియమ-ఆధారిత వ్యవస్థలు** వ్యక్తులు వ్రాసిన సూచనలను అనుసరించండి. *\"నేల తేమ 25% కంటే తక్కువగా ఉంటే, పంపును ప్రారంభించండి\"* అని చెప్పే నీటిపారుదల నియంత్రిక నియమాన్ని అనుసరిస్తోంది. నియమాలు పారదర్శకంగా మరియు ఊహాజనితంగా ఉంటాయి, అయితే ఎవరైనా సరైన నియమాన్ని ముందుగానే తెలుసుకోవాలి మరియు పరిస్థితులు మారినప్పుడు నియమాలు అనుకూలించవు.\n\n**మెషిన్ లెర్నింగ్ (ML)** సిస్టమ్‌లు బదులుగా ఉదాహరణల నుండి నమూనాలను నేర్చుకుంటాయి. వాతావరణం, నేల, నీటిపారుదల మరియు ఆ తర్వాత వచ్చిన దిగుబడులు - - వేలకొద్దీ గత సీజన్‌ల నమూనాను చూపండి మరియు ఎవరూ స్పష్టంగా వ్రాసుకోని సంబంధాలను ఇది నేర్చుకోగలదు. ఈ రోజు ప్రజలు \"AI\" అని పిలిచే వాటిలో చాలా వరకు మెషిన్ లెర్నింగ్.\n\n| | నియమ-ఆధారిత వ్యవస్థ | మెషిన్ లెర్నింగ్ మోడల్ |\n|---|---|---|\n| లాజిక్ ఎక్కడ నుండి వస్తుంది | ప్రజలు దీనిని వ్రాస్తారు | డేటా నుండి నేర్చుకున్న |\n| బలం | పారదర్శక, ఊహాజనిత | సంక్లిష్టమైన నమూనాలను కనుగొంటుంది, కొత్త డేటాతో అనుకూలిస్తుంది |\n| బలహీనత | దృఢమైన; డిజైనర్లు ఊహించని వాటిని కోల్పోతారు | దాని డేటా అంత మంచిది; వివరించడం కష్టంగా ఉంటుంది |\n| వ్యవసాయ ఉదాహరణ | పంపు తేమ థ్రెషోల్డ్ క్రింద ప్రారంభమవుతుంది | రేపటి పంట నీటి వినియోగాన్ని అంచనా వేసిన మోడల్ |\n\n## లోతైన అభ్యాసం\n\n**డీప్ లెర్నింగ్** అనేది అనేక-లేయర్డ్ \"న్యూరల్ నెట్‌వర్క్‌ల\" నుండి రూపొందించబడిన మెషిన్ లెర్నింగ్ పద్ధతుల కుటుంబం. చిత్రాలు మరియు ధ్వని వంటి గజిబిజి, హై-డైమెన్షనల్ డేటాలో ఇది చాలా బాగుంది. ఫోన్ యాప్ ఫోటో నుండి ఆకు వ్యాధిని గుర్తించినప్పుడు, లోతైన అభ్యాసం సాధారణంగా దాని వెనుక ఉంటుంది.\n\n## జనరేటివ్ AI\n\n**జెనరేటివ్ AI** చాలా పెద్ద డేటాసెట్‌ల నుండి నేర్చుకున్న నమూనాల ఆధారంగా - టెక్స్ట్, ఇమేజ్‌లు, ఆడియో లేదా కోడ్ - కొత్త కంటెంట్‌ను సృష్టిస్తుంది. లార్జ్ లాంగ్వేజ్ మోడల్స్ (LLMలు), సంభాషణ సహాయకుల వెనుక ఉన్న సాంకేతికత ఉత్పాదక AI. వారు అనేక భాషలలో భావనలను వివరించగలరు, నివేదికలను సంగ్రహించగలరు మరియు ప్రశ్నలకు సమాధానమివ్వగలరు.\n\nఉత్పాదక AI శక్తివంతమైనది, కానీ ఇది *అనుకూలమైన* పదాలను అంచనా వేస్తుంది, ధృవీకరించబడిన వాస్తవాలను కాదు. ఇది పూర్తి విశ్వాసంతో ఏదైనా తప్పును పేర్కొనవచ్చు. వ్యవసాయంలో, ఒక ఉత్పాదక సహాయకుడు వివరించడానికి మరియు ముసాయిదా చేయడానికి ఉపయోగపడుతుంది, అయితే ముఖ్యమైన సంఖ్యలు మరియు నిర్ణయాలు తప్పనిసరిగా విశ్వసనీయ డేటాకు వ్యతిరేకంగా తనిఖీ చేయబడాలి.\n\n> **కీలక ఆలోచన:** AI అనేది ఒక యంత్రం కాదు. ఇది ఒక టూల్ బాక్స్. నియమాలు, గణాంక నమూనాలు, లోతైన అభ్యాసం మరియు ఉత్పాదక నమూనాలు ప్రతి ఒక్కటి విభిన్న సమస్యలకు సరిపోతాయి.\n\n## AI అంటే ఏమిటి\n\n- **AI అనేది మాయాజాలం కాదు.** ప్రతి అవుట్‌పుట్ వ్యక్తులు చేసిన డేటా మరియు డిజైన్ ఎంపికల నుండి వస్తుంది.\n- **AI మీ పొలాన్ని** మీరు చేసే విధంగా \"అర్థం చేసుకోలేదు\". దాని డేటా క్యాప్చర్ చేయబడినది మాత్రమే దానికి తెలుసు.\n- **AI స్వయంచాలకంగా సరైనది కాదు.** అంచనాలు అనిశ్చితిని కలిగి ఉంటాయి మరియు అత్యుత్తమ సిస్టమ్‌లు ఎంత అని మీకు తెలియజేస్తాయి.\n- **AI తీర్పును భర్తీ చేయదు.** ఇది నిర్ణయం-మద్దతు సాధనం. నిర్ణయానికి సంబంధించిన బాధ్యత ప్రజలపైనే ఉంటుంది.\n\n## మీ అవగాహనను తనిఖీ చేయండి\n\nమీరు ఇప్పటికే ఉపయోగించే సాధనం గురించి ఆలోచించండి — వాతావరణ యాప్, దిగుబడి మానిటర్, ఫార్ములాలతో కూడిన స్ప్రెడ్‌షీట్. దాని లాజిక్ నియమాలుగా వ్రాయబడిందా లేదా డేటా నుండి నేర్చుకున్నదా? మీ గమనికలలో మీ సమాధానాన్ని వ్రాయండి; మేము మాడ్యూల్ 2లో ఈ ఆలోచనకు తిరిగి వస్తాము.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "వ్యవసాయం ఇప్పుడు AI వైపు ఎందుకు మళ్లుతోంది",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "ఒత్తిళ్లు మరియు అవకాశాలు పొలాలపై AI స్వీకరణను ప్రోత్సహిస్తాయి.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "status": "source_fallback"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}
