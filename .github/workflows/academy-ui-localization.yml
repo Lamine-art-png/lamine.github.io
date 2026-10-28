@@ -97,7 +97,6 @@ jobs:
           PY
           cd apps/academy
           node scripts/build-i18n-index.mjs
-          npm test
       - name: Save catalogs on authoring branch only
         run: |
           git config user.name "github-actions[bot]"
@@ -109,3 +108,7 @@ jobs:
             git commit -m "i18n(academy): machine-author 60 Portal-matched UI catalogs"
             git push origin HEAD:feature/academy-full-ui-locales-20261028
           fi
+      - name: Test committed catalogs against all Academy constraints
+        run: |
+          cd apps/academy
+          npm test
