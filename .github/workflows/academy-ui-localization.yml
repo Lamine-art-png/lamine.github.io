@@ -4,6 +4,10 @@ on:
     branches: [feature/academy-full-ui-locales-20261028]
     paths:
       - scripts/author-academy-ui-catalogs.py
+      - apps/academy/tests/integration/localization.test.js
+      - apps/academy/tests/integration/staging-harness.test.js
+      - apps/academy/tests/remote/staging.mjs
+      - apps/academy/scripts/smoke.sh
       - .github/workflows/academy-ui-localization.yml
   workflow_dispatch:
 permissions:
