@@ -11,7 +11,10 @@ export const ORIGIN = "https://academy.test";
 
 export function makeEnv(overrides = {}) {
   const DB = new D1Shim(":memory:");
-  applyMigrations(DB, join(root, "migrations"));
+  // Deploy tests generate 0014 on disk while Node runs suites concurrently.
+  // Keep ordinary test fixtures independent of that optional machine import;
+  // the dedicated import test applies its SQL explicitly.
+  applyMigrations(DB, join(root, "migrations"), { exclude: ["0014_a1_machine_content.sql"] });
   return {
     DB,
     ASSETS: assetsBinding(join(root, "public")),
