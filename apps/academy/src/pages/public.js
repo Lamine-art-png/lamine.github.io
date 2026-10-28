@@ -48,7 +48,7 @@ export async function home(c) {
   const t = c.t;
   const [courses, paths, team] = await Promise.all([listCourses(c.env, c.locale, { limit: 6 }), listPaths(c.env, c.locale), instructors(c.env)]);
   const available = courses.filter((x) => x.isAvailable).length;
-  const firstDate = c.fmtDate(c.cfg.firstClassesDate);
+  const firstAvailability = available ? t("catalog.available_now") : t("course.coming_soon");
   const nativeSample = ["English", "Português", "Español", "Français", "Kiswahili", "العربية", "हिन्दी", "中文", "Bahasa Indonesia", "Türkçe", "Русский", "日本語"];
 
   const body = html`
@@ -72,7 +72,7 @@ export async function home(c) {
       <img class="hero-lockup" src="${asset(BRAND.logo.stackedLight)}" alt="${BRAND.name}" width="${BRAND.stackedSize.width}" height="${BRAND.stackedSize.height}" fetchpriority="high">
       <div class="hero-card">
         <div class="row-between">
-          <div><strong>${t("home.first_classes")}</strong><span class="tiny">${firstDate}</span></div>
+          <div><strong>${t("home.first_classes")}</strong><span class="tiny">${firstAvailability}</span></div>
           <span class="badge badge-green">${icon("check", { size: 12 })} ${t("home.free_badge")}</span>
         </div>
       </div>
@@ -92,7 +92,7 @@ export async function home(c) {
 <section class="section">
   <div class="wrap">
     <div class="section-head"><div><p class="eyebrow">${t("home.featured_eyebrow")}</p><h2 class="h2">${t("home.featured_title")}</h2></div>
-      <p>${available ? t("home.featured_lead") : t("home.featured_lead_upcoming", { date: firstDate })}</p></div>
+      <p>${available ? t("home.featured_lead") : t("home.featured_lead_upcoming")}</p></div>
     ${courses.length ? html`<div class="cards cards-3">${courses.slice(0, 6).map((x) => courseCard(c, x))}</div>` : emptyState({ title: t("catalog.empty_title"), body: t("catalog.empty_body") })}
     <div class="actions"><a class="btn btn-secondary" href="/courses">${t("home.view_catalog")} ${icon("arrow-right", { size: 16, cls: "ic-flip" })}</a></div>
   </div>
