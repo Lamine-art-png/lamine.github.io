@@ -85,6 +85,15 @@ if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
 else
   echo "::warning::BACKUP_PASSPHRASE is not set; ${TARGET} backups are stored unencrypted in the private bucket."
 fi
+# Assemble machine-only A1 language drafts from the exact committed public
+# lesson packs before backup rehearsal. Every INSERT checks its source and
+# never overwrites reviewed or manually edited content. This is a normal D1
+# migration under the existing encrypted backup and protected release gate.
+echo "==> Validating A1 machine-content translation pack for migration"
+node "${HERE}/build-a1-machine-content-migration.mjs" || {
+  echo "::error::A1 machine translation pack failed validation; refusing deploy." >&2
+  exit 1
+}
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 api() { curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "${CF_API}$1"; }
