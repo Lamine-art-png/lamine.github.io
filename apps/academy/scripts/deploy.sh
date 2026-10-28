@@ -85,15 +85,17 @@ if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
 else
   echo "::warning::BACKUP_PASSPHRASE is not set; ${TARGET} backups are stored unencrypted in the private bucket."
 fi
-# Assemble machine-only A1 language drafts from the exact committed public
-# lesson packs before backup rehearsal. Every INSERT checks its source and
-# never overwrites reviewed or manually edited content. This is a normal D1
-# migration under the existing encrypted backup and protected release gate.
-echo "==> Validating A1 machine-content translation pack for migration"
-node "${HERE}/build-a1-machine-content-migration.mjs" || {
-  echo "::error::A1 machine translation pack failed validation; refusing deploy." >&2
-  exit 1
-}
+# Generate the A1 content migration only in the actual Academy release jobs.
+# Unit tests spawn mocked deploys concurrently; generating a migration in the
+# shared checkout during those tests leaks rows into unrelated test fixtures.
+# Both official staging and production jobs opt in explicitly.
+if [ "${ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:-0}" = "1" ]; then
+  echo "==> Validating A1 machine-content translation pack for migration"
+  node "${HERE}/build-a1-machine-content-migration.mjs" || {
+    echo "::error::A1 machine translation pack failed validation; refusing deploy." >&2
+    exit 1
+  }
+fi
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 api() { curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "${CF_API}$1"; }
