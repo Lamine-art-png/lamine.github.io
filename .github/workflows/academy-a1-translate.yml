@@ -75,10 +75,17 @@ jobs:
           assert len(codes)==59 and got==codes, (codes-got,got-codes)
           for code in codes:
               x=json.loads((root/(code+'.json')).read_text())
-              assert x['status']=='machine' and x['target_locale']==code
-              assert x['translated_fields']==x['total_fields'] and not x['untranslated']
-              assert all(it['type'] in ('course','module','lesson') and it['status']=='machine' for it in x['items'])
-          print('59 locales: complete unreviewed public A1 content packs; no exam questions')
+              assert x['status']=='machine_draft_requires_review' and x['target_locale']==code
+              assert len(x['items'])==x['total_fields']
+              assert all(it['type'] in ('course','module','lesson') and it['status'] in ('machine','source_fallback') for it in x['items'])
+              translated=[it for it in x['items'] if it['status']=='machine']
+              fallback=[it for it in x['items'] if it['status']=='source_fallback']
+              assert len(translated)==x['translated_fields']
+              assert len(fallback)==len(x['untranslated'])
+              assert all(it['translation']==it['source'] for it in fallback)
+              assert {(it['type'],it['id'],it['field']) for it in fallback} == {(it['type'],it['id'],it['field']) for it in x['untranslated']}
+              print(f"{code}: {len(translated)} machine fields; {len(fallback)} English fallbacks; NOT approved for import")
+          print('59 locales: unreviewed public A1 content drafts; no exam questions; no production import')
           PY
       - name: Commit reviewable content packs, do not deploy
         run: |
