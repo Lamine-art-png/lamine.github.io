@@ -56,14 +56,35 @@ const sql = (v) => (v == null ? "NULL" : typeof v === "number" ? String(v) : `'$
 export const clock = { now: () => Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 const sleep = (ms) => clock.sleep(ms);
 
+// Cloudflare occasionally returns transient 5xx/429 responses even for read-only
+// Stream inventory checks (observed: GET /stream/<uid>/downloads HTTP 500 10500).
+// Retry only GETs, with a firm cap. Writes are not blindly repeated, and failed
+// reads still make the protection gate fail closed.
 async function cf(path, { method = "GET", body, raw = false } = {}) {
   const headers = { Authorization: `Bearer ${TOKEN}` };
   if (body && !(body instanceof FormData)) headers["Content-Type"] = "application/json";
-  const r = await fetch(`${API}/accounts/${ACCOUNT}${path}`, { method, headers, body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined });
-  if (raw) return { status: r.status, text: await r.text() };
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.success === false) throw new Error(`${method} ${path.replace(/[0-9a-f]{32}/g, (u) => short(u))}: HTTP ${r.status} ${(j.errors || []).map((e) => e.code).join(",")}`);
-  return j.result;
+  const maxAttempts = method === "GET" ? 4 : 1;
+  const requestBody = body instanceof FormData ? body : body ? JSON.stringify(body) : undefined;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let r;
+    try {
+      r = await fetch(`${API}/accounts/${ACCOUNT}${path}`, { method, headers, body: requestBody });
+    } catch (e) {
+      if (attempt + 1 === maxAttempts) throw e;
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+    if (method === "GET" && (r.status === 429 || r.status >= 500) && attempt + 1 < maxAttempts) {
+      await r.body?.cancel().catch(() => {});
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+    if (raw) return { status: r.status, text: await r.text() };
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.success === false) throw new Error(`${method} ${path.replace(/[0-9a-f]{32}/g, (u) => short(u))}: HTTP ${r.status} ${(j.errors || []).map((e) => e.code).join(",")}`);
+    return j.result;
+  }
+  throw new Error("Cloudflare Stream API read failed after bounded retries");
 }
 
 async function anonymous(url) {
