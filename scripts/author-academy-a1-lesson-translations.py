@@ -97,20 +97,23 @@ def main():
                 error=str(exc)[:120]
                 if attempt<2: time.sleep(2*(attempt+1))
         if error:
+            # Preserve complete reviewable coverage without presenting a
+            # broken machine translation as valid localized course content.
+            # This field MUST be translated and reviewed before public import.
+            items.append({**item,"translation":item["source"],"status":"source_fallback"})
             failures.append({k:item[k] for k in ("type","id","field")}|{"reason":error})
     OUT.mkdir(parents=True,exist_ok=True)
+    translated_count=sum(it["status"]=="machine" for it in items)
     payload={
         "format":"agroai-academy-translations/v1",
-        "source_locale":"en","target_locale":lang,"status":"machine",
-        "translated_fields":len(items),"total_fields":len(source),
-        "limitations":"Public A1 course/module/lesson text only; NO exam questions or answer keys.",
+        "source_locale":"en","target_locale":lang,"status":"machine_draft_requires_review",
+        "translated_fields":translated_count,"total_fields":len(source),
+        "limitations":"Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
         "provenance":"unreviewed machine, source must match production before import",
         "items":items,"untranslated":failures,
     }
     (OUT/(lang+".json")).write_text(json.dumps(payload,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    print(f"{lang}: {len(items)}/{len(source)} machine fields, {len(failures)} require review",flush=True)
-    if failures:
-        raise RuntimeError(f"{lang}: incomplete: {len(failures)} fields failed format QA")
+    print(f"{lang}: {translated_count}/{len(source)} machine fields, {len(failures)} explicit English fallbacks requiring review",flush=True)
 
 if __name__=="__main__":
     main()
