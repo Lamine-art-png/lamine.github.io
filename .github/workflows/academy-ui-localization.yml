@@ -78,7 +78,16 @@ jobs:
               assert set(rows)==set(en), f'{code}: source key parity'
               assert all(isinstance(v,str) and v.strip() for v in rows.values()), code
               if code!='en':
-                  meta[code]={'provenance':'machine-prepared','reviewed':False}
+                  # Source-language strings are safe to display, but never
+                  # represent them as translated or human-reviewed.
+                  source_fallbacks=sorted(k for k,v in rows.items() if v==en[k])
+                  meta[code]={
+                      'provenance':'machine-prepared',
+                      'reviewed':False,
+                      'source_language_fallback_keys':source_fallbacks,
+                  }
+                  if source_fallbacks:
+                      print(f'{code}: {len(source_fallbacks)} English/source fallbacks; needs language review')
           (root/'_meta.json').write_text(json.dumps(meta,indent=2,ensure_ascii=False)+'\n')
           PY
           cd apps/academy
