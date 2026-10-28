@@ -27,7 +27,8 @@ test("a translated right-to-left page marks English curriculum text as English, 
   assert.match(r.text, /<html lang="ar" dir="rtl"/);
   assert.match(r.text, /<h1 class="display-sm" lang="en" dir="ltr">Introduction to Artificial Intelligence in Agriculture<\/h1>/);
   assert.match(r.text, /<div class="prose" lang="en" dir="ltr">/);
-  assert.match(r.text, /أكتوبر/, "Gregorian month names in Arabic");
+  assert.match(r.text, /قريبًا/, "review-state course uses localized coming-soon copy");
+  assert.doesNotMatch(r.text, /أكتوبر/, "review-state course must not promise an October opening");
   // English pages carry no redundant markers.
   const en = await new Client(env).get(`${COURSE}?lang=en`);
   assert.match(en.text, /<h1 class="display-sm">Introduction to Artificial Intelligence in Agriculture<\/h1>/);
