@@ -34,21 +34,24 @@ def exact_placeholders(text: str) -> list[str]:
     return sorted(PLACEHOLDER.findall(text))
 
 
+def valid_entry(code: str, key: str, src: str, val: str) -> None:
+    if not isinstance(val, str) or not val.strip():
+        raise ValueError(f"{code}:{key}: blank or invalid")
+    if len(val) > max(2500, len(src) * 5):
+        raise ValueError(f"{code}:{key}: unexpectedly long")
+    if UNSAFE.search(val):
+        raise ValueError(f"{code}:{key}: untrusted markup/marker")
+    if exact_placeholders(val) != exact_placeholders(src):
+        raise ValueError(f"{code}:{key}: interpolated placeholders changed")
+    if sorted(TAG.findall(val)) != sorted(TAG.findall(src)):
+        raise ValueError(f"{code}:{key}: HTML tag structure changed")
+
+
 def valid_catalog(code: str, translated: dict, en: dict) -> None:
     if not isinstance(translated, dict) or set(translated) != set(en):
         raise ValueError(f"{code}: incomplete/extra keys")
     for key, src in en.items():
-        val = translated[key]
-        if not isinstance(val, str) or not val.strip():
-            raise ValueError(f"{code}:{key}: blank or invalid")
-        if len(val) > max(2500, len(src) * 5):
-            raise ValueError(f"{code}:{key}: unexpectedly long")
-        if UNSAFE.search(val):
-            raise ValueError(f"{code}:{key}: untrusted markup/marker")
-        if exact_placeholders(val) != exact_placeholders(src):
-            raise ValueError(f"{code}:{key}: interpolated placeholders changed")
-        if sorted(TAG.findall(val)) != sorted(TAG.findall(src)):
-            raise ValueError(f"{code}:{key}: HTML tag structure changed")
+        valid_entry(code, key, src, translated[key])
 
 
 def main() -> None:
@@ -83,8 +86,27 @@ def main() -> None:
             try:
                 # Preserve every existing string; translate only the missing keys.
                 # The five preexisting catalogs have six new keys each.
-                data = {**existing, **translate_catalog(code, missing)}
+                authored = translate_catalog(code, missing)
+                fallback_keys = []
+                for key, src in missing.items():
+                    try:
+                        valid_entry(code, key, src, authored[key])
+                    except (ValueError, KeyError):
+                        # Retry only the damaged field; never accept altered
+                        # placeholders, URLs, HTML or unsafe provider markup.
+                        try:
+                            single = translate_catalog(code, {key: src})[key]
+                            valid_entry(code, key, src, single)
+                            authored[key] = single
+                        except Exception:
+                            # Fail safe with visible source-language fallback.
+                            # Workflow metadata records these keys as NOT translated.
+                            authored[key] = src
+                            fallback_keys.append(key)
+                data = {**existing, **authored}
                 valid_catalog(code, data, en)
+                if fallback_keys:
+                    print(f"ENGLISH FALLBACK {code}: {len(fallback_keys)} keys; requires language review", flush=True)
                 path.write_text(
                     json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8",
