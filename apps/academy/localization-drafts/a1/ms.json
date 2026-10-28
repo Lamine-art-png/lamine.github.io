@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "ms",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Pengenalan kepada Kepintaran Buatan dalam Pertanian",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Apakah AI itu, cara ia berfungsi di ladang, dan cara menggunakannya secara bertanggungjawab.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Kecerdasan buatan tiba dalam pertanian melalui pengawal pengairan, perkhidmatan satelit, perisian pengurusan ladang dan telefon dalam poket penanam. Kursus ini memberi anda pemahaman yang jelas dan praktikal tentang teknologi itu, cara ia berfungsi dan cara menggunakannya dengan baik.\n\nAnda akan mempelajari idea teras di sebalik AI dan pembelajaran mesin tanpa persamaan, melihat bagaimana data pertanian menjadi ramalan dan kemudiannya cadangan, dan mengikuti AI sepanjang musim — daripada perancangan dan pengairan kepada kesihatan tanaman dan penuaian. Di atas segalanya, anda akan belajar untuk menilai output AI: bila untuk mempercayainya, bila untuk mempersoalkannya, dan bagaimana untuk memastikan pertimbangan manusia dan pengetahuan ladang bertanggungjawab.\n\nKursus ini direka untuk penanam, pengendali, ahli agronomi, pengurus dan pelajar. Tiada latar belakang teknikal diperlukan.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "tiada. Rasa ingin tahu tentang bagaimana teknologi boleh menyokong kerja pertanian adalah semua yang anda perlukan.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Terangkan dalam bahasa mudah apa itu kecerdasan buatan, pembelajaran mesin dan AI generatif\", \"Terangkan sumber utama data pertanian dan perkara yang menjadikan data boleh dipercayai\", \"Ikuti cara model menukar data menjadi ramalan dan ramalan menjadi cadangan\", \"Kenali aplikasi AI praktikal sepanjang musim tanaman, daripada perancangan hingga penuaian\", \"Kenal pasti had dan mod kegagalan AI pertanian dan bila untuk mencabar cadangan\", \"Gunakan prinsip pemilikan data, privasi dan penggunaan yang bertanggungjawab pada operasi anda sendiri\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Maksud AI untuk pertanian",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Idea teras dan mengapa ia penting sekarang.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Cara AI pertanian berfungsi",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Daripada data kepada model kepada cadangan.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI sepanjang musim",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Aplikasi praktikal dari perancangan hingga penuaian.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Menggunakan AI secara bertanggungjawab",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Had, hak data dan yakin, penggunaan kritikal.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Pemantauan kesihatan tanaman dari atas dan dekat",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Imejan satelit, indeks tumbuh-tumbuhan dan penglihatan komputer untuk kesihatan tanaman.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Tumbuhan yang sihat dan tumbuhan tertekan memantulkan cahaya secara berbeza. AI menggunakan perbezaan itu — ditangkap oleh satelit, dron dan kamera — untuk menonton tanaman pada skala yang tidak dapat ditanggung oleh pasukan pengakap.\n\n## Bagaimana tumbuhan melihat kepada satelit\n\nDaun hijau menyerap kebanyakan cahaya merah untuk fotosintesis dan memantulkan cahaya **inframerah dekat (NIR)** dengan kuat. Apabila tumbuhan ditekankan, jarang atau senescing, pemantulan merah meningkat dan pemantulan NIR turun.\n\n**Indeks Tumbuhan Perbezaan Normal (NDVI)** menangkap kontras ini:\n\n**NDVI = (NIR − Merah) ÷ (NIR + Merah)**\n\nNilai berjulat dari −1 hingga +1. Tumbuhan yang lebat dan sihat biasanya tinggi (selalunya melebihi 0.6); tanah kosong adalah rendah (sekitar 0.1–0.2); air biasanya negatif.\n\n## Membaca peta NDVI dengan bijak\n\nNDVI berguna untuk mengesan **di mana** medan berbeza, bukan untuk mendiagnosis **mengapa**. Tompokan NDVI rendah mungkin tekanan air, kekurangan nutrien, penyakit, perosak, masalah penanaman, atau hanya pelbagai jenis yang berbeza. Peta memberitahu anda tempat untuk melihat; pengakap memberitahu anda apa yang anda temui.\n\n> **Penting:** Awan, bayang awan, jerebu dan waktu siang boleh memesongkan bacaan satelit. Perkhidmatan yang boleh dipercayai menutupi awan dan membandingkan imej dari semasa ke semasa dan bukannya mempercayai satu syot kilat.\n\nIndeks lain wujud untuk tujuan tertentu — sesetengahnya lebih sensitif terhadap klorofil, yang lain terhadap kandungan air atau kanopi padat tempat NDVI tepu.\n\n## Penglihatan komputer dari dekat\n\nDi lapangan, **penglihatan komputer** model menganalisis foto daripada telefon, traktor atau dron untuk:\n\n- mengenal pasti penyakit dan perosak daripada imej daun;\n- membezakan rumpai daripada tanaman untuk penyemburan yang disasarkan;\n- mengira buah, bunga atau tumbuhan untuk menganggarkan hasil.\n\nModel ini dilatih pada koleksi besar imej berlabel. Ketepatannya sangat bergantung pada sama ada imej tersebut menyerupai tanaman anda, varieti anda dan keadaan pencahayaan anda.\n\n## Daripada pengesanan kepada tindakan\n\nAliran kerja pemantauan tanaman yang baik menukarkan pengesanan kepada tugas yang diutamakan: *\"Zon 3 menunjukkan kemerosotan semangat dalam tempoh 10 hari. Tinjau sudut timur laut dahulu; semak keseragaman pengairan dan cari tanda-tanda penyakit akar.\"* Penemuan pengakap kemudian memberi suapan semula ke dalam sistem, mempertingkatkan makluman masa hadapan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Data: bahan mentah AI pertanian",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Dari mana datangnya data ladang dan perkara yang menjadikannya boleh dipercayai.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Setiap sistem AI dibina daripada data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Dari mana datangnya data pertanian\n\n| Sumber | Contoh | Apa yang ia memberitahu anda |\n|---|---|---|\n| Cuaca | Stesen di ladang, rangkaian serantau, ramalan | Suhu, hujan, kelembapan, angin, sinaran suria |\n| Tanah | Kuar lembapan, ujian tanah, peta tanah | Air tersedia untuk akar, nutrien, tekstur |\n| Penderiaan jauh | Imej satelit, pesawat dan dron | Kekuatan tanaman, penutup kanopi, corak tegasan merentas padang |\n| Peralatan | Pengawal pengairan, meter aliran, monitor hasil, traktor | Apa yang digunakan, di mana dan bila |\n| Rekod | Tarikh penanaman, varieti, aplikasi input, nota pengakap | Keputusan dan pemerhatian pengurusan |\n| Pasaran | Harga, kontrak, isyarat permintaan | Konteks ekonomi untuk keputusan |\n\n## Kualiti data yang baik\n\n**Ketepatan** — adakah ukuran mencerminkan realiti? Siasatan lembapan yang dipasang di tempat basah, atau tolok hujan di bawah pokok, akan mengelirukan setiap model yang menggunakannya.\n\n**Kelengkapan** — adakah terdapat jurang? Penderia yang berhenti melaporkan selama seminggu semasa gelombang haba meninggalkan lubang tepat pada masa yang paling penting.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; bulan lepas bukan.\n\n**Ketekalan** — adakah unit, format dan takrifan sama dari semasa ke semasa dan merentasi medan? Mencampurkan inci dan milimeter, atau dua nama untuk medan yang sama, menyebabkan ralat senyap.\n\n**Kewakilan** — adakah data meliputi keadaan di mana AI akan digunakan? Model yang dilatih hanya pada tanah berpasir mungkin tidak berfungsi pada tanah liat.\n\n> **Semakan medan:** Sebelum mempercayai papan pemuka, tanya tiga soalan: Dari manakah nombor ini datang? Bilakah ia diukur? Apa yang akan membuat ia salah?\n\n## Data memerlukan konteks\n\nBacaan kelembapan tanah sebanyak 30% bermakna sedikit sahaja. Ia penting apa jenis tanah, sejauh mana penderia berada, tanaman mana yang tumbuh dan pada peringkat mana. AI pertanian yang baik menggabungkan sumber data supaya setiap satu menambah konteks kepada yang lain — contohnya, menggandingkan imejan satelit dengan data cuaca dan sejarah pengairan lapangan.\n\n## Data anda, keputusan anda\n\nData ladang mempunyai nilai — komersial, operasi dan peribadi. Sebelum menyambungkan peralatan atau berkongsi rekod dengan mana-mana perkhidmatan, fahami siapa yang boleh mengakses data, cara ia akan digunakan dan sama ada anda boleh membawanya bersama anda jika anda pergi. Kami akan kembali kepada pemilikan data dalam Modul 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Pemilikan data, privasi dan kepercayaan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Prinsip praktikal untuk berkongsi data ladang dengan yakin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Data ladang boleh mendedahkan hasil, amalan, kewangan dan lokasi orang dan aset. Berkongsi ia boleh membuka kunci perkhidmatan yang berharga — tetapi ia harus sentiasa menjadi pilihan yang disengajakan.\n\n## Soalan untuk ditanya kepada mana-mana penyedia teknologi\n\n- **Pemilikan:** Siapakah yang memiliki data yang saya berikan dan data yang sistem hasilkan tentang ladang saya?\n- **Penggunaan:** Data akan digunakan untuk apa? Adakah ia akan digunakan untuk melatih model? Adakah ia akan digabungkan dengan data ladang lain?\n- **Perkongsian:** Adakah ia akan dikongsi atau dijual kepada pihak ketiga? Yang mana, dan mengapa?\n- **Akses dan mudah alih:** Bolehkah saya memuat turun data saya dalam format yang boleh digunakan? Bolehkah saya membawanya bersama saya jika saya pergi?\n- **Pemadaman:** Bolehkah saya memadamkan data saya, dan apa yang kekal selepas itu?\n- **Keselamatan:** Bagaimanakah data dilindungi? Siapa di dalam syarikat boleh melihatnya?\n- **Kawalan:** Bolehkah saya membatalkan akses untuk peranti atau rakan kongsi yang disambungkan pada bila-bila masa?\n\nBeberapa organisasi pertanian telah menerbitkan prinsip data ladang yang menangani persoalan ini; bertanya sama ada pembekal mengikuti mereka adalah titik permulaan yang baik.\n\n## Persetujuan dan kebenaran\n\nSistem yang baik meminta kebenaran termaklum yang khusus — contohnya, membenarkan penyambung membaca data pengawal pengairan tanpa memberikan kebenaran untuk menukar tetapan. Berikan akses paling sedikit yang diperlukan untuk kerja itu dan semak perkhidmatan yang berkaitan dengan kerap.\n\n## Data teragregat dan tanpa nama\n\nMenggabungkan data daripada banyak ladang boleh menambah baik model untuk semua orang, seperti anggaran penggunaan air serantau yang lebih baik. Selesai dengan baik, pengagregatan mengalih keluar maklumat yang boleh mengenal pasti ladang individu. Tanya cara penganamaan dilakukan dan sama ada anda boleh menarik diri.\n\n## Amanah diperoleh\n\n> **Idea utama:** AI pertanian yang boleh dipercayai adalah telus tentang cara ia menggunakan data, menerangkan pengesyorannya, mengakui ketidakpastian dan membiarkan petani dalam kawalan.\n\nPrinsip yang sama ini terpakai kepada Akademi itu sendiri. Anda boleh memuat turun atau memadamkan data pembelajaran anda pada bila-bila masa daripada tetapan akaun anda.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Latihan praktikal: menilai cadangan AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Gunakan perkara yang anda pelajari pada pengesyoran yang realistik.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Dalam latihan ini anda akan mempraktikkan kemahiran semakan kritikal daripada modul ini berdasarkan cadangan yang realistik.\n\n## Senario\n\nAnda menguruskan operasi tomato pengairan titisan seluas 60 hektar. Pada pagi Selasa pada pertengahan musim, sistem sokongan keputusan anda menunjukkan:\n\n> *\"Cadangan: Langkau pengairan di Blok C selama 48 jam seterusnya. Ramalan penggunaan air tanaman: 3.1 mm/hari. Kelembapan tanah: 82% daripada kapasiti ladang. Keyakinan: tinggi.\"*\n\nApabila anda memandu melepasi Blok C, anda dapati tumbuh-tumbuhan di pinggir timur kelihatan layu dalam cuaca panas lewat pagi, dan suhu maksimum semalam ialah 37 °C — jauh lebih panas daripada ramalan 29 °C yang digunakan sistem dua hari lalu.\n\n## Tugas anda\n\nKerja melalui senarai semak di bawah. Tulis alasan anda dalam tab **Nota** supaya anda boleh kembali kepadanya.\n\n1. **Semak input.** Input yang manakah kelihatan boleh dipersoalkan? (Petunjuk: bandingkan suhu ramalan dengan apa yang berlaku.)\n2. **Periksa penderia.** Di manakah probe kelembapan tanah dipasang? Mungkinkah ia berada di tempat yang tidak mewakili pinggir timur?\n3. **Lihat di ladang.** Apakah yang akan anda periksa pada tumbuhan yang layu? Pertimbangkan penyumbatan pemancar, tekanan pada hujung talian, dan kesihatan akar.\n4. **Tentukan.** Adakah anda akan mengikuti, mengubah suai atau membatalkan pengesyoran? kenapa?\n5. **Rekod dan laporkan.** Apakah maklum balas yang akan anda berikan supaya sistem — dan pasukan anda — boleh belajar daripada perkara ini?\n\n## Perbincangan\n\nJawapan yang kukuh mendapati bahawa penggunaan air yang diramalkan mungkin berdasarkan ramalan yang ternyata terlalu sejuk, jadi permintaan sebenar adalah lebih tinggi. Bacaan probe tunggal 82% mungkin tidak mewakili pinggir timur, terutamanya jika pemancar tersumbat atau tekanan rendah di hujung sisi. Keputusan yang wajar mungkin adalah untuk memeriksa pinggir timur dengan segera, menjalankan pengairan singkat jika pemeriksaan mengesahkan tanah kering, dan melaporkan kedua-dua ramalan kehilangan dan kemungkinan masalah keseragaman.\n\nJarang ada satu jawapan yang betul — tetapi sentiasa ada proses yang betul: semak input, semak konteks, lihat di medan, buat keputusan dan rekod.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Tuai, pasaran dan rantaian bekalan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Ramalan hasil, risikan pasaran dan logistik.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Apabila musim bergerak ke arah menuai, keputusan beralih daripada menanam tanaman kepada menangkap nilainya.\n\n## Ramalan hasil\n\nRamalan hasil menggabungkan model pertumbuhan tanaman, cuaca hingga kini dan ramalan, kekuatan berasaskan imejan dan kadangkala dikira daripada penglihatan komputer. Ramalan awal kurang pasti; ketepatan bertambah baik apabila musim berjalan.\n\nRamalan menyokong keputusan seperti:\n\n- berapa banyak untuk menjual ke hadapan, dan bila;\n- berapa ramai pekerja, trak dan kapasiti penyimpanan untuk ditempah;\n- sama ada input lewat masih berbaloi untuk digunakan.\n\n## Risikan pasaran\n\nAlat risikan pasaran mengumpulkan harga, niaga hadapan, data eksport, cuaca di wilayah bersaing dan berita untuk membantu menjangka pergerakan harga. AI boleh meringkaskan isyarat ini dengan cepat dan menyerlahkan perubahan luar biasa. Tiada model boleh meramalkan pasaran dengan pasti; menganggap ramalan pasaran sebagai satu input kepada pelan yang diuruskan risiko, bukan sebagai jaminan.\n\n## Masa dan kualiti penuaian\n\nModel yang menjejaki kematangan tanaman — paras gula dalam anggur, kelembapan dalam bijirin, warna dalam buah — membantu menjadualkan penuaian untuk keseimbangan terbaik kualiti, risiko cuaca dan logistik. Digabungkan dengan ketersediaan tenaga kerja dan peralatan, mereka boleh membantu menyusun medan merentasi operasi.\n\n## Kebolehkesanan dan bukti\n\nPembeli semakin banyak meminta bukti tentang cara tanaman dihasilkan: penggunaan air, input yang digunakan, pensijilan. Sistem yang merekodkan pengesyoran, tindakan dan pengesahan sepanjang musim menjadikan bukti itu mudah dihasilkan — sebab lain langkah pengesahan gelung itu penting.\n\n> **Idea utama:** Semasa penuaian, nilai AI datang daripada mengurangkan ketidakpastian dalam masa, kuantiti dan harga — dan daripada mendokumentasikan perkara yang telah dilakukan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Kajian kes: pengairan dan pengurusan air",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Bagaimana sejatanspirasi, kelembapan tanah dan AI bergabung dalam penjadualan pengairan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Pengairan ialah salah satu contoh AI yang paling jelas mencipta nilai di ladang, kerana keputusan air adalah kerap, mahal dan boleh diukur.\n\n## Imbangan air\n\nFikirkan zon akar sebagai akaun bank untuk air.\n\n- **Deposit:** hujan dan pengairan.\n- **Pengeluaran:** air yang digunakan oleh tanaman dan tersejat daripada tanah — bersama dipanggil **evapotranspirasi (ET)** — ditambah saliran di bawah akar.\n\nMatlamat penjadualan pengairan adalah untuk mengekalkan keseimbangan antara had yang lebih rendah, di mana tanaman mula mengalami tekanan, dan had atas, di mana air mengalir keluar dan terbuang.\n\n## Menganggar penggunaan air tanaman\n\nPenggunaan air tanaman biasanya dianggarkan dalam dua langkah:\n\n1. **Evapotranspirasi rujukan (ET₀)** dikira daripada data cuaca — suhu, kelembapan, sinaran angin dan suria — untuk tanaman rujukan standard.\n2. **Pekali tanaman (Kc)** melaraskan ET₀ untuk tanaman sebenar dan peringkat pertumbuhannya: **ETc = ET₀ × Kc**.\n\nPembelajaran mesin boleh meningkatkan anggaran ini dengan belajar daripada penderia tempatan, imejan kanopi dan sejarah ladang itu sendiri, terutamanya apabila pekali standard tidak sesuai.\n\n## Senario penjadualan\n\n> **Contoh:** Blok ladang anggur mempunyai 40 mm air yang sedia ada apabila zon akar penuh. Kuar lembapan tanah menunjukkan baki 18 mm. Ramalan ETc ialah 5 mm sehari untuk empat hari berikutnya, dan tiada hujan dijangkakan.\n\nTanpa pengairan, blok mencapai had bawahnya dalam kira-kira tiga setengah hari (18 mm ÷ 5 mm/hari). Sistem penjadualan akan mengesyorkan pengairan dalam dua hingga tiga hari akan datang, bersaiz untuk mengisi semula zon akar tanpa terlalu mengisinya, bermasa kepada kapasiti pam yang tersedia dan menurunkan harga elektrik pada waktu malam.\n\nJika ramalan berubah kepada 15 mm hujan pada hari kedua, sistem yang baik mengemas kini pengesyoran — dan menerangkan sebabnya.\n\n## Di mana AI menambah nilai\n\n- **Anggaran penggunaan air yang lebih baik** dengan menggabungkan cuaca, penderia dan imejan.\n- **Penjadualan sedar ramalan** yang menyumbang kepada hujan dan panas yang akan datang.\n- **Pengoptimuman** merentas banyak blok, had pam dan peruntukan air.\n- **Pengesahan** — mengesahkan daripada meter aliran dan kelembapan tanah bahawa pengairan berlaku seperti yang dirancang dan mempunyai kesan yang dijangkakan.\n\n## Apa yang boleh berlaku\n\nPemancar tersumbat, injap pecah atau probe yang dipasang di tempat yang tidak mewakili semuanya boleh mengelirukan sistem. Itulah sebabnya langkah pengesahan penting: apabila kelembapan tanah diperhatikan tidak bertindak balas seperti yang diramalkan selepas pengairan, ia adalah isyarat untuk menyiasat lapangan, bukan hanya model.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Had, ralat dan masa untuk mencabar cadangan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Mengiktiraf mod kegagalan dan memastikan pertimbangan manusia bertanggungjawab.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Setiap sistem AI kadangkala akan menjadi salah. Matlamatnya bukanlah kepercayaan buta atau penolakan menyeluruh, tetapi **kepercayaan yang ditentukur**: mengetahui bila pengesyoran memerlukan keyakinan dan bila ia patut dilihat kedua.\n\n## Mod kegagalan biasa\n\n**Input buruk.** Penderia yang gagal, siasatan yang salah letak atau suapan data yang hilang menghasilkan omong kosong yang yakin. *Sampah masuk, sampah keluar.*\n\n**Keadaan di luar lingkungan.** Model paling tidak boleh dipercayai dalam situasi yang jarang mereka lihat semasa latihan: kepanasan melampau, varieti baharu, tanah yang luar biasa.\n\n**Hanyutan.** Keadaan berubah mengikut masa dan model yang tepat tiga tahun lalu mungkin tidak lagi.\n\n**Bias.** Jika data latihan lebih mewakili kawasan, saiz ladang atau tanaman tertentu, pengesyoran mungkin kurang tepat untuk operasi yang berbeza.\n\n**Konteks hilang.** Sistem tidak mengetahui tentang hanyut racun herba jiran, paip pecah atau kontrak yang memerlukan penuaian minggu depan.\n\n** Bias automasi.** Orang ramai cenderung terlalu mempercayai output mesin, terutamanya apabila ia dibentangkan dengan tepat. Nombor dengan dua tempat perpuluhan tidak semestinya tepat.\n\n## Bila hendak mencabar cadangan\n\nJeda dan siasat apabila:\n\n- pengesyoran bercanggah dengan apa yang anda lihat di lapangan;\n- ia jauh di luar julat normal untuk musim ini;\n- sistem menunjukkan keyakinan yang rendah, atau tidak menunjukkan keyakinan sama sekali;\n- data utama tiada, basi, atau jelas salah;\n- akibat daripada ralat akan menjadi teruk atau sukar untuk diterbalikkan.\n\n> **Pemeriksaan medan:** Peraturan mudah — keputusan yang lebih besar dan kurang boleh diterbalikkan, lebih banyak bukti yang perlu anda perlukan sebelum bertindak atas pengesyoran AI.\n\n## Bagaimana untuk mencabar dengan baik\n\n1. **Semak input.** Adakah penderia melaporkan? Adakah data cuaca terkini?\n2. **Tanyakan sebabnya.** Data apakah yang mendorong cadangan ini?\n3. **Lihat di padang.** Tinjau kawasan berkenaan.\n4. **Rekodkan perkara yang anda putuskan dan sebabnya.** Penggantian anda ialah maklum balas berharga yang membantu menambah baik sistem.\n\nMencabar cadangan bukanlah kegagalan teknologi. Itulah cara orang dan AI bekerja dengan baik bersama-sama.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Model, latihan dan ramalan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Bagaimana model belajar daripada contoh dan sebab setiap ramalan mempunyai ketidakpastian.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**model** ialah perihalan matematik perhubungan — contohnya, antara cuaca dan jumlah air yang digunakan tanaman. Pembelajaran mesin membina model dengan belajar daripada contoh.\n\n## Belajar daripada contoh\n\nBayangkan anda ingin meramalkan berapa banyak air yang akan digunakan oleh kebun badam esok. Anda mengumpul banyak hari lepas, setiap satu dengan:\n\n- **input** (juga dipanggil *ciri*): suhu, kelembapan, angin, sinaran suria, umur pokok, penutup kanopi;\n- **hasil** yang anda ingin ramalkan: air yang sebenarnya digunakan oleh kebun pada hari itu, diukur dengan penderia.\n\nSemasa **latihan**, algoritma melaraskan model berulang kali sehingga ramalannya sepadan dengan hasil yang direkodkan sehampir mungkin. Ini dipanggil **pembelajaran terselia**, kerana setiap contoh disertakan dengan jawapan yang betul.\n\n## Menguji data yang model tidak pernah dilihat\n\nModel boleh menghafal contoh latihannya dan masih gagal pada hari baharu. Itulah sebabnya saintis data mengetepikan beberapa data untuk **pengesahan** — data yang tidak pernah dilihat model semasa latihan. Prestasi pada data yang ditahan itu adalah ukuran yang jujur ​​tentang sejauh mana ia berfungsi.\n\n> **Penting:** Tanya bagaimana model disahkan. \"Ia sesuai dengan data sejarah kami dengan sempurna\" adalah tanda amaran, bukan kekuatan.\n\n## Mengukur ketepatan\n\nUntuk ramalan berangka, ukuran biasa termasuk **ralat purata** (sejauh mana ramalan, secara purata) dan berapa banyak variasi yang dijelaskan oleh model. Untuk klasifikasi — \"tertekan\" atau \"sihat\" — kami bertanya berapa kerap model itu betul, dan kekerapan model itu menimbulkan penggera palsu atau terlepas masalah sebenar.\n\nTiada ketepatan tunggal \"baik\". Ramalan hasil dalam lingkungan 5% mungkin sangat baik untuk keputusan pemasaran; penggera fros yang terlepas satu acara dalam sepuluh mungkin tidak boleh diterima.\n\n## Setiap ramalan mempunyai ketidakpastian\n\nPerubahan cuaca, penderia hanyut dan medan berbeza-beza. Sistem yang boleh dipercayai menyampaikan ketidakpastian: \"penggunaan air esok ialah 6.2 mm, berkemungkinan antara 5.6 dan 6.8 mm.\" Nombor tunggal tanpa julat menyembunyikan maklumat penting.\n\n## Apabila model menjadi basi\n\nKeadaan berubah. Varieti baharu, tahun kemarau atau sistem pengairan yang diubah boleh menjadikan data lepas kurang mewakili. Ini dipanggil **hanyut**. Sistem yang baik memantau ketepatan mereka sendiri dari semasa ke semasa dan dilatih semula apabila prestasi menurun.\n\n## Jenis model pertanian biasa\n\n- **Regression** — meramalkan nombor (penggunaan air, hasil, harga).\n- **Klasifikasi** — menetapkan kategori (penyakit ada atau tiada, jenis tanaman).\n- **Ramalan** — meramalkan bagaimana sesuatu akan berubah dari semasa ke semasa (kelembapan tanah dalam tempoh lima hari akan datang).\n- **Penglihatan komputer** — mentafsir imej (mengira buah, mengesan rumpai).\n- **Pengoptimuman** — mencari pelan terbaik dalam kekangan (jadual pengairan yang memenuhi permintaan tanaman dengan air yang terhad).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Perancangan dan penanaman",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Menggunakan data dan AI sebelum benih pertama masuk ke dalam tanah.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Banyak keputusan yang paling berharga pada musim ini dibuat sebelum menanam. AI boleh membantu dengan membawa lebih banyak bukti kepada keputusan tersebut.\n\n## Sejarah lapangan dan zon pengurusan\n\nPadang tidak seragam. Peta hasil bertahun-tahun, tinjauan tanah dan imejan satelit sering mendedahkan corak yang konsisten: kawasan rendah yang kekal basah, rabung berpasir yang kering terlebih dahulu. Algoritma boleh mengumpulkan kawasan ini ke dalam **zon pengurusan** yang bertindak balas secara berbeza terhadap air, benih dan baja.\n\nDengan zon, penanam boleh mengubah kadar pembenihan, memilih tempat untuk menggunakan lebih atau kurang nitrogen, atau merancang set pengairan yang sepadan dengan cara setiap bahagian ladang berkelakuan.\n\n## Kepelbagaian dan keputusan tarikh penanaman\n\nModel yang dilatih tentang ujian serantau dan rekod cuaca boleh menganggarkan prestasi varieti dalam keadaan berbeza dan cara tarikh penanaman mempengaruhi risiko — contohnya, peluang tekanan haba semasa berbunga. Anggaran ini paling berguna apabila ia mencerminkan percubaan tempatan, bukan sahaja purata nasional.\n\n## Perancangan senario\n\nAlat AI boleh menjalankan senario \"bagaimana jika\" dengan cepat: Bagaimana jika musim kering? Bagaimana jika peruntukan air dipotong sebanyak 20%? Bagaimana jika harga input meningkat? Membandingkan senario membantu anda memilih pelan yang sesuai dengan banyak kemungkinan masa hadapan, bukan sahaja yang dijangkakan.\n\n> **Pemeriksaan medan:** Apabila alat mengesyorkan kadar pembenihan atau varieti, tanya data yang digunakan untuk membinanya. Data percubaan serantau dari tanah dan iklim anda jauh lebih relevan daripada purata nasional.\n\n## Had yang perlu diingat\n\nCadangan pramusim bergantung pada ramalan jangka panjang, yang tidak pasti. Anggap mereka sebagai pelan permulaan untuk diselaraskan apabila musim berlangsung, bukan preskripsi tetap.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "kuiz modul 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Semak pemahaman anda tentang asas AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Jawab lima soalan ringkas tentang idea dalam Modul 1. Kuiz adalah untuk latihan: anda boleh mengulangnya seberapa banyak kali yang anda suka dan anda akan melihat penjelasan selepas setiap percubaan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "kuiz modul 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Semak pemahaman anda tentang data, model dan cadangan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Lima soalan mengenai kualiti data, latihan model dan sokongan keputusan. Ambil semula seberapa kerap yang anda suka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "kuiz modul 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Semak pemahaman anda tentang AI sepanjang musim.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Lima soalan mengenai perancangan, pengairan, pemantauan tanaman dan penuaian. Ambil semula seberapa kerap yang anda suka.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Daripada ramalan kepada cadangan",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Bagaimana sistem sokongan keputusan menukar ramalan kepada tindakan — dan memastikan orang ramai sentiasa berada dalam gelung.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Ramalan memberitahu anda apa yang mungkin berlaku. **syor** memberitahu anda perkara yang perlu dilakukan mengenainya. Mengubah satu kepada yang lain memerlukan matlamat, kekangan dan konteks.\n\n## Contoh pengairan\n\nKatakan model meramalkan bahawa ladang akan menggunakan 7 mm air esok dan kelembapan tanah sudah menghampiri had bawah yang boleh diterima oleh tanaman. Sistem pengesyoran menggabungkan ramalan itu dengan:\n\n- **matlamat** — melindungi hasil dan kualiti, elakkan pembaziran;\n- **kekangan** — kapasiti pam, baki peruntukan air, tarif elektrik, jadual set pengairan;\n- **konteks** — ramalan hujan, peringkat tanaman, penuaian terancang yang memerlukan tanah kering.\n\nHasilnya mungkin: *\"Sirami blok 4 malam ini selama 6 jam (kira-kira 18 mm). Langkau blok 7: 12 mm hujan diramalkan dengan keyakinan tinggi.\"*\n\n## Pengesyoran yang baik menerangkan sendiri\n\nSyor yang anda tidak faham ialah syor yang tidak boleh anda nilai. Cari sistem yang menunjukkan:\n\n- **sebab** — data dan ramalan mana yang mendorong cadangan itu;\n- **keyakinan** — betapa pasti sistem itu;\n- **alternatif** — apa yang berlaku jika anda menunggu, atau memohon lebih sedikit;\n- **jejak bukti** — supaya anda boleh menyemak selepas itu sama ada tindakan itu berlaku dan berkesan.\n\n## Memastikan orang sentiasa berada dalam gelung\n\nDalam pertanian, kebanyakan AI ialah **sokongan keputusan**: sistem mencadangkan, seseorang membuat keputusan. Walaupun automasi melaksanakan tindakan — contohnya, pengawal membuka injap — reka bentuk yang bertanggungjawab termasuk langkah kelulusan, had dan keupayaan untuk mengatasi.\n\n> **Idea utama:** Orang yang bertanggungjawab ke atas keputusan harus sentiasa dapat melihat sebab pengesyoran dibuat, mengubahnya dan menghentikannya.\n\n## Menutup gelung: pengesahan\n\nSistem yang paling berharga tidak berhenti pada cadangan. Mereka menyemak apa yang sebenarnya dilakukan dan apa yang berlaku seterusnya: Adakah pengairan berjalan? Berapa banyak air yang digunakan? Adakah kelembapan tanah pulih seperti yang dijangkakan? Langkah **pengesahan** ini membina kepercayaan, menangkap masalah peralatan dan menghasilkan bukti yang semakin diminta oleh pembeli, juruaudit dan pihak berkuasa air.\n\nIngat gelung dari Modul 1: **sense → predict → recommend → verify**. Setiap pusingan gelung meningkatkan kedua-dua keputusan dan data untuk musim seterusnya.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Ringkasan kursus dan langkah seterusnya",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Perkara penting dan cara persediaan untuk peperiksaan akhir.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Tahniah kerana telah sampai ke penghujung kursus. Mari kita kumpulkan idea utama.\n\n## Pengambilan utama\n\n- **AI ialah kotak alat**, bukan satu teknologi. Peraturan, pembelajaran mesin, pembelajaran mendalam dan AI generatif sesuai dengan masalah yang berbeza.\n- **Data adalah asas.** Ketepatan, kesempurnaan, ketepatan masa, ketekalan dan keterwakilan menentukan perkara yang boleh dilakukan oleh mana-mana model.\n- **Model belajar daripada contoh** dan mesti disahkan pada data yang tidak pernah mereka lihat. Setiap ramalan mempunyai ketidakpastian, dan model boleh hanyut.\n- **Pengesyoran menggabungkan ramalan dengan matlamat, kekangan dan konteks.** Pengesyoran yang baik menjelaskan sendiri.\n- **Gelung itu penting:** rasa → ramal → mengesyorkan → sahkan.\n- **Sepanjang musim**, AI menyokong perancangan, pengairan, pemantauan tanaman, masa menuai, pemasaran dan kebolehkesanan.\n- **Gunakan kepercayaan yang ditentukur.** Cabaran cadangan yang bercanggah dengan medan, bergantung pada data yang lemah atau membawa kepentingan yang tinggi.\n- **Data anda patut dijaga.** Ketahui siapa pemiliknya, cara ia digunakan dan cara mengambilnya kembali.\n\n## Persediaan untuk peperiksaan akhir\n\nPeperiksaan akhir merangkumi keempat-empat modul. Ia mengeluarkan 20 soalan daripada bank yang lebih besar dan memberi anda 30 minit. Anda perlu **80%** untuk lulus.\n\n> **Petua:** Semak nota anda dan kuiz modul. Jika anda terlepas soalan kuiz, buka pelajaran yang ditunjukkannya sebelum peperiksaan.\n\n## Ke mana hendak pergi seterusnya\n\n- **Asas Data Pertanian** mendalami sumber dan kualiti data.\n- **Penderiaan Jauh dan Perisikan Satelit** berkembang pada indeks imejan dan tumbuh-tumbuhan.\n- **Pengairan Berkuasa AI** menggunakan idea ini pada pengurusan air secara terperinci.\n\nTerima kasih kerana belajar dengan AGRO-AI Akademi. Apabila anda sudah bersedia, buka peperiksaan akhir dari menu kursus.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Selamat datang ke kursus",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Perkara yang akan anda pelajari, cara kursus ini berfungsi dan cara memperoleh sijil anda.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Selamat datang ke **Pengenalan kepada Kepintaran Buatan dalam Pertanian**, kursus pertama program AGRO-AI Akademi *Asas Pertanian AI*.\n\nAnda tidak memerlukan sebarang latar belakang teknikal untuk berjaya di sini. Jika anda pernah melihat ramalan cuaca, membaca ujian tanah atau membandingkan hasil antara dua bidang, anda sudah menggunakan tabiat fikiran yang dibina oleh kursus ini: mengumpul bukti, mengesan corak dan memutuskan perkara yang perlu dilakukan seterusnya.\n\n## Apa yang anda akan pelajari\n\nPada akhir kursus anda akan dapat:\n\n- terangkan apa itu AI — dan bukan — dalam bahasa mudah;\n- terangkan dari mana data pertanian datang dan perkara yang menjadikannya boleh dipercayai;\n- ikuti cara data menjadi ramalan, dan ramalan menjadi cadangan;\n- mengiktiraf aplikasi AI yang berguna sepanjang musim;\n- menilai output AI secara kritis dan menggunakannya secara bertanggungjawab.\n\n## Bagaimana kursus ini berfungsi\n\nKursus ini mempunyai **empat modul** pelajaran pendek. Modul satu hingga tiga setiap satu berakhir dengan kuiz latihan yang membantu anda menyemak pemahaman anda; modul empat berakhir dengan latihan praktikal dan ringkasan kursus yang menyediakan anda untuk peperiksaan akhir. Kuiz tidak dikira dalam sijil anda dan anda boleh mengulanginya sekerap yang anda suka.\n\nKemajuan anda disimpan secara automatik. Anda boleh berhenti di tengah-tengah pelajaran pada telefon anda dan teruskan kemudian pada komputer.\n\n> **Petua:** Gunakan tab **Nota** di bawah setiap pelajaran untuk menulis idea yang berkaitan dengan operasi anda sendiri. Nota adalah peribadi — hanya anda boleh melihatnya.\n\n## Memperoleh sijil anda\n\nApabila anda telah menyelesaikan setiap pelajaran yang diperlukan, **peperiksaan akhir** dibuka. Ia mengeluarkan 20 soalan daripada bank yang lebih besar, ditetapkan masa pada 30 minit dan memerlukan markah **80%** untuk lulus. Jika anda tidak lulus pada percubaan pertama, anda boleh menyemak pelajaran yang disyorkan dan cuba lagi selepas satu jam.\n\nLulus peperiksaan dan AGRO-AI Akademi mengeluarkan sijil anda secara automatik — percuma, dengan ID kelayakan unik dan halaman pengesahan awam yang boleh anda kongsi di LinkedIn.\n\nMari kita mulakan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Daripada peraturan kepada pembelajaran: apakah AI itu (dan bukan)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Takrifan bahasa biasa AI, pembelajaran mesin, pembelajaran mendalam dan AI generatif.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Kecerdasan buatan\" digunakan untuk menerangkan segala-galanya daripada penggera sensor mudah kepada chatbot yang menulis esei. Sebelum kita melihat pertanian, kita memerlukan kata-kata yang jelas.\n\n## Kepintaran buatan\n\n**Kecerdasan buatan (AI)** ialah bidang luas membina sistem komputer yang melaksanakan tugas yang biasa kita kaitkan dengan kecerdasan manusia: mengenali corak, membuat ramalan, memahami bahasa dan memilih tindakan.\n\nTakrifan itu sengaja luas. Ia termasuk teknologi yang sangat berbeza, jadi ia membantu untuk memisahkan dua cara membinanya.\n\n## Peraturan berbanding pembelajaran\n\n**Sistem berasaskan peraturan** ikut arahan yang ditulis oleh orang. Pengawal pengairan yang menyatakan *\"jika kelembapan tanah jatuh di bawah 25%, mulakan pam\"* mematuhi peraturan. Peraturan adalah telus dan boleh diramal, tetapi seseorang perlu mengetahui peraturan yang betul terlebih dahulu, dan peraturan tidak menyesuaikan diri apabila keadaan berubah.\n\nSistem **Pembelajaran mesin (ML)** mempelajari corak daripada contoh sebaliknya. Tunjukkan model beribu-ribu musim lalu — cuaca, tanah, pengairan dan hasil yang diikuti — dan ia boleh mempelajari perhubungan yang tiada siapa yang menulis secara eksplisit. Kebanyakan apa yang orang panggil \"AI\" hari ini ialah pembelajaran mesin.\n\n| | Sistem berasaskan peraturan | Model pembelajaran mesin |\n|---|---|---|\n| Dari mana datangnya logik | Orang menulisnya | Belajar daripada data |\n| Kekuatan | Telus, boleh diramal | Menemui corak kompleks, menyesuaikan diri dengan data baharu |\n| Kelemahan | Tegar; merindui perkara yang tidak diramalkan oleh pereka | Hanya sebaik datanya; sukar untuk dijelaskan |\n| Contoh ladang | Pam bermula di bawah ambang kelembapan | Model meramalkan penggunaan air tanaman esok |\n\n## Pembelajaran mendalam\n\n**Pembelajaran mendalam** ialah keluarga kaedah pembelajaran mesin yang dibina daripada \"rangkaian saraf\" berlapis-lapis. Ia sangat baik pada data berdimensi tinggi yang tidak kemas seperti imej dan bunyi. Apabila apl telefon mengenali penyakit daun daripada foto, pembelajaran mendalam biasanya berada di belakangnya.\n\n## AI Generatif\n\n**AI Generatif** mencipta kandungan baharu — teks, imej, audio atau kod — berdasarkan corak yang dipelajari daripada set data yang sangat besar. Model bahasa besar (LLM), teknologi di sebalik pembantu perbualan, adalah AI generatif. Mereka boleh menerangkan konsep, meringkaskan laporan dan menjawab soalan dalam banyak bahasa.\n\nAI Generatif berkuasa, tetapi ia meramalkan perkataan *yang munasabah*, bukan fakta yang disahkan. Ia boleh menyatakan sesuatu yang palsu dengan penuh keyakinan. Dalam pertanian, pembantu generatif berguna untuk menerangkan dan merangka, tetapi nombor dan keputusan penting mesti disemak berdasarkan data yang dipercayai.\n\n> **Idea utama:** AI bukan satu mesin. Ia adalah kotak alat. Peraturan, model statistik, pembelajaran mendalam dan model generatif masing-masing sesuai dengan masalah yang berbeza.\n\n## Apa yang bukan AI\n\n- **AI bukan sihir.** Setiap output datang daripada data dan pilihan reka bentuk yang dibuat oleh orang ramai.\n- **AI tidak \"memahami\" ladang anda** seperti yang anda lakukan. Ia hanya tahu apa yang datanya ditangkap.\n- **AI tidak betul secara automatik.** Ramalan membawa ketidakpastian, dan sistem terbaik memberitahu anda jumlahnya.\n- **AI tidak menggantikan pertimbangan.** Ia adalah alat sokongan keputusan. Tanggungjawab untuk keputusan tetap ada pada orang.\n\n## Semak pemahaman anda\n\nFikirkan alat yang sudah anda gunakan — apl cuaca, monitor hasil, hamparan dengan formula. Adakah logiknya ditulis sebagai peraturan, atau dipelajari daripada data? Tulis jawapan anda dalam nota anda; kita akan kembali kepada idea ini dalam Modul 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Mengapa pertanian beralih kepada AI sekarang",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Tekanan dan peluang mendorong penggunaan AI di ladang.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Petani sentiasa menggunakan maklumat untuk membuat keputusan. Apa yang telah berubah ialah jumlah maklumat yang tersedia, kelajuan ia mesti digunakan, dan tekanan ke atas setiap sumber.\n\n## Tekanan ke atas ladang moden\n\n**Air.** Pertanian ialah pengguna terbesar air tawar di seluruh dunia; menurut Pertubuhan Makanan dan Pertanian PBB (FAO AQUASTAT), pertanian secara keseluruhan, kebanyakannya pengairan, menyumbang kira-kira 70% daripada pengeluaran air tawar global. Di banyak wilayah, peruntukan air semakin berkurangan sementara permintaan meningkat. Setiap keputusan pengairan adalah penting.\n\n**Kebolehubahan iklim.** Musim kurang dapat diramalkan. Gelombang haba, hujan tidak teratur dan tekanan perosak baharu menjadikan buku permainan tahun lepas kurang dipercayai.\n\n**Kos dan margin.** Kos baja, tenaga, buruh dan peralatan boleh berayun mendadak. Menggunakan jumlah yang betul di tempat yang betul melindungi kedua-dua margin dan persekitaran.\n\n**Buruh.** Banyak operasi bergelut untuk mencari dan mengekalkan orang yang mahir. Pengetahuan yang tinggal di dalam kepala seorang pengurus berpengalaman berisiko apabila orang itu tidak tersedia.\n\n**Jangkaan daripada pembeli dan pengawal selia.** Rantaian bekalan semakin meminta bukti: berapa banyak air telah digunakan, input mana yang digunakan, apakah amalan yang diikuti.\n\n## Mengapa AI, dan mengapa sekarang\n\nTiga perkara disatukan:\n\n1. **Data menjadi banyak.** Satelit kini melawat semula kebanyakan tanah ladang setiap beberapa hari. Probe kelembapan tanah, stesen cuaca, pengawal pengairan dan jentera semuanya menghasilkan data berterusan.\n2. **Pengkomputeran menjadi murah dan bersambung.** Model yang pernah memerlukan makmal penyelidikan boleh dijalankan di awan dan menyampaikan hasil ke telefon.\n3. **Kaedah matang.** Pembelajaran mesin, penglihatan komputer dan model bahasa telah bertambah baik dengan pesat dan kini menjadi alat praktikal.\n\n> **Idea utama:** AI tidak mencipta sumber baharu. Ia membantu anda menggunakan air, input, masa dan pengetahuan yang anda sudah ada dengan lebih baik.\n\n## Perkara yang boleh dilakukan oleh AI secara realistik\n\n- **Sense** — menukar imejan mentah dan data penderia kepada maklumat, seperti zon medan yang ditekankan.\n- **Ramalkan** — anggarkan perkara yang akan berlaku, seperti permintaan air tanaman esok atau hasil akhir musim.\n- **Cadangkan** — cadangkan tindakan, seperti jadual pengairan dan terangkan sebabnya.\n- **Sahkan** — semak sama ada tindakan berlaku dan sama ada tindakan itu berkesan.\n\nPerhatikan corak: rasa, ramal, cadangkan, sahkan. Kami akan menggunakan gelung ini sepanjang kursus.\n\n## Perkara yang tidak boleh dilakukannya\n\nAI tidak dapat melihat perkara yang tidak ditangkap oleh datanya: injap pecah, penyemburan jiran, amalan budaya yang unik untuk ladang anda. Ia tidak boleh memikul tanggungjawab untuk sesuatu keputusan. Dan ia tidak boleh menggantikan kepercayaan antara penanam dan penasihat. AI pertanian yang baik direka untuk bekerja *dengan* orang yang mengetahui tanah itu.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

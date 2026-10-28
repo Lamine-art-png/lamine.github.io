@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "ka",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "ხელოვნური ინტელექტის შესავალი სოფლის მეურნეობაში",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "რა არის AI, როგორ მუშაობს იგი ფერმაში და როგორ გამოვიყენოთ იგი პასუხისმგებლობით.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "ხელოვნური ინტელექტი სოფლის მეურნეობაში შემოდის სარწყავი კონტროლერების, სატელიტური სერვისების, ფერმის მართვის პროგრამული უზრუნველყოფის და მევენახეების ჯიბეებში არსებული ტელეფონების მეშვეობით. ეს კურსი გაძლევთ ნათელ, პრაქტიკულ გაგებას, თუ რა არის ეს ტექნოლოგია, როგორ მუშაობს და როგორ გამოიყენოთ იგი კარგად.\n\nთქვენ შეისწავლით ხელოვნური ინტელექტისა და მანქანათმცოდნეობის ძირითად იდეებს განტოლებების გარეშე, დაინახავთ, როგორ იქცევა სასოფლო-სამეურნეო მონაცემები პროგნოზად და შემდეგ რეკომენდაციად და მიჰყევით AI-ს სეზონის განმავლობაში - დაგეგმვიდან და მორწყვიდან მოსავლის ჯანმრთელობამდე და მოსავალამდე. უპირველეს ყოვლისა, თქვენ ისწავლით შეაფასოთ ხელოვნური ინტელექტის გამომუშავება: როდის უნდა ენდოთ მას, როდის დაუსვათ კითხვა და როგორ შეინარჩუნოთ ადამიანის განსჯა და ფერმის ცოდნა.\n\nკურსი განკუთვნილია მევენახეებისთვის, ოპერატორებისთვის, აგრონომებისთვის, მენეჯერებისთვის და სტუდენტებისთვის. არ არის საჭირო ტექნიკური ცოდნა.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "არცერთი. ცნობისმოყვარეობა იმის შესახებ, თუ როგორ შეუძლია ტექნოლოგიას ხელი შეუწყოს სასოფლო-სამეურნეო სამუშაოებს, არის ყველაფერი რაც თქვენ გჭირდებათ.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"მარტივი ენით ახსენით რა არის ხელოვნური ინტელექტი, მანქანათმცოდნეობა და გენერაციული AI\", \"აღწერეთ სოფლის მეურნეობის მონაცემების ძირითადი წყაროები და რა ხდის მონაცემებს სანდოს\", \"მიჰყევით თუ როგორ აქცევს მოდელი მონაცემებს პროგნოზად და პროგნოზს რეკომენდაციად\", \"აღიარეთ ხელოვნური ინტელექტის პრაქტიკული აპლიკაციები მოსავლის სეზონზე, დაგეგმვიდან მოსავლის აღებამდე\", \"განსაზღვრეთ სასოფლო-სამეურნეო ხელოვნური ინტელექტის შეზღუდვები და წარუმატებლობის რეჟიმები და როდის გამოწვევა რეკომენდაცია\", \"გამოიყენეთ მონაცემთა საკუთრების, კონფიდენციალურობისა და პასუხისმგებლობით გამოყენების პრინციპები საკუთარ ოპერაციებზე\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "რას ნიშნავს AI სოფლის მეურნეობისთვის",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "ძირითადი იდეები და რატომ არის ისინი მნიშვნელოვანი ახლა.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "როგორ მუშაობს სასოფლო-სამეურნეო AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "მონაცემებიდან მოდელამდე რეკომენდაციამდე.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI მთელი სეზონის განმავლობაში",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "პრაქტიკული გამოყენება დაგეგმვიდან მოსავლის აღებამდე.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "AI-ის პასუხისმგებლობით გამოყენება",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "შეზღუდვები, მონაცემთა უფლებები და თავდაჯერებული, კრიტიკული გამოყენება.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "მოსავლის ჯანმრთელობის მონიტორინგი ზემოდან და ახლოდან",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "სატელიტური გამოსახულება, მცენარეულობის ინდექსები და კომპიუტერული ხედვა მოსავლის ჯანმრთელობისთვის.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "ჯანმრთელი მცენარეები და სტრესული მცენარეები განსხვავებულად ასახავს სინათლეს. ხელოვნური ინტელექტი იყენებს ამ განსხვავებას - დაფიქსირებულს სატელიტების, თვითმფრინავების და კამერების მიერ - მოსავლის საყურებლად იმ მასშტაბით, რომელსაც ვერც ერთი სკაუტური ჯგუფი ვერ დაფარავს.\n\n## როგორ გამოიყურება მცენარეები თანამგზავრზე\n\nმწვანე ფოთლები შთანთქავს უმეტეს წითელ შუქს ფოტოსინთეზისთვის და ძლიერად ასახავს **ახლო ინფრაწითელ (NIR)** სინათლეს. როდესაც მცენარეები დაძაბულია, მწირი ან დაბერებულია, წითელი არეკვლა იზრდება და NIR ასახვა ეცემა.\n\n**ნორმალიზებული სხვაობის მცენარეულობის ინდექსი (NDVI)** ასახავს ამ კონტრასტს:\n\n**NDVI = (NIR − წითელი) ÷ (NIR + წითელი)**\n\nმნიშვნელობები მერყეობს -1-დან +1-მდე. ხშირი, ჯანსაღი მცენარეულობა ჩვეულებრივ მაღალია (ხშირად 0,6-ზე მეტი); შიშველი ნიადაგი დაბალია (დაახლოებით 0,1–0,2); წყალი ჩვეულებრივ უარყოფითია.\n\n## NDVI რუკების გონივრულად კითხვა\n\nNDVI გამოსადეგია ** სად** ველი განსხვავდება და არა ** რატომ** დიაგნოსტიკისთვის. დაბალი NDVI-ის ნაყენი შეიძლება იყოს წყლის სტრესი, საკვები ნივთიერებების დეფიციტი, დაავადება, მავნებლები, დარგვის პრობლემა ან უბრალოდ სხვა ჯიში. რუკა გიჩვენებთ სად უნდა გამოიყურებოდეს; სკაუტინგი გეუბნებათ რა იპოვეთ.\n\n> **მნიშვნელოვანია:** ღრუბლებმა, ღრუბლის ჩრდილებმა, ნისლმა და დღის დრომ შეიძლება დაამახინჯოს თანამგზავრის მონაცემები. სანდო სერვისები ფარავს ღრუბლებს და ადარებენ სურათებს დროთა განმავლობაში, ვიდრე ენდობა ერთ კადრს.\n\nსხვა ინდექსები არსებობს კონკრეტული მიზნებისთვის - ზოგი უფრო მგრძნობიარეა ქლოროფილის მიმართ, ზოგიც წყლის შემცველობის ან მკვრივი ტილოების მიმართ, სადაც NDVI გაჯერებულია.\n\n## კომპიუტერული ხედვა ახლოდან\n\nადგილზე, **კომპიუტერული ხედვის** მოდელები აანალიზებენ ფოტოებს ტელეფონებიდან, ტრაქტორებიდან ან თვითმფრინავებიდან:\n\n- იდენტიფიცირება დაავადებები და მავნებლები ფოთლების სურათებიდან;\n- განასხვავებენ სარეველებს კულტურებისგან მიზნობრივი შესხურებისთვის;\n- დათვალეთ ხილი, ყვავილები ან მცენარეები მოსავლიანობის შესაფასებლად.\n\nეს მოდელები მომზადებულია ეტიკეტირებული სურათების დიდ კოლექციებზე. მათი სიზუსტე დიდად არის დამოკიდებული იმაზე, ჰგავს თუ არა ეს სურათები თქვენს მოსავალს, თქვენს ჯიშებს და განათების პირობებს.\n\n## გამოვლენიდან მოქმედებამდე\n\nმოსავლის მონიტორინგის კარგი პროცესი აქცევს გამოვლენას პრიორიტეტულ ამოცანად: *\"3 ზონა აჩვენებს სიძლიერის დაქვეითებას 10 დღის განმავლობაში. ჯერ დაათვალიერეთ ჩრდილო-აღმოსავლეთი კუთხე; შეამოწმეთ მორწყვის ერთგვაროვნება და მოძებნეთ ფესვების დაავადების ნიშნები.\"* სკაუტის დასკვნები შემდეგ მიეწოდება სისტემას, აუმჯობესებს სამომავლო სიგნალიზაციას.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "მონაცემები: სასოფლო-სამეურნეო AI-ის ნედლეული",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "საიდან მოდის ფერმის მონაცემები და რა ხდის მას სანდო.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "ყველა AI სისტემა აგებულია მონაცემებისგან. თუ მონაცემები არასრული, მიკერძოებული ან არასწორია, AI ასევე იქნება. თქვენი მონაცემების გაგება ყველაზე მნიშვნელოვანი უნარია სასოფლო-სამეურნეო AI-ში.\n\n## საიდან მოდის სოფლის მეურნეობის მონაცემები\n\n| წყარო | მაგალითები | რას გეუბნებათ |\n|---|---|---|\n| ამინდი | ფერმის სადგურები, რეგიონული ქსელები, პროგნოზები | ტემპერატურა, ნალექი, ტენიანობა, ქარი, მზის რადიაცია |\n| ნიადაგი | ტენიანობის ზონდები, ნიადაგის ტესტები, ნიადაგის რუქები | ფესვებისთვის ხელმისაწვდომი წყალი, საკვები ნივთიერებები, ტექსტურა |\n| დისტანციური ზონდირების | სატელიტური, თვითმფრინავი და დრონი გამოსახულება | მოსავლის ენერგიულობა, ტილოების საფარი, სტრესი მინდორზე |\n| აღჭურვილობა | სარწყავი კონტროლერები, ნაკადის მრიცხველები, მოსავლიანობის მონიტორები, ტრაქტორები | რა იქნა გამოყენებული, სად და როდის |\n| ჩანაწერები | დარგვის თარიღები, ჯიშები, შეყვანის განაცხადები, სკაუტური შენიშვნები | მენეჯმენტის გადაწყვეტილებები და დაკვირვებები |\n| ბაზრები | ფასები, კონტრაქტები, მოთხოვნის სიგნალები | გადაწყვეტილებების ეკონომიკური კონტექსტი |\n\n## კარგი მონაცემების თვისებები\n\n**სიზუსტე** — ასახავს თუ არა გაზომვა რეალობას? ტენიანობის ზონდი დამონტაჟებული სველ ადგილზე, ან წვიმის ლიანდაგი ხის ქვეშ, შეცდომაში შეჰყავს ყველა მოდელს, რომელიც იყენებს მას.\n\n**სისრულე** - არის ხარვეზები? სენსორი, რომელიც აჩერებს მოხსენებას ერთი კვირის განმავლობაში სიცხის ტალღის დროს, ტოვებს ხვრელს ზუსტად მაშინ, როდესაც ეს ყველაზე მნიშვნელოვანია.\n\n**დროულობა** - არის თუ არა ბოლო მონაცემები საკმარისი გადაწყვეტილების მისაღებად? დღევანდელი მორწყვისთვის სასარგებლოა გუშინდელი ნიადაგის ტენიანობა; გასული თვის არ არის.\n\n**თანმიმდევრულობა** — არის თუ არა ერთეულები, ფორმატები და განმარტებები ერთნაირი დროში და ველებში? ინჩისა და მილიმეტრის, ან ერთი და იმავე ველის ორი სახელის შერევა იწვევს ჩუმ შეცდომებს.\n\n**წარმომადგენლობა** — მოიცავს თუ არა მონაცემები იმ პირობებს, სადაც AI იქნება გამოყენებული? მხოლოდ ქვიშიან ნიადაგებზე გაწვრთნილი მოდელი შეიძლება არ იმუშაოს თიხაზე.\n\n> ** საველე შემოწმება: ** სანამ დაფას ენდობით, დასვით სამი შეკითხვა: საიდან გაჩნდა ეს ნომერი? როდის გაზომეს? What would make it wrong?\n\n## მონაცემებს კონტექსტი სჭირდება\n\nნიადაგის ტენიანობის მაჩვენებელი 30% თავისთავად ცოტას ნიშნავს. მნიშვნელობა აქვს რა არის ნიადაგის ტიპი, რამდენად ღრმაა სენსორი, რომელი კულტურა იზრდება და რომელ ეტაპზე. კარგი სასოფლო-სამეურნეო ხელოვნური ინტელექტი აერთიანებს მონაცემთა წყაროებს ისე, რომ თითოეული ამატებს კონტექსტს სხვებს - მაგალითად, სატელიტური სურათების დაწყვილება ამინდის მონაცემებთან და მინდვრის ირიგაციის ისტორიასთან.\n\n## თქვენი მონაცემები, თქვენი გადაწყვეტილებები\n\nფერმის მონაცემებს აქვს მნიშვნელობა - კომერციული, ოპერატიული და პირადი. აღჭურვილობის დაკავშირებამდე ან რომელიმე სერვისთან ჩანაწერების გაზიარებამდე, გაიგეთ, ვის შეუძლია წვდომა მონაცემებზე, როგორ გამოიყენებს ისინი და შეგიძლიათ თუ არა თქვენთან წაღება, თუ წახვალთ. ჩვენ დავუბრუნდებით მონაცემთა მფლობელობას მოდულ 4-ში.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "მონაცემთა საკუთრება, კონფიდენციალურობა და ნდობა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "ფერმის მონაცემების დამაჯერებლად გაზიარების პრაქტიკული პრინციპები.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "ფერმის მონაცემებმა შეიძლება გამოავლინოს მოსავლიანობა, პრაქტიკა, ფინანსები და ხალხისა და აქტივების მდებარეობა. მის გაზიარებას შეუძლია ღირებული სერვისების განბლოკვა – მაგრამ ეს ყოველთვის უნდა იყოს მიზანმიმართული არჩევანი.\n\n## კითხვები, რომლებიც უნდა დაუსვათ ნებისმიერ ტექნოლოგიურ პროვაიდერს\n\n- **მფლობელობა:** ვინ ფლობს ჩემს მიერ მოწოდებულ მონაცემებს და იმ მონაცემებს, რომელსაც სისტემა აწარმოებს ჩემი ფერმის შესახებ?\n- **გამოყენება:** რისთვის იქნება გამოყენებული მონაცემები? გამოიყენებს თუ არა მოდელების მომზადებას? გაერთიანდება თუ არა ის სხვა ფერმების მონაცემებთან?\n- **გაზიარება:** გაზიარდება თუ გაიყიდება მესამე პირებთან? რომელი და რატომ?\n- **წვდომა და პორტაბელურობა:** შემიძლია გადმოვწერო ჩემი მონაცემები გამოსაყენებელ ფორმატში? წასვლის შემთხვევაში შემიძლია თან წავიღო?\n- **წაშლა:** შემიძლია თუ არა ჩემი მონაცემების წაშლა და რა რჩება შემდეგ?\n- **უსაფრთხოება:** როგორ არის დაცული მონაცემები? ვის შეუძლია კომპანიის შიგნით მისი ნახვა?\n- **კონტროლი:** შემიძლია ნებისმიერ დროს გავაუქმო წვდომა დაკავშირებულ მოწყობილობაზე ან პარტნიორზე?\n\nრამდენიმე სასოფლო-სამეურნეო ორგანიზაციამ გამოაქვეყნა ფერმის მონაცემების პრინციპები, რომლებიც ეხმიანება ამ კითხვებს; კითხვა, მიყვება თუ არა პროვაიდერი მათ, კარგი საწყისი წერტილია.\n\n## თანხმობა და ნებართვები\n\nკარგი სისტემები ითხოვენ კონკრეტულ, ინფორმირებულ ნებართვას - მაგალითად, საშუალებას აძლევს კონექტორს წაიკითხოს სარწყავი კონტროლერის მონაცემები პარამეტრების შეცვლის ნებართვის გარეშე. მიეცით სამუშაოსთვის საჭირო მინიმალური წვდომა და რეგულარულად გადახედეთ დაკავშირებულ სერვისებს.\n\n## აგრეგირებული და ანონიმური მონაცემები\n\nმრავალი ფერმის მონაცემების გაერთიანებას შეუძლია გააუმჯობესოს მოდელები ყველასთვის, მაგალითად, უკეთესი რეგიონალური წყლის გამოყენების შეფასებები. კარგად გაკეთებული, აგრეგაცია აშორებს ინფორმაციას, რომელსაც შეუძლია ინდივიდუალური ფერმის იდენტიფიცირება. ჰკითხეთ, როგორ ხდება ანონიმიზაცია და შეგიძლიათ თუ არა უარის თქმა.\n\n## ნდობა მიღებულია\n\n> **ძირითადი იდეა:** სანდო სასოფლო-სამეურნეო AI არის გამჭვირვალე იმის შესახებ, თუ როგორ იყენებს ის მონაცემებს, განმარტავს თავის რეკომენდაციებს, აღიარებს გაურკვევლობას და აკონტროლებს ფერმერს.\n\nიგივე პრინციპები ეხება თავად აკადემიას. თქვენ შეგიძლიათ ჩამოტვირთოთ ან წაშალოთ თქვენი სასწავლო მონაცემები ნებისმიერ დროს თქვენი ანგარიშის პარამეტრებიდან.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "პრაქტიკული სავარჯიშო: შეაფასეთ AI რეკომენდაცია",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "გამოიყენეთ ის, რაც ისწავლეთ რეალისტურ რეკომენდაციებზე.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "ამ სავარჯიშოში თქვენ ივარჯიშებთ ამ მოდულის კრიტიკული განხილვის უნარებს რეალისტური რეკომენდაციით.\n\n## სცენარი\n\nთქვენ მართავთ 60 ჰექტარზე წვეთოვანი პომიდვრის ოპერაციას. სამშაბათს დილით შუა სეზონში, თქვენი გადაწყვეტილების მხარდაჭერის სისტემა აჩვენებს:\n\n> *\"რეკომენდაცია: გამოტოვეთ მორწყვა C ბლოკზე მომდევნო 48 საათის განმავლობაში. მოსავლის წყლის სავარაუდო მოხმარება: 3.1 მმ/დღეში. ნიადაგის ტენიანობა: მინდვრის მოცულობის 82%. ნდობა: მაღალი.\"*\n\nროდესაც გასცდებით C ბლოკს, შეამჩნევთ, რომ მცენარეები აღმოსავლეთის კიდეზე გვიან დილის სიცხეში გაცვეთილს გამოიყურებიან და გუშინდელი მაქსიმალური ტემპერატურა იყო 37 °C - ბევრად უფრო ცხელი, ვიდრე 29 °C-ის პროგნოზი, რომელიც სისტემამ გამოიყენა ორი დღის წინ.\n\n## შენი ამოცანა\n\nიმუშავეთ ქვემოთ მოცემულ საკონტროლო სიაზე. ჩაწერეთ თქვენი მსჯელობა **შენიშვნების** ჩანართში, რათა დაბრუნდეთ მასზე.\n\n1. **შეამოწმეთ შეყვანები.** რომელი შეყვანა საეჭვოა? (მინიშნება: შეადარეთ საპროგნოზო ტემპერატურა მომხდართან.)\n2. **შეამოწმეთ სენსორები.** სად არის დამონტაჟებული ნიადაგის ტენიანობის ზონდი? შეიძლება ის იყოს ისეთ ადგილზე, რომელიც არ წარმოადგენს აღმოსავლეთ კიდეს?\n3. ** მინდორში შეხედეთ.** რას შეამოწმებდით გაცვეთილ მცენარეებზე? განვიხილოთ ემიტერის ჩაკეტვა, წნევა ხაზის ბოლოს და ფესვების ჯანმრთელობა.\n4. **გადაწყვიტე.** მიჰყვებოდით, შეცვლიდით თუ უგულებელყოფთ რეკომენდაციას? რატომ?\n5. **ჩაწერეთ და შეატყობინეთ.** რა გამოხმაურებას მისცემდით, რათა სისტემამ - და თქვენმა გუნდმა - ისწავლონ აქედან?\n\n## დისკუსია\n\nმტკიცე პასუხიდან ჩანს, რომ პროგნოზირებული წყლის გამოყენება სავარაუდოდ ეფუძნებოდა პროგნოზს, რომელიც ძალიან მაგარი აღმოჩნდა, ამიტომ რეალური მოთხოვნა უფრო მაღალი იყო. ერთი ზონდი 82% შეიძლება არ წარმოადგენდეს აღმოსავლეთ კიდეს, განსაკუთრებით იმ შემთხვევაში, თუ ემიტერები იქ არის ჩაკეტილი ან წნევა დაბალია გვერდითი ბოლოში. გონივრული გადაწყვეტილება შეიძლება იყოს აღმოსავლეთის კიდეების დაუყონებლივ შემოწმება, მოკლე მორწყვის გაშვება, თუ ინსპექტირება დაადასტურებს მშრალ ნიადაგს და შეატყობინეთ როგორც პროგნოზის გაცდენას, ასევე შესაძლო ერთგვაროვნების პრობლემას.\n\nიშვიათად არის ერთი სწორი პასუხი - მაგრამ ყოველთვის არის სწორი პროცესი: შეამოწმეთ შეყვანები, შეამოწმეთ კონტექსტი, შეხედეთ ველს, გადაწყვიტეთ და ჩაწერეთ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "მოსავალი, ბაზრები და მიწოდების ჯაჭვი",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "მოსავლიანობის პროგნოზირება, ბაზრის დაზვერვა და ლოჯისტიკა.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "როდესაც სეზონი მოსავლის აღებისკენ მიდის, გადაწყვეტილებები მოსავლის მოყვანიდან მისი ღირებულების აღებაზე გადადის.\n\n## მოსავლიანობის პროგნოზირება\n\nმოსავლიანობის პროგნოზები აერთიანებს მოსავლის ზრდის მოდელებს, დღევანდელ ამინდს და პროგნოზებს, გამოსახულებაზე დაფუძნებულ ენერგიას და ზოგჯერ კომპიუტერულ ხედვას. ადრეული პროგნოზები ნაკლებად გარკვეულია; სიზუსტე უმჯობესდება სეზონის პროგრესირებასთან ერთად.\n\nპროგნოზები მხარს უჭერს გადაწყვეტილებებს, როგორიცაა:\n\n- რამდენი იყიდება ფორვარდი და როდის;\n- რამდენი მუშა, სატვირთო მანქანა და შენახვის მოცულობა უნდა დაჯავშნოთ;\n- მაინც ღირს თუ არა დაგვიანებული შეყვანის გამოყენება.\n\n## ბაზრის ინტელექტი\n\nბაზრის დაზვერვის ინსტრუმენტები აგროვებს ფასებს, ფიუჩერსებს, საექსპორტო მონაცემებს, ამინდს კონკურენტ რეგიონებში და სიახლეებს ფასების მოძრაობების წინასწარ განსაზღვრაში. AI-ს შეუძლია ამ სიგნალების სწრაფად შეჯამება და უჩვეულო ცვლილებების ხაზგასმა. არცერთ მოდელს არ შეუძლია ზუსტად განსაზღვროს ბაზრები; ბაზრის პროგნოზებს განიხილავს, როგორც რისკის მართვადი გეგმის ერთ-ერთ მონაცემს და არა როგორც გარანტიას.\n\n## მოსავლის დრო და ხარისხი\n\nმოდელები, რომლებიც აკონტროლებენ მოსავლის სიმწიფეს - შაქრის დონეს ყურძენში, ტენიანობა მარცვლეულში, ფერი ხილში - ეხმარება მოსავლის დაგეგმვას ხარისხის, ამინდის რისკისა და ლოგისტიკის საუკეთესო ბალანსისთვის. შრომისა და აღჭურვილობის ხელმისაწვდომობასთან ერთად, მათ შეუძლიათ დაეხმარონ ველების თანმიმდევრობას ოპერაციაში.\n\n## მიკვლევადობა და მტკიცებულება\n\nმყიდველები სულ უფრო ხშირად ითხოვენ მტკიცებულებას იმის შესახებ, თუ როგორ წარმოიქმნა მოსავალი: წყლის მოხმარება, გამოყენებული პროდუქცია, სერთიფიკატები. სისტემები, რომლებიც ჩაწერენ რეკომენდაციებს, მოქმედებებს და გადამოწმებას მთელი სეზონის განმავლობაში, ამ მტკიცებულების წარმოებას მარტივს ხდის - კიდევ ერთი მიზეზი, რის გამოც მარყუჟის გადამოწმების ნაბიჯი მნიშვნელოვანია.\n\n> **ძირითადი იდეა:** მოსავლის აღებისას, ხელოვნური ინტელექტის ღირებულება მოდის დროის, რაოდენობისა და ფასის გაურკვევლობის შემცირებიდან და გაკეთებულების დოკუმენტაციისგან.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "შემთხვევის შესწავლა: სარწყავი და წყლის მართვა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "როგორ ერწყმის აორთქლება, ნიადაგის ტენიანობა და ხელოვნური ინტელექტი სარწყავი დაგეგმვისას.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "ირიგაცია არის AI-ის ერთ-ერთი ყველაზე ნათელი მაგალითი ფერმაში ღირებულების შექმნისა, რადგან წყლის გადაწყვეტილებები ხშირი, ძვირი და გაზომვადია.\n\n## წყლის ბალანსი\n\nიფიქრეთ ფესვის ზონაზე, როგორც წყლის საბანკო ანგარიშზე.\n\n- **დეპოზიტები:** ნალექი და სარწყავი.\n- **ამოღება:** მოსავლის მიერ გამოყენებული და ნიადაგიდან აორთქლებული წყალი - ერთად მოუწოდა **აორთქლება ტრანსპირაცია (ET)** - პლუს დრენაჟი ფესვების ქვემოთ.\n\nსარწყავი დაგეგმვის მიზანია შეინარჩუნოს ბალანსი ქვედა ზღვარს, სადაც მოსავალი იწყებს სტრესს, და ზედა ზღვარს შორის, რომლის მიღმაც წყალი იშლება და იხარჯება.\n\n## მოსავლის წყლის გამოყენების შეფასება\n\nმოსავლის წყლის გამოყენება ჩვეულებრივ ფასდება ორ ეტაპად:\n\n1. **საცნობარო აორთქლება (ET₀)** გამოითვლება ამინდის მონაცემებიდან - ტემპერატურა, ტენიანობა, ქარი და მზის რადიაცია - სტანდარტული საცნობარო მოსავლისთვის.\n2. **მოსავლის კოეფიციენტი (Kc)** არეგულირებს ET₀-ს რეალური მოსავლისთვის და მისი ზრდის სტადიისთვის: **ETc = ET0 × Kc**.\n\nმანქანათმცოდნეობას შეუძლია გააუმჯობესოს ეს შეფასება ადგილობრივი სენსორების, ტილოების გამოსახულების და ფერმის საკუთარი ისტორიის შესწავლით, განსაკუთრებით იქ, სადაც სტანდარტული კოეფიციენტები ცუდად ერგება.\n\n## დაგეგმვის სცენარი\n\n> **მაგალითი:** ვენახის ბლოკს აქვს 40 მმ ადვილად ხელმისაწვდომი წყალი, როდესაც ფესვის ზონა სავსეა. ნიადაგის ტენიანობის ზონდები აჩვენებს 18 მმ-ს. პროგნოზი ETc არის 5 მმ დღეში მომდევნო ოთხი დღის განმავლობაში და წვიმა არ არის მოსალოდნელი.\n\nმორწყვის გარეშე, ბლოკი აღწევს ქვედა ზღვარს დაახლოებით სამნახევარ დღეში (18 მმ ÷ 5 მმ/დღეში). დაგეგმვის სისტემა გირჩევთ მორწყვას მომდევნო ორ-სამ დღეში, ისეთი ზომის, რომ შეავსოთ ფესვის ზონა ზედმეტი შევსების გარეშე, დროული ტუმბოს ხელმისაწვდომ სიმძლავრემდე და ღამით ელექტროენერგიის დაბალი ფასი.\n\nთუ პროგნოზი შეიცვლება 15 მმ წვიმამდე მეორე დღეს, კარგი სისტემა განაახლებს რეკომენდაციას და განმარტავს რატომ.\n\n## სადაც AI მატებს ღირებულებას\n\n- ** წყლის გამოყენების უკეთესი შეფასება ** ამინდის, სენსორების და გამოსახულების კომბინაციით.\n- **პროგნოზირებადი განრიგი **, რომელიც ითვალისწინებს მომავალ წვიმას და სიცხეს.\n- ** ოპტიმიზაცია ** ბევრ ბლოკში, ტუმბოს ლიმიტებსა და წყლის გამოყოფაზე.\n- **შემოწმება** - მრიცხველების და ნიადაგის ტენიანობის დადასტურება, რომ მორწყვა მოხდა ისე, როგორც დაგეგმილი იყო და ჰქონდა მოსალოდნელი ეფექტი.\n\n## რა შეიძლება იყოს არასწორი\n\nჩაკეტილმა ემიტერმა, გატეხილმა სარქველმა ან არარეპრეზენტატორულ ადგილზე დაყენებულმა ზონდმა შეიძლება შეცდომაში შეიყვანოს სისტემა. სწორედ ამიტომ, გადამოწმების საფეხურს აქვს მნიშვნელობა: როდესაც დაკვირვებული ნიადაგის ტენიანობა არ რეაგირებს ისე, როგორც ირიგაციის შემდეგ იყო ნაწინასწარმეტყველები, ეს არის სიგნალი ველის შესასწავლად და არა მხოლოდ მოდელის.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "შეზღუდვები, შეცდომები და როდის გამოწვევა რეკომენდაცია",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "წარუმატებლობის რეჟიმების ამოცნობა და ადამიანის განსჯის კონტროლი.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "ყველა AI სისტემა ზოგჯერ არასწორი იქნება. მიზანი არ არის ბრმა ნდობა ან სრული უარყოფა, არამედ ** დაკალიბრებული ნდობა**: იმის ცოდნა, თუ როდის იმსახურებს რეკომენდაცია ნდობას და როდის იმსახურებს მეორე ნახვას.\n\n## მარცხის საერთო რეჟიმები\n\n**ცუდი შეყვანები.** წარუმატებელი სენსორი, არასწორად განთავსებული ზონდი ან დაკარგული მონაცემთა არხი წარმოშობს თავდაჯერებულ სისულელეს. *ნაგავი შედი, ნაგავი გარეთ.*\n\n**განსხვავებულ პირობებში.** მოდელები ყველაზე ნაკლებად სანდოა ისეთ სიტუაციებში, რომლებსაც იშვიათად ხედავდნენ ვარჯიშის დროს: უკიდურესი სიცხე, ახალი ჯიში, უჩვეულო ნიადაგი.\n\n**დრიფტი.** პირობები იცვლება დროთა განმავლობაში და მოდელი, რომელიც ზუსტი იყო სამი წლის წინ, შეიძლება აღარ იყოს.\n\n**მიკერძოება.** თუ ტრენინგის მონაცემები ზედმეტად ასახავს გარკვეულ რეგიონებს, ფერმის ზომას ან მოსავალს, რეკომენდაციები შეიძლება ნაკლებად ზუსტი იყოს განსხვავებული ოპერაციებისთვის.\n\n**კონტექსტი აკლია.** სისტემამ არ იცის მეზობლის ჰერბიციდის დრეიფის, გატეხილი მილის ან კონტრაქტის შესახებ, რომელიც მოსავალს მომავალ კვირას მოითხოვს.\n\n** ავტომატიზაციის მიკერძოება.** ადამიანები ზედმეტად ენდობიან მანქანის გამომუშავებას, განსაკუთრებით მაშინ, როდესაც ის ზუსტად არის წარმოდგენილი. რიცხვი, რომელსაც აქვს ორი ათობითი ადგილი, სულაც არ არის ზუსტი.\n\n## როდის გავასაჩივროთ რეკომენდაცია\n\nშეაჩერე და გამოიკვლიე, როდესაც:\n\n- რეკომენდაცია ეწინააღმდეგება იმას, რასაც ხედავთ სფეროში;\n- სეზონის ნორმალურ დიაპაზონს შორს სცილდება;\n- სისტემა აჩვენებს დაბალ ნდობას, ან საერთოდ არ აჩვენებს ნდობას;\n- ძირითადი მონაცემები აკლია, შემორჩენილია ან აშკარად არასწორია;\n- შეცდომის შედეგები იქნება მძიმე ან ძნელი გამოსასწორებელი.\n\n> **საველე შემოწმება:** მარტივი წესი - რაც უფრო დიდი და ნაკლებად შექცევადი იქნება გადაწყვეტილება, მით მეტი მტკიცებულება უნდა მოითხოვოთ ხელოვნური ინტელექტის რეკომენდაციის მიხედვით მოქმედებამდე.\n\n## როგორ გამოწვევა კარგად\n\n1. **შეამოწმეთ შეყვანები.** სენსორები იუწყებიან? ამინდის მონაცემები აქტუალურია?\n2. ** იკითხეთ მიზეზი. ** რა მონაცემებმა განაპირობა ეს წინადადება?\n3. **შეხედეთ მინდორს.** დაათვალიერეთ მოცემული ტერიტორია.\n4. **ჩაწერეთ რა გადაწყვიტეთ და რატომ.** თქვენი უგულებელყოფა არის ღირებული გამოხმაურება, რომელიც ხელს უწყობს სისტემის გაუმჯობესებას.\n\nრეკომენდაციის გამოწვევა არ არის ტექნოლოგიის წარუმატებლობა. ეს არის ის, თუ როგორ მუშაობენ ადამიანები და AI ერთად.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "მოდელები, ტრენინგი და პროგნოზები",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "როგორ სწავლობს მოდელი მაგალითებიდან და რატომ აქვს ყველა პროგნოზს გაურკვევლობა.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**მოდელი** არის ურთიერთობის მათემატიკური აღწერა - მაგალითად, ამინდისა და მოსავლის მიერ გამოყენებული წყლის რაოდენობას შორის. მანქანათმცოდნეობა ქმნის მოდელებს მაგალითებიდან სწავლით.\n\n## სწავლა მაგალითებიდან\n\nწარმოიდგინეთ, გსურთ წინასწარ განსაზღვროთ, თუ რამდენ წყალს მოიხმარს ნუშის ბაღი ხვალ. თქვენ აგროვებთ ბევრ გასულ დღეს, თითოეულს აქვს:\n\n- **შეყვანები** (ასევე უწოდებენ *ფუნქციებს*): ტემპერატურა, ტენიანობა, ქარი, მზის გამოსხივება, ხეების ასაკი, ტილოების საფარი;\n- **შედეგი**, რომლის პროგნოზირებაც გსურთ: წყალი, რომელიც ბაღმა ფაქტობრივად გამოიყენა იმ დღეს, გაზომილი სენსორებით.\n\n**ტრენინგის** დროს ალგორითმი ისევ და ისევ არეგულირებს მოდელს, სანამ მისი პროგნოზები მაქსიმალურად არ ემთხვევა დაფიქსირებულ შედეგებს. ამას ეწოდება **ზედამხედველობითი სწავლება**, რადგან ყველა მაგალითს მოყვება სწორი პასუხი.\n\n## ტესტირება მონაცემებზე, რომელსაც მოდელი არასოდეს უნახავს\n\nმოდელს შეუძლია დაიმახსოვროს თავისი ვარჯიშის მაგალითები და მაინც წარუმატებელი იყოს ახალ დღეებში. ამიტომაც მონაცემთა მეცნიერები ინახავენ ზოგიერთ მონაცემს **დამოწმებისთვის** - მონაცემებს, რომლებიც მოდელს არასოდეს უნახავს ტრენინგის დროს. ამ შენახულ მონაცემებზე შესრულება არის პატიოსანი საზომი იმისა, თუ რამდენად კარგად მუშაობს.\n\n> **მნიშვნელოვანია:** ჰკითხეთ, როგორ მოხდა მოდელის ვალიდაცია. \"ეს იდეალურად ერგება ჩვენს ისტორიულ მონაცემებს\" გამაფრთხილებელი ნიშანია და არა სიძლიერე.\n\n## გაზომვის სიზუსტე\n\nრიცხვითი პროგნოზებისთვის, საერთო ზომები მოიცავს **საშუალო შეცდომას** (რაოდენ შორს არის პროგნოზები, საშუალოდ) და რამდენად ახსნილია მოდელი. კლასიფიკაციისთვის - \"ხაზგასმული\" ან \"ჯანმრთელი\" - ჩვენ ვკითხულობთ, რამდენად ხშირად არის მოდელი სწორი და რამდენად ხშირად აყენებს ცრუ სიგნალიზაციას ან გამოტოვებს რეალურ პრობლემებს.\n\nარ არსებობს ერთი \"კარგი\" სიზუსტე. მოსავლიანობის პროგნოზი, რომელიც 5%-ის ფარგლებშია, შეიძლება იყოს შესანიშნავი მარკეტინგული გადაწყვეტილებების მისაღებად; ყინვაგამძლე სიგნალიზაცია, რომელიც ათიდან ერთ მოვლენას გამოტოვებს, შეიძლება მიუღებელი იყოს.\n\n## ყველა პროგნოზს აქვს გაურკვევლობა\n\nამინდის ცვლილებები, სენსორების დრიფტი და ველები იცვლება. სანდო სისტემა იძლევა გაურკვევლობას: „ხვალინდელი წყლის მოხმარება არის 6.2 მმ, სავარაუდოდ 5.6-დან 6.8 მმ-მდე“. ერთი რიცხვი დიაპაზონის გარეშე მალავს მნიშვნელოვან ინფორმაციას.\n\n## როცა მოდელები ძველდება\n\nიცვლება პირობები. ახალმა ჯიშებმა, გვალვიანმა წელმა ან მორწყვის შეცვლილმა სისტემამ შეიძლება წარსული მონაცემები ნაკლებად წარმომადგენლობითი გახადოს. ამას **დრიფტი** ჰქვია. კარგი სისტემები დროთა განმავლობაში აკონტროლებენ საკუთარ სიზუსტეს და გადამზადებულნი არიან, როდესაც შესრულება იკლებს.\n\n## სასოფლო-სამეურნეო მოდელების გავრცელებული ტიპები\n\n- **რეგრესია** - პროგნოზირებს რიცხვს (წყლის მოხმარება, მოსავლიანობა, ფასი).\n- **კლასიფიკაცია** — ანიჭებს კატეგორიას (დაავადება არსებობს ან არ არსებობს, მოსავლის ტიპი).\n- **პროგნოზირება** - პროგნოზირებს, თუ როგორ შეიცვლება რაღაც დროთა განმავლობაში (ნიადაგის ტენიანობა მომდევნო ხუთი დღის განმავლობაში).\n- **კომპიუტერული ხედვა** - ახსნის სურათებს (ნაყოფის დათვლა, სარეველების აღმოჩენა).\n- **ოპტიმიზაცია** - პოულობს საუკეთესო გეგმას შეზღუდვების ფარგლებში (ირიგაციის გრაფიკი, რომელიც აკმაყოფილებს მოსავლის მოთხოვნას შეზღუდული წყლით).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "დაგეგმვა და დარგვა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "მონაცემების და ხელოვნური ინტელექტის გამოყენება, სანამ პირველი თესლი მიწაში მოხვდება.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "სეზონის ბევრი ყველაზე ღირებული გადაწყვეტილება მიიღება დარგვამდე. AI-ს შეუძლია დაეხმაროს ამ გადაწყვეტილებებზე მეტი მტკიცებულების მოტანით.\n\n## საველე ისტორია და მართვის ზონები\n\nველები არ არის ერთგვაროვანი. მრავალწლიანი მოსავლიანობის რუქები, ნიადაგის კვლევები და სატელიტური გამოსახულებები ხშირად ავლენს თანმიმდევრულ ნიმუშებს: დაბალი ტერიტორია, რომელიც რჩება სველი, ქვიშიანი ქედი, რომელიც ჯერ შრება. ალგორითმებს შეუძლიათ ამ ტერიტორიების დაჯგუფება **მართვის ზონებად**, რომლებიც განსხვავებულად რეაგირებენ წყალზე, თესლსა და სასუქზე.\n\nზონებით, მწარმოებელს შეუძლია იცვლებოდეს დათესვის სიჩქარე, აირჩიოს სად გამოიყენოს მეტი ან ნაკლები აზოტი, ან დაგეგმოს სარწყავი კომპლექტები, რომლებიც ემთხვევა მინდვრის თითოეული ნაწილის ქცევას.\n\n## ჯიშისა და დარგვის თარიღის გადაწყვეტილებები\n\nრეგიონულ ცდებზე და ამინდის ჩანაწერებზე გაწვრთნილ მოდელებს შეუძლიათ შეაფასონ, თუ როგორ მოქმედებს ჯიშები სხვადასხვა პირობებში და როგორ მოქმედებს დარგვის თარიღი რისკზე - მაგალითად, ყვავილობის დროს სითბური სტრესის შანსზე. ეს შეფასებები ყველაზე სასარგებლოა, როდესაც ისინი ასახავს ადგილობრივ კვლევებს და არა მხოლოდ ეროვნულ საშუალო მაჩვენებლებს.\n\n## სცენარის დაგეგმვა\n\nხელოვნური ინტელექტის ინსტრუმენტებს შეუძლიათ სწრაფად აწარმოონ „რა იქნებოდა თუ“ სცენარები: რა მოხდება, თუ სეზონი მშრალია? რა მოხდება, თუ წყლის გამოყოფა 20%-ით შემცირდება? რა მოხდება, თუ შესვლის ფასები იზრდება? სცენარების შედარება გეხმარებათ აირჩიოთ გეგმა, რომელიც შეესაბამება ბევრ შესაძლო ფიუჩერს და არა მხოლოდ მოსალოდნელს.\n\n> **საველე შემოწმება:** როდესაც ინსტრუმენტი გირჩევთ დათესვის სიჩქარეს ან ჯიშს, ჰკითხეთ რა მონაცემებზეა აგებული. თქვენი ნიადაგებისა და კლიმატის რეგიონალური საცდელი მონაცემები ბევრად უფრო აქტუალურია, ვიდრე ეროვნული საშუალო.\n\n## შეზღუდვები უნდა გვახსოვდეს\n\nსეზონისწინა რეკომენდაციები ეყრდნობა გრძელვადიან პროგნოზებს, რომლებიც გაურკვეველია. მოექეცით მათ როგორც სასტარტო გეგმას, რომელიც უნდა მორგებული იყოს სეზონის განვითარებასთან ერთად და არა ფიქსირებულ რეცეპტად.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "მოდული 1 ვიქტორინა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "შეამოწმეთ თქვენი გაგება AI საფუძვლების შესახებ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "უპასუხეთ ხუთ სწრაფ კითხვას მოდული 1-ში მოცემული იდეების შესახებ. ვიქტორინები განკუთვნილია პრაქტიკისთვის: შეგიძლიათ ხელახლა გაიაროთ ისინი რამდენჯერაც გსურთ და ყოველი მცდელობის შემდეგ ნახავთ განმარტებებს.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "მოდული 2 ვიქტორინა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "შეამოწმეთ თქვენი გაგება მონაცემების, მოდელებისა და რეკომენდაციების შესახებ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "ხუთი შეკითხვა მონაცემთა ხარისხზე, მოდელის ტრენინგზე და გადაწყვეტილების მხარდაჭერაზე. მიიღეთ ხელახლა რამდენჯერაც გსურთ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "მოდული 3 ვიქტორინა",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "შეამოწმეთ თქვენი გაგება AI-ის შესახებ მთელი სეზონის განმავლობაში.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "ხუთი კითხვა დაგეგმვის, ირიგაციის, მოსავლის მონიტორინგისა და მოსავლის აღების შესახებ. მიიღეთ ხელახლა რამდენჯერაც გსურთ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "პროგნოზიდან რეკომენდაციამდე",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "როგორ აქცევს გადაწყვეტილების მხარდაჭერის სისტემები პროგნოზებს ქმედებად - და აკავებს ხალხს.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "პროგნოზი გეტყვით, რა შეიძლება მოხდეს. ** რეკომენდაცია ** გეტყვით რა უნდა გააკეთოთ ამის შესახებ. ერთის მეორედ გადაქცევას მიზნები, შეზღუდვები და კონტექსტი სჭირდება.\n\n## სარწყავი მაგალითი\n\nდავუშვათ, მოდელი პროგნოზირებს, რომ ხვალ მინდორში 7 მმ წყალი გამოიყენებს და ნიადაგის ტენიანობა უკვე იმ ქვედა ზღვართანაა, რომელსაც მოსავალი მოითმენს. სარეკომენდაციო სისტემა აერთიანებს ამ პროგნოზს:\n\n- **მიზნები** - მოსავლიანობისა და ხარისხის დაცვა, ნარჩენების თავიდან აცილება;\n- **შეზღუდვები** - ტუმბოს სიმძლავრე, დარჩენილი წყლის გამოყოფა, ელექტროენერგიის ტარიფები, ირიგაციის დადგენილი გრაფიკი;\n- **კონტექსტი** — წვიმის პროგნოზი, მოსავლის ეტაპი, დაგეგმილი მოსავალი, რომელსაც სჭირდება მშრალი ნიადაგი.\n\nშედეგი შეიძლება იყოს: *\"4 ბლოკის მორწყვა დღეს ღამით 6 საათის განმავლობაში (დაახლოებით 18 მმ). გამოტოვეთ ბლოკი 7: პროგნოზირებულია 12 მმ წვიმა მაღალი ნდობით.\"*\n\n## კარგი რეკომენდაციები ხსნის თავის თავს\n\nრეკომენდაცია, რომელსაც ვერ გაიგებ, არის რეკომენდაცია, რომლის განსჯა არ შეგიძლია. მოძებნეთ სისტემები, რომლებიც აჩვენებენ:\n\n- **მიზეზი** — რომელმა მონაცემებმა და რომელმა პროგნოზმა განაპირობა წინადადება;\n- **ნდობა** - რამდენად გარკვეულია სისტემა;\n- **ალტერნატივები** — რა მოხდება, თუ დაელოდებით ან ნაკლებად მიმართავთ;\n- **მტკიცებულებების ბილიკი** - ასე რომ თქვენ შეგიძლიათ შეამოწმოთ, მოხდა თუ არა მოქმედება და მუშაობდა.\n\n## ხალხის შენარჩუნება\n\nსოფლის მეურნეობაში, ხელოვნური ინტელექტის უმეტესობა **გადაწყვეტილების მხარდაჭერაა**: სისტემა გვთავაზობს, ადამიანი გადაწყვეტს. მაშინაც კი, როდესაც ავტომატიზაცია ახორციელებს მოქმედებებს - მაგალითად, კონტროლერი ხსნის სარქველს - პასუხისმგებელი დიზაინი მოიცავს დამტკიცების ნაბიჯებს, შეზღუდვებს და გადალახვის უნარს.\n\n> **ძირითადი იდეა:** შედეგზე პასუხისმგებელ პირს ყოველთვის უნდა შეეძლოს დაინახოს, რატომ გაკეთდა რეკომენდაცია, შეცვალოს იგი და შეაჩეროს იგი.\n\n## მარყუჟის დახურვა: გადამოწმება\n\nყველაზე ღირებული სისტემები არ ჩერდება რეკომენდაციაზე. ისინი ამოწმებენ, რა გაკეთდა რეალურად და რა მოხდა შემდეგ: მორწყვა ჩაიარა? რამდენი წყალი დაასხეს? აღდგა ნიადაგის ტენიანობა, როგორც მოსალოდნელი იყო? ეს **შემოწმების** ნაბიჯი აყალიბებს ნდობას, იჭერს აღჭურვილობის პრობლემებს და აწარმოებს მტკიცებულებებს, რასაც მყიდველები, აუდიტორები და წყლის ორგანოები სულ უფრო ხშირად ითხოვენ.\n\nდაიმახსოვრე ციკლი 1 მოდულიდან: ** გრძნობა → პროგნოზირება → რეკომენდაცია → გადამოწმება **. მარყუჟის ყოველი შემობრუნება აუმჯობესებს გადაწყვეტილებებსაც და მონაცემებს მომავალი სეზონისთვის.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "კურსის შეჯამება და შემდეგი ნაბიჯები",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "ძირითადი ამოცანები და როგორ მოვემზადოთ საბოლოო გამოცდისთვის.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "გილოცავთ კურსის დასრულებას. მოდით გავაერთიანოთ ძირითადი იდეები.\n\n## ძირითადი წაღებები\n\n- **AI არის ინსტრუმენტის ყუთი** და არა ერთი ტექნოლოგია. წესები, მანქანათმცოდნეობა, ღრმა სწავლა და გენერაციული AI შეესაბამება სხვადასხვა პრობლემას.\n- **მონაცემები არის საფუძველი.** სიზუსტე, სისრულე, დროულობა, თანმიმდევრულობა და წარმომადგენლობა განსაზღვრავს რისი გაკეთება შეუძლია ნებისმიერ მოდელს.\n- **მოდელები სწავლობენ მაგალითებიდან** და უნდა დადასტურდეს იმ მონაცემებით, რომლებიც არასოდეს უნახავთ. ყველა პროგნოზს აქვს გაურკვევლობა და მოდელებს შეუძლიათ დრიფტი.\n- ** რეკომენდაციები აერთიანებს პროგნოზებს მიზნებთან, შეზღუდვებთან და კონტექსტთან.** კარგი ახსნის თავს.\n- ** მარყუჟს აქვს მნიშვნელობა: ** გრძნობა → პროგნოზირება → რეკომენდაცია → გადამოწმება.\n- ** მთელი სეზონის განმავლობაში **, AI მხარს უჭერს დაგეგმვას, მორწყვას, მოსავლის მონიტორინგს, მოსავლის აღების ვადას, მარკეტინგისა და მიკვლევადობას.\n- **გამოიყენეთ კალიბრირებული ნდობა.** რეკომენდაციების გამოწვევა, რომლებიც ეწინააღმდეგება სფეროს, ეყრდნობა ცუდ მონაცემებს ან ატარებს დიდ ფსონებს.\n- **თქვენი მონაცემები იმსახურებს ზრუნვას.** იცოდეთ ვის ეკუთვნის, როგორ გამოიყენება და როგორ დაიბრუნოთ.\n\n## მზადება დასკვნითი გამოცდისთვის\n\nდასკვნითი გამოცდა მოიცავს ოთხივე მოდულს. ის იღებს 20 კითხვას უფრო დიდი ბანკიდან და გაძლევთ 30 წუთს. ჩასაბარებლად საჭიროა **80%**.\n\n> **მინიშნება:** გადახედეთ თქვენს შენიშვნებს და მოდულის ტესტებს. თუ გამოტოვეთ ვიქტორინის შეკითხვა, გახსენით გაკვეთილი, რომელზეც ის მიუთითებს გამოცდამდე.\n\n## სად წავიდეთ შემდეგ\n\n- **სოფლის მეურნეობის მონაცემთა საფუძვლები** უფრო ღრმად მიდის მონაცემთა წყაროებსა და ხარისხში.\n- **დისტანციური ზონდირება და სატელიტური დაზვერვა** აფართოებს გამოსახულებასა და მცენარეულობის ინდექსებს.\n- **AI-Powered Irrigation** ამ იდეებს დეტალურად იყენებს წყლის მართვაში.\n\nგმადლობთ, რომ ისწავლეთ AGRO-AI აკადემიით. როდესაც მზად იქნებით, გახსენით საბოლოო გამოცდა კურსის მენიუდან.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "მოგესალმებით კურსზე",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "რას შეისწავლით, როგორ მუშაობს კურსი და როგორ მიიღოთ თქვენი სერთიფიკატი.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "კეთილი იყოს თქვენი მობრძანება **ხელოვნური ინტელექტის შესავალი სოფლის მეურნეობაში**, AGRO-AI აკადემიის *სასოფლო-სამეურნეო ხელოვნური ინტელექტის საფუძვლები* პროგრამის პირველ კურსში.\n\nთქვენ არ გჭირდებათ რაიმე ტექნიკური ცოდნა აქ წარმატების მისაღწევად. თუ თქვენ ოდესმე უყურეთ ამინდის პროგნოზს, წაიკითხეთ ნიადაგის ტესტი ან შეადარეთ მოსავლიანობა ორ ველს შორის, თქვენ უკვე იყენებთ გონების ჩვევებს, რომლებზეც ეს კურსი ეფუძნება: მტკიცებულებების შეგროვება, ნიმუშების დაფიქსირება და გადაწყვეტილების მიღება, თუ რა უნდა გააკეთოთ შემდეგ.\n\n## რას ისწავლით\n\nკურსის ბოლოს თქვენ შეძლებთ:\n\n- აუხსენით რა არის ხელოვნური ინტელექტი - და რა არ არის - მარტივი ენით;\n- აღწერეთ საიდან მოდის სასოფლო-სამეურნეო მონაცემები და რა ხდის მას სანდოს;\n- მიჰყევით, თუ როგორ ხდება მონაცემები პროგნოზად, ხოლო პროგნოზი რეკომენდაციად;\n- ამოიცნოთ სასარგებლო AI აპლიკაციები სეზონის განმავლობაში;\n- შეაფასეთ ხელოვნური ინტელექტის გამომუშავება კრიტიკულად და გამოიყენეთ იგი პასუხისმგებლობით.\n\n## როგორ მუშაობს კურსი\n\nკურსს აქვს მოკლე გაკვეთილების **ოთხი მოდული**. მოდულები ერთიდან სამამდე მთავრდება პრაქტიკული ვიქტორინით, რომელიც დაგეხმარებათ შეამოწმოთ თქვენი გაგება; მეოთხე მოდული მთავრდება პრაქტიკული სავარჯიშოებით და კურსის შეჯამებით, რომელიც მოგამზადებთ საბოლოო გამოცდისთვის. ტესტები არ ითვლება თქვენს სერტიფიკატში და შეგიძლიათ ხელახლა გაიაროთ ისინი რამდენჯერაც გსურთ.\n\nთქვენი პროგრესი ავტომატურად შეინახება. შეგიძლიათ შეჩერდეთ გაკვეთილის შუაში თქვენს ტელეფონზე და გააგრძელოთ მოგვიანებით კომპიუტერზე.\n\n> **მინიშნება:** გამოიყენეთ **შენიშვნები** ჩანართი თითოეული გაკვეთილის ქვეშ, რათა ჩამოწეროთ იდეები, რომლებიც ეხება თქვენს ოპერაციას. შენიშვნები პირადია - მხოლოდ თქვენ შეგიძლიათ მათი ნახვა.\n\n## მიიღეთ თქვენი სერთიფიკატი\n\nროდესაც დაასრულებთ ყველა საჭირო გაკვეთილს, **ფინალური გამოცდა** იხსნება. ის იღებს 20 შეკითხვას უფრო დიდი ბანკიდან, არის დრო 30 წუთში და მოითხოვს **80%** ქულას, რომ გაიაროს. თუ პირველ ცდას არ ჩააბარებთ, შეგიძლიათ გადახედოთ რეკომენდებულ გაკვეთილებს და ისევ სცადოთ ერთი საათის შემდეგ.\n\nგაიარეთ გამოცდა და AGRO-AI აკადემია ავტომატურად გასცემს თქვენს სერთიფიკატს — უფასოდ, უნიკალური რწმუნებათა სიგელის ID და საჯარო დადასტურების გვერდით, რომელიც შეგიძლიათ გააზიაროთ LinkedIn-ზე.\n\nდავიწყოთ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "წესებიდან სწავლებამდე: რა არის AI (და არ არის)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "ხელოვნური ინტელექტის, მანქანათმცოდნეობის, ღრმა სწავლისა და გენერაციული AI-ს მარტივი ენობრივი განმარტებები.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "„ხელოვნური ინტელექტი“ გამოიყენება ყველაფრის აღსაწერად, მარტივი სენსორის განგაშიდან დაწყებული ჩეთბოტამდე, რომელიც წერს ესეებს. სანამ სოფლის მეურნეობას შევხედავთ, მკაფიო სიტყვები გვჭირდება.\n\n## ხელოვნური ინტელექტი\n\n**ხელოვნური ინტელექტი (AI)** არის კომპიუტერული სისტემების მშენებლობის ფართო სფერო, რომელიც ასრულებს დავალებებს, რომლებიც ჩვეულებრივ ასოცირდება ადამიანის ინტელექტთან: შაბლონების ამოცნობა, პროგნოზების გაკეთება, ენის გაგება და მოქმედებების არჩევა.\n\nეს განმარტება განზრახ ფართოა. იგი მოიცავს ძალიან განსხვავებულ ტექნოლოგიებს, ასე რომ, ეს ხელს უწყობს მათი აგების ორი გზის გამოყოფას.\n\n## წესები სწავლის წინააღმდეგ\n\n**წესებზე დაფუძნებული სისტემები** მიჰყვება ხალხის მიერ დაწერილ ინსტრუქციებს. სარწყავი კონტროლერი, რომელიც ამბობს *\"თუ ნიადაგის ტენიანობა 25%-ზე დაბლა დაეცემა, გაუშვით ტუმბო\"* მიჰყვება წესს. წესები გამჭვირვალე და პროგნოზირებადია, მაგრამ ვინმემ წინასწარ უნდა იცოდეს სწორი წესი და წესები არ ერგება პირობების შეცვლას.\n\n**მანქანური სწავლება (ML)** სისტემები სწავლობენ შაბლონებს მაგალითებიდან. აჩვენე მოდელს ათასობით გასული სეზონი - ამინდი, ნიადაგი, სარწყავი და შემდგომი მოსავლიანობა - და მას შეუძლია ისწავლოს ურთიერთობები, რომლებიც არავის დაუწერია ცალსახად. უმეტესობა, რასაც დღეს ადამიანები უწოდებენ \"AI\"-ს, არის მანქანური სწავლება.\n\n| | წესებზე დაფუძნებული სისტემა | მანქანათმცოდნეობის მოდელი |\n|---|---|---|\n| საიდან მოდის ლოგიკა | ხალხი წერს | მიღებული მონაცემებიდან |\n| სიძლიერე | გამჭვირვალე, პროგნოზირებადი | პოულობს რთულ შაბლონებს, ადაპტირდება ახალ მონაცემებთან |\n| სისუსტე | ხისტი; ენატრება ის, რაც დიზაინერებმა არ იწინასწარმეტყველეს | მხოლოდ ისეთივე კარგი, როგორც მისი მონაცემები; შეიძლება რთული იყოს ახსნა |\n| ფერმის მაგალითი | ტუმბო იწყება ტენიანობის ზღურბლის ქვემოთ | მოდელი პროგნოზირებს ხვალინდელ მოსავლის წყლის გამოყენებას |\n\n## ღრმა სწავლა\n\n**ღრმა სწავლება** არის მანქანათმცოდნეობის მეთოდების ოჯახი, რომელიც აგებულია მრავალშრიანი „ნერვული ქსელებიდან“. ის განსაკუთრებით კარგია ბინძურ, მაღალგანზომილებიან მონაცემებში, როგორიცაა სურათები და ხმა. როდესაც ტელეფონის აპლიკაცია ფოტოდან ამოიცნობს ფოთლის დაავადებას, ღრმა სწავლა ჩვეულებრივ მის უკან დგას.\n\n## გენერაციული AI\n\n**გენერაციული AI** ქმნის ახალ შინაარსს - ტექსტს, სურათებს, აუდიოს ან კოდს - მონაცემთა ძალიან დიდი ნაკრებიდან მიღებული შაბლონების საფუძველზე. დიდი ენის მოდელები (LLMs), ტექნოლოგია სასაუბრო ასისტენტების უკან, არის გენერაციული AI. მათ შეუძლიათ ცნებების ახსნა, მოხსენებების შეჯამება და კითხვებზე პასუხის გაცემა მრავალ ენაზე.\n\nგენერაციული AI ძლიერია, მაგრამ ის წინასწარმეტყველებს *სასიამოვნო* სიტყვებს და არა დადასტურებულ ფაქტებს. მას შეუძლია თქვას რაიმე ყალბი სრული დარწმუნებით. სოფლის მეურნეობაში გენერაციული ასისტენტი სასარგებლოა ახსნისა და შედგენისთვის, მაგრამ მნიშვნელოვანი რიცხვები და გადაწყვეტილებები უნდა შემოწმდეს სანდო მონაცემებთან.\n\n> ** საკვანძო იდეა: ** AI არ არის ერთი მანქანა. ეს არის ხელსაწყოთა ყუთი. წესები, სტატისტიკური მოდელები, ღრმა სწავლა და გენერაციული მოდელები თითოეული შეესაბამება სხვადასხვა პრობლემას.\n\n## რა AI არ არის\n\n- **AI არ არის ჯადოსნური.** ყოველი გამომავალი მოდის მონაცემებისა და ადამიანების მიერ გაკეთებული დიზაინის არჩევანიდან.\n- **AI არ \"ესმის\" თქვენს ფერმას** ისე, როგორც თქვენ. მან იცის მხოლოდ ის, რაც მისმა მონაცემებმა დააგროვა.\n- **AI ავტომატურად არ არის სწორი.** პროგნოზები გაურკვევლობას შეიცავს და საუკეთესო სისტემები გეტყვით რამდენს.\n- **AI არ ცვლის განსჯას.** ეს არის გადაწყვეტილების მხარდაჭერის ინსტრუმენტი. გადაწყვეტილებაზე პასუხისმგებლობა რჩება ხალხს.\n\n## შეამოწმეთ თქვენი გაგება\n\nიფიქრეთ ხელსაწყოზე, რომელსაც უკვე იყენებთ - ამინდის აპლიკაცია, მოსავლიანობის მონიტორი, ცხრილი ფორმულებით. მისი ლოგიკა წესებად არის დაწერილი თუ მონაცემებიდან მიღებული? Write your answer in your notes; we will return to this idea in Module 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "რატომ გადადის სოფლის მეურნეობა ხელოვნური ინტელექტისკენ ახლა?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "ზეწოლა და შესაძლებლობები, რომლებიც განაპირობებს AI-ს მიღებას ფერმებში.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "ფერმერები ყოველთვის იყენებდნენ ინფორმაციას გადაწყვეტილების მისაღებად. რაც შეიცვალა არის ხელმისაწვდომი ინფორმაციის რაოდენობა, სიჩქარე, რომლითაც ის უნდა იქნას გამოყენებული და ზეწოლა ყველა რესურსზე.\n\n## ზეწოლა თანამედროვე ფერმაზე\n\n**წყალი.** სოფლის მეურნეობა მტკნარი წყლის ყველაზე დიდი მომხმარებელია მსოფლიოში; გაეროს სურსათისა და სოფლის მეურნეობის ორგანიზაციის (FAO AQUASTAT) მიხედვით, სოფლის მეურნეობა მთლიანობაში, ძირითადად სარწყავი, შეადგენს მტკნარი წყლის გლობალური გატანის დაახლოებით 70%-ს. ბევრ რეგიონში წყლის გამოყოფა მცირდება, ხოლო მოთხოვნა იზრდება. ყველა სარწყავი გადაწყვეტილება მნიშვნელოვანია.\n\n**კლიმატის ცვალებადობა.** სეზონები ნაკლებად პროგნოზირებადია. სიცხის ტალღები, არარეგულარული ნალექი და მავნებლების ახალი ზეწოლა შარშანდელ სათამაშო წიგნს ნაკლებად საიმედოს ხდის.\n\n** ხარჯები და მარჟები. ** სასუქის, ენერგიის, შრომისა და აღჭურვილობის ხარჯები შეიძლება მკვეთრად შეიცვალოს. სწორი თანხის სწორ ადგილას გამოყენება იცავს როგორც ზღვარს, ასევე გარემოს.\n\n** შრომა.** ბევრი ოპერაცია იბრძვის გამოცდილი ადამიანების პოვნასა და შესანარჩუნებლად. ცოდნა, რომელიც ცხოვრობს ერთი გამოცდილი მენეჯერის თავში, საფრთხეშია, როდესაც ეს ადამიანი მიუწვდომელია.\n\n**მოლოდინი მყიდველებისა და მარეგულირებლებისგან.** მიწოდების ქსელები სულ უფრო ხშირად ითხოვენ მტკიცებულებებს: რამდენი წყალი იქნა გამოყენებული, რა საშუალებები იქნა გამოყენებული, რა პრაქტიკა იყო დაცული.\n\n## რატომ AI და რატომ ახლა\n\nსამი რამ გაერთიანდა:\n\n1. **მონაცემები გამრავლდა.** თანამგზავრები ახლა რამდენიმე დღეში ერთხელ ათვალიერებენ სასოფლო-სამეურნეო მიწების უმეტესობას. ნიადაგის ტენიანობის ზონდები, ამინდის სადგურები, სარწყავი კონტროლერები და მანქანა-დანადგარები აწარმოებენ უწყვეტ მონაცემებს.\n2. **გამოთვლა გახდა იაფი და დაკავშირებული.** მოდელები, რომლებსაც ოდესღაც სჭირდებოდათ კვლევითი ლაბორატორია, შეუძლიათ იმუშაონ ღრუბელში და მიაწოდონ შედეგები ტელეფონს.\n3. ** მეთოდები მომწიფდა. ** მანქანათმცოდნეობა, კომპიუტერული ხედვა და ენის მოდელები სწრაფად გაუმჯობესდა და ახლა პრაქტიკულ ინსტრუმენტებად იქცა.\n\n> **საკვანძო იდეა:** AI არ ქმნის ახალ რესურსებს. ეს გეხმარებათ უკეთ გამოიყენოთ წყალი, შემოსული საშუალებები, დრო და ცოდნა, რომელიც უკვე გაქვთ.\n\n## რა შეუძლია AI-ს რეალურად\n\n- **გრძნობა** — გადააკეთეთ ნედლი გამოსახულება და სენსორის მონაცემები ინფორმაციად, მაგალითად, ველის რომელ ზონებზეა ხაზგასმული.\n- **პროგნოზირება ** - შეაფასეთ რა მოხდება, როგორიცაა ხვალინდელი მოსავლის წყლის მოთხოვნა ან სეზონის ბოლოს მოსავლიანობა.\n- **რეკომენდაცია ** - შესთავაზეთ მოქმედება, როგორიცაა სარწყავი გრაფიკი და ახსენით რატომ.\n- **გადაამოწმეთ** — შეამოწმეთ მოხდა თუ არა მოქმედება და მუშაობდა თუ არა.\n\nყურადღება მიაქციეთ შაბლონს: იგრძენით, იწინასწარმეტყველეთ, გირჩევთ, გადაამოწმეთ. ჩვენ გამოვიყენებთ ამ მარყუჟს მთელი კურსის განმავლობაში.\n\n## რისი გაკეთება არ შეუძლია\n\nხელოვნური ინტელექტი ვერ ხედავს იმას, რასაც მისი მონაცემები არ ასახავს: გატეხილი სარქველი, მეზობლის შესხურება, თქვენი ფერმაში უნიკალური კულტურული პრაქტიკა. მას არ შეუძლია პასუხისმგებლობა გადაწყვეტილების მიღებაზე. და ის ვერ შეცვლის ნდობას მევენახესა და მრჩეველს შორის. კარგი სასოფლო-სამეურნეო ხელოვნური ინტელექტი შექმნილია იმ ადამიანებთან მუშაობისთვის, ვინც იცის მიწა.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

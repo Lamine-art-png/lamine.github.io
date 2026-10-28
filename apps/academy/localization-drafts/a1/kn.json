@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "kn",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "ಕೃಷಿಯಲ್ಲಿ ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆಯ ಪರಿಚಯ",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "AI ಎಂದರೇನು, ಅದು ಫಾರ್ಮ್‌ನಲ್ಲಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಮತ್ತು ಅದನ್ನು ಜವಾಬ್ದಾರಿಯುತವಾಗಿ ಹೇಗೆ ಬಳಸುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "ನೀರಾವರಿ ನಿಯಂತ್ರಕಗಳು, ಉಪಗ್ರಹ ಸೇವೆಗಳು, ಕೃಷಿ ನಿರ್ವಹಣೆ ಸಾಫ್ಟ್‌ವೇರ್ ಮತ್ತು ಬೆಳೆಗಾರರ ​​ಜೇಬಿನಲ್ಲಿರುವ ಫೋನ್‌ಗಳ ಮೂಲಕ ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ ಕೃಷಿಗೆ ಆಗಮಿಸುತ್ತಿದೆ. ಈ ಕೋರ್ಸ್ ನಿಮಗೆ ಆ ತಂತ್ರಜ್ಞಾನ ಏನು, ಅದು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಮತ್ತು ಅದನ್ನು ಹೇಗೆ ಚೆನ್ನಾಗಿ ಬಳಸುವುದು ಎಂಬುದರ ಕುರಿತು ಸ್ಪಷ್ಟವಾದ, ಪ್ರಾಯೋಗಿಕ ತಿಳುವಳಿಕೆಯನ್ನು ನೀಡುತ್ತದೆ.\n\nಸಮೀಕರಣಗಳಿಲ್ಲದೆ AI ಮತ್ತು ಯಂತ್ರ ಕಲಿಕೆಯ ಹಿಂದಿನ ಪ್ರಮುಖ ವಿಚಾರಗಳನ್ನು ನೀವು ಕಲಿಯುವಿರಿ, ಕೃಷಿ ದತ್ತಾಂಶವು ಹೇಗೆ ಮುನ್ಸೂಚನೆ ಮತ್ತು ನಂತರ ಶಿಫಾರಸು ಆಗುತ್ತದೆ ಎಂಬುದನ್ನು ನೋಡಿ ಮತ್ತು ಋತುವಿನ ಮೂಲಕ AI ಅನ್ನು ಅನುಸರಿಸಿ - ಯೋಜನೆ ಮತ್ತು ನೀರಾವರಿಯಿಂದ ಬೆಳೆ ಆರೋಗ್ಯ ಮತ್ತು ಕೊಯ್ಲುವರೆಗೆ. ಎಲ್ಲಕ್ಕಿಂತ ಹೆಚ್ಚಾಗಿ, AI ಔಟ್‌ಪುಟ್ ಅನ್ನು ನಿರ್ಣಯಿಸಲು ನೀವು ಕಲಿಯುವಿರಿ: ಅದನ್ನು ಯಾವಾಗ ನಂಬಬೇಕು, ಯಾವಾಗ ಅದನ್ನು ಪ್ರಶ್ನಿಸಬೇಕು ಮತ್ತು ಮಾನವ ತೀರ್ಪು ಮತ್ತು ಕೃಷಿ ಜ್ಞಾನವನ್ನು ಹೇಗೆ ಉಸ್ತುವಾರಿ ವಹಿಸಬೇಕು.\n\nಬೆಳೆಗಾರರು, ನಿರ್ವಾಹಕರು, ಕೃಷಿ ವಿಜ್ಞಾನಿಗಳು, ವ್ಯವಸ್ಥಾಪಕರು ಮತ್ತು ವಿದ್ಯಾರ್ಥಿಗಳಿಗೆ ಕೋರ್ಸ್ ಅನ್ನು ವಿನ್ಯಾಸಗೊಳಿಸಲಾಗಿದೆ. ಯಾವುದೇ ತಾಂತ್ರಿಕ ಹಿನ್ನೆಲೆ ಅಗತ್ಯವಿಲ್ಲ.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "ಯಾವುದೂ ಇಲ್ಲ. ತಂತ್ರಜ್ಞಾನವು ಕೃಷಿ ಕೆಲಸವನ್ನು ಹೇಗೆ ಬೆಂಬಲಿಸುತ್ತದೆ ಎಂಬ ಕುತೂಹಲ ನಿಮಗೆ ಬೇಕಾಗಿರುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ, ಯಂತ್ರ ಕಲಿಕೆ ಮತ್ತು ಉತ್ಪಾದಕ AI ಎಂದರೇನು ಎಂಬುದನ್ನು ಸರಳ ಭಾಷೆಯಲ್ಲಿ ವಿವರಿಸಿ\", \"ಕೃಷಿ ದತ್ತಾಂಶದ ಮುಖ್ಯ ಮೂಲಗಳನ್ನು ವಿವರಿಸಿ ಮತ್ತು ಡೇಟಾವನ್ನು ವಿಶ್ವಾಸಾರ್ಹವಾಗಿಸುತ್ತದೆ\", \"ಮಾದರಿಯು ಡೇಟಾವನ್ನು ಭವಿಷ್ಯವಾಣಿಯಾಗಿ ಮತ್ತು ಭವಿಷ್ಯವನ್ನು ಶಿಫಾರಸಾಗಿ ಹೇಗೆ ಪರಿವರ್ತಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ಅನುಸರಿಸಿ\", \"ಯೋಜನೆಯಿಂದ ಕೊಯ್ಲು ಮಾಡುವವರೆಗೆ ಬೆಳೆ ಋತುವಿನಾದ್ಯಂತ ಪ್ರಾಯೋಗಿಕ AI ಅಪ್ಲಿಕೇಶನ್‌ಗಳನ್ನು ಗುರುತಿಸಿ\", \"ಕೃಷಿ AI ಯ ಮಿತಿಗಳು ಮತ್ತು ವೈಫಲ್ಯ ವಿಧಾನಗಳನ್ನು ಗುರುತಿಸಿ ಮತ್ತು ಶಿಫಾರಸನ್ನು ಯಾವಾಗ ಪ್ರಶ್ನಿಸಬೇಕು\", \"ನಿಮ್ಮ ಸ್ವಂತ ಕಾರ್ಯಾಚರಣೆಯಲ್ಲಿ ಡೇಟಾ ಮಾಲೀಕತ್ವ, ಗೌಪ್ಯತೆ ಮತ್ತು ಜವಾಬ್ದಾರಿಯುತ ಬಳಕೆಯ ತತ್ವಗಳನ್ನು ಅನ್ವಯಿಸಿ\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "ಕೃಷಿಗೆ AI ಎಂದರೆ ಏನು",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "ಪ್ರಮುಖ ವಿಚಾರಗಳು ಮತ್ತು ಅವು ಈಗ ಏಕೆ ಮುಖ್ಯವಾಗಿವೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "ಕೃಷಿ AI ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "ಡೇಟಾದಿಂದ ಮಾದರಿಗೆ ಶಿಫಾರಸುಗೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "ಋತುವಿನಾದ್ಯಂತ AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "ಯೋಜನೆಯಿಂದ ಕೊಯ್ಲು ಮಾಡುವವರೆಗೆ ಪ್ರಾಯೋಗಿಕ ಅಪ್ಲಿಕೇಶನ್‌ಗಳು.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "AI ಅನ್ನು ಜವಾಬ್ದಾರಿಯುತವಾಗಿ ಬಳಸುವುದು",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "ಮಿತಿಗಳು, ಡೇಟಾ ಹಕ್ಕುಗಳು ಮತ್ತು ಆತ್ಮವಿಶ್ವಾಸ, ನಿರ್ಣಾಯಕ ಬಳಕೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "ಮೇಲಿನಿಂದ ಮತ್ತು ಹತ್ತಿರದಿಂದ ಬೆಳೆ ಆರೋಗ್ಯ ಮೇಲ್ವಿಚಾರಣೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "ಉಪಗ್ರಹ ಚಿತ್ರಣ, ಸಸ್ಯವರ್ಗದ ಸೂಚ್ಯಂಕಗಳು ಮತ್ತು ಬೆಳೆ ಆರೋಗ್ಯಕ್ಕಾಗಿ ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "ಆರೋಗ್ಯಕರ ಸಸ್ಯಗಳು ಮತ್ತು ಒತ್ತಡದ ಸಸ್ಯಗಳು ಬೆಳಕನ್ನು ವಿಭಿನ್ನವಾಗಿ ಪ್ರತಿಬಿಂಬಿಸುತ್ತವೆ. AI ಆ ವ್ಯತ್ಯಾಸವನ್ನು ಬಳಸುತ್ತದೆ - ಉಪಗ್ರಹಗಳು, ಡ್ರೋನ್‌ಗಳು ಮತ್ತು ಕ್ಯಾಮೆರಾಗಳಿಂದ ಸೆರೆಹಿಡಿಯಲಾಗಿದೆ - ಯಾವುದೇ ಸ್ಕೌಟಿಂಗ್ ತಂಡವು ಒಳಗೊಳ್ಳಲು ಸಾಧ್ಯವಾಗದ ಪ್ರಮಾಣದಲ್ಲಿ ಬೆಳೆಗಳನ್ನು ವೀಕ್ಷಿಸಲು.\n\n## ಸಸ್ಯಗಳು ಉಪಗ್ರಹಕ್ಕೆ ಹೇಗೆ ಕಾಣುತ್ತವೆ\n\nಹಸಿರು ಎಲೆಗಳು ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆಗಾಗಿ ಹೆಚ್ಚಿನ ಕೆಂಪು ಬೆಳಕನ್ನು ಹೀರಿಕೊಳ್ಳುತ್ತವೆ ಮತ್ತು **ಇನ್‌ಫ್ರಾರೆಡ್ (NIR)** ಬೆಳಕನ್ನು ಬಲವಾಗಿ ಪ್ರತಿಬಿಂಬಿಸುತ್ತವೆ. ಸಸ್ಯಗಳು ಒತ್ತಡಕ್ಕೆ ಒಳಗಾದಾಗ, ವಿರಳವಾದಾಗ ಅಥವಾ ಸೆನೆಸಿಂಗ್ ಆಗುವಾಗ, ಕೆಂಪು ಪ್ರತಿಫಲನವು ಹೆಚ್ಚಾಗುತ್ತದೆ ಮತ್ತು NIR ಪ್ರತಿಫಲನವು ಕುಸಿಯುತ್ತದೆ.\n\n**ಸಾಮಾನ್ಯ ವ್ಯತ್ಯಾಸದ ಸಸ್ಯವರ್ಗ ಸೂಚ್ಯಂಕ (NDVI)** ಈ ವ್ಯತಿರಿಕ್ತತೆಯನ್ನು ಸೆರೆಹಿಡಿಯುತ್ತದೆ:\n\n**NDVI = (NIR - ಕೆಂಪು) ÷ (NIR + ಕೆಂಪು)**\n\nಮೌಲ್ಯಗಳು −1 ರಿಂದ +1 ವರೆಗೆ ಇರುತ್ತದೆ. ದಟ್ಟವಾದ, ಆರೋಗ್ಯಕರ ಸಸ್ಯವರ್ಗವು ಸಾಮಾನ್ಯವಾಗಿ ಅಧಿಕವಾಗಿರುತ್ತದೆ (ಸಾಮಾನ್ಯವಾಗಿ 0.6 ಕ್ಕಿಂತ ಹೆಚ್ಚು); ಬೇರ್ ಮಣ್ಣು ಕಡಿಮೆ (ಸುಮಾರು 0.1-0.2); ನೀರು ಸಾಮಾನ್ಯವಾಗಿ ನಕಾರಾತ್ಮಕವಾಗಿರುತ್ತದೆ.\n\n## NDVI ನಕ್ಷೆಗಳನ್ನು ಬುದ್ಧಿವಂತಿಕೆಯಿಂದ ಓದುವುದು\n\n**ಎಲ್ಲಿ** ಕ್ಷೇತ್ರವು ಭಿನ್ನವಾಗಿದೆ ಎಂಬುದನ್ನು ಗುರುತಿಸಲು NDVI ಉಪಯುಕ್ತವಾಗಿದೆ, **ಏಕೆ** ರೋಗನಿರ್ಣಯಕ್ಕೆ ಅಲ್ಲ. ಕಡಿಮೆ-ಎನ್‌ಡಿವಿಐ ಪ್ಯಾಚ್ ನೀರಿನ ಒತ್ತಡ, ಪೋಷಕಾಂಶಗಳ ಕೊರತೆ, ರೋಗ, ಕೀಟಗಳು, ನೆಟ್ಟ ಸಮಸ್ಯೆ ಅಥವಾ ಸರಳವಾಗಿ ವಿಭಿನ್ನ ವೈವಿಧ್ಯವಾಗಿರಬಹುದು. ನಕ್ಷೆಯು ಎಲ್ಲಿ ನೋಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ; ನೀವು ಕಂಡುಕೊಂಡದ್ದನ್ನು ಸ್ಕೌಟಿಂಗ್ ಹೇಳುತ್ತದೆ.\n\n> **ಪ್ರಮುಖ:** ಮೋಡಗಳು, ಮೋಡದ ನೆರಳುಗಳು, ಮಬ್ಬು ಮತ್ತು ದಿನದ ಸಮಯವು ಉಪಗ್ರಹ ವಾಚನಗೋಷ್ಠಿಯನ್ನು ವಿರೂಪಗೊಳಿಸಬಹುದು. ವಿಶ್ವಾಸಾರ್ಹ ಸೇವೆಗಳು ಮೋಡಗಳನ್ನು ಮರೆಮಾಚುತ್ತವೆ ಮತ್ತು ಒಂದೇ ಸ್ನ್ಯಾಪ್‌ಶಾಟ್ ಅನ್ನು ನಂಬುವ ಬದಲು ಕಾಲಾನಂತರದಲ್ಲಿ ಚಿತ್ರಗಳನ್ನು ಹೋಲಿಕೆ ಮಾಡುತ್ತವೆ.\n\nಇತರ ಸೂಚ್ಯಂಕಗಳು ನಿರ್ದಿಷ್ಟ ಉದ್ದೇಶಗಳಿಗಾಗಿ ಅಸ್ತಿತ್ವದಲ್ಲಿವೆ - ಕೆಲವು ಕ್ಲೋರೊಫಿಲ್‌ಗೆ ಹೆಚ್ಚು ಸಂವೇದನಾಶೀಲವಾಗಿರುತ್ತವೆ, ಇತರವು ನೀರಿನ ಅಂಶಕ್ಕೆ ಅಥವಾ NDVI ಸ್ಯಾಚುರೇಟ್ ಆಗುವ ದಟ್ಟವಾದ ಮೇಲಾವರಣಗಳಿಗೆ.\n\n## ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿ ಹತ್ತಿರದಿಂದ\n\nನೆಲದ ಮೇಲೆ, **ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿ** ಮಾದರಿಗಳು ಫೋನ್‌ಗಳು, ಟ್ರಾಕ್ಟರುಗಳು ಅಥವಾ ಡ್ರೋನ್‌ಗಳಿಂದ ಫೋಟೋಗಳನ್ನು ವಿಶ್ಲೇಷಿಸುತ್ತವೆ:\n\n- ಎಲೆಗಳ ಚಿತ್ರಗಳಿಂದ ರೋಗಗಳು ಮತ್ತು ಕೀಟಗಳನ್ನು ಗುರುತಿಸಿ;\n- ಉದ್ದೇಶಿತ ಸಿಂಪರಣೆಗಾಗಿ ಬೆಳೆಗಳಿಂದ ಕಳೆಗಳನ್ನು ಪ್ರತ್ಯೇಕಿಸಿ;\n- ಇಳುವರಿಯನ್ನು ಅಂದಾಜು ಮಾಡಲು ಹಣ್ಣು, ಹೂವುಗಳು ಅಥವಾ ಸಸ್ಯಗಳನ್ನು ಎಣಿಸಿ.\n\nಈ ಮಾದರಿಗಳು ಲೇಬಲ್ ಮಾಡಲಾದ ಚಿತ್ರಗಳ ದೊಡ್ಡ ಸಂಗ್ರಹಗಳ ಮೇಲೆ ತರಬೇತಿ ಪಡೆದಿವೆ. ಅವುಗಳ ನಿಖರತೆಯು ಆ ಚಿತ್ರಗಳು ನಿಮ್ಮ ಬೆಳೆ, ನಿಮ್ಮ ಪ್ರಭೇದಗಳು ಮತ್ತು ನಿಮ್ಮ ಬೆಳಕಿನ ಪರಿಸ್ಥಿತಿಗಳನ್ನು ಹೋಲುತ್ತವೆಯೇ ಎಂಬುದರ ಮೇಲೆ ಹೆಚ್ಚು ಅವಲಂಬಿತವಾಗಿದೆ.\n\n## ಪತ್ತೆಯಿಂದ ಕ್ರಿಯೆಯವರೆಗೆ\n\nಉತ್ತಮ ಬೆಳೆ-ಮೇಲ್ವಿಚಾರಣೆ ಕೆಲಸದ ಹರಿವು ಪತ್ತೆಹಚ್ಚುವಿಕೆಯನ್ನು ಆದ್ಯತೆಯ ಕಾರ್ಯವಾಗಿ ಪರಿವರ್ತಿಸುತ್ತದೆ: *\"ವಲಯ 3 10 ದಿನಗಳಲ್ಲಿ ಕ್ಷೀಣಿಸುತ್ತಿರುವ ಚೈತನ್ಯವನ್ನು ತೋರಿಸುತ್ತದೆ. ಮೊದಲು ಈಶಾನ್ಯ ಮೂಲೆಯನ್ನು ಸ್ಕೌಟ್ ಮಾಡಿ; ನೀರಾವರಿ ಏಕರೂಪತೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಮೂಲ ರೋಗದ ಚಿಹ್ನೆಗಳನ್ನು ನೋಡಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "ಡೇಟಾ: ಕೃಷಿ AI ಯ ಕಚ್ಚಾ ವಸ್ತು",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "ಫಾರ್ಮ್ ಡೇಟಾ ಎಲ್ಲಿಂದ ಬರುತ್ತದೆ ಮತ್ತು ಅದನ್ನು ವಿಶ್ವಾಸಾರ್ಹವಾಗಿಸುತ್ತದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "ಪ್ರತಿಯೊಂದು AI ವ್ಯವಸ್ಥೆಯನ್ನು ಡೇಟಾದಿಂದ ನಿರ್ಮಿಸಲಾಗಿದೆ. ಡೇಟಾ ಅಪೂರ್ಣವಾಗಿದ್ದರೆ, ಪಕ್ಷಪಾತ ಅಥವಾ ತಪ್ಪಾಗಿದ್ದರೆ, AI ಸಹ ಇರುತ್ತದೆ. ನಿಮ್ಮ ಡೇಟಾವನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳುವುದು ಕೃಷಿ AI ಯಲ್ಲಿ ಪ್ರಮುಖ ಕೌಶಲ್ಯವಾಗಿದೆ.\n\n## ಕೃಷಿ ಡೇಟಾ ಎಲ್ಲಿಂದ ಬರುತ್ತದೆ\n\n| ಮೂಲ | ಉದಾಹರಣೆಗಳು | ಇದು ನಿಮಗೆ ಏನು ಹೇಳುತ್ತದೆ |\n|---|---|---|\n| ಹವಾಮಾನ | ಆನ್-ಫಾರ್ಮ್ ಸ್ಟೇಷನ್‌ಗಳು, ಪ್ರಾದೇಶಿಕ ನೆಟ್‌ವರ್ಕ್‌ಗಳು, ಮುನ್ಸೂಚನೆಗಳು | ತಾಪಮಾನ, ಮಳೆ, ಆರ್ದ್ರತೆ, ಗಾಳಿ, ಸೌರ ವಿಕಿರಣ |\n| ಮಣ್ಣು | ತೇವಾಂಶ ಶೋಧಕಗಳು, ಮಣ್ಣಿನ ಪರೀಕ್ಷೆಗಳು, ಮಣ್ಣಿನ ನಕ್ಷೆಗಳು | ಬೇರುಗಳು, ಪೋಷಕಾಂಶಗಳು, ರಚನೆಗೆ ನೀರು ಲಭ್ಯವಿದೆ |\n| ರಿಮೋಟ್ ಸೆನ್ಸಿಂಗ್ | ಉಪಗ್ರಹ, ವಿಮಾನ ಮತ್ತು ಡ್ರೋನ್ ಚಿತ್ರಣ | ಬೆಳೆ ಶಕ್ತಿ, ಮೇಲಾವರಣ ಹೊದಿಕೆ, ಹೊಲದಾದ್ಯಂತ ಒತ್ತಡದ ಮಾದರಿಗಳು |\n| ಸಲಕರಣೆ | ನೀರಾವರಿ ನಿಯಂತ್ರಕಗಳು, ಹರಿವಿನ ಮೀಟರ್‌ಗಳು, ಇಳುವರಿ ಮಾನಿಟರ್‌ಗಳು, ಟ್ರಾಕ್ಟರ್‌ಗಳು | ಏನು ಅನ್ವಯಿಸಲಾಗಿದೆ, ಎಲ್ಲಿ ಮತ್ತು ಯಾವಾಗ |\n| ದಾಖಲೆಗಳು | ನೆಟ್ಟ ದಿನಾಂಕಗಳು, ಪ್ರಭೇದಗಳು, ಇನ್‌ಪುಟ್ ಅಪ್ಲಿಕೇಶನ್‌ಗಳು, ಸ್ಕೌಟಿಂಗ್ ಟಿಪ್ಪಣಿಗಳು | ನಿರ್ವಹಣಾ ನಿರ್ಧಾರಗಳು ಮತ್ತು ಅವಲೋಕನಗಳು |\n| ಮಾರುಕಟ್ಟೆಗಳು | ಬೆಲೆಗಳು, ಒಪ್ಪಂದಗಳು, ಬೇಡಿಕೆ ಸಂಕೇತಗಳು | ನಿರ್ಧಾರಗಳಿಗೆ ಆರ್ಥಿಕ ಸಂದರ್ಭ |\n\n## ಉತ್ತಮ ಡೇಟಾದ ಗುಣಗಳು\n\n** ನಿಖರತೆ** - ಮಾಪನವು ವಾಸ್ತವತೆಯನ್ನು ಪ್ರತಿಬಿಂಬಿಸುತ್ತದೆಯೇ? ಆರ್ದ್ರ ಸ್ಥಳದಲ್ಲಿ ಸ್ಥಾಪಿಸಲಾದ ತೇವಾಂಶ ತನಿಖೆ ಅಥವಾ ಮರದ ಕೆಳಗೆ ಮಳೆ ಮಾಪಕವು ಅದನ್ನು ಬಳಸುವ ಪ್ರತಿಯೊಂದು ಮಾದರಿಯನ್ನು ದಾರಿತಪ್ಪಿಸುತ್ತದೆ.\n\n**ಸಂಪೂರ್ಣತೆ** - ಅಂತರಗಳಿವೆಯೇ? ಶಾಖದ ಅಲೆಯ ಸಮಯದಲ್ಲಿ ಒಂದು ವಾರದವರೆಗೆ ವರದಿ ಮಾಡುವುದನ್ನು ನಿಲ್ಲಿಸುವ ಸಂವೇದಕವು ಹೆಚ್ಚು ಮುಖ್ಯವಾದಾಗ ನಿಖರವಾಗಿ ರಂಧ್ರವನ್ನು ಬಿಡುತ್ತದೆ.\n\n**ಸಮಯತೆ** — ನಿರ್ಧಾರಕ್ಕೆ ಸಾಕಷ್ಟು ಇತ್ತೀಚಿನ ಡೇಟಾ ಇದೆಯೇ? ನಿನ್ನೆಯ ಮಣ್ಣಿನ ತೇವಾಂಶ ಇಂದಿನ ನೀರಾವರಿಗೆ ಉಪಯುಕ್ತವಾಗಿದೆ; ಕಳೆದ ತಿಂಗಳು ಅಲ್ಲ.\n\n** ಸ್ಥಿರತೆ** - ಯುನಿಟ್‌ಗಳು, ಸ್ವರೂಪಗಳು ಮತ್ತು ವ್ಯಾಖ್ಯಾನಗಳು ಕಾಲಾನಂತರದಲ್ಲಿ ಮತ್ತು ಕ್ಷೇತ್ರಗಳಾದ್ಯಂತ ಒಂದೇ ಆಗಿವೆಯೇ? ಇಂಚುಗಳು ಮತ್ತು ಮಿಲಿಮೀಟರ್‌ಗಳನ್ನು ಅಥವಾ ಒಂದೇ ಕ್ಷೇತ್ರಕ್ಕೆ ಎರಡು ಹೆಸರುಗಳನ್ನು ಮಿಶ್ರಣ ಮಾಡುವುದು ಮೂಕ ದೋಷಗಳನ್ನು ಉಂಟುಮಾಡುತ್ತದೆ.\n\n**ಪ್ರಾತಿನಿಧ್ಯ** — ಡೇಟಾವು AI ಅನ್ನು ಬಳಸುವ ಪರಿಸ್ಥಿತಿಗಳನ್ನು ಒಳಗೊಂಡಿದೆಯೇ? ಮರಳು ಮಣ್ಣಿನಲ್ಲಿ ಮಾತ್ರ ತರಬೇತಿ ಪಡೆದ ಮಾದರಿಯು ಮಣ್ಣಿನ ಮೇಲೆ ಕೆಲಸ ಮಾಡದಿರಬಹುದು.\n\n> **ಫೀಲ್ಡ್ ಚೆಕ್:** ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಅನ್ನು ನಂಬುವ ಮೊದಲು, ಮೂರು ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ: ಈ ಸಂಖ್ಯೆ ಎಲ್ಲಿಂದ ಬಂತು? ಅದನ್ನು ಯಾವಾಗ ಅಳೆಯಲಾಯಿತು? ಏನು ತಪ್ಪು ಮಾಡುತ್ತದೆ?\n\n## ಡೇಟಾಗೆ ಸಂದರ್ಭದ ಅಗತ್ಯವಿದೆ\n\n30% ನಷ್ಟು ಮಣ್ಣಿನ ತೇವಾಂಶವು ತನ್ನದೇ ಆದ ಮೇಲೆ ಕಡಿಮೆ ಎಂದರ್ಥ. ಮಣ್ಣಿನ ಪ್ರಕಾರ ಯಾವುದು, ಸಂವೇದಕ ಎಷ್ಟು ಆಳವಾಗಿ ಕುಳಿತುಕೊಳ್ಳುತ್ತದೆ, ಯಾವ ಬೆಳೆ ಬೆಳೆಯುತ್ತಿದೆ ಮತ್ತು ಯಾವ ಹಂತದಲ್ಲಿದೆ ಎಂಬುದು ಮುಖ್ಯವಾಗಿದೆ. ಉತ್ತಮ ಕೃಷಿ AI ಡೇಟಾ ಮೂಲಗಳನ್ನು ಸಂಯೋಜಿಸುತ್ತದೆ ಇದರಿಂದ ಪ್ರತಿಯೊಂದೂ ಇತರರಿಗೆ ಸಂದರ್ಭವನ್ನು ಸೇರಿಸುತ್ತದೆ - ಉದಾಹರಣೆಗೆ, ಹವಾಮಾನ ಡೇಟಾ ಮತ್ತು ಕ್ಷೇತ್ರದ ನೀರಾವರಿ ಇತಿಹಾಸದೊಂದಿಗೆ ಉಪಗ್ರಹ ಚಿತ್ರಣವನ್ನು ಜೋಡಿಸುವುದು.\n\n## ನಿಮ್ಮ ಡೇಟಾ, ನಿಮ್ಮ ನಿರ್ಧಾರಗಳು\n\nಫಾರ್ಮ್ ಡೇಟಾ ಮೌಲ್ಯವನ್ನು ಹೊಂದಿದೆ - ವಾಣಿಜ್ಯ, ಕಾರ್ಯಾಚರಣೆ ಮತ್ತು ವೈಯಕ್ತಿಕ. ಉಪಕರಣಗಳನ್ನು ಸಂಪರ್ಕಿಸುವ ಮೊದಲು ಅಥವಾ ಯಾವುದೇ ಸೇವೆಯೊಂದಿಗೆ ದಾಖಲೆಗಳನ್ನು ಹಂಚಿಕೊಳ್ಳುವ ಮೊದಲು, ಡೇಟಾವನ್ನು ಯಾರು ಪ್ರವೇಶಿಸಬಹುದು, ಅದನ್ನು ಹೇಗೆ ಬಳಸುತ್ತಾರೆ ಮತ್ತು ನೀವು ತೊರೆದರೆ ಅದನ್ನು ನಿಮ್ಮೊಂದಿಗೆ ಕೊಂಡೊಯ್ಯಬಹುದೇ ಎಂಬುದನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಿ. ನಾವು ಮಾಡ್ಯೂಲ್ 4 ರಲ್ಲಿ ಡೇಟಾ ಮಾಲೀಕತ್ವಕ್ಕೆ ಹಿಂತಿರುಗುತ್ತೇವೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "ಡೇಟಾ ಮಾಲೀಕತ್ವ, ಗೌಪ್ಯತೆ ಮತ್ತು ನಂಬಿಕೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "ಕೃಷಿ ಡೇಟಾವನ್ನು ವಿಶ್ವಾಸದಿಂದ ಹಂಚಿಕೊಳ್ಳಲು ಪ್ರಾಯೋಗಿಕ ತತ್ವಗಳು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "ಫಾರ್ಮ್ ಡೇಟಾವು ಇಳುವರಿ, ಅಭ್ಯಾಸಗಳು, ಹಣಕಾಸು ಮತ್ತು ಜನರು ಮತ್ತು ಸ್ವತ್ತುಗಳ ಸ್ಥಳವನ್ನು ಬಹಿರಂಗಪಡಿಸಬಹುದು. ಅದನ್ನು ಹಂಚಿಕೊಳ್ಳುವುದರಿಂದ ಅಮೂಲ್ಯವಾದ ಸೇವೆಗಳನ್ನು ಅನ್ಲಾಕ್ ಮಾಡಬಹುದು - ಆದರೆ ಇದು ಯಾವಾಗಲೂ ಉದ್ದೇಶಪೂರ್ವಕ ಆಯ್ಕೆಯಾಗಿರಬೇಕು.\n\n## ಯಾವುದೇ ತಂತ್ರಜ್ಞಾನ ಪೂರೈಕೆದಾರರನ್ನು ಕೇಳಲು ಪ್ರಶ್ನೆಗಳು\n\n- **ಮಾಲೀಕತ್ವ:** ನಾನು ಒದಗಿಸುವ ಡೇಟಾ ಮತ್ತು ನನ್ನ ಫಾರ್ಮ್ ಕುರಿತು ಸಿಸ್ಟಮ್ ಉತ್ಪಾದಿಸುವ ಡೇಟಾವನ್ನು ಯಾರು ಹೊಂದಿದ್ದಾರೆ?\n- **ಬಳಕೆ:** ಡೇಟಾವನ್ನು ಯಾವುದಕ್ಕಾಗಿ ಬಳಸಲಾಗುತ್ತದೆ? ಮಾದರಿಗಳಿಗೆ ತರಬೇತಿ ನೀಡಲು ಇದನ್ನು ಬಳಸಬಹುದೇ? ಇದನ್ನು ಇತರ ಫಾರ್ಮ್‌ಗಳ ಡೇಟಾದೊಂದಿಗೆ ಸಂಯೋಜಿಸಲಾಗುತ್ತದೆಯೇ?\n- **ಹಂಚಿಕೆ:** ಇದನ್ನು ಮೂರನೇ ವ್ಯಕ್ತಿಗಳೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆಯೇ ಅಥವಾ ಮಾರಾಟ ಮಾಡಲಾಗುತ್ತದೆಯೇ? ಯಾವುದು, ಮತ್ತು ಏಕೆ?\n- **ಪ್ರವೇಶ ಮತ್ತು ಪೋರ್ಟಬಿಲಿಟಿ:** ನಾನು ನನ್ನ ಡೇಟಾವನ್ನು ಬಳಸಬಹುದಾದ ಸ್ವರೂಪದಲ್ಲಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಬಹುದೇ? ನಾನು ಹೋದರೆ ಅದನ್ನು ನನ್ನೊಂದಿಗೆ ತೆಗೆದುಕೊಳ್ಳಬಹುದೇ?\n- **ಅಳಿಸುವಿಕೆ:** ನನ್ನ ಡೇಟಾವನ್ನು ನಾನು ಅಳಿಸಬಹುದೇ ಮತ್ತು ನಂತರ ಏನು ಉಳಿದಿದೆ?\n- **ಭದ್ರತೆ:** ಡೇಟಾವನ್ನು ಹೇಗೆ ರಕ್ಷಿಸಲಾಗಿದೆ? ಕಂಪನಿಯೊಳಗೆ ಯಾರು ಅದನ್ನು ನೋಡಬಹುದು?\n- **ನಿಯಂತ್ರಣ:** ನಾನು ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ಸಂಪರ್ಕಿತ ಸಾಧನ ಅಥವಾ ಪಾಲುದಾರರಿಗೆ ಪ್ರವೇಶವನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದೇ?\n\nಹಲವಾರು ಕೃಷಿ ಸಂಸ್ಥೆಗಳು ಈ ಪ್ರಶ್ನೆಗಳನ್ನು ಪರಿಹರಿಸುವ ಕೃಷಿ-ದತ್ತಾಂಶ ತತ್ವಗಳನ್ನು ಪ್ರಕಟಿಸಿವೆ; ಪೂರೈಕೆದಾರರು ಅವರನ್ನು ಅನುಸರಿಸುತ್ತಾರೆಯೇ ಎಂದು ಕೇಳುವುದು ಉತ್ತಮ ಆರಂಭದ ಹಂತವಾಗಿದೆ.\n\n## ಸಮ್ಮತಿ ಮತ್ತು ಅನುಮತಿಗಳು\n\nಉತ್ತಮ ವ್ಯವಸ್ಥೆಗಳು ನಿರ್ದಿಷ್ಟ, ತಿಳುವಳಿಕೆಯುಳ್ಳ ಅನುಮತಿಯನ್ನು ಕೇಳುತ್ತವೆ - ಉದಾಹರಣೆಗೆ, ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬದಲಾಯಿಸಲು ಅನುಮತಿ ನೀಡದೆಯೇ ನೀರಾವರಿ ನಿಯಂತ್ರಕ ಡೇಟಾವನ್ನು ಓದಲು ಕನೆಕ್ಟರ್ ಅನ್ನು ಅನುಮತಿಸುತ್ತದೆ. ಕೆಲಸಕ್ಕೆ ಅಗತ್ಯವಿರುವ ಕನಿಷ್ಠ ಪ್ರವೇಶವನ್ನು ನೀಡಿ ಮತ್ತು ಸಂಪರ್ಕಿತ ಸೇವೆಗಳನ್ನು ನಿಯಮಿತವಾಗಿ ಪರಿಶೀಲಿಸಿ.\n\n## ಒಟ್ಟುಗೂಡಿದ ಮತ್ತು ಅನಾಮಧೇಯ ಡೇಟಾ\n\nಅನೇಕ ಫಾರ್ಮ್‌ಗಳಿಂದ ಡೇಟಾವನ್ನು ಸಂಯೋಜಿಸುವುದರಿಂದ ಪ್ರತಿಯೊಬ್ಬರಿಗೂ ಮಾದರಿಗಳನ್ನು ಸುಧಾರಿಸಬಹುದು, ಉದಾಹರಣೆಗೆ ಉತ್ತಮ ಪ್ರಾದೇಶಿಕ ನೀರು-ಬಳಕೆಯ ಅಂದಾಜುಗಳು. ಉತ್ತಮವಾಗಿ ಮಾಡಲಾಗಿದೆ, ಒಟ್ಟುಗೂಡಿಸುವಿಕೆಯು ವೈಯಕ್ತಿಕ ಫಾರ್ಮ್ ಅನ್ನು ಗುರುತಿಸಬಹುದಾದ ಮಾಹಿತಿಯನ್ನು ತೆಗೆದುಹಾಕುತ್ತದೆ. ಅನಾಮಧೇಯತೆಯನ್ನು ಹೇಗೆ ನಡೆಸಲಾಗುತ್ತದೆ ಮತ್ತು ನೀವು ಆಯ್ಕೆಯಿಂದ ಹೊರಗುಳಿಯಬಹುದೇ ಎಂದು ಕೇಳಿ.\n\n## ವಿಶ್ವಾಸ ಗಳಿಸಿದೆ\n\n> **ಪ್ರಮುಖ ಕಲ್ಪನೆ:** ವಿಶ್ವಾಸಾರ್ಹ ಕೃಷಿ AI ಅದು ಡೇಟಾವನ್ನು ಹೇಗೆ ಬಳಸುತ್ತದೆ ಎಂಬುದರ ಬಗ್ಗೆ ಪಾರದರ್ಶಕವಾಗಿರುತ್ತದೆ, ಅದರ ಶಿಫಾರಸುಗಳನ್ನು ವಿವರಿಸುತ್ತದೆ, ಅನಿಶ್ಚಿತತೆಯನ್ನು ಒಪ್ಪಿಕೊಳ್ಳುತ್ತದೆ ಮತ್ತು ರೈತರನ್ನು ನಿಯಂತ್ರಣದಲ್ಲಿರಿಸುತ್ತದೆ.\n\nಇದೇ ತತ್ವಗಳು ಅಕಾಡೆಮಿಗೆ ಅನ್ವಯಿಸುತ್ತವೆ. ನಿಮ್ಮ ಖಾತೆಯ ಸೆಟ್ಟಿಂಗ್‌ಗಳಿಂದ ನೀವು ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ನಿಮ್ಮ ಕಲಿಕೆಯ ಡೇಟಾವನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಬಹುದು ಅಥವಾ ಅಳಿಸಬಹುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "ಪ್ರಾಯೋಗಿಕ ವ್ಯಾಯಾಮ: AI ಶಿಫಾರಸುಗಳನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಿ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "ನೀವು ಕಲಿತದ್ದನ್ನು ವಾಸ್ತವಿಕ ಶಿಫಾರಸುಗೆ ಅನ್ವಯಿಸಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "ಈ ವ್ಯಾಯಾಮದಲ್ಲಿ ನೀವು ವಾಸ್ತವಿಕ ಶಿಫಾರಸಿನ ಮೇಲೆ ಈ ಮಾಡ್ಯೂಲ್‌ನಿಂದ ವಿಮರ್ಶಾತ್ಮಕ ವಿಮರ್ಶೆ ಕೌಶಲ್ಯಗಳನ್ನು ಅಭ್ಯಾಸ ಮಾಡುತ್ತೀರಿ.\n\n## ಸನ್ನಿವೇಶ\n\nನೀವು 60-ಹೆಕ್ಟೇರ್ ಹನಿ-ನೀರಾವರಿ ಟೊಮೆಟೊ ಕಾರ್ಯಾಚರಣೆಯನ್ನು ನಿರ್ವಹಿಸುತ್ತೀರಿ. ಮಧ್ಯ ಋತುವಿನಲ್ಲಿ ಮಂಗಳವಾರ ಬೆಳಿಗ್ಗೆ, ನಿಮ್ಮ ನಿರ್ಧಾರ-ಬೆಂಬಲ ವ್ಯವಸ್ಥೆಯು ತೋರಿಸುತ್ತದೆ:\n\n> *\"ಶಿಫಾರಸು: ಮುಂದಿನ 48 ಗಂಟೆಗಳ ಕಾಲ C ಬ್ಲಾಕ್‌ನಲ್ಲಿ ನೀರಾವರಿಯನ್ನು ಬಿಟ್ಟುಬಿಡಿ. ನಿರೀಕ್ಷಿತ ಬೆಳೆ ನೀರಿನ ಬಳಕೆ: 3.1 ಮಿಮೀ/ದಿನ. ಮಣ್ಣಿನ ತೇವಾಂಶ: ಕ್ಷೇತ್ರ ಸಾಮರ್ಥ್ಯದ 82%. ವಿಶ್ವಾಸ: ಹೆಚ್ಚು.\"*\n\nನೀವು ಬ್ಲಾಕ್ C ಅನ್ನು ದಾಟಿದಾಗ, ಪೂರ್ವದ ಅಂಚಿನಲ್ಲಿರುವ ಸಸ್ಯಗಳು ಬೆಳಗಿನ ಬಿಸಿಲಿನಲ್ಲಿ ಒಣಗಿಹೋಗಿರುವುದನ್ನು ನೀವು ಗಮನಿಸಬಹುದು ಮತ್ತು ನಿನ್ನೆಯ ಗರಿಷ್ಠ ತಾಪಮಾನವು 37 °C ಆಗಿತ್ತು - ಎರಡು ದಿನಗಳ ಹಿಂದೆ ಸಿಸ್ಟಮ್ ಬಳಸಿದ 29 °C ಮುನ್ಸೂಚನೆಗಿಂತ ಹೆಚ್ಚು ಬಿಸಿಯಾಗಿದೆ.\n\n## ನಿಮ್ಮ ಕಾರ್ಯ\n\nಕೆಳಗಿನ ಪರಿಶೀಲನಾಪಟ್ಟಿಯ ಮೂಲಕ ಕೆಲಸ ಮಾಡಿ. **ಟಿಪ್ಪಣಿಗಳು** ಟ್ಯಾಬ್‌ನಲ್ಲಿ ನಿಮ್ಮ ತಾರ್ಕಿಕತೆಯನ್ನು ಬರೆಯಿರಿ ಇದರಿಂದ ನೀವು ಅದಕ್ಕೆ ಹಿಂತಿರುಗಬಹುದು.\n\n1. **ಇನ್‌ಪುಟ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.** ಯಾವ ಇನ್‌ಪುಟ್ ಪ್ರಶ್ನಾರ್ಹವಾಗಿ ಕಾಣುತ್ತದೆ? (ಸುಳಿವು: ಏನಾಯಿತು ಎಂಬುದರೊಂದಿಗೆ ಮುನ್ಸೂಚನೆಯ ತಾಪಮಾನವನ್ನು ಹೋಲಿಕೆ ಮಾಡಿ.)\n2. **ಸೆನ್ಸರ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.** ಮಣ್ಣಿನ ತೇವಾಂಶ ತನಿಖೆಯನ್ನು ಎಲ್ಲಿ ಸ್ಥಾಪಿಸಲಾಗಿದೆ? ಇದು ಪೂರ್ವದ ಅಂಚನ್ನು ಪ್ರತಿನಿಧಿಸದ ಸ್ಥಳದಲ್ಲಿರಬಹುದೇ?\n3. **ಹೊಲದಲ್ಲಿ ನೋಡಿ.** ಬಾಡಿದ ಗಿಡಗಳನ್ನು ನೀವು ಏನು ಪರಿಶೀಲಿಸುತ್ತೀರಿ? ಎಮಿಟರ್ ಅಡಚಣೆ, ರೇಖೆಯ ಕೊನೆಯಲ್ಲಿ ಒತ್ತಡ ಮತ್ತು ಮೂಲ ಆರೋಗ್ಯವನ್ನು ಪರಿಗಣಿಸಿ.\n4. ** ನಿರ್ಧರಿಸಿ.** ನೀವು ಶಿಫಾರಸನ್ನು ಅನುಸರಿಸುತ್ತೀರಾ, ಮಾರ್ಪಡಿಸುತ್ತೀರಾ ಅಥವಾ ಅತಿಕ್ರಮಿಸುತ್ತೀರಾ? ಏಕೆ?\n5. ** ರೆಕಾರ್ಡ್ ಮಾಡಿ ಮತ್ತು ವರದಿ ಮಾಡಿ.** ಸಿಸ್ಟಮ್ - ಮತ್ತು ನಿಮ್ಮ ತಂಡ - ಇದರಿಂದ ಕಲಿಯಲು ನೀವು ಯಾವ ಪ್ರತಿಕ್ರಿಯೆಯನ್ನು ನೀಡುತ್ತೀರಿ?\n\n## ಚರ್ಚೆ\n\nಊಹಿಸಲಾದ ನೀರಿನ ಬಳಕೆಯು ಬಹುಶಃ ತುಂಬಾ ತಂಪಾಗಿರುವ ಮುನ್ಸೂಚನೆಯ ಮೇಲೆ ಆಧಾರಿತವಾಗಿದೆ ಎಂದು ಬಲವಾದ ಉತ್ತರವು ಗಮನಿಸುತ್ತದೆ, ಆದ್ದರಿಂದ ನಿಜವಾದ ಬೇಡಿಕೆ ಹೆಚ್ಚಿತ್ತು. 82% ಓದುವ ಏಕೈಕ ಶೋಧಕವು ಪೂರ್ವದ ಅಂಚನ್ನು ಪ್ರತಿನಿಧಿಸುವುದಿಲ್ಲ, ವಿಶೇಷವಾಗಿ ಹೊರಸೂಸುವವರು ಮುಚ್ಚಿಹೋಗಿದ್ದರೆ ಅಥವಾ ಪಾರ್ಶ್ವದ ಕೊನೆಯಲ್ಲಿ ಒತ್ತಡ ಕಡಿಮೆಯಿದ್ದರೆ. ಪೂರ್ವದ ಅಂಚನ್ನು ತಕ್ಷಣವೇ ಪರಿಶೀಲಿಸುವುದು, ಪರಿಶೀಲನೆಯು ಒಣ ಮಣ್ಣನ್ನು ದೃಢೀಕರಿಸಿದರೆ ಸಣ್ಣ ನೀರಾವರಿಯನ್ನು ನಡೆಸುವುದು ಮತ್ತು ಮುನ್ಸೂಚನೆಯ ಕೊರತೆ ಮತ್ತು ಸಂಭವನೀಯ ಏಕರೂಪತೆಯ ಸಮಸ್ಯೆಯನ್ನು ವರದಿ ಮಾಡುವುದು ಒಂದು ಸಂವೇದನಾಶೀಲ ನಿರ್ಧಾರವಾಗಿದೆ.\n\nಅಪರೂಪವಾಗಿ ಒಂದೇ ಸರಿಯಾದ ಉತ್ತರವಿದೆ - ಆದರೆ ಯಾವಾಗಲೂ ಸರಿಯಾದ ಪ್ರಕ್ರಿಯೆ ಇರುತ್ತದೆ: ಇನ್‌ಪುಟ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ, ಸಂದರ್ಭವನ್ನು ಪರಿಶೀಲಿಸಿ, ಕ್ಷೇತ್ರದಲ್ಲಿ ನೋಡಿ, ನಿರ್ಧರಿಸಿ ಮತ್ತು ರೆಕಾರ್ಡ್ ಮಾಡಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "ಕೊಯ್ಲು, ಮಾರುಕಟ್ಟೆಗಳು ಮತ್ತು ಪೂರೈಕೆ ಸರಪಳಿ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "ಇಳುವರಿ ಮುನ್ಸೂಚನೆ, ಮಾರುಕಟ್ಟೆ ಬುದ್ಧಿವಂತಿಕೆ ಮತ್ತು ಲಾಜಿಸ್ಟಿಕ್ಸ್.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "ಋತುವು ಸುಗ್ಗಿಯ ಕಡೆಗೆ ಸಾಗುತ್ತಿದ್ದಂತೆ, ನಿರ್ಧಾರಗಳು ಬೆಳೆ ಬೆಳೆಯುವುದರಿಂದ ಅದರ ಮೌಲ್ಯವನ್ನು ಹಿಡಿಯುವ ಕಡೆಗೆ ಬದಲಾಗುತ್ತವೆ.\n\n## ಇಳುವರಿ ಮುನ್ಸೂಚನೆ\n\nಇಳುವರಿ ಮುನ್ಸೂಚನೆಗಳು ಬೆಳೆ ಬೆಳವಣಿಗೆಯ ಮಾದರಿಗಳು, ಇಂದಿನವರೆಗಿನ ಹವಾಮಾನ ಮತ್ತು ಮುನ್ಸೂಚನೆಗಳು, ಚಿತ್ರಣ-ಆಧಾರಿತ ಶಕ್ತಿ, ಮತ್ತು ಕೆಲವೊಮ್ಮೆ ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿಯಿಂದ ಎಣಿಕೆಗಳನ್ನು ಸಂಯೋಜಿಸುತ್ತದೆ. ಹಿಂದಿನ ಮುನ್ಸೂಚನೆಗಳು ಕಡಿಮೆ ಖಚಿತವಾಗಿರುತ್ತವೆ; ಋತುವು ಮುಂದುವರೆದಂತೆ ನಿಖರತೆ ಸುಧಾರಿಸುತ್ತದೆ.\n\nಮುನ್ಸೂಚನೆಗಳು ಅಂತಹ ನಿರ್ಧಾರಗಳನ್ನು ಬೆಂಬಲಿಸುತ್ತವೆ:\n\n- ಮುಂದೆ ಎಷ್ಟು ಮಾರಾಟ ಮಾಡಬೇಕು ಮತ್ತು ಯಾವಾಗ;\n- ಬುಕ್ ಮಾಡಲು ಎಷ್ಟು ಕೆಲಸಗಾರರು, ಟ್ರಕ್‌ಗಳು ಮತ್ತು ಶೇಖರಣಾ ಸಾಮರ್ಥ್ಯ;\n- ತಡವಾದ ಇನ್‌ಪುಟ್ ಇನ್ನೂ ಅನ್ವಯಿಸಲು ಯೋಗ್ಯವಾಗಿದೆಯೇ.\n\n## ಮಾರುಕಟ್ಟೆ ಬುದ್ಧಿವಂತಿಕೆ\n\nಮಾರುಕಟ್ಟೆ ಗುಪ್ತಚರ ಪರಿಕರಗಳು ಬೆಲೆಗಳು, ಭವಿಷ್ಯಗಳು, ರಫ್ತು ಡೇಟಾ, ಸ್ಪರ್ಧಾತ್ಮಕ ಪ್ರದೇಶಗಳಲ್ಲಿ ಹವಾಮಾನ ಮತ್ತು ಬೆಲೆ ಚಲನೆಯನ್ನು ನಿರೀಕ್ಷಿಸಲು ಸಹಾಯ ಮಾಡಲು ಸುದ್ದಿಗಳನ್ನು ಸಂಗ್ರಹಿಸುತ್ತವೆ. AI ಈ ಸಂಕೇತಗಳನ್ನು ತ್ವರಿತವಾಗಿ ಸಾರಾಂಶ ಮಾಡಬಹುದು ಮತ್ತು ಅಸಾಮಾನ್ಯ ಬದಲಾವಣೆಗಳನ್ನು ಎತ್ತಿ ತೋರಿಸುತ್ತದೆ. ಯಾವುದೇ ಮಾದರಿಯು ಖಚಿತವಾಗಿ ಮಾರುಕಟ್ಟೆಗಳನ್ನು ಊಹಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ; ಮಾರುಕಟ್ಟೆ ಮುನ್ಸೂಚನೆಗಳನ್ನು ಅಪಾಯ-ನಿರ್ವಹಣೆಯ ಯೋಜನೆಗೆ ಒಂದು ಇನ್‌ಪುಟ್‌ನಂತೆ ಪರಿಗಣಿಸಿ, ಗ್ಯಾರಂಟಿಯಾಗಿ ಅಲ್ಲ.\n\n## ಕೊಯ್ಲು ಸಮಯ ಮತ್ತು ಗುಣಮಟ್ಟ\n\nಬೆಳೆ ಪ್ರಬುದ್ಧತೆಯನ್ನು ಟ್ರ್ಯಾಕ್ ಮಾಡುವ ಮಾದರಿಗಳು - ದ್ರಾಕ್ಷಿಯಲ್ಲಿ ಸಕ್ಕರೆ ಮಟ್ಟಗಳು, ಧಾನ್ಯದಲ್ಲಿನ ತೇವಾಂಶ, ಹಣ್ಣಿನಲ್ಲಿ ಬಣ್ಣ - ಗುಣಮಟ್ಟ, ಹವಾಮಾನ ಅಪಾಯ ಮತ್ತು ಲಾಜಿಸ್ಟಿಕ್ಸ್‌ನ ಉತ್ತಮ ಸಮತೋಲನಕ್ಕಾಗಿ ಕೊಯ್ಲು ವೇಳಾಪಟ್ಟಿಗೆ ಸಹಾಯ ಮಾಡುತ್ತದೆ. ಕಾರ್ಮಿಕರು ಮತ್ತು ಸಲಕರಣೆಗಳ ಲಭ್ಯತೆಯೊಂದಿಗೆ ಸಂಯೋಜಿಸಿ, ಅವರು ಕಾರ್ಯಾಚರಣೆಯ ಉದ್ದಕ್ಕೂ ಅನುಕ್ರಮ ಕ್ಷೇತ್ರಗಳಿಗೆ ಸಹಾಯ ಮಾಡಬಹುದು.\n\n## ಪತ್ತೆಹಚ್ಚುವಿಕೆ ಮತ್ತು ಸಾಕ್ಷ್ಯ\n\nಖರೀದಿದಾರರು ಬೆಳೆಯನ್ನು ಹೇಗೆ ಉತ್ಪಾದಿಸಲಾಯಿತು ಎಂಬುದಕ್ಕೆ ಪುರಾವೆಗಳನ್ನು ಹೆಚ್ಚಾಗಿ ಕೇಳುತ್ತಾರೆ: ನೀರಿನ ಬಳಕೆ, ಅನ್ವಯಿಸಲಾದ ಒಳಹರಿವುಗಳು, ಪ್ರಮಾಣೀಕರಣಗಳು. ಋತುವಿನ ಉದ್ದಕ್ಕೂ ಶಿಫಾರಸುಗಳು, ಕ್ರಮಗಳು ಮತ್ತು ಪರಿಶೀಲನೆಯನ್ನು ರೆಕಾರ್ಡ್ ಮಾಡುವ ಸಿಸ್ಟಂಗಳು ಸಾಕ್ಷ್ಯವನ್ನು ಉತ್ಪಾದಿಸಲು ಸುಲಭಗೊಳಿಸುತ್ತದೆ - ಲೂಪ್ನ ಪರಿಶೀಲನೆಯ ಹಂತವು ಮುಖ್ಯವಾದ ಇನ್ನೊಂದು ಕಾರಣ.\n\n> **ಪ್ರಮುಖ ಕಲ್ಪನೆ:** ಸುಗ್ಗಿಯ ಸಮಯದಲ್ಲಿ, AI ಮೌಲ್ಯವು ಸಮಯ, ಪ್ರಮಾಣ ಮತ್ತು ಬೆಲೆಯಲ್ಲಿನ ಅನಿಶ್ಚಿತತೆಯನ್ನು ಕಡಿಮೆ ಮಾಡುವುದರಿಂದ ಬರುತ್ತದೆ - ಮತ್ತು ಏನು ಮಾಡಲಾಗಿದೆ ಎಂಬುದನ್ನು ದಾಖಲಿಸುವುದರಿಂದ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "ಕೇಸ್ ಸ್ಟಡಿ: ನೀರಾವರಿ ಮತ್ತು ನೀರಿನ ನಿರ್ವಹಣೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "ಆವಿಯಾಗುವಿಕೆ, ಮಣ್ಣಿನ ತೇವಾಂಶ ಮತ್ತು AI ನೀರಾವರಿ ವೇಳಾಪಟ್ಟಿಯಲ್ಲಿ ಹೇಗೆ ಸಂಯೋಜಿಸುತ್ತದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "ನೀರಾವರಿಯು ಜಮೀನಿನಲ್ಲಿ ಮೌಲ್ಯವನ್ನು ಸೃಷ್ಟಿಸುವ AI ಯ ಸ್ಪಷ್ಟ ಉದಾಹರಣೆಗಳಲ್ಲಿ ಒಂದಾಗಿದೆ, ಏಕೆಂದರೆ ನೀರಿನ ನಿರ್ಧಾರಗಳು ಆಗಾಗ್ಗೆ, ದುಬಾರಿ ಮತ್ತು ಅಳೆಯಬಹುದು.\n\n## ನೀರಿನ ಸಮತೋಲನ\n\nಮೂಲ ವಲಯವನ್ನು ನೀರಿಗಾಗಿ ಬ್ಯಾಂಕ್ ಖಾತೆಯಾಗಿ ಯೋಚಿಸಿ.\n\n- **ನಿಕ್ಷೇಪಗಳು:** ಮಳೆ ಮತ್ತು ನೀರಾವರಿ.\n- **ಹಿಂತೆಗೆದುಕೊಳ್ಳುವಿಕೆಗಳು:** ಬೆಳೆ ಬಳಸಿದ ಮತ್ತು ಮಣ್ಣಿನಿಂದ ಆವಿಯಾಗುವ ನೀರು - ಒಟ್ಟಿಗೆ ** ಬಾಷ್ಪೀಕರಣ (ET)** ಎಂದು ಕರೆಯಲಾಗುತ್ತದೆ - ಜೊತೆಗೆ ಬೇರುಗಳ ಕೆಳಗೆ ಒಳಚರಂಡಿ.\n\nನೀರಾವರಿ ವೇಳಾಪಟ್ಟಿಯ ಗುರಿಯು ಕಡಿಮೆ ಮಿತಿಯ ನಡುವೆ ಸಮತೋಲನವನ್ನು ಇಟ್ಟುಕೊಳ್ಳುವುದು, ಅಲ್ಲಿ ಬೆಳೆ ಒತ್ತಡವನ್ನು ಅನುಭವಿಸಲು ಪ್ರಾರಂಭಿಸುತ್ತದೆ, ಮತ್ತು ಮೇಲಿನ ಮಿತಿಯನ್ನು ಮೀರಿ ನೀರು ಹರಿದುಹೋಗುತ್ತದೆ ಮತ್ತು ವ್ಯರ್ಥವಾಗುತ್ತದೆ.\n\n## ಬೆಳೆ ನೀರಿನ ಬಳಕೆಯನ್ನು ಅಂದಾಜು ಮಾಡುವುದು\n\nಬೆಳೆ ನೀರಿನ ಬಳಕೆಯನ್ನು ಸಾಮಾನ್ಯವಾಗಿ ಎರಡು ಹಂತಗಳಲ್ಲಿ ಅಂದಾಜು ಮಾಡಲಾಗುತ್ತದೆ:\n\n1. **ಉಲ್ಲೇಖ ಬಾಷ್ಪೀಕರಣ (ET₀)** ಅನ್ನು ಹವಾಮಾನ ದತ್ತಾಂಶದಿಂದ - ತಾಪಮಾನ, ಆರ್ದ್ರತೆ, ಗಾಳಿ ಮತ್ತು ಸೌರ ವಿಕಿರಣದಿಂದ - ಪ್ರಮಾಣಿತ ಉಲ್ಲೇಖ ಬೆಳೆಗಾಗಿ ಲೆಕ್ಕಹಾಕಲಾಗುತ್ತದೆ.\n2. ಒಂದು ** ಬೆಳೆ ಗುಣಾಂಕ (Kc)** ನಿಜವಾದ ಬೆಳೆ ಮತ್ತು ಅದರ ಬೆಳವಣಿಗೆಯ ಹಂತಕ್ಕೆ ET₀ ಸರಿಹೊಂದಿಸುತ್ತದೆ: **ETc = ET₀ × Kc**.\n\nಸ್ಥಳೀಯ ಸಂವೇದಕಗಳು, ಮೇಲಾವರಣ ಚಿತ್ರಣ ಮತ್ತು ಫಾರ್ಮ್‌ನ ಸ್ವಂತ ಇತಿಹಾಸದಿಂದ ಕಲಿಯುವ ಮೂಲಕ ಯಂತ್ರ ಕಲಿಕೆಯು ಈ ಅಂದಾಜನ್ನು ಸುಧಾರಿಸಬಹುದು, ವಿಶೇಷವಾಗಿ ಪ್ರಮಾಣಿತ ಗುಣಾಂಕಗಳು ಕಳಪೆಯಾಗಿ ಹೊಂದಿಕೊಳ್ಳುತ್ತವೆ.\n\n## ವೇಳಾಪಟ್ಟಿಯ ಸನ್ನಿವೇಶ\n\n> **ಉದಾಹರಣೆ:** ದ್ರಾಕ್ಷಿತೋಟದ ಬ್ಲಾಕ್ ಮೂಲ ವಲಯವು ತುಂಬಿರುವಾಗ 40 ಮಿಮೀ ಸುಲಭವಾಗಿ ಲಭ್ಯವಿರುವ ನೀರನ್ನು ಹೊಂದಿರುತ್ತದೆ. ಮಣ್ಣಿನ ತೇವಾಂಶ ಶೋಧಕಗಳು 18 ಮಿಮೀ ಉಳಿದಿರುವುದನ್ನು ತೋರಿಸುತ್ತವೆ. ಮುನ್ಸೂಚನೆ ETc ಮುಂದಿನ ನಾಲ್ಕು ದಿನಗಳವರೆಗೆ ದಿನಕ್ಕೆ 5 ಮಿಮೀ, ಮತ್ತು ಯಾವುದೇ ಮಳೆ ನಿರೀಕ್ಷಿಸಲಾಗುವುದಿಲ್ಲ.\n\nನೀರಾವರಿ ಇಲ್ಲದೆ, ಬ್ಲಾಕ್ ಸುಮಾರು ಮೂರೂವರೆ ದಿನಗಳಲ್ಲಿ ಅದರ ಕಡಿಮೆ ಮಿತಿಯನ್ನು ತಲುಪುತ್ತದೆ (18 ಮಿಮೀ ÷ 5 ಮಿಮೀ / ದಿನ). ನಿಗದಿತ ವ್ಯವಸ್ಥೆಯು ಮುಂದಿನ ಎರಡರಿಂದ ಮೂರು ದಿನಗಳಲ್ಲಿ ನೀರಾವರಿಗೆ ಶಿಫಾರಸು ಮಾಡುತ್ತದೆ, ಮೂಲ ವಲಯವನ್ನು ಅತಿಯಾಗಿ ತುಂಬದೆಯೇ ಅದನ್ನು ಮರುಪೂರಣಗೊಳಿಸಲು ಗಾತ್ರ, ಲಭ್ಯವಿರುವ ಪಂಪ್ ಸಾಮರ್ಥ್ಯಕ್ಕೆ ಸಮಯ ಮತ್ತು ರಾತ್ರಿಯಲ್ಲಿ ಕಡಿಮೆ ವಿದ್ಯುತ್ ಬೆಲೆಗಳು.\n\nಎರಡು ದಿನದಲ್ಲಿ ಮುನ್ಸೂಚನೆಯು 15 ಮಿಮೀ ಮಳೆಗೆ ಬದಲಾದರೆ, ಉತ್ತಮ ವ್ಯವಸ್ಥೆಯು ಶಿಫಾರಸನ್ನು ನವೀಕರಿಸುತ್ತದೆ - ಮತ್ತು ಏಕೆ ಎಂದು ವಿವರಿಸುತ್ತದೆ.\n\n## ಅಲ್ಲಿ AI ಮೌಲ್ಯವನ್ನು ಸೇರಿಸುತ್ತದೆ\n\n- ಹವಾಮಾನ, ಸಂವೇದಕಗಳು ಮತ್ತು ಚಿತ್ರಣವನ್ನು ಸಂಯೋಜಿಸುವ ಮೂಲಕ **ಉತ್ತಮ ನೀರಿನ ಬಳಕೆಯ ಅಂದಾಜುಗಳು**.\n- **ಮುನ್ಸೂಚನೆ-ಅರಿವಿನ ವೇಳಾಪಟ್ಟಿ** ಇದು ಬರಲಿರುವ ಮಳೆ ಮತ್ತು ಶಾಖಕ್ಕೆ ಕಾರಣವಾಗುತ್ತದೆ.\n- **ಆಪ್ಟಿಮೈಸೇಶನ್** ಅನೇಕ ಬ್ಲಾಕ್‌ಗಳಲ್ಲಿ, ಪಂಪ್ ಮಿತಿಗಳು ಮತ್ತು ನೀರಿನ ಹಂಚಿಕೆಗಳು.\n- **ಪರಿಶೀಲನೆ** - ನೀರಾವರಿಯು ಯೋಜಿಸಿದಂತೆ ಸಂಭವಿಸಿದೆ ಮತ್ತು ನಿರೀಕ್ಷಿತ ಪರಿಣಾಮವನ್ನು ಹೊಂದಿದೆ ಎಂದು ಹರಿವಿನ ಮೀಟರ್‌ಗಳು ಮತ್ತು ಮಣ್ಣಿನ ತೇವಾಂಶದಿಂದ ದೃಢೀಕರಿಸುತ್ತದೆ.\n\n## ಏನು ತಪ್ಪಾಗಬಹುದು\n\nಮುಚ್ಚಿಹೋಗಿರುವ ಎಮಿಟರ್, ಮುರಿದ ಕವಾಟ ಅಥವಾ ಪ್ರಾತಿನಿಧಿಕವಲ್ಲದ ಸ್ಥಳದಲ್ಲಿ ಸ್ಥಾಪಿಸಲಾದ ತನಿಖೆ ಎಲ್ಲವೂ ಸಿಸ್ಟಮ್ ಅನ್ನು ತಪ್ಪುದಾರಿಗೆಳೆಯಬಹುದು. ಅದಕ್ಕಾಗಿಯೇ ಪರಿಶೀಲನೆಯ ಹಂತವು ಮುಖ್ಯವಾಗಿದೆ: ನೀರಾವರಿಯ ನಂತರ ಊಹಿಸಿದಂತೆ ಮಣ್ಣಿನ ತೇವಾಂಶವು ಪ್ರತಿಕ್ರಿಯಿಸದಿದ್ದರೆ, ಇದು ಕೇವಲ ಮಾದರಿಯಲ್ಲ, ಕ್ಷೇತ್ರವನ್ನು ತನಿಖೆ ಮಾಡಲು ಸಂಕೇತವಾಗಿದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "ಮಿತಿಗಳು, ದೋಷಗಳು ಮತ್ತು ಶಿಫಾರಸನ್ನು ಯಾವಾಗ ಪ್ರಶ್ನಿಸಬೇಕು",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "ವೈಫಲ್ಯದ ವಿಧಾನಗಳನ್ನು ಗುರುತಿಸುವುದು ಮತ್ತು ಮಾನವನ ನಿರ್ಣಯವನ್ನು ಉಸ್ತುವಾರಿಯಲ್ಲಿಟ್ಟುಕೊಳ್ಳುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "ಪ್ರತಿ AI ವ್ಯವಸ್ಥೆಯು ಕೆಲವೊಮ್ಮೆ ತಪ್ಪಾಗಿರುತ್ತದೆ. ಗುರಿಯು ಕುರುಡು ನಂಬಿಕೆ ಅಥವಾ ಕಂಬಳಿ ನಿರಾಕರಣೆ ಅಲ್ಲ, ಆದರೆ **ಮಾಪನಾಂಕ ನಿರ್ಣಯಿಸಿದ ನಂಬಿಕೆ**: ಶಿಫಾರಸು ಯಾವಾಗ ವಿಶ್ವಾಸಕ್ಕೆ ಅರ್ಹವಾಗಿದೆ ಮತ್ತು ಅದು ಯಾವಾಗ ಎರಡನೇ ನೋಟಕ್ಕೆ ಅರ್ಹವಾಗಿದೆ ಎಂಬುದನ್ನು ತಿಳಿದುಕೊಳ್ಳುವುದು.\n\n## ಸಾಮಾನ್ಯ ವೈಫಲ್ಯ ವಿಧಾನಗಳು\n\n**ಕೆಟ್ಟ ಇನ್‌ಪುಟ್‌ಗಳು.** ವಿಫಲವಾದ ಸಂವೇದಕ, ತಪ್ಪಾದ ತನಿಖೆ ಅಥವಾ ಕಾಣೆಯಾದ ಡೇಟಾ ಫೀಡ್ ವಿಶ್ವಾಸಾರ್ಹ ಅಸಂಬದ್ಧತೆಯನ್ನು ಉಂಟುಮಾಡುತ್ತದೆ. *ಕಸ ಒಳಗೆ, ಕಸ ಹೊರಗೆ.*\n\n** ವ್ಯಾಪ್ತಿಯಿಂದ ಹೊರಗಿರುವ ಪರಿಸ್ಥಿತಿಗಳು.** ತರಬೇತಿ ಸಮಯದಲ್ಲಿ ಅವರು ಅಪರೂಪವಾಗಿ ನೋಡಿದ ಸಂದರ್ಭಗಳಲ್ಲಿ ಮಾದರಿಗಳು ಕನಿಷ್ಠ ವಿಶ್ವಾಸಾರ್ಹವಾಗಿವೆ: ತೀವ್ರ ಶಾಖ, ಹೊಸ ವೈವಿಧ್ಯ, ಅಸಾಮಾನ್ಯ ಮಣ್ಣು.\n\n** ಡ್ರಿಫ್ಟ್.** ಕಾಲಾನಂತರದಲ್ಲಿ ಪರಿಸ್ಥಿತಿಗಳು ಬದಲಾಗುತ್ತವೆ ಮತ್ತು ಮೂರು ವರ್ಷಗಳ ಹಿಂದೆ ನಿಖರವಾದ ಮಾದರಿಯು ಇನ್ನು ಮುಂದೆ ಇರುವುದಿಲ್ಲ.\n\n**ಪಕ್ಷಪಾತ.** ತರಬೇತಿಯ ಡೇಟಾವು ಕೆಲವು ಪ್ರದೇಶಗಳು, ಕೃಷಿ ಗಾತ್ರಗಳು ಅಥವಾ ಬೆಳೆಗಳನ್ನು ಅತಿಯಾಗಿ ಪ್ರತಿನಿಧಿಸಿದರೆ, ವಿಭಿನ್ನ ಕಾರ್ಯಾಚರಣೆಗಳಿಗೆ ಶಿಫಾರಸುಗಳು ಕಡಿಮೆ ನಿಖರವಾಗಿರಬಹುದು.\n\n**ಸಂದರ್ಭ ಕಾಣೆಯಾಗಿದೆ.** ನೆರೆಹೊರೆಯವರ ಸಸ್ಯನಾಶಕ ಡ್ರಿಫ್ಟ್, ಒಡೆದ ಪೈಪ್ ಅಥವಾ ಮುಂದಿನ ವಾರ ಕೊಯ್ಲು ಅಗತ್ಯವಿರುವ ಒಪ್ಪಂದದ ಬಗ್ಗೆ ವ್ಯವಸ್ಥೆಗೆ ತಿಳಿದಿಲ್ಲ.\n\n**ಆಟೊಮೇಷನ್ ಪಕ್ಷಪಾತ.** ಜನರು ಯಂತ್ರದ ಉತ್ಪಾದನೆಯನ್ನು ಅತಿಯಾಗಿ ನಂಬುತ್ತಾರೆ, ವಿಶೇಷವಾಗಿ ಅದನ್ನು ನಿಖರವಾಗಿ ಪ್ರಸ್ತುತಪಡಿಸಿದಾಗ. ಎರಡು ದಶಮಾಂಶ ಸ್ಥಾನಗಳನ್ನು ಹೊಂದಿರುವ ಸಂಖ್ಯೆಯು ಅಗತ್ಯವಾಗಿ ನಿಖರವಾಗಿರುವುದಿಲ್ಲ.\n\n## ಶಿಫಾರಸನ್ನು ಯಾವಾಗ ಪ್ರಶ್ನಿಸಬೇಕು\n\nಯಾವಾಗ ವಿರಾಮಗೊಳಿಸಿ ಮತ್ತು ತನಿಖೆ ಮಾಡಿ:\n\n- ಶಿಫಾರಸು ನೀವು ಕ್ಷೇತ್ರದಲ್ಲಿ ನೋಡುವುದನ್ನು ವಿರೋಧಿಸುತ್ತದೆ;\n- ಇದು ಋತುವಿನ ಸಾಮಾನ್ಯ ವ್ಯಾಪ್ತಿಯ ಹೊರಗಿದೆ;\n- ವ್ಯವಸ್ಥೆಯು ಕಡಿಮೆ ವಿಶ್ವಾಸವನ್ನು ತೋರಿಸುತ್ತದೆ, ಅಥವಾ ವಿಶ್ವಾಸವನ್ನು ತೋರಿಸುವುದಿಲ್ಲ;\n- ಪ್ರಮುಖ ಡೇಟಾ ಕಾಣೆಯಾಗಿದೆ, ಹಳೆಯದು ಅಥವಾ ಸ್ಪಷ್ಟವಾಗಿ ತಪ್ಪಾಗಿದೆ;\n- ದೋಷದ ಪರಿಣಾಮಗಳು ತೀವ್ರವಾಗಿರುತ್ತವೆ ಅಥವಾ ರಿವರ್ಸ್ ಮಾಡಲು ಕಷ್ಟವಾಗುತ್ತದೆ.\n\n> **ಫೀಲ್ಡ್ ಚೆಕ್:** ಸರಳ ನಿಯಮ - ದೊಡ್ಡ ಮತ್ತು ಕಡಿಮೆ ಹಿಂತಿರುಗಿಸಬಹುದಾದ ನಿರ್ಧಾರ, AI ಶಿಫಾರಸಿನ ಮೇಲೆ ಕಾರ್ಯನಿರ್ವಹಿಸುವ ಮೊದಲು ನಿಮಗೆ ಹೆಚ್ಚಿನ ಪುರಾವೆಗಳು ಬೇಕಾಗುತ್ತವೆ.\n\n## ಚೆನ್ನಾಗಿ ಸವಾಲು ಮಾಡುವುದು ಹೇಗೆ\n\n1. **ಇನ್‌ಪುಟ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.** ಸಂವೇದಕಗಳು ವರದಿ ಮಾಡುತ್ತಿವೆಯೇ? ಹವಾಮಾನ ಡೇಟಾ ಪ್ರಸ್ತುತವಾಗಿದೆಯೇ?\n2. **ಕಾರಣವನ್ನು ಕೇಳಿ.** ಈ ಸಲಹೆಯನ್ನು ಯಾವ ಡೇಟಾ ಪ್ರೇರೇಪಿಸಿತು?\n3. **ಕ್ಷೇತ್ರದಲ್ಲಿ ನೋಡಿ.** ಪ್ರಶ್ನೆಯಲ್ಲಿರುವ ಪ್ರದೇಶವನ್ನು ಸ್ಕೌಟ್ ಮಾಡಿ.\n4. **ನೀವು ಏನು ನಿರ್ಧರಿಸಿದ್ದೀರಿ ಮತ್ತು ಏಕೆ ಎಂದು ರೆಕಾರ್ಡ್ ಮಾಡಿ.** ನಿಮ್ಮ ಅತಿಕ್ರಮಣವು ಸಿಸ್ಟಂ ಅನ್ನು ಸುಧಾರಿಸಲು ಸಹಾಯ ಮಾಡುವ ಮೌಲ್ಯಯುತವಾದ ಪ್ರತಿಕ್ರಿಯೆಯಾಗಿದೆ.\n\nಶಿಫಾರಸನ್ನು ಸವಾಲು ಮಾಡುವುದು ತಂತ್ರಜ್ಞಾನದ ವೈಫಲ್ಯವಲ್ಲ. ಜನರು ಮತ್ತು AI ಹೇಗೆ ಒಟ್ಟಿಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "ಮಾದರಿಗಳು, ತರಬೇತಿ ಮತ್ತು ಭವಿಷ್ಯವಾಣಿಗಳು",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "ಮಾದರಿಯು ಉದಾಹರಣೆಗಳಿಂದ ಹೇಗೆ ಕಲಿಯುತ್ತದೆ ಮತ್ತು ಪ್ರತಿ ಭವಿಷ್ಯವು ಏಕೆ ಅನಿಶ್ಚಿತತೆಯನ್ನು ಹೊಂದಿದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**ಮಾದರಿ** ಒಂದು ಸಂಬಂಧದ ಗಣಿತದ ವಿವರಣೆಯಾಗಿದೆ - ಉದಾಹರಣೆಗೆ, ಹವಾಮಾನ ಮತ್ತು ಬೆಳೆ ಬಳಸುವ ನೀರಿನ ಪ್ರಮಾಣ. ಯಂತ್ರ ಕಲಿಕೆಯು ಉದಾಹರಣೆಗಳಿಂದ ಕಲಿಯುವ ಮೂಲಕ ಮಾದರಿಗಳನ್ನು ನಿರ್ಮಿಸುತ್ತದೆ.\n\n## ಉದಾಹರಣೆಗಳಿಂದ ಕಲಿಯುವುದು\n\nಬಾದಾಮಿ ತೋಟವು ನಾಳೆ ಎಷ್ಟು ನೀರನ್ನು ಬಳಸುತ್ತದೆ ಎಂದು ನೀವು ಊಹಿಸಲು ಬಯಸುತ್ತೀರಿ ಎಂದು ಊಹಿಸಿ. ನೀವು ಅನೇಕ ಹಿಂದಿನ ದಿನಗಳನ್ನು ಸಂಗ್ರಹಿಸುತ್ತೀರಿ, ಪ್ರತಿಯೊಂದೂ:\n\n- ** ಇನ್‌ಪುಟ್‌ಗಳು** (*ವೈಶಿಷ್ಟ್ಯಗಳು* ಎಂದೂ ಕರೆಯುತ್ತಾರೆ): ತಾಪಮಾನ, ಆರ್ದ್ರತೆ, ಗಾಳಿ, ಸೌರ ವಿಕಿರಣ, ಮರದ ವಯಸ್ಸು, ಮೇಲಾವರಣ ಹೊದಿಕೆ;\n- ನೀವು ಊಹಿಸಲು ಬಯಸುವ **ಫಲಿತಾಂಶ**: ಸಂವೇದಕಗಳಿಂದ ಅಳೆಯಲ್ಪಟ್ಟ ಆ ದಿನ ಹಣ್ಣಿನ ತೋಟವು ನಿಜವಾಗಿ ಬಳಸಿದ ನೀರು.\n\n**ತರಬೇತಿ** ಸಮಯದಲ್ಲಿ, ಅಲ್ಗಾರಿದಮ್ ಅದರ ಮುನ್ನೋಟಗಳು ರೆಕಾರ್ಡ್ ಮಾಡಿದ ಫಲಿತಾಂಶಗಳನ್ನು ಸಾಧ್ಯವಾದಷ್ಟು ಹತ್ತಿರವಾಗಿ ಹೊಂದಿಸುವವರೆಗೆ ಮಾದರಿಯನ್ನು ಮತ್ತೆ ಮತ್ತೆ ಸರಿಹೊಂದಿಸುತ್ತದೆ. ಇದನ್ನು **ಮೇಲ್ವಿಚಾರಣೆಯ ಕಲಿಕೆ** ಎಂದು ಕರೆಯಲಾಗುತ್ತದೆ, ಏಕೆಂದರೆ ಪ್ರತಿಯೊಂದು ಉದಾಹರಣೆಯು ಸರಿಯಾದ ಉತ್ತರದೊಂದಿಗೆ ಬರುತ್ತದೆ.\n\n## ಮಾದರಿಯು ಎಂದಿಗೂ ನೋಡದ ಡೇಟಾದ ಮೇಲೆ ಪರೀಕ್ಷೆ\n\nಮಾದರಿಯು ತನ್ನ ತರಬೇತಿ ಉದಾಹರಣೆಗಳನ್ನು ನೆನಪಿಟ್ಟುಕೊಳ್ಳಬಹುದು ಮತ್ತು ಹೊಸ ದಿನಗಳಲ್ಲಿ ವಿಫಲಗೊಳ್ಳಬಹುದು. ಅದಕ್ಕಾಗಿಯೇ ಡೇಟಾ ವಿಜ್ಞಾನಿಗಳು ಕೆಲವು ಡೇಟಾವನ್ನು ಪಕ್ಕಕ್ಕೆ ಇಡುತ್ತಾರೆ ** ಮೌಲ್ಯಮಾಪನ ** — ಮಾದರಿಯು ತರಬೇತಿಯ ಸಮಯದಲ್ಲಿ ಎಂದಿಗೂ ನೋಡಿಲ್ಲ. ಹಿಡಿದಿಟ್ಟುಕೊಂಡಿರುವ ಡೇಟಾದಲ್ಲಿನ ಕಾರ್ಯಕ್ಷಮತೆಯು ಅದು ಎಷ್ಟು ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡುತ್ತದೆ ಎಂಬುದರ ಪ್ರಾಮಾಣಿಕ ಅಳತೆಯಾಗಿದೆ.\n\n> **ಪ್ರಮುಖ:** ಮಾದರಿಯನ್ನು ಹೇಗೆ ಮೌಲ್ಯೀಕರಿಸಲಾಗಿದೆ ಎಂದು ಕೇಳಿ. \"ಇದು ನಮ್ಮ ಐತಿಹಾಸಿಕ ಡೇಟಾಗೆ ಸಂಪೂರ್ಣವಾಗಿ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ\" ಎಂಬುದು ಎಚ್ಚರಿಕೆಯ ಸಂಕೇತವಾಗಿದೆ, ಶಕ್ತಿಯಲ್ಲ.\n\n## ನಿಖರತೆಯನ್ನು ಅಳೆಯುವುದು\n\nಸಂಖ್ಯಾತ್ಮಕ ಮುನ್ನೋಟಗಳಿಗಾಗಿ, ಸಾಮಾನ್ಯ ಅಳತೆಗಳಲ್ಲಿ **ಸರಾಸರಿ ದೋಷ** (ಸರಾಸರಿಯಲ್ಲಿ ಎಷ್ಟು ದೂರವಿದೆ) ಮತ್ತು ಮಾದರಿಯು ಎಷ್ಟು ವ್ಯತ್ಯಾಸವನ್ನು ವಿವರಿಸುತ್ತದೆ. ವರ್ಗೀಕರಣಗಳಿಗಾಗಿ - \"ಒತ್ತಡ\" ಅಥವಾ \"ಆರೋಗ್ಯಕರ\" - ಮಾದರಿಯು ಎಷ್ಟು ಬಾರಿ ಸರಿ ಎಂದು ನಾವು ಕೇಳುತ್ತೇವೆ ಮತ್ತು ಎಷ್ಟು ಬಾರಿ ಅದು ತಪ್ಪು ಎಚ್ಚರಿಕೆಗಳನ್ನು ಹುಟ್ಟುಹಾಕುತ್ತದೆ ಅಥವಾ ನೈಜ ಸಮಸ್ಯೆಗಳನ್ನು ತಪ್ಪಿಸುತ್ತದೆ.\n\nಒಂದೇ \"ಉತ್ತಮ\" ನಿಖರತೆ ಇಲ್ಲ. 5% ಒಳಗಿನ ಇಳುವರಿ ಮುನ್ಸೂಚನೆಯು ಮಾರ್ಕೆಟಿಂಗ್ ನಿರ್ಧಾರಗಳಿಗೆ ಅತ್ಯುತ್ತಮವಾಗಿರುತ್ತದೆ; ಹತ್ತರಲ್ಲಿ ಒಂದು ಘಟನೆಯನ್ನು ತಪ್ಪಿಸುವ ಫ್ರಾಸ್ಟ್ ಅಲಾರಾಂ ಸ್ವೀಕಾರಾರ್ಹವಲ್ಲ.\n\n## ಪ್ರತಿಯೊಂದು ಭವಿಷ್ಯವೂ ಅನಿಶ್ಚಿತತೆಯನ್ನು ಹೊಂದಿರುತ್ತದೆ\n\nಹವಾಮಾನ ಬದಲಾವಣೆಗಳು, ಸಂವೇದಕಗಳು ಡ್ರಿಫ್ಟ್ ಮತ್ತು ಕ್ಷೇತ್ರಗಳು ಬದಲಾಗುತ್ತವೆ. ವಿಶ್ವಾಸಾರ್ಹ ವ್ಯವಸ್ಥೆಯು ಅನಿಶ್ಚಿತತೆಯನ್ನು ತಿಳಿಸುತ್ತದೆ: \"ನಾಳೆ ನೀರಿನ ಬಳಕೆ 6.2 ಮಿಮೀ, ಸಾಧ್ಯತೆ 5.6 ಮತ್ತು 6.8 ಮಿಮೀ ನಡುವೆ ಇರುತ್ತದೆ.\" ಯಾವುದೇ ವ್ಯಾಪ್ತಿಯಿಲ್ಲದ ಒಂದೇ ಸಂಖ್ಯೆಯು ಪ್ರಮುಖ ಮಾಹಿತಿಯನ್ನು ಮರೆಮಾಡುತ್ತದೆ.\n\n## ಮಾದರಿಗಳು ಹಳೆಯದಾಗ\n\nಪರಿಸ್ಥಿತಿಗಳು ಬದಲಾಗುತ್ತವೆ. ಹೊಸ ಪ್ರಭೇದಗಳು, ಬರಗಾಲದ ವರ್ಷ ಅಥವಾ ಬದಲಾದ ನೀರಾವರಿ ವ್ಯವಸ್ಥೆಯು ಹಿಂದಿನ ಡೇಟಾವನ್ನು ಕಡಿಮೆ ಪ್ರತಿನಿಧಿಸಬಹುದು. ಇದನ್ನು ** ಡ್ರಿಫ್ಟ್** ಎಂದು ಕರೆಯಲಾಗುತ್ತದೆ. ಉತ್ತಮ ವ್ಯವಸ್ಥೆಗಳು ಕಾಲಾನಂತರದಲ್ಲಿ ತಮ್ಮದೇ ಆದ ನಿಖರತೆಯನ್ನು ಮೇಲ್ವಿಚಾರಣೆ ಮಾಡುತ್ತವೆ ಮತ್ತು ಕಾರ್ಯಕ್ಷಮತೆ ಕಡಿಮೆಯಾದಾಗ ಮರು ತರಬೇತಿ ನೀಡಲಾಗುತ್ತದೆ.\n\n## ಸಾಮಾನ್ಯ ರೀತಿಯ ಕೃಷಿ ಮಾದರಿಗಳು\n\n- **ರಿಗ್ರೆಶನ್** - ಸಂಖ್ಯೆಯನ್ನು ಊಹಿಸುತ್ತದೆ (ನೀರಿನ ಬಳಕೆ, ಇಳುವರಿ, ಬೆಲೆ).\n- **ವರ್ಗೀಕರಣ** - ಒಂದು ವರ್ಗವನ್ನು ನಿಯೋಜಿಸುತ್ತದೆ (ರೋಗ ಇರುವ ಅಥವಾ ಇಲ್ಲದಿರುವ, ಬೆಳೆ ಪ್ರಕಾರ).\n- **ಮುನ್ಸೂಚನೆ** — ಕಾಲಾನಂತರದಲ್ಲಿ ಏನಾದರೂ ಹೇಗೆ ಬದಲಾಗುತ್ತದೆ ಎಂಬುದನ್ನು ಊಹಿಸುತ್ತದೆ (ಮುಂದಿನ ಐದು ದಿನಗಳಲ್ಲಿ ಮಣ್ಣಿನ ತೇವಾಂಶ).\n- **ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿ** — ಚಿತ್ರಗಳನ್ನು ಅರ್ಥೈಸುತ್ತದೆ (ಹಣ್ಣನ್ನು ಎಣಿಸುವುದು, ಕಳೆಗಳನ್ನು ಪತ್ತೆ ಮಾಡುವುದು).\n- **ಆಪ್ಟಿಮೈಸೇಶನ್** - ನಿರ್ಬಂಧಗಳೊಳಗೆ ಉತ್ತಮ ಯೋಜನೆಯನ್ನು ಕಂಡುಕೊಳ್ಳುತ್ತದೆ (ಸೀಮಿತ ನೀರಿನಿಂದ ಬೆಳೆ ಬೇಡಿಕೆಯನ್ನು ಪೂರೈಸುವ ನೀರಾವರಿ ವೇಳಾಪಟ್ಟಿ).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "ಯೋಜನೆ ಮತ್ತು ನೆಡುವಿಕೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "ಮೊದಲ ಬೀಜವು ನೆಲಕ್ಕೆ ಹೋಗುವ ಮೊದಲು ಡೇಟಾ ಮತ್ತು AI ಅನ್ನು ಬಳಸುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "ಋತುವಿನ ಅನೇಕ ಅತ್ಯಮೂಲ್ಯ ನಿರ್ಧಾರಗಳನ್ನು ನೆಡುವ ಮೊದಲು ಮಾಡಲಾಗುತ್ತದೆ. ಆ ನಿರ್ಧಾರಗಳಿಗೆ ಹೆಚ್ಚಿನ ಪುರಾವೆಗಳನ್ನು ತರುವ ಮೂಲಕ AI ಸಹಾಯ ಮಾಡಬಹುದು.\n\n## ಕ್ಷೇತ್ರ ಇತಿಹಾಸ ಮತ್ತು ನಿರ್ವಹಣಾ ವಲಯಗಳು\n\nಕ್ಷೇತ್ರಗಳು ಏಕರೂಪವಾಗಿಲ್ಲ. ವರ್ಷಗಳ ಇಳುವರಿ ನಕ್ಷೆಗಳು, ಮಣ್ಣಿನ ಸಮೀಕ್ಷೆಗಳು ಮತ್ತು ಉಪಗ್ರಹ ಚಿತ್ರಣಗಳು ಸಾಮಾನ್ಯವಾಗಿ ಸ್ಥಿರವಾದ ಮಾದರಿಗಳನ್ನು ಬಹಿರಂಗಪಡಿಸುತ್ತವೆ: ತೇವವಾಗಿ ಉಳಿಯುವ ಕಡಿಮೆ ಪ್ರದೇಶ, ಮೊದಲು ಒಣಗುವ ಮರಳಿನ ಪರ್ವತ. ಕ್ರಮಾವಳಿಗಳು ಈ ಪ್ರದೇಶಗಳನ್ನು **ನಿರ್ವಹಣಾ ವಲಯಗಳಾಗಿ ಗುಂಪು ಮಾಡಬಹುದು** ಅದು ನೀರು, ಬೀಜ ಮತ್ತು ರಸಗೊಬ್ಬರಗಳಿಗೆ ವಿಭಿನ್ನವಾಗಿ ಪ್ರತಿಕ್ರಿಯಿಸುತ್ತದೆ.\n\nವಲಯಗಳೊಂದಿಗೆ, ಬೆಳೆಗಾರನು ಬಿತ್ತನೆ ದರಗಳನ್ನು ಬದಲಾಯಿಸಬಹುದು, ಹೆಚ್ಚು ಅಥವಾ ಕಡಿಮೆ ಸಾರಜನಕವನ್ನು ಎಲ್ಲಿ ಅನ್ವಯಿಸಬೇಕು ಎಂಬುದನ್ನು ಆರಿಸಿಕೊಳ್ಳಬಹುದು ಅಥವಾ ಕ್ಷೇತ್ರದ ಪ್ರತಿಯೊಂದು ಭಾಗವು ಹೇಗೆ ವರ್ತಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ಹೊಂದಿಸುವ ನೀರಾವರಿ ಸೆಟ್‌ಗಳನ್ನು ಯೋಜಿಸಬಹುದು.\n\n## ವೈವಿಧ್ಯತೆ ಮತ್ತು ನೆಟ್ಟ ದಿನಾಂಕ ನಿರ್ಧಾರಗಳು\n\nಪ್ರಾದೇಶಿಕ ಪ್ರಯೋಗಗಳು ಮತ್ತು ಹವಾಮಾನ ದಾಖಲೆಗಳ ಮೇಲೆ ತರಬೇತಿ ಪಡೆದ ಮಾದರಿಗಳು ವಿವಿಧ ಪರಿಸ್ಥಿತಿಗಳಲ್ಲಿ ಪ್ರಭೇದಗಳು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ ಮತ್ತು ನೆಟ್ಟ ದಿನಾಂಕವು ಅಪಾಯದ ಮೇಲೆ ಹೇಗೆ ಪರಿಣಾಮ ಬೀರುತ್ತದೆ ಎಂಬುದನ್ನು ಅಂದಾಜು ಮಾಡಬಹುದು - ಉದಾಹರಣೆಗೆ, ಹೂಬಿಡುವ ಸಮಯದಲ್ಲಿ ಶಾಖದ ಒತ್ತಡದ ಸಾಧ್ಯತೆ. ಈ ಅಂದಾಜುಗಳು ರಾಷ್ಟ್ರೀಯ ಸರಾಸರಿಗಳನ್ನು ಮಾತ್ರವಲ್ಲದೆ ಸ್ಥಳೀಯ ಪ್ರಯೋಗಗಳನ್ನು ಪ್ರತಿಬಿಂಬಿಸುವಾಗ ಹೆಚ್ಚು ಉಪಯುಕ್ತವಾಗಿವೆ.\n\n## ಸನ್ನಿವೇಶ ಯೋಜನೆ\n\nAI ಪರಿಕರಗಳು \"ವಾಟ್ ಇಫ್\" ಸನ್ನಿವೇಶಗಳನ್ನು ತ್ವರಿತವಾಗಿ ರನ್ ಮಾಡಬಹುದು: ಋತುವು ಶುಷ್ಕವಾಗಿದ್ದರೆ ಏನು? ನೀರಿನ ಹಂಚಿಕೆಯನ್ನು 20% ಕಡಿತಗೊಳಿಸಿದರೆ ಏನು? ಇನ್ಪುಟ್ ಬೆಲೆಗಳು ಏರಿದರೆ ಏನು? ಸನ್ನಿವೇಶಗಳನ್ನು ಹೋಲಿಸುವುದು ನಿರೀಕ್ಷಿತ ಒಂದನ್ನು ಮಾತ್ರವಲ್ಲದೆ, ಅನೇಕ ಸಂಭವನೀಯ ಭವಿಷ್ಯಗಳಲ್ಲಿ ಹಿಡಿದಿಟ್ಟುಕೊಳ್ಳುವ ಯೋಜನೆಯನ್ನು ಆಯ್ಕೆ ಮಾಡಲು ನಿಮಗೆ ಸಹಾಯ ಮಾಡುತ್ತದೆ.\n\n> **ಫೀಲ್ಡ್ ಚೆಕ್:** ಒಂದು ಉಪಕರಣವು ಬಿತ್ತನೆ ದರ ಅಥವಾ ವೈವಿಧ್ಯತೆಯನ್ನು ಶಿಫಾರಸು ಮಾಡಿದಾಗ, ಅದನ್ನು ಯಾವ ಡೇಟಾವನ್ನು ನಿರ್ಮಿಸಲಾಗಿದೆ ಎಂದು ಕೇಳಿ. ನಿಮ್ಮ ಮಣ್ಣು ಮತ್ತು ಹವಾಮಾನದಿಂದ ಪ್ರಾದೇಶಿಕ ಪ್ರಯೋಗ ಡೇಟಾವು ರಾಷ್ಟ್ರೀಯ ಸರಾಸರಿಗಿಂತ ಹೆಚ್ಚು ಪ್ರಸ್ತುತವಾಗಿದೆ.\n\n## ನೆನಪಿನಲ್ಲಿಟ್ಟುಕೊಳ್ಳಬೇಕಾದ ಮಿತಿಗಳು\n\nಪೂರ್ವ-ಋತುವಿನ ಶಿಫಾರಸುಗಳು ಅನಿಶ್ಚಿತವಾಗಿರುವ ದೀರ್ಘ-ಶ್ರೇಣಿಯ ಮುನ್ಸೂಚನೆಗಳ ಮೇಲೆ ನಿಂತಿವೆ. ಋತುಮಾನವು ತೆರೆದುಕೊಂಡಂತೆ ಅವುಗಳನ್ನು ಹೊಂದಿಸಲು ಆರಂಭಿಕ ಯೋಜನೆಯಾಗಿ ಪರಿಗಣಿಸಿ, ಸ್ಥಿರವಾದ ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್ ಅಲ್ಲ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "ಮಾಡ್ಯೂಲ್ 1 ರಸಪ್ರಶ್ನೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "AI ಮೂಲಭೂತ ಅಂಶಗಳ ಬಗ್ಗೆ ನಿಮ್ಮ ತಿಳುವಳಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "ಮಾಡ್ಯೂಲ್ 1 ರಲ್ಲಿನ ವಿಚಾರಗಳ ಕುರಿತು ಐದು ತ್ವರಿತ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸಿ. ರಸಪ್ರಶ್ನೆಗಳು ಅಭ್ಯಾಸಕ್ಕಾಗಿ: ನೀವು ಬಯಸಿದಷ್ಟು ಬಾರಿ ಅವುಗಳನ್ನು ಮರುಪಡೆಯಬಹುದು ಮತ್ತು ಪ್ರತಿ ಪ್ರಯತ್ನದ ನಂತರ ನೀವು ವಿವರಣೆಯನ್ನು ನೋಡುತ್ತೀರಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "ಮಾಡ್ಯೂಲ್ 2 ರಸಪ್ರಶ್ನೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "ಡೇಟಾ, ಮಾದರಿಗಳು ಮತ್ತು ಶಿಫಾರಸುಗಳ ಬಗ್ಗೆ ನಿಮ್ಮ ತಿಳುವಳಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "ಡೇಟಾ ಗುಣಮಟ್ಟ, ಮಾದರಿ ತರಬೇತಿ ಮತ್ತು ನಿರ್ಧಾರ ಬೆಂಬಲದ ಮೇಲೆ ಐದು ಪ್ರಶ್ನೆಗಳು. ನೀವು ಇಷ್ಟಪಡುವಷ್ಟು ಬಾರಿ ಮರುಪಡೆಯಿರಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "ಮಾಡ್ಯೂಲ್ 3 ರಸಪ್ರಶ್ನೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "ಋತುವಿನಾದ್ಯಂತ AI ಕುರಿತು ನಿಮ್ಮ ತಿಳುವಳಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "ಯೋಜನೆ, ನೀರಾವರಿ, ಬೆಳೆ ಮೇಲ್ವಿಚಾರಣೆ ಮತ್ತು ಕೊಯ್ಲು ಕುರಿತು ಐದು ಪ್ರಶ್ನೆಗಳು. ನೀವು ಇಷ್ಟಪಡುವಷ್ಟು ಬಾರಿ ಮರುಪಡೆಯಿರಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "ಮುನ್ಸೂಚನೆಯಿಂದ ಶಿಫಾರಸುವರೆಗೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "ನಿರ್ಧಾರ-ಬೆಂಬಲ ವ್ಯವಸ್ಥೆಗಳು ಭವಿಷ್ಯವಾಣಿಗಳನ್ನು ಕ್ರಿಯೆಗಳಾಗಿ ಪರಿವರ್ತಿಸುವುದು ಹೇಗೆ - ಮತ್ತು ಜನರನ್ನು ಲೂಪ್‌ನಲ್ಲಿ ಇರಿಸುತ್ತದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "ಏನಾಗಬಹುದು ಎಂಬುದನ್ನು ಭವಿಷ್ಯವು ನಿಮಗೆ ಹೇಳುತ್ತದೆ. ಇದರ ಬಗ್ಗೆ ಏನು ಮಾಡಬೇಕೆಂದು **ಶಿಫಾರಸು** ನಿಮಗೆ ತಿಳಿಸುತ್ತದೆ. ಒಂದನ್ನು ಇನ್ನೊಂದಕ್ಕೆ ತಿರುಗಿಸಲು ಗುರಿಗಳು, ನಿರ್ಬಂಧಗಳು ಮತ್ತು ಸಂದರ್ಭದ ಅಗತ್ಯವಿದೆ.\n\n## ನೀರಾವರಿ ಉದಾಹರಣೆ\n\nಒಂದು ಕ್ಷೇತ್ರವು ನಾಳೆ 7 ಮಿಮೀ ನೀರನ್ನು ಬಳಸುತ್ತದೆ ಮತ್ತು ಮಣ್ಣಿನ ತೇವಾಂಶವು ಈಗಾಗಲೇ ಬೆಳೆ ಸಹಿಸಿಕೊಳ್ಳುವ ಕಡಿಮೆ ಮಿತಿಯಲ್ಲಿದೆ ಎಂದು ಒಂದು ಮಾದರಿ ಊಹಿಸುತ್ತದೆ ಎಂದು ಭಾವಿಸೋಣ. ಶಿಫಾರಸ್ಸು ವ್ಯವಸ್ಥೆಯು ಆ ಭವಿಷ್ಯವನ್ನು ಇದರೊಂದಿಗೆ ಸಂಯೋಜಿಸುತ್ತದೆ:\n\n- ** ಗುರಿಗಳು ** - ಇಳುವರಿ ಮತ್ತು ಗುಣಮಟ್ಟವನ್ನು ರಕ್ಷಿಸಿ, ತ್ಯಾಜ್ಯವನ್ನು ತಪ್ಪಿಸಿ;\n- ** ನಿರ್ಬಂಧಗಳು** - ಪಂಪ್ ಸಾಮರ್ಥ್ಯ, ಉಳಿದಿರುವ ನೀರಿನ ಹಂಚಿಕೆ, ವಿದ್ಯುತ್ ಸುಂಕಗಳು, ನೀರಾವರಿ ಸೆಟ್ ವೇಳಾಪಟ್ಟಿ;\n- ** ಸಂದರ್ಭ** - ಮುನ್ಸೂಚನೆ ಮಳೆ, ಬೆಳೆ ಹಂತ, ಒಣ ನೆಲದ ಅಗತ್ಯವಿರುವ ಯೋಜಿತ ಸುಗ್ಗಿಯ.\n\nಫಲಿತಾಂಶವು ಹೀಗಿರಬಹುದು: *\"ಇಂದು ರಾತ್ರಿ 6 ಗಂಟೆಗಳ ಕಾಲ (ಸುಮಾರು 18 ಮಿಮೀ) ಬ್ಲಾಕ್ 4 ಅನ್ನು ನೀರಾವರಿ ಮಾಡಿ. ಬ್ಲಾಕ್ 7 ಅನ್ನು ಬಿಟ್ಟುಬಿಡಿ: 12 ಮಿಮೀ ಮಳೆಯ ಬಗ್ಗೆ ಹೆಚ್ಚಿನ ವಿಶ್ವಾಸದಿಂದ ಮುನ್ಸೂಚನೆ ನೀಡಲಾಗಿದೆ.\"*\n\n## ಉತ್ತಮ ಶಿಫಾರಸುಗಳು ತಮ್ಮನ್ನು ವಿವರಿಸುತ್ತವೆ\n\nನೀವು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಸಾಧ್ಯವಾಗದ ಶಿಫಾರಸು ನೀವು ನಿರ್ಣಯಿಸಲಾಗದ ಶಿಫಾರಸು. ತೋರಿಸುವ ವ್ಯವಸ್ಥೆಗಳಿಗಾಗಿ ನೋಡಿ:\n\n- **ಕಾರಣ** - ಯಾವ ಡೇಟಾ ಮತ್ತು ಯಾವ ಮುನ್ಸೂಚನೆಯು ಸಲಹೆಯನ್ನು ನೀಡಿತು;\n- **ವಿಶ್ವಾಸಾರ್ಹ** - ವ್ಯವಸ್ಥೆಯು ಎಷ್ಟು ಖಚಿತವಾಗಿದೆ;\n- **ಪರ್ಯಾಯಗಳು** - ನೀವು ಕಾಯುತ್ತಿದ್ದರೆ ಅಥವಾ ಕಡಿಮೆ ಅನ್ವಯಿಸಿದರೆ ಏನಾಗುತ್ತದೆ;\n- **ಸಾಕ್ಷಾಧಾರದ ಜಾಡು** — ಆದ್ದರಿಂದ ನೀವು ಕ್ರಿಯೆಯು ಸಂಭವಿಸಿದೆಯೇ ಮತ್ತು ಕೆಲಸ ಮಾಡಿದೆಯೇ ಎಂದು ನಂತರ ಪರಿಶೀಲಿಸಬಹುದು.\n\n## ಜನರನ್ನು ಲೂಪ್‌ನಲ್ಲಿ ಇರಿಸುವುದು\n\nಕೃಷಿಯಲ್ಲಿ, ಹೆಚ್ಚಿನ AI ** ನಿರ್ಧಾರ ಬೆಂಬಲ**: ವ್ಯವಸ್ಥೆಯು ಪ್ರಸ್ತಾಪಿಸುತ್ತದೆ, ಒಬ್ಬ ವ್ಯಕ್ತಿಯು ನಿರ್ಧರಿಸುತ್ತಾನೆ. ಯಾಂತ್ರೀಕೃತಗೊಂಡ ಕ್ರಿಯೆಗಳನ್ನು ಕಾರ್ಯಗತಗೊಳಿಸಿದರೂ ಸಹ - ಉದಾಹರಣೆಗೆ, ಕವಾಟವನ್ನು ತೆರೆಯುವ ನಿಯಂತ್ರಕ - ಜವಾಬ್ದಾರಿಯುತ ವಿನ್ಯಾಸಗಳು ಅನುಮೋದನೆಯ ಹಂತಗಳು, ಮಿತಿಗಳು ಮತ್ತು ಅತಿಕ್ರಮಿಸುವ ಸಾಮರ್ಥ್ಯವನ್ನು ಒಳಗೊಂಡಿರುತ್ತವೆ.\n\n> **ಪ್ರಮುಖ ಕಲ್ಪನೆ:** ಫಲಿತಾಂಶಕ್ಕೆ ಜವಾಬ್ದಾರರಾಗಿರುವ ವ್ಯಕ್ತಿಯು ಯಾವಾಗಲೂ ಏಕೆ ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ ಎಂಬುದನ್ನು ನೋಡಲು ಸಾಧ್ಯವಾಗುತ್ತದೆ, ಅದನ್ನು ಬದಲಾಯಿಸಬಹುದು ಮತ್ತು ಅದನ್ನು ನಿಲ್ಲಿಸಬೇಕು.\n\n## ಲೂಪ್ ಅನ್ನು ಮುಚ್ಚುವುದು: ಪರಿಶೀಲನೆ\n\nಅತ್ಯಮೂಲ್ಯವಾದ ವ್ಯವಸ್ಥೆಗಳು ಶಿಫಾರಸಿನಲ್ಲಿ ನಿಲ್ಲುವುದಿಲ್ಲ. ನಿಜವಾಗಿ ಏನು ಮಾಡಲಾಗಿದೆ ಮತ್ತು ಮುಂದೆ ಏನಾಯಿತು ಎಂದು ಅವರು ಪರಿಶೀಲಿಸುತ್ತಾರೆ: ನೀರಾವರಿ ಚಾಲನೆಯಲ್ಲಿದೆಯೇ? ಎಷ್ಟು ನೀರು ಹಾಕಲಾಗಿದೆ? ನಿರೀಕ್ಷೆಯಂತೆ ಮಣ್ಣಿನ ತೇವಾಂಶ ಚೇತರಿಸಿಕೊಂಡಿದೆಯೇ? ಈ **ಪರಿಶೀಲನೆ** ಹಂತವು ನಂಬಿಕೆಯನ್ನು ನಿರ್ಮಿಸುತ್ತದೆ, ಸಲಕರಣೆಗಳ ಸಮಸ್ಯೆಗಳನ್ನು ಹಿಡಿಯುತ್ತದೆ ಮತ್ತು ಖರೀದಿದಾರರು, ಲೆಕ್ಕಪರಿಶೋಧಕರು ಮತ್ತು ನೀರಿನ ಅಧಿಕಾರಿಗಳು ಹೆಚ್ಚು ಕೇಳುವ ಪುರಾವೆಗಳನ್ನು ಉತ್ಪಾದಿಸುತ್ತದೆ.\n\nಮಾಡ್ಯೂಲ್ 1 ರಿಂದ ಲೂಪ್ ಅನ್ನು ನೆನಪಿಡಿ: ** ಸೆನ್ಸ್ → ಊಹಿಸಿ → ಶಿಫಾರಸು → ಪರಿಶೀಲಿಸು**. ಲೂಪ್‌ನ ಪ್ರತಿಯೊಂದು ತಿರುವು ಮುಂದಿನ ಋತುವಿಗಾಗಿ ನಿರ್ಧಾರಗಳು ಮತ್ತು ಡೇಟಾ ಎರಡನ್ನೂ ಸುಧಾರಿಸುತ್ತದೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "ಕೋರ್ಸ್ ಸಾರಾಂಶ ಮತ್ತು ಮುಂದಿನ ಹಂತಗಳು",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "ಪ್ರಮುಖ ಟೇಕ್‌ಅವೇಗಳು ಮತ್ತು ಅಂತಿಮ ಪರೀಕ್ಷೆಗೆ ಹೇಗೆ ತಯಾರಿ ಮಾಡುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "ಕೋರ್ಸ್‌ನ ಅಂತ್ಯವನ್ನು ತಲುಪಿದ್ದಕ್ಕಾಗಿ ಅಭಿನಂದನೆಗಳು. ಮುಖ್ಯ ವಿಚಾರಗಳನ್ನು ಒಟ್ಟಿಗೆ ತರೋಣ.\n\n## ಪ್ರಮುಖ ಟೇಕ್‌ಅವೇಗಳು\n\n- **AI ಒಂದು ಟೂಲ್‌ಬಾಕ್ಸ್**, ಒಂದೇ ತಂತ್ರಜ್ಞಾನವಲ್ಲ. ನಿಯಮಗಳು, ಯಂತ್ರ ಕಲಿಕೆ, ಆಳವಾದ ಕಲಿಕೆ ಮತ್ತು ಉತ್ಪಾದಕ AI ವಿವಿಧ ಸಮಸ್ಯೆಗಳಿಗೆ ಸರಿಹೊಂದುತ್ತದೆ.\n- **ದತ್ತಾಂಶವು ಅಡಿಪಾಯವಾಗಿದೆ.** ನಿಖರತೆ, ಸಂಪೂರ್ಣತೆ, ಸಮಯಪ್ರಜ್ಞೆ, ಸ್ಥಿರತೆ ಮತ್ತು ಪ್ರಾತಿನಿಧ್ಯವು ಯಾವುದೇ ಮಾದರಿಯು ಏನು ಮಾಡಬಹುದು ಎಂಬುದನ್ನು ನಿರ್ಧರಿಸುತ್ತದೆ.\n- **ಮಾದರಿಗಳು ಉದಾಹರಣೆಗಳಿಂದ ಕಲಿಯುತ್ತವೆ** ಮತ್ತು ಅವರು ಎಂದಿಗೂ ನೋಡಿರದ ಡೇಟಾವನ್ನು ಮೌಲ್ಯೀಕರಿಸಬೇಕು. ಪ್ರತಿ ಭವಿಷ್ಯವು ಅನಿಶ್ಚಿತತೆಯನ್ನು ಹೊಂದಿದೆ ಮತ್ತು ಮಾದರಿಗಳು ಚಲಿಸಬಹುದು.\n- **ಶಿಫಾರಸುಗಳು ಮುನ್ನೋಟಗಳನ್ನು ಗುರಿಗಳು, ನಿರ್ಬಂಧಗಳು ಮತ್ತು ಸಂದರ್ಭದೊಂದಿಗೆ ಸಂಯೋಜಿಸುತ್ತವೆ.** ಒಳ್ಳೆಯವರು ತಮ್ಮನ್ನು ತಾವು ವಿವರಿಸುತ್ತಾರೆ.\n- ** ಲೂಪ್ ವಿಷಯಗಳು:** ಅರ್ಥ → ಊಹಿಸಿ → ಶಿಫಾರಸು → ಪರಿಶೀಲಿಸಿ.\n- **ಋತುವಿನಾದ್ಯಂತ**, AI ಯೋಜನೆ, ನೀರಾವರಿ, ಬೆಳೆ ಮೇಲ್ವಿಚಾರಣೆ, ಕೊಯ್ಲು ಸಮಯ, ಮಾರುಕಟ್ಟೆ ಮತ್ತು ಪತ್ತೆಹಚ್ಚುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುತ್ತದೆ.\n- **ಕ್ಯಾಲಿಬ್ರೇಟೆಡ್ ಟ್ರಸ್ಟ್ ಅನ್ನು ಬಳಸಿ.** ಕ್ಷೇತ್ರದೊಂದಿಗೆ ಘರ್ಷಣೆಯಾಗುವ ಶಿಫಾರಸುಗಳನ್ನು ಸವಾಲು ಮಾಡಿ, ಕಳಪೆ ಡೇಟಾದ ಮೇಲೆ ವಿಶ್ರಾಂತಿ ಪಡೆಯಿರಿ ಅಥವಾ ಹೆಚ್ಚಿನ ಪಾಲನ್ನು ಹೊಂದಿರಿ.\n- **ನಿಮ್ಮ ಡೇಟಾ ಕಾಳಜಿಗೆ ಅರ್ಹವಾಗಿದೆ.** ಅದನ್ನು ಯಾರು ಹೊಂದಿದ್ದಾರೆ, ಅದನ್ನು ಹೇಗೆ ಬಳಸಲಾಗುತ್ತದೆ ಮತ್ತು ಅದನ್ನು ಹೇಗೆ ಹಿಂಪಡೆಯಬೇಕು ಎಂಬುದನ್ನು ತಿಳಿದುಕೊಳ್ಳಿ.\n\n## ಅಂತಿಮ ಪರೀಕ್ಷೆಗೆ ತಯಾರಿ\n\nಅಂತಿಮ ಪರೀಕ್ಷೆಯು ಎಲ್ಲಾ ನಾಲ್ಕು ಮಾಡ್ಯೂಲ್‌ಗಳನ್ನು ಒಳಗೊಂಡಿದೆ. ಇದು ದೊಡ್ಡ ಬ್ಯಾಂಕ್‌ನಿಂದ 20 ಪ್ರಶ್ನೆಗಳನ್ನು ಸೆಳೆಯುತ್ತದೆ ಮತ್ತು ನಿಮಗೆ 30 ನಿಮಿಷಗಳನ್ನು ನೀಡುತ್ತದೆ. ಉತ್ತೀರ್ಣರಾಗಲು ನಿಮಗೆ **80%** ಅಗತ್ಯವಿದೆ.\n\n> **ಸಲಹೆ:** ನಿಮ್ಮ ಟಿಪ್ಪಣಿಗಳು ಮತ್ತು ಮಾಡ್ಯೂಲ್ ರಸಪ್ರಶ್ನೆಗಳನ್ನು ಪರಿಶೀಲಿಸಿ. ನೀವು ರಸಪ್ರಶ್ನೆ ಪ್ರಶ್ನೆಯನ್ನು ತಪ್ಪಿಸಿಕೊಂಡರೆ, ಪರೀಕ್ಷೆಯ ಮೊದಲು ಅದು ಸೂಚಿಸುವ ಪಾಠವನ್ನು ತೆರೆಯಿರಿ.\n\n## ಮುಂದೆ ಎಲ್ಲಿಗೆ ಹೋಗಬೇಕು\n\n- **ಕೃಷಿ ಡೇಟಾ ಫಂಡಮೆಂಟಲ್ಸ್** ಡೇಟಾ ಮೂಲಗಳು ಮತ್ತು ಗುಣಮಟ್ಟಕ್ಕೆ ಆಳವಾಗಿ ಹೋಗುತ್ತದೆ.\n- **ರಿಮೋಟ್ ಸೆನ್ಸಿಂಗ್ ಮತ್ತು ಸ್ಯಾಟಲೈಟ್ ಇಂಟೆಲಿಜೆನ್ಸ್** ಚಿತ್ರಣ ಮತ್ತು ಸಸ್ಯವರ್ಗದ ಸೂಚ್ಯಂಕಗಳ ಮೇಲೆ ವಿಸ್ತರಿಸುತ್ತದೆ.\n- **AI-ಚಾಲಿತ ನೀರಾವರಿ** ಈ ವಿಚಾರಗಳನ್ನು ನೀರಿನ ನಿರ್ವಹಣೆಗೆ ವಿವರವಾಗಿ ಅನ್ವಯಿಸುತ್ತದೆ.\n\nAGRO-AI ಅಕಾಡೆಮಿಯೊಂದಿಗೆ ಕಲಿತಿದ್ದಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು. ನೀವು ಸಿದ್ಧರಾದಾಗ, ಕೋರ್ಸ್ ಮೆನುವಿನಿಂದ ಅಂತಿಮ ಪರೀಕ್ಷೆಯನ್ನು ತೆರೆಯಿರಿ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "ಕೋರ್ಸ್‌ಗೆ ಸ್ವಾಗತ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "ನೀವು ಏನು ಕಲಿಯುವಿರಿ, ಕೋರ್ಸ್ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಮತ್ತು ನಿಮ್ಮ ಪ್ರಮಾಣಪತ್ರವನ್ನು ಹೇಗೆ ಗಳಿಸುವುದು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "AGRO-AI ಅಕಾಡೆಮಿ *ಫೌಂಡೇಶನ್ಸ್ ಆಫ್ ಅಗ್ರಿಕಲ್ಚರಲ್ AI* ಕಾರ್ಯಕ್ರಮದ ಮೊದಲ ಕೋರ್ಸ್ **ಕೃಷಿಯಲ್ಲಿ ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆಯ ಪರಿಚಯ** ಗೆ ಸುಸ್ವಾಗತ.\n\nಇಲ್ಲಿ ಯಶಸ್ವಿಯಾಗಲು ನಿಮಗೆ ಯಾವುದೇ ತಾಂತ್ರಿಕ ಹಿನ್ನೆಲೆ ಅಗತ್ಯವಿಲ್ಲ. ನೀವು ಎಂದಾದರೂ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆಯನ್ನು ನೋಡಿದ್ದರೆ, ಮಣ್ಣಿನ ಪರೀಕ್ಷೆಯನ್ನು ಓದಿದ್ದರೆ ಅಥವಾ ಎರಡು ಕ್ಷೇತ್ರಗಳ ನಡುವಿನ ಇಳುವರಿಯನ್ನು ಹೋಲಿಸಿದರೆ, ನೀವು ಈಗಾಗಲೇ ಈ ಕೋರ್ಸ್ ನಿರ್ಮಿಸುವ ಮನಸ್ಸಿನ ಅಭ್ಯಾಸಗಳನ್ನು ಬಳಸುತ್ತೀರಿ: ಪುರಾವೆಗಳನ್ನು ಸಂಗ್ರಹಿಸುವುದು, ಮಾದರಿಗಳನ್ನು ಗುರುತಿಸುವುದು ಮತ್ತು ಮುಂದೆ ಏನು ಮಾಡಬೇಕೆಂದು ನಿರ್ಧರಿಸುವುದು.\n\n## ನೀವು ಏನು ಕಲಿಯುವಿರಿ\n\nಕೋರ್ಸ್ ಅಂತ್ಯದ ವೇಳೆಗೆ ನೀವು ಹೀಗೆ ಮಾಡಬಹುದು:\n\n- AI ಏನೆಂದು ವಿವರಿಸಿ — ಮತ್ತು ಅಲ್ಲ — ಸರಳ ಭಾಷೆಯಲ್ಲಿ;\n- ಕೃಷಿ ಡೇಟಾ ಎಲ್ಲಿಂದ ಬರುತ್ತದೆ ಮತ್ತು ಅದನ್ನು ವಿಶ್ವಾಸಾರ್ಹವಾಗಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ವಿವರಿಸಿ;\n- ಡೇಟಾ ಹೇಗೆ ಮುನ್ಸೂಚನೆಯಾಗುತ್ತದೆ ಮತ್ತು ಭವಿಷ್ಯವು ಶಿಫಾರಸು ಆಗುತ್ತದೆ ಎಂಬುದನ್ನು ಅನುಸರಿಸಿ;\n- ಋತುವಿನಾದ್ಯಂತ ಉಪಯುಕ್ತ AI ಅಪ್ಲಿಕೇಶನ್‌ಗಳನ್ನು ಗುರುತಿಸಿ;\n- AI ಔಟ್‌ಪುಟ್ ಅನ್ನು ವಿಮರ್ಶಾತ್ಮಕವಾಗಿ ನಿರ್ಣಯಿಸಿ ಮತ್ತು ಅದನ್ನು ಜವಾಬ್ದಾರಿಯುತವಾಗಿ ಬಳಸಿ.\n\n## ಕೋರ್ಸ್ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ\n\nಕೋರ್ಸ್ ಸಣ್ಣ ಪಾಠಗಳ **ನಾಲ್ಕು ಮಾಡ್ಯೂಲ್‌ಗಳನ್ನು** ಹೊಂದಿದೆ. ನಿಮ್ಮ ತಿಳುವಳಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಲು ಸಹಾಯ ಮಾಡುವ ಅಭ್ಯಾಸ ರಸಪ್ರಶ್ನೆಯೊಂದಿಗೆ ಒಂದರಿಂದ ಮೂರು ಪ್ರತಿ ಕೊನೆಯಲ್ಲಿ ಮಾಡ್ಯೂಲ್‌ಗಳು; ಪ್ರಾಯೋಗಿಕ ವ್ಯಾಯಾಮ ಮತ್ತು ಅಂತಿಮ ಪರೀಕ್ಷೆಗೆ ನಿಮ್ಮನ್ನು ಸಿದ್ಧಪಡಿಸುವ ಕೋರ್ಸ್ ಸಾರಾಂಶದೊಂದಿಗೆ ಮಾಡ್ಯೂಲ್ ನಾಲ್ಕು ಕೊನೆಗೊಳ್ಳುತ್ತದೆ. ರಸಪ್ರಶ್ನೆಗಳು ನಿಮ್ಮ ಪ್ರಮಾಣಪತ್ರದ ಕಡೆಗೆ ಎಣಿಸುವುದಿಲ್ಲ ಮತ್ತು ನೀವು ಬಯಸಿದಷ್ಟು ಬಾರಿ ನೀವು ಅವುಗಳನ್ನು ಮರುಪಡೆಯಬಹುದು.\n\nನಿಮ್ಮ ಪ್ರಗತಿಯನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಉಳಿಸಲಾಗುತ್ತದೆ. ನಿಮ್ಮ ಫೋನ್‌ನಲ್ಲಿ ನೀವು ಪಾಠವನ್ನು ಮಧ್ಯದಲ್ಲಿ ನಿಲ್ಲಿಸಬಹುದು ಮತ್ತು ನಂತರ ಕಂಪ್ಯೂಟರ್‌ನಲ್ಲಿ ಮುಂದುವರಿಸಬಹುದು.\n\n> **ಸಲಹೆ:** ನಿಮ್ಮ ಸ್ವಂತ ಕಾರ್ಯಾಚರಣೆಗೆ ಅನ್ವಯಿಸುವ ವಿಚಾರಗಳನ್ನು ಬರೆಯಲು ಪ್ರತಿ ಪಾಠದ ಅಡಿಯಲ್ಲಿ **ಟಿಪ್ಪಣಿಗಳು** ಟ್ಯಾಬ್ ಅನ್ನು ಬಳಸಿ. ಟಿಪ್ಪಣಿಗಳು ಖಾಸಗಿಯಾಗಿವೆ - ನೀವು ಮಾತ್ರ ಅವುಗಳನ್ನು ನೋಡಬಹುದು.\n\n## ನಿಮ್ಮ ಪ್ರಮಾಣಪತ್ರವನ್ನು ಗಳಿಸುವುದು\n\nಅಗತ್ಯವಿರುವ ಪ್ರತಿಯೊಂದು ಪಾಠವನ್ನು ನೀವು ಪೂರ್ಣಗೊಳಿಸಿದಾಗ, **ಅಂತಿಮ ಪರೀಕ್ಷೆ** ಅನ್‌ಲಾಕ್ ಆಗುತ್ತದೆ. ಇದು ದೊಡ್ಡ ಬ್ಯಾಂಕ್‌ನಿಂದ 20 ಪ್ರಶ್ನೆಗಳನ್ನು ಸೆಳೆಯುತ್ತದೆ, 30 ನಿಮಿಷಗಳಲ್ಲಿ ಸಮಯ ನಿಗದಿಪಡಿಸಲಾಗಿದೆ ಮತ್ತು ಉತ್ತೀರ್ಣರಾಗಲು **80%** ಸ್ಕೋರ್ ಅಗತ್ಯವಿದೆ. ನೀವು ಮೊದಲ ಪ್ರಯತ್ನದಲ್ಲಿ ಉತ್ತೀರ್ಣರಾಗದಿದ್ದರೆ, ನೀವು ಶಿಫಾರಸು ಮಾಡಿದ ಪಾಠಗಳನ್ನು ಪರಿಶೀಲಿಸಬಹುದು ಮತ್ತು ಒಂದು ಗಂಟೆಯ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಬಹುದು.\n\nಪರೀಕ್ಷೆಯಲ್ಲಿ ಉತ್ತೀರ್ಣರಾಗಿ ಮತ್ತು AGRO-AI ಅಕಾಡೆಮಿ ನಿಮ್ಮ ಪ್ರಮಾಣಪತ್ರವನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನೀಡುತ್ತದೆ — ಉಚಿತ, ಅನನ್ಯ ರುಜುವಾತು ID ಮತ್ತು ಸಾರ್ವಜನಿಕ ಪರಿಶೀಲನೆ ಪುಟದೊಂದಿಗೆ ನೀವು ಲಿಂಕ್ಡ್‌ಇನ್‌ನಲ್ಲಿ ಹಂಚಿಕೊಳ್ಳಬಹುದು.\n\nಆರಂಭಿಸೋಣ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "ನಿಯಮಗಳಿಂದ ಕಲಿಕೆಯವರೆಗೆ: AI ಎಂದರೇನು (ಮತ್ತು ಅಲ್ಲ)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "AI, ಯಂತ್ರ ಕಲಿಕೆ, ಆಳವಾದ ಕಲಿಕೆ ಮತ್ತು ಉತ್ಪಾದಕ AI ಯ ಸರಳ-ಭಾಷೆಯ ವ್ಯಾಖ್ಯಾನಗಳು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ\" ಅನ್ನು ಸರಳ ಸಂವೇದಕ ಎಚ್ಚರಿಕೆಯಿಂದ ಹಿಡಿದು ಪ್ರಬಂಧಗಳನ್ನು ಬರೆಯುವ ಚಾಟ್‌ಬಾಟ್‌ವರೆಗೆ ಎಲ್ಲವನ್ನೂ ವಿವರಿಸಲು ಬಳಸಲಾಗುತ್ತದೆ. ಕೃಷಿಯನ್ನು ನೋಡುವ ಮೊದಲು ಸ್ಪಷ್ಟವಾದ ಮಾತುಗಳು ಬೇಕು.\n\n## ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ\n\n**ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ (AI)** ನಾವು ಸಾಮಾನ್ಯವಾಗಿ ಮಾನವ ಬುದ್ಧಿಮತ್ತೆಯೊಂದಿಗೆ ಸಂಯೋಜಿಸುವ ಕಾರ್ಯಗಳನ್ನು ನಿರ್ವಹಿಸುವ ಕಂಪ್ಯೂಟರ್ ಸಿಸ್ಟಮ್‌ಗಳನ್ನು ನಿರ್ಮಿಸುವ ವಿಶಾಲ ಕ್ಷೇತ್ರವಾಗಿದೆ: ಮಾದರಿಗಳನ್ನು ಗುರುತಿಸುವುದು, ಭವಿಷ್ಯ ನುಡಿಯುವುದು, ಭಾಷೆಯನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳುವುದು ಮತ್ತು ಕ್ರಿಯೆಗಳನ್ನು ಆರಿಸಿಕೊಳ್ಳುವುದು.\n\nಆ ವ್ಯಾಖ್ಯಾನವು ಉದ್ದೇಶಪೂರ್ವಕವಾಗಿದೆ. ಇದು ವಿಭಿನ್ನ ತಂತ್ರಜ್ಞಾನಗಳನ್ನು ಒಳಗೊಂಡಿದೆ, ಆದ್ದರಿಂದ ಅವುಗಳನ್ನು ನಿರ್ಮಿಸುವ ಎರಡು ವಿಧಾನಗಳನ್ನು ಪ್ರತ್ಯೇಕಿಸಲು ಸಹಾಯ ಮಾಡುತ್ತದೆ.\n\n## ಕಲಿಕೆಯ ವಿರುದ್ಧ ನಿಯಮಗಳು\n\n**ನಿಯಮ ಆಧಾರಿತ ವ್ಯವಸ್ಥೆಗಳು** ಜನರು ಬರೆದ ಸೂಚನೆಗಳನ್ನು ಅನುಸರಿಸಿ. *\"ಮಣ್ಣಿನ ತೇವಾಂಶವು 25% ಕ್ಕಿಂತ ಕಡಿಮೆಯಿದ್ದರೆ, ಪಂಪ್ ಅನ್ನು ಪ್ರಾರಂಭಿಸಿ\"* ಎಂದು ಹೇಳುವ ನೀರಾವರಿ ನಿಯಂತ್ರಕವು ನಿಯಮವನ್ನು ಅನುಸರಿಸುತ್ತಿದೆ. ನಿಯಮಗಳು ಪಾರದರ್ಶಕ ಮತ್ತು ಊಹಿಸಬಹುದಾದವು, ಆದರೆ ಯಾರಾದರೂ ಸರಿಯಾದ ನಿಯಮವನ್ನು ಮುಂಚಿತವಾಗಿ ತಿಳಿದುಕೊಳ್ಳಬೇಕು ಮತ್ತು ಪರಿಸ್ಥಿತಿಗಳು ಬದಲಾದಾಗ ನಿಯಮಗಳು ಹೊಂದಿಕೊಳ್ಳುವುದಿಲ್ಲ.\n\n**ಮೆಷಿನ್ ಲರ್ನಿಂಗ್ (ML)** ವ್ಯವಸ್ಥೆಗಳು ಉದಾಹರಣೆಗಳಿಂದ ಮಾದರಿಗಳನ್ನು ಕಲಿಯುತ್ತವೆ. ಹವಾಮಾನ, ಮಣ್ಣು, ನೀರಾವರಿ ಮತ್ತು ನಂತರದ ಇಳುವರಿ - ಸಾವಿರಾರು ಹಿಂದಿನ ಋತುಗಳ ಮಾದರಿಯನ್ನು ತೋರಿಸಿ ಮತ್ತು ಯಾರೂ ಸ್ಪಷ್ಟವಾಗಿ ಬರೆಯದ ಸಂಬಂಧಗಳನ್ನು ಅದು ಕಲಿಯಬಹುದು. ಇಂದು ಜನರು \"AI\" ಎಂದು ಕರೆಯುವ ಹೆಚ್ಚಿನವು ಯಂತ್ರ ಕಲಿಕೆಯಾಗಿದೆ.\n\n| | ನಿಯಮಾಧಾರಿತ ವ್ಯವಸ್ಥೆ | ಯಂತ್ರ ಕಲಿಕೆಯ ಮಾದರಿ |\n|---|---|---|\n| ತರ್ಕ ಎಲ್ಲಿಂದ ಬರುತ್ತದೆ | ಜನರು ಅದನ್ನು ಬರೆಯುತ್ತಾರೆ | ಡೇಟಾದಿಂದ ಕಲಿತ |\n| ಬಲ | ಪಾರದರ್ಶಕ, ಊಹಿಸಬಹುದಾದ | ಸಂಕೀರ್ಣ ಮಾದರಿಗಳನ್ನು ಕಂಡುಕೊಳ್ಳುತ್ತದೆ, ಹೊಸ ಡೇಟಾದೊಂದಿಗೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ |\n| ದೌರ್ಬಲ್ಯ | ರಿಜಿಡ್; ವಿನ್ಯಾಸಕರು ಏನನ್ನು ಊಹಿಸಲಿಲ್ಲವೋ ಅದನ್ನು ತಪ್ಪಿಸುತ್ತದೆ | ಅದರ ಡೇಟಾದಷ್ಟು ಮಾತ್ರ ಉತ್ತಮವಾಗಿದೆ; ವಿವರಿಸಲು ಕಷ್ಟವಾಗಬಹುದು |\n| ಫಾರ್ಮ್ ಉದಾಹರಣೆ | ತೇವಾಂಶದ ಮಿತಿಗಿಂತ ಕೆಳಗೆ ಪಂಪ್ ಪ್ರಾರಂಭವಾಗುತ್ತದೆ | ನಾಳಿನ ಬೆಳೆ ನೀರಿನ ಬಳಕೆಯ ಭವಿಷ್ಯ ನುಡಿದ ಮಾದರಿ |\n\n## ಆಳವಾದ ಕಲಿಕೆ\n\n**ಡೀಪ್ ಲರ್ನಿಂಗ್** ಎನ್ನುವುದು ಅನೇಕ-ಲೇಯರ್‌ಗಳ \"ನರ ಜಾಲಗಳಿಂದ\" ನಿರ್ಮಿಸಲಾದ ಯಂತ್ರ ಕಲಿಕೆಯ ವಿಧಾನಗಳ ಕುಟುಂಬವಾಗಿದೆ. ಚಿತ್ರಗಳು ಮತ್ತು ಧ್ವನಿಯಂತಹ ಗೊಂದಲಮಯ, ಹೆಚ್ಚಿನ ಆಯಾಮದ ಡೇಟಾದಲ್ಲಿ ಇದು ವಿಶೇಷವಾಗಿ ಉತ್ತಮವಾಗಿದೆ. ಫೋನ್ ಅಪ್ಲಿಕೇಶನ್ ಫೋಟೋದಿಂದ ಎಲೆ ರೋಗವನ್ನು ಗುರುತಿಸಿದಾಗ, ಆಳವಾದ ಕಲಿಕೆಯು ಸಾಮಾನ್ಯವಾಗಿ ಅದರ ಹಿಂದೆ ಇರುತ್ತದೆ.\n\n## ಜನರೇಟಿವ್ AI\n\n**ಜನರೇಟಿವ್ AI** ಹೊಸ ವಿಷಯವನ್ನು ರಚಿಸುತ್ತದೆ - ಪಠ್ಯ, ಚಿತ್ರಗಳು, ಆಡಿಯೋ ಅಥವಾ ಕೋಡ್ - ಅತಿ ದೊಡ್ಡ ಡೇಟಾಸೆಟ್‌ಗಳಿಂದ ಕಲಿತ ಮಾದರಿಗಳ ಆಧಾರದ ಮೇಲೆ. ದೊಡ್ಡ ಭಾಷಾ ಮಾದರಿಗಳು (LLMಗಳು), ಸಂಭಾಷಣಾ ಸಹಾಯಕರ ಹಿಂದಿನ ತಂತ್ರಜ್ಞಾನವು AI ಅನ್ನು ಉತ್ಪಾದಿಸುತ್ತದೆ. ಅವರು ಪರಿಕಲ್ಪನೆಗಳನ್ನು ವಿವರಿಸಬಹುದು, ವರದಿಗಳನ್ನು ಸಾರಾಂಶ ಮಾಡಬಹುದು ಮತ್ತು ಅನೇಕ ಭಾಷೆಗಳಲ್ಲಿ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸಬಹುದು.\n\nಜನರೇಟಿವ್ AI ಶಕ್ತಿಯುತವಾಗಿದೆ, ಆದರೆ ಇದು *ಕಾಣಬಹುದಾದ* ಪದಗಳನ್ನು ಮುನ್ಸೂಚಿಸುತ್ತದೆ, ಪರಿಶೀಲಿಸಿದ ಸತ್ಯಗಳಲ್ಲ. ಇದು ಸಂಪೂರ್ಣ ವಿಶ್ವಾಸದಿಂದ ಸುಳ್ಳನ್ನು ಹೇಳಬಹುದು. ಕೃಷಿಯಲ್ಲಿ, ಉತ್ಪಾದಕ ಸಹಾಯಕವು ವಿವರಿಸಲು ಮತ್ತು ಕರಡು ರಚನೆಗೆ ಉಪಯುಕ್ತವಾಗಿದೆ, ಆದರೆ ಪ್ರಮುಖ ಸಂಖ್ಯೆಗಳು ಮತ್ತು ನಿರ್ಧಾರಗಳನ್ನು ವಿಶ್ವಾಸಾರ್ಹ ಡೇಟಾದ ವಿರುದ್ಧ ಪರಿಶೀಲಿಸಬೇಕು.\n\n> **ಪ್ರಮುಖ ಕಲ್ಪನೆ:** AI ಒಂದು ಯಂತ್ರವಲ್ಲ. ಇದು ಟೂಲ್ ಬಾಕ್ಸ್ ಆಗಿದೆ. ನಿಯಮಗಳು, ಸಂಖ್ಯಾಶಾಸ್ತ್ರೀಯ ಮಾದರಿಗಳು, ಆಳವಾದ ಕಲಿಕೆ ಮತ್ತು ಉತ್ಪಾದಕ ಮಾದರಿಗಳು ಪ್ರತಿಯೊಂದೂ ವಿಭಿನ್ನ ಸಮಸ್ಯೆಗಳಿಗೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತವೆ.\n\n## ಏನು AI ಅಲ್ಲ\n\n- **AI ಮ್ಯಾಜಿಕ್ ಅಲ್ಲ.** ಪ್ರತಿಯೊಂದು ಔಟ್‌ಪುಟ್ ಜನರು ಮಾಡಿದ ಡೇಟಾ ಮತ್ತು ವಿನ್ಯಾಸದ ಆಯ್ಕೆಗಳಿಂದ ಬರುತ್ತದೆ.\n- **AI ನಿಮ್ಮ ಫಾರ್ಮ್ ಅನ್ನು \"ಅರ್ಥಮಾಡಿಕೊಳ್ಳುವುದಿಲ್ಲ\"** ನೀವು ಮಾಡುವ ರೀತಿಯಲ್ಲಿ. ಅದರ ಡೇಟಾವನ್ನು ಸೆರೆಹಿಡಿಯಲಾಗಿದೆ ಎಂಬುದನ್ನು ಮಾತ್ರ ಅದು ತಿಳಿದಿದೆ.\n- **AI ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಸರಿಯಾಗಿಲ್ಲ.** ಭವಿಷ್ಯವಾಣಿಗಳು ಅನಿಶ್ಚಿತತೆಯನ್ನು ಹೊಂದಿರುತ್ತವೆ ಮತ್ತು ಉತ್ತಮ ವ್ಯವಸ್ಥೆಗಳು ಎಷ್ಟು ಎಂದು ನಿಮಗೆ ತಿಳಿಸುತ್ತದೆ.\n- **AI ತೀರ್ಪನ್ನು ಬದಲಿಸುವುದಿಲ್ಲ.** ಇದು ನಿರ್ಧಾರ-ಬೆಂಬಲ ಸಾಧನವಾಗಿದೆ. ನಿರ್ಧಾರದ ಜವಾಬ್ದಾರಿ ಜನರ ಮೇಲಿರುತ್ತದೆ.\n\n## ನಿಮ್ಮ ತಿಳುವಳಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ\n\nನೀವು ಈಗಾಗಲೇ ಬಳಸುವ ಉಪಕರಣದ ಕುರಿತು ಯೋಚಿಸಿ - ಹವಾಮಾನ ಅಪ್ಲಿಕೇಶನ್, ಇಳುವರಿ ಮಾನಿಟರ್, ಸೂತ್ರಗಳೊಂದಿಗೆ ಸ್ಪ್ರೆಡ್‌ಶೀಟ್. ಅದರ ತರ್ಕವನ್ನು ನಿಯಮಗಳಂತೆ ಬರೆಯಲಾಗಿದೆಯೇ ಅಥವಾ ಡೇಟಾದಿಂದ ಕಲಿಯಲಾಗಿದೆಯೇ? ನಿಮ್ಮ ಟಿಪ್ಪಣಿಗಳಲ್ಲಿ ನಿಮ್ಮ ಉತ್ತರವನ್ನು ಬರೆಯಿರಿ; ನಾವು ಮಾಡ್ಯೂಲ್ 2 ರಲ್ಲಿ ಈ ಕಲ್ಪನೆಗೆ ಹಿಂತಿರುಗುತ್ತೇವೆ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "ಕೃಷಿ ಈಗ AI ಗೆ ಏಕೆ ತಿರುಗುತ್ತಿದೆ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "ಫಾರ್ಮ್‌ಗಳಲ್ಲಿ AI ಅಳವಡಿಕೆಗೆ ಕಾರಣವಾಗುವ ಒತ್ತಡಗಳು ಮತ್ತು ಅವಕಾಶಗಳು.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "ರೈತರು ಯಾವಾಗಲೂ ನಿರ್ಧಾರಗಳನ್ನು ತೆಗೆದುಕೊಳ್ಳಲು ಮಾಹಿತಿಯನ್ನು ಬಳಸುತ್ತಾರೆ. ಲಭ್ಯವಿರುವ ಮಾಹಿತಿಯ ಪ್ರಮಾಣ, ಅದನ್ನು ಬಳಸಬೇಕಾದ ವೇಗ ಮತ್ತು ಪ್ರತಿ ಸಂಪನ್ಮೂಲದ ಮೇಲಿನ ಒತ್ತಡವು ಬದಲಾಗಿದೆ.\n\n## ಆಧುನಿಕ ಫಾರ್ಮ್ ಮೇಲೆ ಒತ್ತಡಗಳು\n\n**ನೀರು.** ಕೃಷಿಯು ಪ್ರಪಂಚದಾದ್ಯಂತ ತಾಜಾ ನೀರಿನ ಅತಿ ದೊಡ್ಡ ಬಳಕೆದಾರ; UN ಆಹಾರ ಮತ್ತು ಕೃಷಿ ಸಂಸ್ಥೆ (FAO AQUASTAT) ಪ್ರಕಾರ, ಒಟ್ಟಾರೆಯಾಗಿ ಕೃಷಿ, ಹೆಚ್ಚಾಗಿ ನೀರಾವರಿ, ಜಾಗತಿಕ ಸಿಹಿನೀರಿನ ಹಿಂತೆಗೆದುಕೊಳ್ಳುವಿಕೆಯ ಸುಮಾರು 70% ನಷ್ಟಿದೆ. ಅನೇಕ ಪ್ರದೇಶಗಳಲ್ಲಿ, ಬೇಡಿಕೆ ಹೆಚ್ಚುತ್ತಿರುವಾಗ ನೀರಿನ ಹಂಚಿಕೆಗಳು ಕುಗ್ಗುತ್ತಿವೆ. ಪ್ರತಿ ನೀರಾವರಿ ನಿರ್ಧಾರವು ಮುಖ್ಯವಾಗಿದೆ.\n\n**ಹವಾಮಾನ ವ್ಯತ್ಯಾಸ.** ಋತುಗಳನ್ನು ಕಡಿಮೆ ಊಹಿಸಬಹುದಾಗಿದೆ. ಶಾಖದ ಅಲೆಗಳು, ಅನಿಯಮಿತ ಮಳೆ ಮತ್ತು ಹೊಸ ಕೀಟ ಒತ್ತಡಗಳು ಕಳೆದ ವರ್ಷದ ಪ್ಲೇಬುಕ್ ಅನ್ನು ಕಡಿಮೆ ವಿಶ್ವಾಸಾರ್ಹವಾಗಿಸುತ್ತದೆ.\n\n**ವೆಚ್ಚಗಳು ಮತ್ತು ಅಂಚುಗಳು.** ರಸಗೊಬ್ಬರ, ಶಕ್ತಿ, ಕಾರ್ಮಿಕ ಮತ್ತು ಸಲಕರಣೆಗಳ ವೆಚ್ಚಗಳು ತೀವ್ರವಾಗಿ ಸ್ವಿಂಗ್ ಆಗಬಹುದು. ಸರಿಯಾದ ಸ್ಥಳದಲ್ಲಿ ಸರಿಯಾದ ಪ್ರಮಾಣವನ್ನು ಅನ್ವಯಿಸುವುದರಿಂದ ಅಂಚು ಮತ್ತು ಪರಿಸರ ಎರಡನ್ನೂ ರಕ್ಷಿಸುತ್ತದೆ.\n\n**ಕಾರ್ಮಿಕ.** ಅನೇಕ ಕಾರ್ಯಾಚರಣೆಗಳು ನುರಿತ ಜನರನ್ನು ಹುಡುಕಲು ಮತ್ತು ಉಳಿಸಿಕೊಳ್ಳಲು ಹೆಣಗಾಡುತ್ತವೆ. ಒಬ್ಬ ಅನುಭವಿ ವ್ಯವಸ್ಥಾಪಕರ ತಲೆಯಲ್ಲಿ ವಾಸಿಸುವ ಜ್ಞಾನವು ಆ ವ್ಯಕ್ತಿಯು ಲಭ್ಯವಿಲ್ಲದಿದ್ದಾಗ ಅಪಾಯದಲ್ಲಿದೆ.\n\n**ಖರೀದಿದಾರರು ಮತ್ತು ನಿಯಂತ್ರಕರಿಂದ ನಿರೀಕ್ಷೆಗಳು.** ಪೂರೈಕೆ ಸರಪಳಿಗಳು ಹೆಚ್ಚಾಗಿ ಪುರಾವೆಗಳನ್ನು ಕೇಳುತ್ತವೆ: ಎಷ್ಟು ನೀರನ್ನು ಬಳಸಲಾಗಿದೆ, ಯಾವ ಒಳಹರಿವುಗಳನ್ನು ಅನ್ವಯಿಸಲಾಗಿದೆ, ಯಾವ ಅಭ್ಯಾಸಗಳನ್ನು ಅನುಸರಿಸಲಾಗಿದೆ.\n\n## ಏಕೆ AI, ಮತ್ತು ಈಗ ಏಕೆ\n\nಮೂರು ವಿಷಯಗಳು ಒಟ್ಟಿಗೆ ಬಂದವು:\n\n1. **ದತ್ತಾಂಶವು ಹೇರಳವಾಯಿತು.** ಉಪಗ್ರಹಗಳು ಈಗ ಪ್ರತಿ ಕೆಲವು ದಿನಗಳಿಗೊಮ್ಮೆ ಹೆಚ್ಚಿನ ಕೃಷಿಭೂಮಿಯನ್ನು ಮರುಭೇಟಿ ಮಾಡುತ್ತವೆ. ಮಣ್ಣಿನ ತೇವಾಂಶ ಶೋಧಕಗಳು, ಹವಾಮಾನ ಕೇಂದ್ರಗಳು, ನೀರಾವರಿ ನಿಯಂತ್ರಕಗಳು ಮತ್ತು ಯಂತ್ರೋಪಕರಣಗಳು ನಿರಂತರ ಡೇಟಾವನ್ನು ಉತ್ಪಾದಿಸುತ್ತವೆ.\n2. **ಕಂಪ್ಯೂಟಿಂಗ್ ಅಗ್ಗವಾಯಿತು ಮತ್ತು ಸಂಪರ್ಕಗೊಂಡಿತು.** ಒಮ್ಮೆ ಸಂಶೋಧನಾ ಪ್ರಯೋಗಾಲಯದ ಅಗತ್ಯವಿರುವ ಮಾದರಿಗಳು ಕ್ಲೌಡ್‌ನಲ್ಲಿ ರನ್ ಆಗಬಹುದು ಮತ್ತು ಫಲಿತಾಂಶಗಳನ್ನು ಫೋನ್‌ಗೆ ತಲುಪಿಸಬಹುದು.\n3. **ವಿಧಾನಗಳು ಪ್ರಬುದ್ಧವಾಗಿವೆ.** ಯಂತ್ರ ಕಲಿಕೆ, ಕಂಪ್ಯೂಟರ್ ದೃಷ್ಟಿ ಮತ್ತು ಭಾಷಾ ಮಾದರಿಗಳು ವೇಗವಾಗಿ ಸುಧಾರಿಸಿವೆ ಮತ್ತು ಈಗ ಪ್ರಾಯೋಗಿಕ ಸಾಧನಗಳಾಗಿವೆ.\n\n> **ಪ್ರಮುಖ ಕಲ್ಪನೆ:** AI ಹೊಸ ಸಂಪನ್ಮೂಲಗಳನ್ನು ರಚಿಸುವುದಿಲ್ಲ. ನೀವು ಈಗಾಗಲೇ ಹೊಂದಿರುವ ನೀರು, ಒಳಹರಿವು, ಸಮಯ ಮತ್ತು ಜ್ಞಾನವನ್ನು ಉತ್ತಮವಾಗಿ ಬಳಸಿಕೊಳ್ಳಲು ಇದು ನಿಮಗೆ ಸಹಾಯ ಮಾಡುತ್ತದೆ.\n\n## AI ವಾಸ್ತವಿಕವಾಗಿ ಏನು ಮಾಡಬಹುದು\n\n- **ಸೆನ್ಸ್** — ಕಚ್ಚಾ ಚಿತ್ರಣ ಮತ್ತು ಸಂವೇದಕ ಡೇಟಾವನ್ನು ಮಾಹಿತಿಯನ್ನಾಗಿ ಪರಿವರ್ತಿಸಿ, ಉದಾಹರಣೆಗೆ ಕ್ಷೇತ್ರದ ಯಾವ ವಲಯಗಳನ್ನು ಒತ್ತಿಹೇಳಲಾಗಿದೆ.\n- **ಊಹೆ** — ನಾಳೆಯ ಬೆಳೆ ನೀರಿನ ಬೇಡಿಕೆ ಅಥವಾ ಋತುವಿನ ಅಂತ್ಯದ ಇಳುವರಿಯಂತಹ ಏನಾಗುತ್ತದೆ ಎಂದು ಅಂದಾಜು ಮಾಡಿ.\n- **ಶಿಫಾರಸು** — ನೀರಾವರಿ ವೇಳಾಪಟ್ಟಿಯಂತಹ ಕ್ರಿಯೆಯನ್ನು ಸೂಚಿಸಿ ಮತ್ತು ಏಕೆ ಎಂದು ವಿವರಿಸಿ.\n- **ಪರಿಶೀಲಿಸಿ** — ಒಂದು ಕ್ರಿಯೆ ಸಂಭವಿಸಿದೆಯೇ ಮತ್ತು ಅದು ಕೆಲಸ ಮಾಡಿದೆಯೇ ಎಂದು ಪರಿಶೀಲಿಸಿ.\n\nಮಾದರಿಯನ್ನು ಗಮನಿಸಿ: ಅರ್ಥ, ಊಹಿಸಿ, ಶಿಫಾರಸು ಮಾಡಿ, ಪರಿಶೀಲಿಸಿ. ನಾವು ಕೋರ್ಸ್ ಉದ್ದಕ್ಕೂ ಈ ಲೂಪ್ ಅನ್ನು ಬಳಸುತ್ತೇವೆ.\n\n## ಅದು ಏನು ಮಾಡಲು ಸಾಧ್ಯವಿಲ್ಲ\n\nAI ತನ್ನ ಡೇಟಾ ಸೆರೆಹಿಡಿಯದಿರುವುದನ್ನು ನೋಡಲು ಸಾಧ್ಯವಿಲ್ಲ: ಮುರಿದ ಕವಾಟ, ನೆರೆಹೊರೆಯವರ ಸಿಂಪಡಿಸುವಿಕೆ, ನಿಮ್ಮ ಫಾರ್ಮ್‌ಗೆ ವಿಶಿಷ್ಟವಾದ ಸಾಂಸ್ಕೃತಿಕ ಅಭ್ಯಾಸ. ಇದು ನಿರ್ಧಾರದ ಜವಾಬ್ದಾರಿಯನ್ನು ಹೊರಲು ಸಾಧ್ಯವಿಲ್ಲ. ಮತ್ತು ಇದು ಬೆಳೆಗಾರ ಮತ್ತು ಸಲಹೆಗಾರರ ​​ನಡುವಿನ ನಂಬಿಕೆಯನ್ನು ಬದಲಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ. ಉತ್ತಮ ಕೃಷಿ AI ಅನ್ನು ಭೂಮಿಯನ್ನು ತಿಳಿದಿರುವ ಜನರೊಂದಿಗೆ * ಕೆಲಸ ಮಾಡಲು ವಿನ್ಯಾಸಗೊಳಿಸಲಾಗಿದೆ.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

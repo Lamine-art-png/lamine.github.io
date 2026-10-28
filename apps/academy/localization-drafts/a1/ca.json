@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "ca",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Introducció a la Intel·ligència Artificial a l'Agricultura",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Què és la IA, com funciona a la granja i com utilitzar-la de manera responsable.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "La intel·ligència artificial està arribant a l'agricultura mitjançant controladors de reg, serveis per satèl·lit, programari de gestió de granges i els telèfons a les butxaques dels productors. Aquest curs us proporciona una comprensió clara i pràctica de què és aquesta tecnologia, com funciona i com utilitzar-la bé.\n\nAprendràs les idees bàsiques darrere de la IA i l'aprenentatge automàtic sense equacions, veuràs com les dades agrícoles es converteixen en una predicció i després en una recomanació, i seguiràs la IA durant la temporada, des de la planificació i el reg fins a la salut dels cultius i la collita. Sobretot, aprendràs a jutjar la sortida de l'IA: quan confiar-hi, quan qüestionar-la i com mantenir al capdavant el judici humà i el coneixement de la granja.\n\nEl curs està dissenyat per a productors, operadors, agrònoms, directius i estudiants. No es requereix cap formació tècnica.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Cap. La curiositat sobre com la tecnologia pot donar suport al treball agrícola és tot el que necessites.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Explica en llenguatge senzill què són la intel·ligència artificial, l'aprenentatge automàtic i la IA generativa\", \"Descriu les principals fonts de dades agrícoles i què fa que les dades siguin fiables\", \"Seguiu com un model converteix les dades en una predicció i una predicció en una recomanació\", \"Reconèixer les aplicacions pràctiques d'IA durant la temporada de cultius, des de la planificació fins a la collita\", \"Identifiqueu els límits i els modes de fallada de la IA agrícola i quan desafiar una recomanació\", \"Aplica els principis de propietat de les dades, privadesa i ús responsable a la teva pròpia operació\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Què significa la IA per a l'agricultura",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Idees bàsiques i per què són importants ara.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Com funciona la IA agrícola",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "De les dades al model a la recomanació.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "IA durant tota la temporada",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Aplicacions pràctiques des de la planificació fins a la collita.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Utilitzar la IA de manera responsable",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Límits, drets de dades i ús confiat i crític.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Monitorització de la salut dels cultius des de dalt i de prop",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Imatges per satèl·lit, índexs de vegetació i visió per ordinador per a la salut dels cultius.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Les plantes sanes i les plantes estressades reflecteixen la llum de manera diferent. La IA utilitza aquesta diferència, capturada per satèl·lits, drons i càmeres, per veure els cultius a una escala que cap equip d'exploració podria cobrir.\n\n## Com es veuen les plantes a un satèl·lit\n\nLes fulles verdes absorbeixen la major part de la llum vermella per a la fotosíntesi i reflecteixen fortament la llum **infraroja propera (NIR)**. Quan les plantes estan estressades, escàs o senescent, la reflectància vermella augmenta i la reflectància NIR baixa.\n\nL'**índex de vegetació de diferència normalitzada (NDVI)** captura aquest contrast:\n\n**NDVI = (NIR − Vermell) ÷ (NIR + Vermell)**\n\nEls valors oscil·len entre -1 i +1. La vegetació densa i sana és típicament alta (sovint per sobre de 0,6); el sòl nu és baix (al voltant de 0,1–0,2); l'aigua sol ser negativa.\n\n## Llegir els mapes NDVI amb prudència\n\nNDVI és útil per detectar **on** un camp és diferent, no per diagnosticar **per què**. Un pegat de NDVI baix pot ser estrès hídric, deficiència de nutrients, malalties, plagues, un problema de plantació o simplement una varietat diferent. El mapa t'indica on has de buscar; l'escoltisme t'explica què has trobat.\n\n> **Important:** Els núvols, les ombres dels núvols, la boira i l'hora del dia poden distorsionar les lectures dels satèl·lits. Els serveis fiables emmascaren els núvols i comparen imatges al llarg del temps en lloc de confiar en una sola instantània.\n\nHi ha altres índexs per a finalitats específiques: alguns són més sensibles a la clorofil·la, altres al contingut d'aigua o a les cobertes denses on NDVI es satura.\n\n## Visió per ordinador de prop\n\nSobre el terreny, els models de **visió per ordinador** analitzen fotos de telèfons, tractors o drons per:\n\n- identificar malalties i plagues a partir d'imatges de fulles;\n- distingir les males herbes dels cultius per a la polvorització específica;\n- comptar fruites, flors o plantes per estimar el rendiment.\n\nAquests models s'entrenen en grans col·leccions d'imatges etiquetades. La seva precisió depèn en gran mesura de si aquestes imatges s'assemblen al vostre cultiu, a les vostres varietats i a les vostres condicions d'il·luminació.\n\n## De la detecció a l'acció\n\nUn bon flux de treball de monitorització de cultius converteix una detecció en una tasca prioritzada: *\"La zona 3 mostra un vigor decreixent durant 10 dies. Exploreu primer la cantonada nord-est; comproveu la uniformitat del reg i busqueu signes de malaltia de l'arrel.\"* Les troballes de l'explorador retroalimenten el sistema, millorant les alertes futures.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Dades: la matèria primera de la IA agrícola",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "D'on provenen les dades de la granja i què les fa fiables.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Cada sistema d'IA es construeix a partir de dades. Si les dades són incompletes, esbiaixades o incorrectes, l'IA també ho serà. Entendre les vostres dades és l'habilitat més important en IA agrícola.\n\n## D'on provenen les dades agrícoles\n\n| Font | Exemples | El que et diu |\n|---|---|---|\n| Temps | Estacions agrícoles, xarxes regionals, previsions | Temperatura, pluja, humitat, vent, radiació solar |\n| Sòl | Sondes d'humitat, proves de sòls, mapes de sòls | Aigua disponible per arrels, nutrients, textura |\n| Teledetecció | Imatges de satèl·lit, avions i drons | Vigor dels cultius, coberta del dosser, patrons d'estrès en un camp |\n| Equipament | Controladors de reg, cabalímetres, monitors de rendiment, tractors | Què s'ha aplicat, on i quan |\n| Registres | Dates de plantació, varietats, aplicacions d'entrada, notes d'exploració | Decisions i observacions de gestió |\n| Mercats | Preus, contractes, senyals de demanda | Context econòmic de les decisions |\n\n## Les qualitats de les bones dades\n\n**Precisió**: la mesura reflecteix la realitat? Una sonda d'humitat instal·lada en un lloc humit, o un pluviòmetre sota un arbre, enganyarà tots els models que l'utilitzin.\n\n**Completitud**: hi ha llacunes? Un sensor que deixa d'informar durant una setmana durant una onada de calor deixa un forat exactament quan més importa.\n\n**Oportunitat**: les dades són prou recents per prendre la decisió? La humitat del sòl d'ahir és útil per al reg d'avui; el del mes passat no ho és.\n\n**Coherència**: les unitats, els formats i les definicions són els mateixos al llarg del temps i entre els camps? Barrejar polzades i mil·límetres, o dos noms per al mateix camp, provoca errors silenciosos.\n\n**Representabilitat**: les dades cobreixen les condicions en què s'utilitzarà la IA? Un model entrenat només en sòls sorrencs pot no funcionar amb argila.\n\n> **Verificació de camp:** abans de confiar en un tauler, feu tres preguntes: d'on prové aquest número? Quan es va mesurar? Què faria malament?\n\n## Les dades necessiten context\n\nUna lectura d'humitat del sòl del 30% significa poc per si sola. Importa quin és el tipus de sòl, la profunditat del sensor, quin cultiu està creixent i en quina etapa. Una bona intel·ligència artificial agrícola combina fonts de dades de manera que cadascuna afegeix context a les altres, per exemple, combinant imatges de satèl·lit amb dades meteorològiques i l'historial de reg del camp.\n\n## Les teves dades, les teves decisions\n\nLes dades de la granja tenen valor: comercial, operacional i personal. Abans de connectar equips o compartir registres amb qualsevol servei, enteneu qui pot accedir a les dades, com s'utilitzaran i si les podeu portar amb vosaltres si marxes. Tornarem a la propietat de les dades al mòdul 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Propietat de les dades, privadesa i confiança",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Principis pràctics per compartir dades de granja amb confiança.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Les dades agrícoles poden revelar els rendiments, les pràctiques, les finances i la ubicació de les persones i els actius. Compartir-lo pot desbloquejar serveis valuosos, però sempre hauria de ser una elecció deliberada.\n\n## Preguntes per fer a qualsevol proveïdor de tecnologia\n\n- **Propietat:** Qui són els propietaris de les dades que proporciono i de les dades que el sistema genera sobre la meva granja?\n- **Ús:** Per a què serviran les dades? S'utilitzarà per formar models? Es combinarà amb les dades d'altres explotacions?\n- **Compartir:** Es compartirà o es vendrà a tercers? Quins i per què?\n- **Accés i portabilitat:** Puc descarregar les meves dades en un format utilitzable? Puc emportar-lo si me'n vaig?\n- **Supressió:** Puc suprimir les meves dades i què en queda després?\n- **Seguretat:** Com es protegeixen les dades? Qui dins de l'empresa ho pot veure?\n- **Control:** Puc revocar l'accés a un dispositiu o soci connectat en qualsevol moment?\n\nDiverses organitzacions agrícoles han publicat principis de dades agrícoles que aborden aquestes preguntes; preguntar-se si un proveïdor els segueix és un bon punt de partida.\n\n## Consentiment i permisos\n\nEls bons sistemes demanen un permís específic i informat, per exemple, permetre que un connector llegeixi les dades del controlador de reg sense donar-li permís per canviar la configuració. Concediu el mínim accés necessari per a la feina i reviseu els serveis connectats amb regularitat.\n\n## Dades agregades i anònimes\n\nLa combinació de dades de moltes granges pot millorar els models per a tothom, com ara millors estimacions regionals de l'ús d'aigua. Fet bé, l'agregació elimina la informació que podria identificar una granja individual. Pregunteu com es fa l'anonimat i si podeu desactivar-lo.\n\n## La confiança es guanya\n\n> **Idea clau:** La IA agrícola fiable és transparent sobre com utilitza les dades, explica les seves recomanacions, admet la incertesa i deixa el granger en control.\n\nAquests mateixos principis s'apliquen a la mateixa Acadèmia. Pots baixar o suprimir les teves dades d'aprenentatge en qualsevol moment des de la configuració del teu compte.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Exercici pràctic: avaluar una recomanació d'IA",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Apliqueu el que heu après a una recomanació realista.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "En aquest exercici practicaràs les habilitats de revisió crítica d'aquest mòdul amb una recomanació realista.\n\n## L'escenari\n\nGestiones una explotació de tomàquets de reg degoteig de 60 hectàrees. Un dimarts al matí a mitja temporada, el vostre sistema de suport a decisions mostra:\n\n> *\"Recomanació: Ometeu el reg al bloc C durant les properes 48 hores. Ús previst d'aigua del cultiu: 3,1 mm/dia. Humitat del sòl: 82% de la capacitat del camp. Confiança: alta.\"*\n\nQuan passeu pel bloc C, observeu que les plantes de l'extrem oriental semblen marcides a la calor del matí, i la temperatura màxima d'ahir va ser de 37 °C, molt més calenta que la previsió de 29 °C que el sistema va utilitzar fa dos dies.\n\n## La teva tasca\n\nFeu servir la llista de verificació següent. Escriu el teu raonament a la pestanya **Notes** perquè hi puguis tornar.\n\n1. **Comproveu les entrades.** Quina entrada sembla qüestionable? (Suggeriment: compareu la temperatura prevista amb el que va passar.)\n2. **Comprova els sensors.** On està instal·lada la sonda d'humitat del sòl? Podria ser en un lloc que no representi la vora oriental?\n3. **Mira al camp.** Què comprovaries a les plantes marcides? Penseu en l'obstrucció de l'emissor, la pressió al final de la línia i la salut de l'arrel.\n4. **Decideix.** Seguiries, modificaries o anul·laries la recomanació? Per què?\n5. **Enregistrar i informar.** Quin comentari donaríeu perquè el sistema —i el vostre equip— puguin aprendre d'això?\n\n## Debat\n\nUna resposta contundent observa que l'ús d'aigua previst probablement es basava en una previsió que va resultar massa freda, de manera que la demanda real era més alta. Una sola sonda que llegeix el 82% pot no representar la vora oriental, especialment si els emissors estan obstruïts o la pressió és baixa al final del lateral. Una decisió raonable podria ser inspeccionar la vora est immediatament, fer un reg breu si la inspecció confirma un sòl sec i informar tant de l'error previst com del possible problema d'uniformitat.\n\nPoques vegades hi ha una única resposta correcta, però sempre hi ha un procés correcte: comprovar les entrades, comprovar el context, mirar al camp, decidir i registrar.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "La collita, els mercats i la cadena de subministrament",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Previsió de rendiment, intel·ligència de mercat i logística.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "A mesura que la temporada avança cap a la collita, les decisions passen de fer créixer el cultiu a capturar-ne el valor.\n\n## Previsió de rendiment\n\nLes previsions de rendiment combinen models de creixement dels cultius, el temps actual i les previsions, el vigor basat en imatges i, de vegades, els recomptes de la visió per ordinador. Les previsions anteriors són menys certes; la precisió millora a mesura que avança la temporada.\n\nLes previsions donen suport a decisions com ara:\n\n- quant vendre a termini i quan;\n- quants treballadors, camions i capacitat d'emmagatzematge reservar;\n- si val la pena aplicar una entrada tardana.\n\n## Intel·ligència de mercat\n\nLes eines d'intel·ligència de mercat recullen preus, futurs, dades d'exportació, temps a regions competidores i notícies per ajudar a anticipar els moviments de preus. La IA pot resumir aquests senyals ràpidament i destacar canvis inusuals. Cap model pot predir mercats amb certesa; tractar les previsions de mercat com una entrada a un pla de gestió de riscos, no com una garantia.\n\n## Temps i qualitat de la collita\n\nEls models que fan un seguiment de la maduresa dels cultius (nivells de sucre al raïm, humitat del gra, color de la fruita) ajuden a programar la collita per obtenir el millor equilibri de qualitat, risc meteorològic i logística. Combinats amb la disponibilitat de mà d'obra i d'equips, poden ajudar a seqüenciar els camps d'una operació.\n\n## Traçabilitat i evidència\n\nEls compradors demanen cada cop més proves de com es va produir un cultiu: ús d'aigua, inputs aplicats, certificacions. Els sistemes que registren recomanacions, accions i verificacions al llarg de la temporada fan que aquestes proves siguin fàcils de produir, una altra raó per la qual és important el pas de verificació del bucle.\n\n> **Idea clau:** a la collita, el valor de l'IA prové de la reducció de la incertesa en el temps, la quantitat i el preu, i de documentar el que es va fer.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Cas pràctic: reg i gestió de l'aigua",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Com es combinen l'evapotranspiració, la humitat del sòl i la IA en la programació del reg.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "El reg és un dels exemples més clars de la creació de valor d'IA en una granja, perquè les decisions sobre l'aigua són freqüents, costoses i mesurables.\n\n## El balanç hídric\n\nPenseu en la zona arrel com un compte bancari per a l'aigua.\n\n- **Dipòsits:** pluja i reg.\n- **Retirada:** aigua utilitzada pel cultiu i evaporada del sòl, conjuntament anomenada **evapotranspiració (ET)**, més drenatge per sota de les arrels.\n\nL'objectiu de la programació del reg és mantenir l'equilibri entre un límit inferior, on el cultiu comença a patir estrès, i un límit superior, més enllà del qual l'aigua drena i es malgasta.\n\n## Estimació del consum d'aigua dels cultius\n\nEl consum d'aigua dels cultius s'estima normalment en dos passos:\n\n1. **L'evapotranspiració de referència (ET₀)** es calcula a partir de dades meteorològiques (temperatura, humitat, vent i radiació solar) per a un cultiu de referència estàndard.\n2. Un **coeficient de cultiu (Kc)** ajusta ET₀ per al cultiu real i la seva etapa de creixement: **ETc = ET₀ × Kc**.\n\nL'aprenentatge automàtic pot millorar aquesta estimació aprenent dels sensors locals, les imatges del dosser i la pròpia història de la granja, especialment quan els coeficients estàndard encaixen malament.\n\n## Un escenari de programació\n\n> **Exemple:** Un bloc de vinya té 40 mm d'aigua fàcilment disponible quan la zona arrel està plena. Les sondes d'humitat del sòl mostren que queden 18 mm. La previsió d'ETc és de 5 mm per dia durant els propers quatre dies, i no s'esperen pluges.\n\nSense reg, el bloc arriba al seu límit inferior en uns tres dies i mig (18 mm ÷ 5 mm/dia). Un sistema de programació recomanaria reg en els propers dos o tres dies, dimensionat per reomplir la zona arrel sense omplir-la en excés, programat a la capacitat disponible de la bomba i preus més baixos de l'electricitat a la nit.\n\nSi la previsió canvia a 15 mm de pluja el segon dia, un bon sistema actualitza la recomanació i explica per què.\n\n## On la IA aporta valor\n\n- **Millors estimacions de l'ús d'aigua** combinant temps, sensors i imatges.\n- **Programació conscient de les previsions** que té en compte la pluja i la calor que s'acosten.\n- **Optimització** a molts blocs, límits de bombes i assignacions d'aigua.\n- **Verificació**: confirmació dels mesuradors de cabal i la humitat del sòl que el reg es va produir segons el previst i va tenir l'efecte esperat.\n\n## Què pot sortir malament\n\nUn emissor obstruït, una vàlvula trencada o una sonda instal·lada en un lloc no representatiu poden enganyar el sistema. Per això és important el pas de verificació: quan la humitat observada del sòl no respon com es va predir després d'un reg, és un senyal per investigar el camp, no només el model.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Límits, errors i quan desafiar una recomanació",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Reconèixer els modes de fallada i mantenir al capdavant el judici humà.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "De vegades, tots els sistemes d'IA estaran equivocats. L'objectiu no és la confiança cega o el rebuig general, sinó la **confiança calibrada**: saber quan una recomanació mereix confiança i quan mereix una segona mirada.\n\n## Modes de fallada habituals\n\n**Entrades incorrectes.** Un sensor fallat, una sonda fora de lloc o una font de dades que falten produeixen una tonteria segura. * Escombraries dins, escombraries fora.*\n\n**Condicions fora de rang.** Els models són menys fiables en situacions que poques vegades van veure durant l'entrenament: calor extrema, una nova varietat, un sòl inusual.\n\n**Deriva.** Les condicions canvien amb el temps i un model que era precís fa tres anys potser ja no ho serà.\n\n**Biaix.** Si les dades de formació sobrerepresenten determinades regions, mides de granja o cultius, les recomanacions poden ser menys precises per a operacions que difereixen.\n\n** Falta context.** El sistema no sap la deriva d'herbicida del veí, la canonada trencada o el contracte que requereix la collita la setmana vinent.\n\n**Biaix de l'automatització.** La gent tendeix a confiar excessivament en la producció de la màquina, sobretot quan es presenta amb precisió. Un nombre amb dos decimals no és necessàriament precís.\n\n## Quan desafiar una recomanació\n\nPosa't en pausa i investiga quan:\n\n- la recomanació contradiu el que es veu al camp;\n- està molt fora del rang normal per a la temporada;\n- el sistema mostra poca confiança, o no mostra confiança en absolut;\n- falten dades clau, estan obsoletes o òbviament són incorrectes;\n- les conseqüències d'un error serien greus o difícils de revertir.\n\n> **Comprovació de camp:** una regla senzilla: com més gran i menys reversible sigui la decisió, més proves hauríeu de requerir abans d'actuar amb una recomanació d'IA.\n\n## Com desafiar bé\n\n1. **Comproveu les entrades.** Els sensors informen? Les dades meteorològiques són actuals?\n2. **Pregunteu el motiu.** Quines dades van impulsar aquest suggeriment?\n3. **Mira al camp.** Explora la zona en qüestió.\n4. **Anoteu què heu decidit i per què.** La vostra substitució és un comentari valuós que ajuda a millorar el sistema.\n\nDesafiar una recomanació no és un fracàs de la tecnologia. Així és com les persones i la IA treballen junts.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Models, entrenament i prediccions",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Com un model aprèn dels exemples i per què cada predicció té incertesa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "Un **model** és una descripció matemàtica d'una relació, per exemple, entre el temps i la quantitat d'aigua que utilitza un cultiu. L'aprenentatge automàtic construeix models aprenent a partir d'exemples.\n\n## Aprenent d'exemples\n\nImagineu-vos que voleu predir quanta aigua utilitzarà un hort d'ametllers demà. Recolliu molts dies passats, cadascun amb:\n\n- les **entrades** (també anomenades *característiques*): temperatura, humitat, vent, radiació solar, edat dels arbres, coberta de copa;\n- el **resultat** que voleu predir: l'aigua que l'hort va utilitzar realment aquell dia, mesurada per sensors.\n\nDurant l'**entrenament**, l'algoritme ajusta el model una i altra vegada fins que les seves prediccions coincideixen el més possible amb els resultats registrats. Això s'anomena **aprenentatge supervisat**, perquè cada exemple ve amb la resposta correcta.\n\n## Prova amb dades que el model no ha vist mai\n\nUn model pot memoritzar els seus exemples d'entrenament i encara fallar els nous dies. És per això que els científics de dades mantenen algunes dades a un costat per a la **validació**: dades que el model mai va veure durant l'entrenament. El rendiment d'aquestes dades retinguts és la mesura honesta del seu bon funcionament.\n\n> **Important:** Pregunteu com es va validar un model. \"Encaixa perfectament amb les nostres dades històriques\" és un senyal d'alerta, no una fortalesa.\n\n## Precisió de mesura\n\nPer a les prediccions numèriques, les mesures habituals inclouen l'**error mitjà** (a quina distància estan les prediccions, de mitjana) i quina part de la variació explica el model. Per a les classificacions - \"estressat\" o \"saludable\" - ens preguntem amb quina freqüència el model és correcte i amb quina freqüència genera falses alarmes o perd problemes reals.\n\nNo hi ha una \"bona\" ​​precisió única. Una previsió de rendiment que estigui dins del 5% pot ser excel·lent per prendre decisions de màrqueting; una alarma de gelades que es perdi un esdeveniment de cada deu pot ser inacceptable.\n\n## Tota predicció té incertesa\n\nEls canvis meteorològics, la deriva dels sensors i els camps varien. Un sistema fiable comunica incertesa: \"el consum d'aigua de demà és de 6,2 mm, probablement entre 5,6 i 6,8 mm\". Un sol número sense rang amaga informació important.\n\n## Quan els models queden obsolets\n\nLes condicions canvien. Les noves varietats, un any de sequera o un sistema de reg canviat poden fer que les dades anteriors siguin menys representatives. Això s'anomena **deriva**. Els bons sistemes controlen la seva pròpia precisió al llarg del temps i es tornen a entrenar quan el rendiment baixa.\n\n## Tipus comuns de models agrícoles\n\n- **Regressió**: prediu un nombre (ús d'aigua, rendiment, preu).\n- **Classificació**: assigna una categoria (malaltia present o absent, tipus de cultiu).\n- **Previsió**: prediu com canviarà alguna cosa amb el temps (humitat del sòl durant els propers cinc dies).\n- **Visió per ordinador** — interpreta imatges (comptar fruites, detectar males herbes).\n- **Optimització**: troba el millor pla dins de les limitacions (un programa de reg que satisfà la demanda dels cultius amb aigua limitada).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Planificació i plantació",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Utilitzant dades i IA abans que la primera llavor entri a terra.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Moltes de les decisions més valuoses de la temporada es prenen abans de plantar. La IA pot ajudar aportant més proves a aquestes decisions.\n\n## Història del camp i zones de gestió\n\nEls camps no són uniformes. Anys de mapes de rendiment, estudis de sòls i imatges per satèl·lit sovint revelen patrons consistents: una zona baixa que es manté humida, una cresta sorrenca que s'asseca primer. Els algorismes poden agrupar aquestes àrees en **zones de gestió** que responen de manera diferent a l'aigua, les llavors i els fertilitzants.\n\nAmb les zones, un productor pot variar les taxes de sembra, triar on aplicar més o menys nitrogen o planificar conjunts de reg que coincideixin amb el comportament de cada part del camp.\n\n## Varietat i decisions de data de plantació\n\nEls models entrenats en proves regionals i registres meteorològics poden estimar el rendiment de les varietats en diferents condicions i com la data de plantació afecta el risc, per exemple, la possibilitat d'estrès per calor durant la floració. Aquestes estimacions són més útils quan reflecteixen assajos locals, no només mitjanes nacionals.\n\n## Planificació d'escenaris\n\nLes eines d'IA poden executar escenaris \"i si\" ràpidament: què passa si la temporada és seca? Què passa si es redueixin les assignacions d'aigua un 20%? Què passa si els preus dels inputs pugen? La comparació d'escenaris us ajuda a triar un pla que s'ajusti a molts futurs possibles, no només a l'esperat.\n\n> **Verificació de camp:** quan una eina recomana una taxa de sembra o varietat, pregunteu sobre quines dades es va crear. Les dades d'assaig regional dels vostres sòls i clima són molt més rellevants que la mitjana nacional.\n\n## Límits a tenir en compte\n\nLes recomanacions de pretemporada es basen en les previsions a llarg termini, que són incertes. Tracteu-los com un pla inicial que s'ajustarà a mesura que es desenvolupi la temporada, no com una recepta fixa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Test del mòdul 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Comproveu la vostra comprensió dels fonaments de la IA.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Respon cinc preguntes ràpides sobre les idees del mòdul 1. Els qüestionaris són per a la pràctica: pots tornar-los a repetir tantes vegades com vulguis i veuràs les explicacions després de cada intent.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Test del mòdul 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Comproveu la vostra comprensió de dades, models i recomanacions.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Cinc preguntes sobre qualitat de dades, formació de models i suport a la presa de decisions. Torna a prendre tantes vegades com vulguis.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Test del mòdul 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Comproveu la vostra comprensió de la IA durant la temporada.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Cinc preguntes sobre planificació, reg, seguiment de cultius i collita. Torna a prendre tantes vegades com vulguis.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "De la predicció a la recomanació",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Com els sistemes de suport a les decisions converteixen les prediccions en accions i mantenen la gent al corrent.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Una predicció us diu què és probable que passi. Una **recomanació** us indica què heu de fer al respecte. Convertir l'un en l'altre requereix objectius, limitacions i context.\n\n## Un exemple de reg\n\nSuposem que un model prediu que un camp utilitzarà 7 mm d'aigua demà i que la humitat del sòl ja està a prop del límit inferior que tolera el cultiu. Un sistema de recomanacions combina aquesta predicció amb:\n\n- **objectius**: protegir el rendiment i la qualitat, evitar el malbaratament;\n- **restriccions** — la capacitat de la bomba, l'assignació d'aigua restant, les tarifes d'electricitat, el calendari establert de reg;\n- **context**: previsió de pluja, fase de cultiu, collita planificada que necessita terra sec.\n\nEl resultat podria ser: *\"Regar el bloc 4 aquesta nit durant 6 hores (uns 18 mm). Saltar el bloc 7: es preveuen 12 mm de pluja amb molta confiança.\"*\n\n## Les bones recomanacions s'expliquen\n\nUna recomanació que no entengueu és una recomanació que no podeu jutjar. Busqueu sistemes que mostrin:\n\n- **el motiu**: quines dades i quina predicció van impulsar el suggeriment;\n- **la confiança** — com de cert és el sistema;\n- **les alternatives**: què passa si esperes o apliques menys?\n- **el rastre de l'evidència**, de manera que podeu comprovar després si l'acció va passar i va funcionar.\n\n## Mantenir la gent al corrent\n\nA l'agricultura, la majoria de la IA és **suport a la decisió**: el sistema proposa, una persona decideix. Fins i tot quan l'automatització executa accions (per exemple, un controlador que obre una vàlvula), els dissenys responsables inclouen passos d'aprovació, límits i la capacitat d'anul·lar.\n\n> **Idea clau:** La persona responsable del resultat sempre hauria de poder veure per què es va fer una recomanació, canviar-la i aturar-la.\n\n## Tancant el bucle: verificació\n\nEls sistemes més valuosos no s'aturen en la recomanació. Comproven què es va fer realment i què va passar després: va funcionar el reg? Quanta aigua s'ha aplicat? La humitat del sòl es va recuperar com s'esperava? Aquest pas de **verificació** genera confiança, detecta problemes amb l'equip i produeix les proves que els compradors, els auditors i les autoritats de l'aigua cada cop demanen més.\n\nRecordeu el bucle del mòdul 1: **sentir → predir → recomanar → verificar**. Cada gir del bucle millora tant les decisions com les dades de la temporada vinent.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Resum del curs i passos següents",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Punts clau i com preparar-se per a l'examen final.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Felicitats per arribar al final del curs. Ajuntem les idees principals.\n\n## Mencions clau per emportar\n\n- **La IA és una caixa d'eines**, no una sola tecnologia. Les regles, l'aprenentatge automàtic, l'aprenentatge profund i la IA generativa s'adapten a diferents problemes.\n- **Les dades són la base.** La precisió, la integritat, l'actualitat, la coherència i la representativitat determinen el que pot fer qualsevol model.\n- **Els models aprenen d'exemples** i s'han de validar amb dades que mai han vist. Totes les prediccions tenen incertesa i els models poden derivar.\n- **Les recomanacions combinen prediccions amb objectius, limitacions i context.** Les bones s'expliquen.\n- **El bucle importa:** sentit → predir → recomanar → verificar.\n- **Durant la temporada**, la IA dóna suport a la planificació, el reg, el seguiment dels cultius, el moment de la collita, la comercialització i la traçabilitat.\n- **Utilitza una confiança calibrada.** Desafia les recomanacions que entren en conflicte amb el camp, es basen en dades deficients o tenen un gran risc.\n- **Les vostres dades mereixen atenció.** Coneixeu qui és el propietari, com s'utilitzen i com recuperar-les.\n\n## Preparant-se per a l'examen final\n\nL'examen final cobreix els quatre mòduls. Treu 20 preguntes d'un banc més gran i us ofereix 30 minuts. Necessites un **80%** per aprovar.\n\n> **Consell:** revisa les teves notes i els qüestionaris del mòdul. Si us heu perdut una pregunta del test, obre la lliçó a la qual apunta abans de l'examen.\n\n## On anar a continuació\n\n- **Fundaments de dades agrícoles** aprofundeix en les fonts de dades i la qualitat.\n- **La teledetecció i la intel·ligència per satèl·lit** amplia els índexs d'imatges i vegetació.\n- **AI-Powered Irrigation** aplica aquestes idees a la gestió de l'aigua en detall.\n\nGràcies per aprendre amb AGRO-AI Academy. Quan estigueu preparat, obriu l'examen final des del menú del curs.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Benvinguts al curs",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Què aprendràs, com funciona el curs i com obtenir el teu certificat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Benvingut a **Introducció a la Intel·ligència Artificial a l'Agricultura**, el primer curs del programa AGRO-AI *Foundations of Agricultural AI* de l'Acadèmia.\n\nNo necessiteu cap formació tècnica per tenir èxit aquí. Si alguna vegada has mirat una previsió meteorològica, has llegit una prova del sòl o has comparat els rendiments entre dos camps, ja fas servir els hàbits mentals sobre els quals es basa aquest curs: recollir proves, detectar patrons i decidir què fer a continuació.\n\n## Què aprendràs\n\nAl final del curs seràs capaç de:\n\n- explicar què és —i no és— la IA en llenguatge senzill;\n- descriure d'on provenen les dades agrícoles i què les fa fiables;\n- seguir com les dades es converteixen en una predicció, i una predicció es converteix en una recomanació;\n- reconèixer aplicacions d'IA útils durant la temporada;\n- jutjar la sortida de l'IA de manera crítica i utilitzar-la de manera responsable.\n\n## Com funciona el curs\n\nEl curs té **quatre mòduls** de lliçons curtes. Els mòduls d'un a tres acaben amb un qüestionari de pràctica que us ajuda a comprovar la vostra comprensió; El mòdul quatre acaba amb un exercici pràctic i un resum del curs que et preparen per a l'examen final. Els qüestionaris no compten per al vostre certificat i els podeu tornar a fer tantes vegades com vulgueu.\n\nEl vostre progrés es desa automàticament. Podeu aturar-vos enmig d'una lliçó al vostre telèfon i continuar més tard amb un ordinador.\n\n> **Consell:** fes servir la pestanya **Notes** sota cada lliçó per escriure idees que s'apliquen a la teva pròpia operació. Les notes són privades, només tu les pots veure.\n\n## Obtenció del teu certificat\n\nQuan hagis completat totes les lliçons necessàries, es desbloquejarà l'**examen final**. Treu 20 preguntes d'un banc més gran, té un temps de 30 minuts i requereix una puntuació del **80%** per aprovar. Si no aproveu el primer intent, podeu revisar les lliçons recomanades i tornar-ho a provar al cap d'una hora.\n\nAproveu l'examen i AGRO-AI Academy emet el vostre certificat automàticament, de manera gratuïta, amb un identificador de credencial únic i una pàgina de verificació pública que podeu compartir a LinkedIn.\n\nComencem.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "De les regles a l'aprenentatge: què és (i no és) la IA",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Definicions en llenguatge senzill d'IA, aprenentatge automàtic, aprenentatge profund i IA generativa.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Per què l'agricultura està recorrent a la IA ara",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Les pressions i les oportunitats que impulsen l'adopció de la IA a les granges.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Els pagesos sempre han utilitzat la informació per prendre decisions. El que ha canviat és la quantitat d'informació disponible, la velocitat amb què s'ha d'utilitzar i la pressió sobre cada recurs.\n\n## Pressions a la granja moderna\n\n**Aigua.** L'agricultura és el major usuari d'aigua dolça a tot el món; segons l'Organització de les Nacions Unides per a l'Agricultura i l'Alimentació (FAO AQUASTAT), l'agricultura en conjunt, principalment el regadiu, representa al voltant del 70% de les extraccions mundials d'aigua dolça. En moltes regions, les assignacions d'aigua es redueixen mentre creix la demanda. Cada decisió de reg és important.\n\n**Variabilitat climàtica.** Les estacions són menys predictibles. Les onades de calor, les pluges irregulars i les noves pressions de plagues fan que el llibre de jocs de l'any passat sigui menys fiable.\n\n**Costos i marges.** Els costos de fertilitzants, energia, mà d'obra i equips poden variar bruscament. Aplicar la quantitat adequada al lloc adequat protegeix tant el marge com el medi ambient.\n\n**La mà d'obra.** Moltes operacions lluiten per trobar i retenir persones qualificades. El coneixement que viu al cap d'un directiu experimentat està en risc quan aquesta persona no està disponible.\n\n**Expectatives dels compradors i reguladors.** Les cadenes de subministrament demanen cada cop més proves: quanta aigua es va utilitzar, quins inputs es van aplicar, quines pràctiques es van seguir.\n\n## Per què IA i per què ara\n\nEs van unir tres coses:\n\n1. **Les dades es van fer abundants**. Ara els satèl·lits tornen a visitar la majoria de terres de cultiu cada pocs dies. Les sondes d'humitat del sòl, les estacions meteorològiques, els controladors de reg i la maquinària produeixen dades contínues.\n2. **La informàtica es va tornar barata i connectada.** Els models que abans necessitaven un laboratori d'investigació poden funcionar al núvol i oferir resultats a un telèfon.\n3. **Els mètodes van madurar**. L'aprenentatge automàtic, la visió per ordinador i els models de llenguatge han millorat ràpidament i ara són eines pràctiques.\n\n> **Idea clau:** la IA no crea nous recursos. T'ajuda a aprofitar millor l'aigua, els inputs, el temps i els coneixements que ja tens.\n\n## Què pot fer la IA de manera realista\n\n- **Sense**: converteix les imatges en brut i les dades del sensor en informació, com ara quines zones d'un camp estan estressades.\n- **Prediu**: calculeu què passarà, com ara la demanda d'aigua dels cultius de demà o el rendiment al final de la temporada.\n- **Recomana**: suggeriu una acció, com ara un programa de reg, i expliqueu per què.\n- **Verificar**: comproveu si s'ha produït una acció i si ha funcionat.\n\nObserveu el patró: sentit, predir, recomanar, verificar. Utilitzarem aquest bucle al llarg del curs.\n\n## El que no pot fer\n\nLa IA no pot veure què no capturen les seves dades: una vàlvula trencada, la fumigació d'un veí, una pràctica cultural única a la vostra granja. No pot assumir la responsabilitat d'una decisió. I no pot substituir la confiança entre un cultivador i un assessor. Una bona IA agrícola està dissenyada per treballar *amb* persones que coneixen la terra.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

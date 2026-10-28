@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "ru",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Введение в искусственный интеллект в сельском хозяйстве",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Что такое ИИ, как он работает на ферме и как его ответственно использовать.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Искусственный интеллект приходит в сельское хозяйство через контроллеры орошения, спутниковые службы, программное обеспечение для управления фермами и телефоны в карманах производителей. Этот курс дает вам четкое практическое понимание того, что это за технология, как она работает и как ее правильно использовать.\n\nВы изучите основные идеи искусственного интеллекта и машинного обучения без уравнений, увидите, как сельскохозяйственные данные становятся прогнозами, а затем рекомендациями, и будете следить за искусственным интеллектом в течение сезона — от планирования и орошения до здоровья сельскохозяйственных культур и сбора урожая. Прежде всего, вы научитесь оценивать результаты ИИ: когда ему доверять, когда подвергать сомнению и как сохранить человеческое суждение и знания фермера.\n\nКурс предназначен для производителей, операторов, агрономов, менеджеров и студентов. Никакого технического образования не требуется.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Никто. Все, что вам нужно, — это любопытство к тому, как технологии могут поддержать сельскохозяйственные работы.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Объясните простым языком, что такое искусственный интеллект, машинное обучение и генеративный ИИ.\", \"Описать основные источники сельскохозяйственных данных и то, что делает данные заслуживающими доверия.\", \"Следите за тем, как модель превращает данные в прогноз, а прогноз в рекомендацию.\", \"Распознайте практические применения ИИ в течение сельскохозяйственного сезона, от планирования до сбора урожая.\", \"Определить пределы и способы сбоя сельскохозяйственного ИИ, а также определить, когда следует оспаривать рекомендации.\", \"Применяйте принципы владения данными, конфиденциальности и ответственного использования в своей деятельности.\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Что значит ИИ для сельского хозяйства",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Основные идеи и почему они важны сейчас.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Как работает сельскохозяйственный ИИ",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "От данных к модели и рекомендациям.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "ИИ в течение сезона",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Практическое применение от планирования до сбора урожая.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Ответственное использование ИИ",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Ограничения, права на данные и уверенное, критическое использование.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Мониторинг состояния урожая сверху и вблизи",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Спутниковые снимки, индексы растительности и компьютерное зрение для здоровья сельскохозяйственных культур.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Здоровые растения и растения, находящиеся в стрессе, отражают свет по-разному. ИИ использует эту разницу, зафиксированную спутниками, дронами и камерами, для наблюдения за посевами в масштабах, которые не сможет охватить ни одна разведывательная команда.\n\n## Как растения выглядят со спутника\n\nЗеленые листья поглощают большую часть красного света для фотосинтеза и сильно отражают **ближний инфракрасный (NIR)** свет. Когда растения находятся в стрессе, становятся редкими или стареют, отражательная способность красного цвета увеличивается, а отражательная способность ближнего ИК-диапазона падает.\n\n**Нормализованный индекс различий растительности (NDVI)** отражает этот контраст:\n\n**NDVI = (NIR − красный) ÷ (NIR + красный)**\n\nЗначения варьируются от −1 до +1. Густая, здоровая растительность обычно имеет высокий показатель (часто выше 0,6); голая почва низкая (около 0,1–0,2); вода обычно отрицательна.\n\n## Грамотное чтение карт NDVI\n\nNDVI полезен для определения **где** поле отличается, а не для диагностики **почему**. Участок с низким NDVI может быть вызван водным дефицитом, дефицитом питательных веществ, болезнью, вредителями, проблемой с посадкой или просто другим сортом. Карта подскажет вам, где искать; разведка расскажет вам, что вы нашли.\n\n> **Важно!** Облака, тени облаков, дымка и время суток могут искажать показания спутников. Надежные сервисы маскируют облака и сравнивают изображения во времени, а не доверяют одному снимку.\n\nСуществуют и другие индексы для конкретных целей: некоторые из них более чувствительны к хлорофиллу, другие к содержанию воды или к густым пологам, где насыщает NDVI.\n\n## Компьютерное зрение вблизи\n\nНа земле модели **компьютерного зрения** анализируют фотографии с телефонов, тракторов или дронов, чтобы:\n\n- определять болезни и вредителей по изображениям листьев;\n- отличать сорняки от посевов для целенаправленного опрыскивания;\n- Подсчитайте фрукты, цветы или растения, чтобы оценить урожайность.\n\nЭти модели обучаются на больших коллекциях помеченных изображений. Их точность во многом зависит от того, напоминают ли эти изображения вашу культуру, сорта и условия освещения.\n\n## От обнаружения к действию\n\nХороший рабочий процесс мониторинга посевов превращает обнаружение в приоритетную задачу: * «В зоне 3 наблюдается снижение урожайности в течение 10 дней. Сначала осмотрите северо-восточный угол; проверьте равномерность орошения и ищите признаки корневых заболеваний». * Результаты разведчика затем возвращаются в систему, улучшая будущие оповещения.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Данные: сырье для сельскохозяйственного ИИ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Откуда берутся данные о фермах и что делает их заслуживающими доверия.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Любая система искусственного интеллекта строится на основе данных. Если данные неполны, предвзяты или неверны, то и ИИ тоже. Понимание ваших данных — самый важный навык в сельскохозяйственном искусственном интеллекте.\n\n## Откуда берутся сельскохозяйственные данные\n\n| Источник | Примеры | Что это вам говорит |\n|---|---|---|\n| Погода | Внутрихозяйственные станции, региональные сети, прогнозы | Температура, осадки, влажность, ветер, солнечная радиация |\n| Почва | Датчики влажности, анализы почвы, карты почвы | Доступность воды для корней, питательные вещества, текстура |\n| Дистанционное зондирование | Снимки со спутников, самолетов и дронов | Сила урожая, покров кроны, характер стресса по полю |\n| Оборудование | Контроллеры для орошения, расходомеры, мониторы урожайности, тракторы | Что применялось, где и когда |\n| Рекорды | Сроки посадки, сорта, внесение удобрений, разведочные заметки | Управленческие решения и наблюдения |\n| Рынки | Цены, контракты, сигналы спроса | Экономический контекст для принятия решений |\n\n## Качества хороших данных\n\n**Точность** – отражает ли измерение реальность? Датчик влажности, установленный во влажном месте, или датчик дождя под деревом введут в заблуждение каждую модель, которая его использует.\n\n**Полнота** — есть ли пробелы? Датчик, который перестает сообщать данные на неделю во время жары, оставляет дыру именно в тот момент, когда это наиболее важно.\n\n**Своевременность** — достаточно ли свежих данных для принятия решения? Вчерашняя влага почвы полезна для сегодняшнего орошения; в прошлом месяце нет.\n\n**Последовательность** – одинаковы ли единицы измерения, форматы и определения во времени и в разных полях? Смешение дюймов и миллиметров или двух названий одного и того же поля приводит к неявным ошибкам.\n\n**Репрезентативность** – охватывают ли данные условия, в которых будет использоваться ИИ? Модель, обученная только на песчаных почвах, может не работать на глине.\n\n> **Проверка на месте.** Прежде чем доверять информационной панели, задайте три вопроса: откуда взялось это число? Когда его измеряли? Что может быть неправильным?\n\n## Данным нужен контекст\n\nПоказание влажности почвы 30% само по себе мало что значит. Имеет значение тип почвы, глубина установки датчика, какая культура растет и на какой стадии. Хороший сельскохозяйственный ИИ объединяет источники данных так, что каждый из них добавляет контекст к другим — например, сопоставляя спутниковые снимки с данными о погоде и историей орошения поля.\n\n## Ваши данные, ваши решения\n\nДанные фермы имеют ценность — коммерческую, оперативную и личную. Прежде чем подключать оборудование или делиться записями с каким-либо сервисом, поймите, кто может получить доступ к данным, как они будут использоваться и сможете ли вы забрать их с собой, если уедете. Мы вернемся к вопросу владения данными в Модуле 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Владение данными, конфиденциальность и доверие",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Практические принципы уверенного обмена данными о фермах.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Данные о фермах могут выявить урожайность, практику, финансы, а также местонахождение людей и активов. Совместное использование может открыть ценные услуги, но это всегда должно быть осознанным выбором.\n\n## Вопросы, которые следует задать любому поставщику технологий\n\n- **Право собственности.** Кому принадлежат предоставленные мной данные и данные о моей ферме, которые генерирует система?\n– **Использование.** Для чего будут использоваться данные? Будет ли он использоваться для обучения моделей? Будут ли они объединены с данными других ферм?\n– **Обмен**. Будет ли он передан или продан третьим лицам? Какие и почему?\n- **Доступ и переносимость:** Могу ли я загрузить свои данные в удобном формате? Могу ли я взять его с собой, если уеду?\n- **Удаление:** Могу ли я удалить свои данные и что останется после этого?\n- **Безопасность:** Как защищаются данные? Кто внутри компании может это видеть?\n- **Контроль:** Могу ли я в любой момент отозвать доступ для подключенного устройства или партнера?\n\nНесколько сельскохозяйственных организаций опубликовали принципы сбора данных о фермах, в которых рассматриваются эти вопросы; Хорошей отправной точкой будет вопрос о том, соблюдает ли их поставщик.\n\n## Согласие и разрешения\n\nХорошие системы запрашивают конкретное, информированное разрешение — например, разрешение соединителю читать данные контроллера орошения, не предоставляя ему разрешения на изменение настроек. Предоставьте минимальный доступ, необходимый для работы, и регулярно проверяйте подключенные услуги.\n\n## Агрегированные и анонимизированные данные\n\nОбъединение данных со многих ферм может улучшить модели для всех, например, улучшить региональные оценки водопользования. При правильном выполнении агрегация удаляет информацию, которая могла бы идентифицировать отдельную ферму. Спросите, как осуществляется анонимизация и можете ли вы от нее отказаться.\n\n## Доверие заработано\n\n> **Ключевая идея:** Надежный сельскохозяйственный ИИ прозрачно говорит о том, как он использует данные, объясняет свои рекомендации, допускает неопределенность и оставляет контроль за фермером.\n\nЭти же принципы применимы и к самой Академии. Вы можете загрузить или удалить свои учебные данные в любое время в настройках своей учетной записи.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Практическое упражнение: оценка рекомендаций ИИ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Примените то, что вы узнали, к реалистичным рекомендациям.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "В этом упражнении вы отработаете навыки критического анализа из этого модуля, используя реалистичные рекомендации.\n\n## Сценарий\n\nВы управляете выращиванием томатов с капельным орошением площадью 60 гектаров. Во вторник утром в разгар сезона ваша система поддержки принятия решений показывает:\n\n> *\"Рекомендация: Пропустить орошение в блоке C на следующие 48 часов. Прогнозируемое потребление воды сельскохозяйственными культурами: 3,1 мм/день. Влажность почвы: 82% от емкости поля. Достоверность: высокая.\"*\n\nПроезжая мимо блока C, вы замечаете, что растения на восточном краю выглядят увядшими от утренней жары, а максимальная температура вчера составила 37 °C — намного жарче, чем прогноз 29 °C, который система использовала два дня назад.\n\n## Ваша задача\n\nПроработайте контрольный список ниже. Запишите свое обоснование на вкладке **Примечания**, чтобы иметь возможность вернуться к нему.\n\n1. **Проверьте входные данные.** Какие входные данные кажутся сомнительными? (Подсказка: сравните прогнозируемую температуру с тем, что произошло.)\n2. **Проверьте датчики.** Где установлен датчик влажности почвы? Может ли это быть место, которое не соответствует восточному краю?\n3. **Посмотрите в поле.** Что бы вы проверили на увядших растениях? Учитывайте засорение эмиттера, давление в конце линии и здоровье корней.\n4. **Примите решение.** Вы бы последовали, изменили или отвергли эту рекомендацию? Почему?\n5. **Записывайте и сообщайте.** Какой отзыв вы бы дали, чтобы система и ваша команда могли извлечь из этого уроки?\n\n## Обсуждение\n\nСильный ответ указывает на то, что прогнозируемое потребление воды, вероятно, было основано на прогнозе, который оказался слишком крутым, поэтому фактический спрос был выше. Показания одного датчика 82% могут не отражать восточный край, особенно если эмиттеры там забиты или давление низкое в конце бокового отвода. Разумным решением могло бы стать немедленное обследование восточного края, проведение кратковременного орошения, если проверка подтвердит сухую почву, и сообщение об ошибке в прогнозе и возможной проблеме с однородностью.\n\nРедко бывает единственный правильный ответ, но всегда есть правильный процесс: проверьте входные данные, проверьте контекст, посмотрите на поле, примите решение и запишите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Урожай, рынки и цепочка поставок",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Прогнозирование урожайности, исследование рынка и логистика.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "По мере того как сезон приближается к сбору урожая, решения смещаются от выращивания урожая к получению его ценности.\n\n## Прогнозирование доходности\n\nПрогнозы урожайности сочетают в себе модели роста сельскохозяйственных культур, текущую погоду и прогнозы, энергию на основе изображений, а иногда и расчеты с помощью компьютерного зрения. Более ранние прогнозы менее точны; точность улучшается по ходу сезона.\n\nПрогнозы поддерживают такие решения, как:\n\n- сколько продать вперед и когда;\n- сколько рабочих, грузовых автомобилей и складских помещений забронировать;\n- стоит ли по-прежнему применять поздний ввод.\n\n## Аналитика рынка\n\nИнструменты анализа рынка собирают данные о ценах, фьючерсах, экспорте, погоде в конкурирующих регионах и новости, чтобы помочь предвидеть движение цен. ИИ может быстро суммировать эти сигналы и выделять необычные изменения. Ни одна модель не может с уверенностью предсказать рынки; рассматривайте рыночные прогнозы как один из вкладов в план управления рисками, а не как гарантию.\n\n## Сроки и качество сбора урожая\n\nМодели, отслеживающие зрелость урожая — уровень сахара в винограде, влажность зерна, цвет фруктов — помогают планировать сбор урожая с учетом наилучшего баланса качества, погодных рисков и логистики. В сочетании с наличием рабочей силы и оборудования они могут помочь упорядочить поля в ходе операции.\n\n## Прослеживаемость и доказательства\n\nПокупатели все чаще запрашивают доказательства того, как был произведен урожай: использование воды, внесенные ресурсы, сертификаты. Системы, записывающие рекомендации, действия и проверки в течение сезона, упрощают получение доказательств — еще одна причина, по которой этап проверки имеет значение.\n\n> **Ключевая идея:** При сборе урожая ценность ИИ заключается в уменьшении неопределенности относительно сроков, количества и цены, а также в документировании того, что было сделано.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Практический пример: ирригация и управление водными ресурсами",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Как суммарное испарение, влажность почвы и AI сочетаются в графике орошения.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Орошение является одним из наиболее ярких примеров того, как ИИ создает ценность на ферме, поскольку решения, связанные с водой, принимаются часто, являются дорогостоящими и измеримыми.\n\n## Водный баланс\n\nДумайте о корневой зоне как о банковском счете для воды.\n\n- **Отложения:** осадки и орошение.\n- **Выводы**: вода, используемая культурой и испаряемая из почвы (в совокупности называемая **эвапотранспирацией (ET)**), плюс дренаж под корнями.\n\nЦелью планирования орошения является сохранение баланса между нижним пределом, при котором урожай начинает испытывать стресс, и верхним пределом, за которым вода стекает и тратится впустую.\n\n## Оценка использования воды сельскохозяйственными культурами\n\nИспользование воды сельскохозяйственными культурами обычно оценивается в два этапа:\n\n1. **Эталонное суммарное испарение (ET₀)** рассчитывается на основе погодных данных — температуры, влажности, ветра и солнечной радиации — для стандартной эталонной культуры.\n2. **Коэффициент урожая (Kc)** корректирует ET₀ для фактической культуры и стадии ее роста: **ETc = ET₀ × Kc**.\n\nМашинное обучение может улучшить эту оценку, изучая данные местных датчиков, изображений растительного покрова и собственной истории фермы, особенно там, где стандартные коэффициенты плохо подходят.\n\n## Сценарий планирования\n\n> **Пример:** В блоке виноградника имеется 40 мм доступной воды, когда корневая зона заполнена. Датчики влажности почвы показывают, что осталось 18 мм. Прогноз ETc составляет 5 мм в сутки в течение следующих четырех дней, дождя не ожидается.\n\nБез орошения блок достигает нижнего предела примерно за три с половиной дня (18 мм ÷ 5 мм/сут). Система планирования рекомендовала бы полив в ближайшие два-три дня, рассчитанный на пополнение корневой зоны без ее переполнения, приуроченный к доступной мощности насоса и более низким ценам на электроэнергию в ночное время.\n\nЕсли прогноз изменится на 15 мм дождя на второй день, хорошая система обновит рекомендацию и объяснит, почему.\n\n## Где ИИ добавляет ценность\n\n- **Улучшение оценок водопользования** за счет объединения погодных данных, данных датчиков и изображений.\n- **Расписание с учетом прогнозов**, учитывающее предстоящий дождь и жару.\n- **Оптимизация** по многим блокам, лимитам насосов и водораспределению.\n- **Верификация** — подтверждение с помощью расходомеров и влажности почвы того, что орошение произошло по плану и дало ожидаемый эффект.\n\n## Что может пойти не так\n\nЗасоренный эмиттер, сломанный клапан или датчик, установленный в нетипичном месте, могут ввести систему в заблуждение. Вот почему этап проверки имеет значение: когда наблюдаемая влажность почвы после орошения не реагирует так, как прогнозировалось, это сигнал к исследованию поля, а не только модели.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Ограничения, ошибки и когда оспаривать рекомендацию",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Распознавание видов сбоев и сохранение контроля над человеческим суждением.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Любая система искусственного интеллекта иногда ошибается. Целью является не слепое доверие или полный отказ, а **выверенное доверие**: знать, когда рекомендация заслуживает доверия, а когда она заслуживает второго взгляда.\n\n## Распространенные режимы сбоя\n\n**Плохие входные данные.** Неисправный датчик, неправильно установленный датчик или отсутствующий канал данных создают откровенную ерунду. *Мусор на входе, мусор на выходе.*\n\n**Условия, выходящие за пределы допустимого диапазона.** Модели наименее надежны в ситуациях, с которыми они редко сталкивались во время тренировок: сильная жара, новый сорт, необычная почва.\n\n**Дрейф.** Условия со временем меняются, и модель, которая была точной три года назад, может уже не быть точной.\n\n**Смещение.** Если данные обучения переоценивают определенные регионы, размеры ферм или культуры, рекомендации могут быть менее точными для операций, которые различаются.\n\n**Отсутствует контекст.** Система не знает о заносе гербицидов соседом, сломанной трубе или контракте, согласно которому урожай должен быть собран на следующей неделе.\n\n**Предвзятость в отношении автоматизации.** Люди склонны слишком доверять результатам работы машин, особенно когда они представлены точно. Число с двумя десятичными знаками не обязательно является точным.\n\n## Когда оспорить рекомендацию\n\nСделайте паузу и исследуйте, когда:\n\n- рекомендация противоречит тому, что вы видите на местах;\n- это далеко за пределы нормы для сезона;\n- система демонстрирует низкую уверенность или не проявляет доверия вообще;\n- ключевые данные отсутствуют, устарели или явно неверны;\n- последствия ошибки будут серьезными или их будет трудно исправить.\n\n> **Проверка на местах:** Простое правило: чем серьезнее и менее обратимым является решение, тем больше доказательств вам следует потребовать, прежде чем действовать по рекомендации ИИ.\n\n## Как хорошо бросать вызов\n\n1. **Проверьте входы.** Сообщают ли датчики? Актуальны ли данные о погоде?\n2. **Спросите причину.** На каких данных основано это предложение?\n3. **Осмотритесь в поле.** Осмотрите интересующую территорию.\n4. **Запишите, что вы решили и почему.** Ваше изменение – это ценная обратная связь, которая помогает улучшить систему.\n\nОспаривание рекомендации не является отказом технологии. Именно так люди и ИИ хорошо работают вместе.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Модели, обучение и прогнозы",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Как модель учится на примерах и почему каждый прогноз имеет неопределенность.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**Модель** — это математическое описание взаимосвязи, например, между погодой и количеством воды, которую использует урожай. Машинное обучение строит модели, обучаясь на примерах.\n\n## Обучение на примерах\n\nПредставьте, что вы хотите предсказать, сколько воды будет потреблять миндальный сад завтра. Вы собираете множество прошлых дней, каждый из которых содержит:\n\n- **входные данные** (также называемые *характеристиками*): температура, влажность, ветер, солнечная радиация, возраст деревьев, покров кроны;\n- **результат**, который вы хотите предсказать: сколько воды фактически использовалось в саду в тот день, измеренное датчиками.\n\nВо время **обучения** алгоритм корректирует модель снова и снова, пока ее прогнозы не будут максимально точно соответствовать записанным результатам. Это называется **обучение с учителем**, поскольку каждый пример содержит правильный ответ.\n\n## Тестирование на данных, которых модель никогда не видела\n\nМодель может запомнить примеры обучения и все равно потерпеть неудачу в новые дни. Вот почему ученые, работающие с данными, откладывают некоторые данные для **проверки** — данные, которые модель никогда не видела во время обучения. Производительность этих устаревших данных является честным показателем того, насколько хорошо они работают.\n\n> **Важно!** Спросите, как была проверена модель. «Это идеально соответствует нашим историческим данным» — это предупреждающий знак, а не сила.\n\n## Точность измерения\n\nДля числовых прогнозов общие меры включают **среднюю ошибку** (насколько далеки прогнозы в среднем) и степень вариации, которую объясняет модель. Что касается классификации — «стресс» или «здоровый» — мы спрашиваем, как часто модель верна и как часто она вызывает ложные тревоги или упускает из виду реальные проблемы.\n\nНе существует единой «хорошей» точности. Прогноз доходности в пределах 5% может оказаться отличным подспорьем для принятия маркетинговых решений; сигнал тревоги о заморозке, который пропускает одно событие из десяти, может быть неприемлем.\n\n## В каждом прогнозе есть неопределенность\n\nИзменения погоды, дрейф датчиков и поля меняются. Надежная система сообщает о неопределенности: «завтра расход воды составит 6,2 мм, вероятно, между 5,6 и 6,8 мм». Одно число без диапазона скрывает важную информацию.\n\n## Когда модели устаревают\n\nУсловия меняются. Новые сорта, засушливый год или измененная ирригационная система могут сделать прошлые данные менее репрезентативными. Это называется **дрейф**. Хорошие системы отслеживают свою точность с течением времени и переобучаются, когда производительность падает.\n\n## Распространенные типы сельскохозяйственных моделей\n\n- **Регрессия** — прогнозирует число (использование воды, урожайность, цену).\n- **Классификация** — присваивает категорию (наличие или отсутствие болезни, вид культуры).\n- **Прогнозирование** — прогнозирует, как что-то изменится со временем (влажность почвы в течение следующих пяти дней).\n- **Компьютерное зрение** — интерпретирует изображения (подсчет фруктов, обнаружение сорняков).\n- **Оптимизация** — находит лучший план в рамках ограничений (график орошения, удовлетворяющий потребности сельскохозяйственных культур при ограниченном количестве воды).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Планирование и посадка",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Использование данных и искусственного интеллекта до того, как первое семя попадет в землю.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Многие из наиболее важных решений сезона принимаются до посадки. ИИ может помочь, предоставив больше доказательств этим решениям.\n\n## История полей и зоны управления\n\nПоля неоднородны. Годы карт урожайности, исследований почвы и спутниковых изображений часто выявляют устойчивые закономерности: низменность, которая остается влажной, песчаный хребет, который высыхает первым. Алгоритмы могут группировать эти территории в **зоны управления**, которые по-разному реагируют на воду, семена и удобрения.\n\nС помощью зон производитель может варьировать нормы высева, выбирать, куда вносить больше или меньше азота, или планировать наборы ирригационных систем, соответствующие поведению каждой части поля.\n\n## Решения о сортах и ​​сроках посадки\n\nМодели, обученные на региональных испытаниях и погодных данных, могут оценить, как сорта ведут себя в различных условиях и как дата посадки влияет на риск — например, на вероятность теплового стресса во время цветения. Эти оценки наиболее полезны, когда они отражают местные исследования, а не только средние показатели по стране.\n\n## Планирование сценариев\n\nИнструменты искусственного интеллекта могут быстро прорабатывать сценарии «что, если»: что, если сезон засушливый? Что, если водораспределение сократится на 20%? Что, если цены на ресурсы вырастут? Сравнение сценариев поможет вам выбрать план, который будет справедлив для многих возможных вариантов будущего, а не только для ожидаемого.\n\n> **Проверка на месте:** Когда инструмент рекомендует норму высева или сорт, спросите, на каких данных это было основано. Данные региональных испытаний ваших почв и климата гораздо более актуальны, чем в среднем по стране.\n\n## Ограничения, о которых следует помнить\n\nПредсезонные рекомендации основаны на долгосрочных прогнозах, которые неопределенны. Относитесь к ним как к стартовому плану, который можно корректировать по мере развития сезона, а не как к фиксированному рецепту.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Тест по модулю 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Проверьте свое понимание основ ИИ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Ответьте на пять коротких вопросов об идеях Модуля 1. Тесты предназначены для практики: вы можете пересдавать их столько раз, сколько захотите, и после каждой попытки вы увидите объяснения.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Тест по модулю 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Проверьте свое понимание данных, моделей и рекомендаций.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Пять вопросов о качестве данных, обучении моделей и поддержке принятия решений. Пересдавайте так часто, как захотите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Тест по модулю 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Проверяйте свое понимание ИИ в течение сезона.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Пять вопросов о планировании, ирригации, мониторинге посевов и сборе урожая. Пересдавайте так часто, как захотите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "От прогноза к рекомендации",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Как системы поддержки принятия решений превращают прогнозы в действия и держат людей в курсе событий.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Прогноз говорит вам, что может произойти. В **рекомендации** указано, что с этим делать. Превращение одного в другое требует целей, ограничений и контекста.\n\n## Пример орошения\n\nПредположим, модель предсказывает, что завтра поле будет использовать 7 мм воды и что влажность почвы уже близка к нижнему пределу, который допускает культура. Система рекомендаций сочетает этот прогноз с:\n\n- **цели** — защитить урожайность и качество, избежать отходов;\n- **ограничения** — мощность насосов, остаток водораспределения, тарифы на электроэнергию, график полива;\n- **контекст** — прогноз дождя, стадия урожая, запланированный урожай, требующий сухой земли.\n\nРезультат может быть таким: *\"Поливать блок 4 сегодня вечером в течение 6 часов (около 18 мм). Пропустить блок 7: с высокой степенью достоверности прогнозируется 12 мм дождя.\"*\n\n## Хорошие рекомендации объясняют сами себя\n\nРекомендация, которую вы не можете понять, — это рекомендация, которую вы не можете судить. Ищите системы, которые показывают:\n\n- **причина** – какие данные и какой прогноз послужили основанием для предложения;\n- **уверенность** — насколько надежна система;\n- **альтернативы** — что произойдет, если вы подождете или подадите меньше заявок;\n- **след доказательств** — чтобы вы могли впоследствии проверить, произошло ли действие и сработало ли оно.\n\n## Держим людей в курсе\n\nВ сельском хозяйстве ИИ по большей части занимается **поддержкой принятия решений**: система предлагает, человек решает. Даже там, где действия выполняет автоматизация (например, контроллер открывает клапан), ответственные конструкции включают этапы утверждения, ограничения и возможность отмены.\n\n> **Ключевая идея:** Лицо, ответственное за результат, всегда должно иметь возможность понять, почему была дана рекомендация, изменить ее и прекратить ее.\n\n## Замыкание цикла: проверка\n\nСамые ценные системы не останавливаются на рекомендациях. Проверяют, что на самом деле было сделано и что было дальше: Пошёл ли полив? Сколько воды было нанесено? Восстановилась ли влажность почвы, как ожидалось? Этот этап **проверки** укрепляет доверие, выявляет проблемы с оборудованием и предоставляет доказательства, которые все чаще запрашивают покупатели, аудиторы и органы водоснабжения.\n\nПомните цикл из Модуля 1: **ощущать → прогнозировать → рекомендовать → проверять**. Каждый поворот цикла улучшает как решения, так и данные для следующего сезона.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Краткое содержание курса и следующие шаги",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Основные выводы и как подготовиться к выпускному экзамену.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Поздравляем с окончанием курса. Давайте объединим основные идеи.\n\n## Ключевые выводы\n\n- **ИИ — это набор инструментов**, а не отдельная технология. Правила, машинное обучение, глубокое обучение и генеративный искусственный интеллект решают разные задачи.\n– **Данные — это основа.** Точность, полнота, своевременность, последовательность и репрезентативность определяют возможности любой модели.\n– **Модели учатся на примерах** и должны проверяться на данных, которых они никогда не видели. В каждом прогнозе есть неопределенность, и модели могут дрейфовать.\n- **Рекомендации сочетают прогнозы с целями, ограничениями и контекстом.** Хорошие рекомендации объясняют сами себя.\n– **Цикл имеет значение**: осмыслить → предсказать → рекомендовать → проверить.\n- **В течение всего сезона** искусственный интеллект поддерживает планирование, орошение, мониторинг урожая, определение времени сбора урожая, маркетинг и отслеживание.\n– **Используйте выверенное доверие.** Оспаривайте рекомендации, которые противоречат действительности, основаны на плохих данных или имеют высокие ставки.\n- **Ваши данные заслуживают заботы.** Знайте, кому они принадлежат, как они используются и как их вернуть.\n\n## Подготовка к выпускному экзамену\n\nИтоговый экзамен охватывает все четыре модуля. Он собирает 20 вопросов из более крупного банка и дает вам 30 минут. Чтобы пройти, вам нужно **80%**.\n\n> **Совет.** Просмотрите свои заметки и тесты модуля. Если вы пропустили вопрос викторины, перед экзаменом откройте урок, на который он указывает.\n\n## Куда идти дальше\n\n- **Основы сельскохозяйственных данных** более подробно рассматривают источники и качество данных.\n- **Дистанционное зондирование и спутниковая разведка** расширяет возможности изображений и индексов растительности.\n- **Ирригация с использованием искусственного интеллекта** детально применяет эти идеи к управлению водными ресурсами.\n\nБлагодарим вас за обучение в Академии AGRO-AI. Когда будете готовы, откройте итоговый экзамен из меню курса.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Добро пожаловать на курс",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Чему вы научитесь, как работает курс и как получить сертификат.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Добро пожаловать на **Введение в искусственный интеллект в сельском хозяйстве**, первый курс программы AGRO-AI Академии *Основы сельскохозяйственного ИИ*.\n\nЧтобы добиться успеха здесь, вам не нужно никакого технического образования. Если вы когда-либо смотрели прогноз погоды, читали результаты анализа почвы или сравнивали урожайность двух полей, вы уже используете привычки ума, на которых основан этот курс: сбор доказательств, выявление закономерностей и принятие решения, что делать дальше.\n\n## Чему вы научитесь\n\nК концу курса вы сможете:\n\n- объяснить, что такое ИИ и чем он не является, простым языком;\n- описать, откуда берутся сельскохозяйственные данные и что делает их надежными;\n- проследить, как данные становятся прогнозом, а прогноз становится рекомендацией;\n- распознавать полезные приложения ИИ в течение сезона;\n- критически оценивать результаты ИИ и использовать их ответственно.\n\n## Как работает курс\n\nКурс состоит из **четырех модулей** коротких уроков. Каждый модуль с первого по третий заканчивается практическим тестом, который поможет вам проверить свое понимание; Четвертый модуль заканчивается практическим упражнением и кратким изложением курса, которые подготовят вас к выпускному экзамену. Тесты не засчитываются в ваш сертификат, и вы можете пересдавать их так часто, как захотите.\n\nВаш прогресс сохраняется автоматически. Вы можете остановиться посреди урока на телефоне и продолжить позже на компьютере.\n\n> **Совет.** Используйте вкладку **Примечания** под каждым уроком, чтобы записывать идеи, применимые к вашей работе. Заметки являются личными — их можете видеть только вы.\n\n## Получение сертификата\n\nКогда вы пройдете все необходимые уроки, откроется **финальный экзамен**. Он включает 20 вопросов из более крупного банка, рассчитан на 30 минут и для прохождения требуется набрать **80%**. Если вы не сдали экзамен с первой попытки, вы можете просмотреть рекомендуемые уроки и повторить попытку через час.\n\nСдайте экзамен, и AGRO-AI Академия автоматически выдает вам сертификат — бесплатно, с уникальным идентификатором учетных данных и общедоступной страницей проверки, которой вы можете поделиться в LinkedIn.\n\nНачнем.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "От правил к обучению: что такое ИИ (и чем он не является)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Простые определения искусственного интеллекта, машинного обучения, глубокого обучения и генеративного искусственного интеллекта.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "«Искусственный интеллект» используется для описания всего: от простой сенсорной сигнализации до чат-бота, который пишет эссе. Прежде чем мы посмотрим на сельское хозяйство, нам нужны ясные слова.\n\n## Искусственный интеллект\n\n**Искусственный интеллект (ИИ)** – это широкая область создания компьютерных систем, выполняющих задачи, которые мы обычно связываем с человеческим интеллектом: распознавание закономерностей, прогнозирование, понимание языка и выбор действий.\n\nЭто определение намеренно широкое. Он включает в себя очень разные технологии, поэтому помогает разделить два способа их создания.\n\n## Правила вместо обучения\n\n**Системы, основанные на правилах**, следуют инструкциям, написанным людьми. Контроллер полива, который говорит *\"если влажность почвы падает ниже 25%, запустить насос\"*, следует правилу. Правила прозрачны и предсказуемы, но кто-то должен заранее знать правильное правило, а правила не адаптируются при изменении условий.\n\nВместо этого системы **машинного обучения (МО)** изучают закономерности на примерах. Покажите модели тысячи прошлых сезонов — погоду, почву, орошение и последующие урожаи — и она сможет изучить взаимосвязи, которые никто не записал явно. Большая часть того, что люди сегодня называют «ИИ», — это машинное обучение.\n\n| | Система, основанная на правилах | Модель машинного обучения |\n|---|---|---|\n| Откуда логика | Люди пишут это | Узнано на основе данных |\n| Сила | Прозрачный, предсказуемый | Находит сложные закономерности, адаптируется к новым данным |\n| Слабость | Жесткий; упускает то, что не предусмотрели дизайнеры | Насколько хороши его данные; может быть трудно объяснить |\n| Пример фермы | Насос запускается ниже порога влажности | Модель предсказывает завтрашнее использование воды сельскохозяйственными культурами |\n\n## Глубокое обучение\n\n**Глубокое обучение** — это семейство методов машинного обучения, построенных на основе многоуровневых «нейронных сетей». Он особенно хорош для беспорядочных, многомерных данных, таких как изображения и звук. Когда приложение для телефона распознает болезнь листьев по фотографии, обычно за этим стоит глубокое обучение.\n\n## Генеративный ИИ\n\n**Генераторный ИИ** создает новый контент — текст, изображения, аудио или код — на основе шаблонов, извлеченных из очень больших наборов данных. Большие языковые модели (LLM), технология, лежащая в основе диалоговых помощников, представляют собой генеративный искусственный интеллект. Они могут объяснять концепции, обобщать отчеты и отвечать на вопросы на многих языках.\n\nГенеративный ИИ — мощный инструмент, но он предсказывает *правдоподобные* слова, а не проверенные факты. Он может с полной уверенностью утверждать что-то ложное. В сельском хозяйстве генеративный помощник полезен для объяснения и составления чертежей, но важные цифры и решения необходимо сверять с достоверными данными.\n\n> **Ключевая идея:** ИИ — это не одна машина. Это ящик для инструментов. Правила, статистические модели, глубокое обучение и генеративные модели подходят для разных задач.\n\n## Чем не является ИИ\n\n- **ИИ — это не волшебство.** Каждый результат основывается на данных и дизайнерских решениях, сделанных людьми.\n- **ИИ не «понимает» вашу ферму** так, как вы. Он знает только то, что захвачены его данными.\n- **ИИ не может быть прав автоматически.** Прогнозы несут в себе неопределенность, и лучшие системы сообщают вам о многом.\n- **ИИ не заменяет суждение.** Это инструмент поддержки принятия решений. Ответственность за решение остается на людях.\n\n## Проверьте свое понимание\n\nПодумайте об инструменте, который вы уже используете: приложение погоды, монитор урожайности, таблица с формулами. Записана ли его логика в виде правил или извлечена из данных? Запишите свой ответ в своих заметках; мы вернемся к этой идее в Модуле 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Почему сельское хозяйство сейчас обращается к ИИ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Давление и возможности, способствующие внедрению ИИ на фермах.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Фермеры всегда использовали информацию для принятия решений. Что изменилось, так это количество доступной информации, скорость, с которой ее необходимо использовать, и нагрузка на каждый ресурс.\n\n## Давление на современную ферму\n\n**Вода.** Сельское хозяйство является крупнейшим потребителем пресной воды в мире; По данным Продовольственной и сельскохозяйственной организации ООН (ФАО АКВАСТАТ), на сельское хозяйство в целом, в основном на орошение, приходится около 70% мирового забора пресной воды. Во многих регионах водораспределение сокращается, а спрос растет. Каждое решение по ирригации имеет значение.\n\n**Изменчивость климата.** Времена года менее предсказуемы. Волны жары, нерегулярные осадки и новое нашествие вредителей делают прошлогодний сценарий менее надежным.\n\n**Затраты и прибыль.** Затраты на удобрения, энергию, рабочую силу и оборудование могут резко колебаться. Применение нужного количества в нужном месте защищает как прибыль, так и окружающую среду.\n\n**Труд.** Многие предприятия испытывают трудности с поиском и удержанием квалифицированных специалистов. Знания, живущие в голове опытного менеджера, подвергаются риску, когда этот человек недоступен.\n\n**Ожидания покупателей и регулирующих органов.** Цепочки поставок все чаще запрашивают доказательства: сколько воды было использовано, какие ресурсы применялись, какие методы применялись.\n\n## Почему ИИ и почему именно сейчас\n\nТри вещи сошлись воедино:\n\n1. **Данных стало много.** Спутники теперь посещают большинство сельскохозяйственных угодий каждые несколько дней. Датчики влажности почвы, метеостанции, контроллеры орошения и оборудование предоставляют непрерывные данные.\n2. **Вычисления стали дешевыми и подключенными.** Модели, которым когда-то требовалась исследовательская лаборатория, теперь могут работать в облаке и передавать результаты на телефон.\n3. **Методы стали более зрелыми.** Машинное обучение, компьютерное зрение и языковые модели быстро совершенствуются и теперь являются практическими инструментами.\n\n> **Ключевая идея:** ИИ не создает новые ресурсы. Это поможет вам более эффективно использовать воду, ресурсы, время и знания, которые у вас уже есть.\n\n## Что реально может сделать ИИ\n\n- **Sense** — превращайте необработанные изображения и данные датчиков в информацию, например о том, какие зоны поля подвергаются стрессу.\n- **Прогнозировать** — оцените, что произойдет, например, завтрашнюю потребность сельскохозяйственных культур в воде или урожайность в конце сезона.\n- **Рекомендовать** — предложите действие, например график полива, и объясните, почему.\n- **Проверить** — проверьте, произошло ли действие и сработало ли оно.\n\nОбратите внимание на закономерность: ощутить, предсказать, порекомендовать, проверить. Мы будем использовать этот цикл на протяжении всего курса.\n\n## Чего он не может сделать\n\nИИ не может видеть то, что не отражают его данные: сломанный клапан, опрыскивание соседом, культурную практику, уникальную для вашей фермы. Он не может нести ответственность за решение. И это не может заменить доверие между производителем и консультантом. Хороший сельскохозяйственный ИИ предназначен для работы *с* людьми, которые знают землю.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

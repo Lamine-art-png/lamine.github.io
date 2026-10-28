@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "hu",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Bevezetés a mesterséges intelligenciába a mezőgazdaságban",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Mi az AI, hogyan működik a farmon, és hogyan kell felelősségteljesen használni.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "A mesterséges intelligencia az öntözésvezérlőkön, a műholdas szolgáltatásokon, a gazdaságirányítási szoftvereken és a termelők zsebében lévő telefonokon keresztül érkezik a mezőgazdaságba. Ez a kurzus világos, gyakorlati megértést ad arról, hogy mi ez a technológia, hogyan működik, és hogyan kell jól használni.\n\nMegismerheti a mesterséges intelligencia és az egyenletek nélküli gépi tanulás mögött meghúzódó alapvető gondolatokat, láthatja, hogyan válnak a mezőgazdasági adatok előrejelzésekké, majd ajánlásokká, és követheti a mesterséges intelligenciát az évszakon keresztül – a tervezéstől és az öntözéstől a termés egészségéig és a betakarításig. Mindenekelőtt megtanulja megítélni a mesterséges intelligencia kimenetét: mikor bízhat benne, mikor kérdőjelezheti meg, és hogyan tarthatja kézben az emberi ítélőképességet és a mezőgazdasági ismereteket.\n\nA kurzus termelőknek, kezelőknek, agronómusoknak, menedzsereknek és hallgatóknak szól. Műszaki háttér nem szükséges.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Egyik sem. Csak az a kíváncsiság, hogy a technológia hogyan támogatja a mezőgazdasági munkát.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Magyarázza el közérthető nyelven, mi a mesterséges intelligencia, a gépi tanulás és a generatív mesterséges intelligencia\", \"Ismertesse a mezőgazdasági adatok főbb forrásait és azt, hogy mitől megbízhatóak az adatok\", \"Kövesse nyomon, hogyan változtatja egy modell az adatokat előrejelzésekké, az előrejelzéseket pedig ajánlásokká\", \"Ismerje fel a gyakorlati mesterséges intelligencia alkalmazásokat a termesztési szezonban, a tervezéstől a betakarításig\", \"Határozza meg a mezőgazdasági mesterséges intelligencia korlátait és meghibásodási módjait, valamint azt, hogy mikor támadjon meg egy ajánlást\", \"Alkalmazza az adatok tulajdonjogának, az adatvédelemnek és a felelősségteljes felhasználásnak az elveit saját működése során\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Mit jelent az AI a mezőgazdaság számára",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Alapvető ötletek és miért fontosak most.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Hogyan működik a mezőgazdasági mesterséges intelligencia",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Az adatoktól a modellig az ajánlásig.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI az egész szezonban",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Gyakorlati alkalmazások a tervezéstől a betakarításig.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Az AI felelősségteljes használata",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Korlátok, adatjogok és magabiztos, kritikus használat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Termény egészségi állapot monitorozás felülről és közelről",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Műholdfelvételek, vegetációs indexek és számítógépes látás a termés egészségéért.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Az egészséges és a stresszes növények eltérően verik vissza a fényt. A mesterséges intelligencia ezt a különbséget – amelyet műholdak, drónok és kamerák rögzítettek – arra használja fel, hogy olyan léptékben figyelje meg a termést, amelyet egy felderítőcsapat sem képes lefedni.\n\n## Hogyan néznek ki a növények egy műhold számára\n\nA zöld levelek a legtöbb vörös fényt elnyelik a fotoszintézishez, és erősen visszaverik a **közeli infravörös (NIR)** fényt. Amikor a növények stressznek vannak kitéve, ritkák vagy öregednek, a vörös reflexió növekszik és a NIR reflexió csökken.\n\nA **Normalized Difference Vegetation Index (NDVI)** ezt a kontrasztot rögzíti:\n\n**NDVI = (NIR – piros) ÷ (NIR + piros)**\n\nAz értékek –1 és +1 között mozognak. A sűrű, egészséges növényzet jellemzően magas (gyakran 0,6 feletti); csupasz talaj alacsony (körülbelül 0,1–0,2); a víz általában negatív.\n\n## Az NDVI térképek bölcs olvasása\n\nAz NDVI a **ahol** eltérések észlelésére használható, nem pedig a **miért** diagnosztizálására. Az alacsony NDVI-tartalmú folt lehet vízhiány, tápanyaghiány, betegség, kártevők, ültetési probléma vagy egyszerűen más fajta. A térkép megmondja, hol keressen; a felderítés megmondja, mit találtál.\n\n> **Fontos:** A felhők, felhőárnyékok, köd és a napszak torzíthatják a műholdak leolvasását. A megbízható szolgáltatások elfedik a felhőket, és idővel összehasonlítják a képeket, ahelyett, hogy egyetlen pillanatfelvételben bíznának.\n\nMás mutatók is léteznek bizonyos célokra – egyesek érzékenyebbek a klorofillra, mások a víztartalomra vagy a sűrű lombkorona-rétegekre, ahol az NDVI telítődik.\n\n## Számítógépes látás közelről\n\nA földön a **számítógépes látás** modellek elemzik a telefonokról, traktorokról vagy drónokról készült fényképeket, hogy:\n\n- levélképek alapján betegségeket és kártevőket azonosítani;\n- a célzott permetezés érdekében megkülönböztetni a gyomnövényeket a haszonnövényektől;\n- számolja meg a gyümölcsöket, virágokat vagy növényeket a termésbecsléshez.\n\nEzeket a modelleket a címkézett képek nagy gyűjteményére képezték ki. Pontosságuk nagymértékben függ attól, hogy ezek a képek hasonlítanak-e a terményre, a fajtákra és a fényviszonyokra.\n\n## Az észleléstől a cselekvésig\n\nEgy jó termésfigyelő munkafolyamat az észlelést prioritást élvező feladattá változtatja: *\"A 3. zóna 10 nap alatt csökkenő életerőt mutat. Először az északkeleti sarkot vizsgálja meg; ellenőrizze az öntözés egyenletességét, és keresse a gyökérbetegségre utaló jeleket.\"* A felderítő eredményeit ezután visszacsatolják a rendszerbe, javítva a jövőbeli riasztásokat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Adatok: a mezőgazdasági mesterséges intelligencia alapanyaga",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Honnan származnak a mezőgazdasági adatok, és mitől megbízhatóak.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Adatok tulajdonjoga, adatvédelem és bizalom",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Gyakorlati elvek a gazdaságok adatainak magabiztos megosztásához.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "A mezőgazdasági üzemek adatai feltárhatják a hozamokat, a gyakorlatot, a pénzügyeket, valamint az emberek és eszközök elhelyezkedését. Megosztása értékes szolgáltatásokat nyithat meg – de ennek mindig tudatos választásnak kell lennie.\n\n## Kérdések, amelyeket fel kell tenni bármely technológiai szolgáltatónak\n\n- **Tulajdonjog:** Kié az általam szolgáltatott adatok és a rendszer által generált adatok a gazdaságomról?\n- **Felhasználás:** Mire használják fel az adatokat? Modellképzésre fogják használni? Összevonják más gazdaságok adataival?\n- **Megosztás:** Megosztják vagy értékesítik harmadik felekkel? Melyek, és miért?\n- **Hozzáférés és hordozhatóság:** Letölthetem az adataimat használható formátumban? Ha elmegyek, magammal vihetem?\n- **Törlés:** Törölhetem az adataimat, és mi marad utána?\n- **Biztonság:** Hogyan védik az adatokat? Ki láthatja a cégen belül?\n- **Vezérlés:** Bármikor visszavonhatom egy csatlakoztatott eszköz vagy partner hozzáférését?\n\nSzámos mezőgazdasági szervezet publikált olyan gazdaságadatokra vonatkozó elveket, amelyek megválaszolják ezeket a kérdéseket; Jó kiindulópont, ha megkérdezzük, hogy a szolgáltató követi-e őket.\n\n## Hozzájárulás és engedélyek\n\nA jó rendszerek konkrét, tájékozott engedélyt kérnek – például lehetővé teszik egy csatlakozó számára az öntözésvezérlő adatainak olvasását anélkül, hogy engedélyt adnának a beállítások módosítására. Biztosítsa a munkához szükséges legkevesebb hozzáférést, és rendszeresen ellenőrizze a kapcsolódó szolgáltatásokat.\n\n## Összesített és anonimizált adatok\n\nA sok gazdaság adatainak kombinálása mindenki számára javíthatja a modelleket, például jobb regionális vízhasználati becsléseket. Ha jól sikerült, az összesítés eltávolítja az egyes gazdaságok azonosítására alkalmas információkat. Kérdezze meg, hogyan történik az anonimizálás, és hogy leiratkozhat-e.\n\n## A bizalom kiérdemelt\n\n> **A legfontosabb ötlet:** A megbízható mezőgazdasági mesterséges intelligencia átlátható az adatok felhasználásával kapcsolatban, elmagyarázza ajánlásait, elismeri a bizonytalanságot, és a gazdára bízza az irányítást.\n\nUgyanezek az elvek vonatkoznak magára az Akadémiára is. Tanulási adatait bármikor letöltheti vagy törölheti fiókbeállításaiból.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Gyakorlati gyakorlat: értékelje ki a mesterséges intelligencia ajánlását",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Alkalmazza a tanultakat egy reális ajánlásra.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Ebben a gyakorlatban reális ajánlás alapján gyakorolja a modul kritikai felülvizsgálati készségeit.\n\n## A forgatókönyv\n\nÖn egy 60 hektáros csepegtetős paradicsomüzemet irányít. A szezon közepén egy kedd reggel a döntéstámogató rendszere a következőket mutatja:\n\n> *\"Javaslat: hagyja ki az öntözést a C blokkban a következő 48 órában. Előre jelzett növényi vízfelhasználás: 3,1 mm/nap. Talajnedvesség: a táblakapacitás 82%-a. Magabiztosság: magas.\"*\n\nAmikor elhalad a C blokk mellett, észreveszi, hogy a keleti szélen a növények fonnyadtnak tűnnek a késő reggeli hőségben, és a tegnapi maximum hőmérséklet 37 °C volt – sokkal melegebb, mint a rendszer két nappal ezelőtti előrejelzése 29 °C.\n\n## Az Ön feladata\n\nVégezze el az alábbi ellenőrzőlistát. Írja be érvelését a **Megjegyzések** fülre, hogy visszatérhessen hozzá.\n\n1. **Ellenőrizze a bemeneteket.** Melyik bemenet tűnik megkérdőjelezhetőnek? (Tipp: hasonlítsa össze az előrejelzett hőmérsékletet a történtekkel.)\n2. **Ellenőrizze az érzékelőket.** Hol van felszerelve a talajnedvesség-szonda? Lehet, hogy olyan helyen, amely nem a keleti szegélyt jelenti?\n3. **Nézze meg a mezőt.** Mit ellenőrizne az elszáradt növényeken? Vegye figyelembe az emitter eltömődését, a nyomást a vonal végén és a gyökér egészségét.\n4. **Döntés.** Követné, módosítaná vagy felülírná az ajánlást? Miért?\n5. **Rögzítés és jelentés.** Milyen visszajelzést adna, hogy a rendszer – és csapata – tanulhasson ebből?\n\n## Vita\n\nA határozott válasz arra utal, hogy az előre jelzett vízfelhasználás valószínűleg túl hidegnek bizonyult előrejelzésen alapult, így a tényleges kereslet magasabb volt. Előfordulhat, hogy egyetlen szonda 82%-a nem a keleti élt jelenti, különösen, ha az ott lévő emitterek eltömődtek, vagy a nyomás alacsony az oldalsó végén. Ésszerű döntés lehet, ha azonnal megvizsgáljuk a keleti szegélyt, rövid öntözést hajtunk végre, ha az ellenőrzés megerősíti a száraz talajt, és jelentjük az előrejelzési hiányosságokat és az esetleges egyenletességi problémát.\n\nRitkán van egyetlen helyes válasz – de mindig van egy helyes folyamat: ellenőrizze a bemeneteket, ellenőrizze a kontextust, nézzen a terepen, döntsön és rögzítsen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Betakarítás, piacok és az ellátási lánc",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Hozam-előrejelzés, piaci intelligencia és logisztika.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Ahogy az évszak a betakarítás felé halad, a döntések a termény termesztéséről az érték megszerzésére tolódnak el.\n\n## Hozam-előrejelzés\n\nA hozam-előrejelzések kombinálják a termésnövekedési modelleket, az aktuális időjárást és az előrejelzéseket, a képeken alapuló lendületet, és néha a számítógépes látásból származó számlálásokat. A korábbi előrejelzések kevésbé biztosak; a pontosság a szezon előrehaladtával javul.\n\nAz előrejelzések olyan döntéseket támogatnak, mint például:\n\n- mennyit kell előre eladni és mikor;\n- hány dolgozót, teherautót és tárolókapacitást kell lefoglalni;\n- megéri-e még alkalmazni egy késői bevitelt.\n\n## Piaci intelligencia\n\nA piaci intelligencia eszközök árakat, határidős ügyleteket, exportadatokat, a versengő régiók időjárását és híreket gyűjtenek, hogy segítsenek előre jelezni az ármozgásokat. Az AI gyorsan össze tudja foglalni ezeket a jeleket, és kiemeli a szokatlan változásokat. Egyetlen modell sem tudja biztosan megjósolni a piacokat; kezelje a piaci előrejelzéseket a kockázatkezelési terv egyik inputjaként, nem pedig garanciaként.\n\n## A betakarítás időzítése és minősége\n\nAzok a modellek, amelyek nyomon követik a termés érettségét – a szőlő cukorszintjét, a szem nedvességtartalmát, a gyümölcs színét – segítenek a betakarítás ütemezésében a minőség, az időjárási kockázat és a logisztika legjobb egyensúlya érdekében. A munkaerővel és a berendezések rendelkezésre állásával kombinálva segíthetik a mezők sorrendjét a művelet során.\n\n## Nyomon követhetőség és bizonyíték\n\nA vásárlók egyre gyakrabban kérnek igazolást arról, hogyan termelték ki a terményt: vízhasználatot, felhasznált ráfordításokat, tanúsítványokat. Azok a rendszerek, amelyek a szezon során ajánlásokat, intézkedéseket és ellenőrzéseket rögzítenek, megkönnyítik a bizonyítékok előállítását – egy másik ok, amiért a hurok ellenőrzési lépése számít.\n\n> **A legfontosabb ötlet:** A betakarításkor a mesterséges intelligencia értéke az időzítés, a mennyiség és az ár bizonytalanságának csökkentéséből, valamint az elvégzett munkák dokumentálásából származik.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Esettanulmány: öntözés és vízgazdálkodás",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Hogyan kombinálódik az evapotranspiráció, a talajnedvesség és a mesterséges intelligencia az öntözés ütemezésében.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Az öntözés az egyik legtisztább példa arra, hogy a mesterséges intelligencia értéket teremt egy farmon, mivel a vízre vonatkozó döntések gyakoriak, költségesek és mérhetőek.\n\n## A vízháztartás\n\nGondoljon a gyökérzónára úgy, mint egy víz bankszámlájára.\n\n- **Befizetések:** csapadék és öntözés.\n- **Kivonások:** a növény által felhasznált és a talajból elpárologtatott víz – együtt **evapotranszspirációnak (ET)** nevezik – plusz a gyökerek alatti vízelvezetést.\n\nAz öntözés ütemezésének célja, hogy egyensúlyt tartson egy alsó határ között, ahol a termés stressznek indul, és egy felső határ között, amelyen túl a víz elfolyik és elpazarol.\n\n## A növényi víz felhasználásának becslése\n\nA növényi víz felhasználását általában két lépésben becsülik meg:\n\n1. A **Referencia evapotranszspiráció (ET₀)** kiszámítása az időjárási adatokból – hőmérséklet, páratartalom, szél és napsugárzás – szabványos referencianövényre vonatkozik.\n2. A **termesztési együttható (Kc)** korrigálja az ET₀ értéket a tényleges terményhez és annak növekedési szakaszához: **ETc = ET₀ × Kc**.\n\nA gépi tanulás javíthatja ezt a becslést, ha tanul a helyi érzékelőkből, a lombkoronaképekből és a gazdaság saját történetéből, különösen ott, ahol a szabványos együtthatók rosszul illeszkednek.\n\n## Egy ütemezési forgatókönyv\n\n> **Példa:** Egy szőlőskertben 40 mm víz áll rendelkezésre, ha a gyökérzóna megtelt. A talajnedvesség-szondák 18 mm-t mutatnak. Az ETc előrejelzés a következő négy napon napi 5 mm-t jelez, eső nem várható.\n\nÖntözés nélkül a blokk körülbelül három és fél nap alatt éri el alsó határát (18 mm ÷ 5 mm/nap). Az ütemezési rendszer a következő két-három napon belüli öntözést javasolja, úgy méretezve, hogy a gyökérzónát túltöltés nélkül töltse fel, időzítve a rendelkezésre álló szivattyúteljesítményre és alacsonyabb éjszakai áramárakra.\n\nHa az előrejelzés 15 mm esőre változik a második napon, egy jó rendszer frissíti az ajánlást – és megmagyarázza, miért.\n\n## Ahol az AI értéket ad\n\n- **Jobb vízhasználati becslés** az időjárás, az érzékelők és a képek kombinálásával.\n- **Előrejelzés-tudatos ütemezés**, amely figyelembe veszi az esőt és a hőséget.\n- **Optimalizálás** számos blokkon, szivattyúkorlátokon és vízkiosztásokon keresztül.\n- **Ellenőrzés** — annak megerősítése az áramlásmérők és a talajnedvesség alapján, hogy az öntözés a terveknek megfelelően történt, és meghozta a várt hatást.\n\n## Mi romolhat el\n\nEgy eltömődött emitter, egy törött szelep vagy egy nem reprezentatív helyre szerelt szonda mind félrevezetheti a rendszert. Ezért fontos az igazolási lépés: ha a megfigyelt talajnedvesség öntözés után nem úgy reagál, ahogy azt előre jelezték, akkor ez egy jelzés a tábla vizsgálatára, nem csak a modellre.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Korlátok, hibák és az ajánlás megtámadásának időpontja",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "A meghibásodási módok felismerése és az emberi ítélőképesség irányítása.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Minden mesterséges intelligencia rendszer néha hibás lesz. A cél nem a vak bizalom vagy a teljes elutasítás, hanem a **kalibrált bizalom**: tudni, hogy egy ajánlás mikor érdemel bizalmat, és mikor érdemel még egy pillantást.\n\n## Gyakori hibamódok\n\n**Hibás bemenetek.** Egy meghibásodott érzékelő, egy rosszul elhelyezett szonda vagy egy hiányzó adatbevitel magabiztos értelmetlenséget eredményez. *Szemet be, szemét ki.*\n\n**A hatótávolságon kívüli körülmények.** A modellek a legkevésbé megbízhatóak olyan helyzetekben, amelyeket edzés közben ritkán láttak: extrém hőség, új fajta, szokatlan talaj.\n\n**Sodródás.** A körülmények idővel változnak, és előfordulhat, hogy a három éve pontos modell már nem lesz az.\n\n**Elfogultság.** Ha a képzési adatok felülreprezentálnak bizonyos régiókat, gazdaságméreteket vagy terményeket, előfordulhat, hogy az ajánlások kevésbé pontosak az eltérő műveleteknél.\n\n**Hiányzó kontextus.** A rendszer nem tud a szomszéd gyomirtószer-sodródásáról, a csőtörésről vagy a szerződésről, amely jövő héten betakarítást igényel.\n\n**Automatizálási torzítás.** Az emberek hajlamosak túlságosan megbízni a gép kimenetében, különösen, ha azt pontosan bemutatják. A két tizedesjegyű szám nem feltétlenül pontos.\n\n## Mikor kell megtámadni egy ajánlást\n\nSzünet, és vizsgálja meg, amikor:\n\n- az ajánlás ellentmond a terepen látottaknak;\n- messze kívül esik az évszakra jellemző normál tartományon;\n- a rendszer alacsony bizalmat mutat, vagy egyáltalán nem mutat magabiztosságot;\n- a kulcsadatok hiányoznak, elavultak vagy nyilvánvalóan hibásak;\n- a hiba következményei súlyosak vagy nehezen visszafordíthatók lennének.\n\n> **Helyszíni ellenőrzés:** Egy egyszerű szabály – minél nagyobb és kevésbé visszafordítható a döntés, annál több bizonyítékra van szüksége, mielőtt egy mesterséges intelligencia ajánlása alapján cselekedne.\n\n## Hogyan kell jól kihívni\n\n1. **Ellenőrizze a bemeneteket.** Jelentenek az érzékelők? Aktuálisak az időjárási adatok?\n2. **Kérdezze meg az okot.** Milyen adatok vezérelték ezt a javaslatot?\n3. **Nézz be a mezőbe.** Felderítsd a kérdéses területet.\n4. **Jegyezze fel, hogy mit és miért döntött.** A felülbírálás értékes visszajelzés, amely segít a rendszer fejlesztésében.\n\nEgy ajánlás megkérdőjelezése nem a technológia kudarca. Az emberek és a mesterséges intelligencia így működik jól együtt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Modellek, képzés és előrejelzések",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Hogyan tanul a modell a példákból, és miért van minden előrejelzésnek bizonytalansága.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "A **modell** egy kapcsolat matematikai leírása – például az időjárás és a növény által felhasznált vízmennyiség között. A gépi tanulás példákból tanulva épít modelleket.\n\n## Tanulás a példákból\n\nKépzelje el, hogy meg akarja jósolni, hogy holnap mennyi vizet fog felhasználni egy mandulaültetvény. Sok elmúlt napot gyűjt össze, mindegyik a következőket tartalmazza:\n\n- a **bemenetek** (más néven *tulajdonságok*): hőmérséklet, páratartalom, szél, napsugárzás, fa kora, lombkoronatakaró;\n- a megjósolni kívánt **eredmény**: a gyümölcsösben aznap ténylegesen használt víz, szenzorok által mérve.\n\nA **tréning** során az algoritmus újra és újra módosítja a modellt, amíg előrejelzései a lehető legpontosabban megegyeznek a rögzített eredményekkel. Ezt hívják **felügyelt tanulásnak**, mert minden példához tartozik a helyes válasz.\n\n## Olyan adatok tesztelése, amelyeket a modell soha nem látott\n\nEgy modell meg tudja jegyezni a képzési példáit, és még mindig kudarcot vall az új napokon. Ez az oka annak, hogy az adatkutatók néhány adatot félretesznek **ellenőrzésre** – olyan adatokat, amelyeket a modell soha nem látott a képzés során. Az eltartott adatokon elért teljesítmény az őszinte mérőszáma annak, hogy mennyire jól működik.\n\n> **Fontos:** Kérdezze meg, hogyan ellenőrizték a modellt. \"Tökéletesen illeszkedik a történelmi adatainkhoz\" figyelmeztető jel, nem erősség.\n\n## Mérési pontosság\n\nA numerikus előrejelzéseknél a gyakori mérőszámok közé tartozik az **átlagos hiba** (átlagosan milyen messze vannak az előrejelzések), és hogy a modell mekkora variációt magyaráz. Az osztályozáshoz – „stresszes” vagy „egészséges” – azt kérdezzük, hogy milyen gyakran helyes a modell, és milyen gyakran kelt téves riasztást vagy hagy ki valós problémákat.\n\nNincs egyetlen \"jó\" pontosság. Az 5%-on belüli hozam-előrejelzés kiváló lehet marketingdöntéshez; az a fagyriasztás, amely minden tizedik eseményt kihagy, elfogadhatatlan lehet.\n\n## Minden jóslatnak van bizonytalansága\n\nAz időjárás változásai, az érzékelők sodródása és a mezők változnak. Egy megbízható rendszer bizonytalanságot közvetít: \"a holnapi vízfelhasználás 6,2 mm, valószínűleg 5,6 és 6,8 mm között van.\" Egyetlen szám, tartomány nélkül, fontos információkat rejt.\n\n## Amikor a modellek elavulnak\n\nVáltoznak a feltételek. Az új fajták, az aszályos év vagy a megváltozott öntözési rendszer kevésbé reprezentatívvá teheti a múltbeli adatokat. Ezt **driftnek** hívják. A jó rendszerek idővel ellenőrzik saját pontosságukat, és ha a teljesítmény csökken, átképzésre kerülnek.\n\n## A mezőgazdasági modellek gyakori típusai\n\n- **Regresszió** — számot jósol (vízfelhasználás, hozam, ár).\n- **Osztályozás** — kategóriát rendel (betegség jelenléte vagy hiánya, termés típusa).\n- **Előrejelzés** – előrejelzi, hogy valami hogyan fog változni az idő múlásával (talajnedvesség a következő öt napban).\n- **Számítógépes látás** — képeket értelmez (gyümölcsszámlálás, gyomok észlelése).\n- **Optimalizálás** – korlátok között megtalálja a legjobb tervet (olyan öntözési ütemterv, amely korlátozott víz mellett kielégíti a terményigényt).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Tervezés és ültetés",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Adatok és mesterséges intelligencia használata, mielőtt az első mag a földbe kerül.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "A szezon legértékesebb döntései közül sok az ültetés előtt születik meg. A mesterséges intelligencia segíthet, ha több bizonyítékot szolgáltat ezekhez a döntésekhez.\n\n## Területi előzmények és kezelési zónák\n\nA mezők nem egységesek. Az évekig tartó hozamtérképek, talajfelmérések és műholdfelvételek gyakran konzisztens mintákat tárnak fel: egy alacsony terület, amely nedves marad, egy homokos gerinc, amely először kiszárad. Az algoritmusok ezeket a területeket **kezelési zónákba** csoportosíthatják, amelyek eltérően reagálnak a vízre, a vetőmagra és a műtrágyára.\n\nA zónák segítségével a termelő megváltoztathatja a vetési arányt, kiválaszthatja, hogy hol alkalmazzon több vagy kevesebb nitrogént, vagy olyan öntözőkészletet tervezhet, amely megfelel a tábla egyes részeinek viselkedésének.\n\n## Döntés a fajtáról és az ültetés dátumáról\n\nA regionális kísérleteken és az időjárási rekordokon kiképzett modellek meg tudják becsülni, hogy a fajták hogyan teljesítenek különböző körülmények között, és hogyan befolyásolja az ültetési dátum a kockázatot – például a virágzáskori hőstressz esélyét. Ezek a becslések akkor a leghasznosabbak, ha a helyi kísérleteket tükrözik, nem csak az országos átlagokat.\n\n## Forgatókönyv tervezés\n\nAz AI-eszközök gyorsan futtathatják a „mi lenne, ha” forgatókönyveket: Mi van, ha száraz az évszak? Mi van, ha 20%-kal csökkentik a vízellátást? Mi van, ha az input árak emelkednek? A forgatókönyvek összehasonlítása segít olyan tervet választani, amely számos lehetséges jövőre vonatkozik, nem csak a vártra.\n\n> **Szántóföldi ellenőrzés:** Ha egy eszköz vetési arányt vagy fajtát javasol, kérdezze meg, milyen adatokra épült. A talajból és az éghajlatból származó regionális kísérleti adatok sokkal relevánsabbak, mint az országos átlag.\n\n## Szem előtt tartandó korlátok\n\nA szezon előtti ajánlások hosszú távú előrejelzéseken alapulnak, amelyek bizonytalanok. Kezelje őket kiindulási tervként, amelyet a szezon előrehaladtával módosítani kell, nem pedig egy fix receptként.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "1. modul kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Ellenőrizze, hogy megértette-e az AI alapjait.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Válaszolj öt gyors kérdésre az 1. modulban található ötletekkel kapcsolatban. A kvízek gyakorlást szolgálnak: tetszőleges alkalommal újratöltheted őket, és minden próbálkozás után magyarázatot fogsz látni.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "2. modul kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Ellenőrizze, hogy megértette-e az adatokat, a modelleket és az ajánlásokat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Öt kérdés az adatminőségről, a modellképzésről és a döntéstámogatásról. Vedd újra, ahányszor csak akarod.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "3. modul kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Ellenőrizze, hogy megértette-e az AI-t a szezon során.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Öt kérdés a tervezésről, az öntözésről, a termésfigyelésről és a betakarításról. Vedd újra, ahányszor csak akarod.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Az előrejelzéstől az ajánlásig",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Hogyan változtatják a döntéstámogató rendszerek az előrejelzéseket tettekké – és hogyan tartják az embereket a hurok alatt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "A jóslat megmondja, mi fog történni. Egy **ajánlás** megmondja, mit kell tenni ezzel kapcsolatban. Az egyik a másikká alakításához célokra, korlátokra és kontextusra van szükség.\n\n## Példa az öntözésre\n\nTegyük fel, hogy egy modell azt jósolja, hogy egy tábla holnap 7 mm vizet használ fel, és a talaj nedvességtartalma már közel van ahhoz az alsó határhoz, amelyet a növény elvisel. Egy ajánlási rendszer ezt az előrejelzést a következőkkel kombinálja:\n\n- **célok** — a hozam és a minőség védelme, a pazarlás elkerülése;\n- **korlátok** — a szivattyú teljesítménye, a fennmaradó vízkiosztás, az áramdíjak, az öntözési ütemterv;\n- **kontextus** — előre jelzett eső, termésszakasz, tervezett betakarítás, amely száraz talajt igényel.\n\nAz eredmény a következő lehet: *\"Öntözze be a 4-es blokkot ma este 6 órán keresztül (kb. 18 mm). 7. blokk kihagyása: 12 mm-es eső várható nagy biztonsággal.\"*\n\n## A jó ajánlások megmagyarázzák magukat\n\nAz az ajánlás, amelyet nem ért, olyan ajánlás, amelyet nem lehet megítélni. Keressen olyan rendszereket, amelyek a következőket mutatják:\n\n- **az ok** — mely adatok és melyik előrejelzés vezérelte a javaslatot;\n- **a bizalom** — mennyire biztos a rendszer;\n- **az alternatívák** — mi történik, ha vár, vagy kevesebbet alkalmaz;\n- **a bizonyítékok nyomvonala** — így utólag ellenőrizheti, hogy az akció megtörtént-e és működött-e.\n\n## Az emberek tájékoztatása\n\nA mezőgazdaságban a legtöbb mesterséges intelligencia **döntéstámogatás**: a rendszer javasol, egy személy dönt. Még akkor is, ha az automatizálás műveleteket hajt végre – például egy vezérlő kinyit egy szelepet –, a felelős tervezések magukban foglalják a jóváhagyási lépéseket, a korlátokat és a felülbírálási lehetőséget.\n\n> **A legfontosabb ötlet:** Az eredményért felelős személynek mindig látnia kell, miért született egy ajánlás, módosíthatja azt, és le kell állítania.\n\n## A hurok lezárása: ellenőrzés\n\nA legértékesebb rendszerek nem állnak meg az ajánlásnál. Ellenőrzik, hogy valójában mi történt, és mi történt ezután: Megtörtént az öntözés? Mennyi vizet alkalmaztak? A talajnedvesség a vártnak megfelelően helyreállt? Ez az **ellenőrzés** lépés bizalmat épít, felderíti a berendezések problémáit, és olyan bizonyítékot szolgáltat, amelyet a vásárlók, a könyvvizsgálók és a vízügyi hatóságok egyre gyakrabban kérnek.\n\nEmlékezzen az 1. modul ciklusára: **érzékelés → előrejelzés → ajánlás → ellenőrzés**. A kör minden egyes fordulata javítja a döntéseket és a következő szezon adatait is.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "A tanfolyam összefoglalója és a következő lépések",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "A legfontosabb tudnivalók és a záróvizsgára való felkészülés.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Gratulálunk a tanfolyam végéhez! Fogjuk össze a főbb gondolatokat.\n\n## Kulcskivonatok\n\n- **Az AI egy eszköztár**, nem egyetlen technológia. A szabályok, a gépi tanulás, a mélytanulás és a generatív mesterséges intelligencia különféle problémáknak felel meg.\n- **Az adatok az alapok.** A pontosság, a teljesség, az időszerűség, a következetesség és a reprezentativitás határozza meg, hogy minden modell mire képes.\n- **A modellek a példákból tanulnak**, és soha nem látott adatok alapján kell érvényesíteni őket. Minden előrejelzésnek van bizonytalansága, és a modellek sodródhatnak.\n- **Az ajánlások az előrejelzéseket célokkal, korlátokkal és kontextussal kombinálják.** A jó ajánlások megmagyarázzák magukat.\n- **A hurok számít:** érzékel → jósol → ajánl → ellenőriz.\n- **Az egész szezonban** az AI támogatja a tervezést, az öntözést, a termésfigyelést, a betakarítás időzítését, a marketinget és a nyomon követhetőséget.\n- **Használjon kalibrált bizalmat.** Kihívás a szakterülettel ütköző, gyenge adatokon nyugvó vagy nagy téttel járó javaslatokkal.\n- **Az Ön adatai gondoskodást érdemelnek.** Tudja meg, ki a tulajdonosa, hogyan használják fel, és hogyan veheti vissza azokat.\n\n## Felkészülés a záróvizsgára\n\nA záróvizsga mind a négy modulra kiterjed. 20 kérdést von le egy nagyobb banktól, és 30 percet ad. A sikeres teljesítéshez **80%** szükséges.\n\n> **Tipp:** Tekintse át jegyzeteit és a modul kvízeit. Ha kihagyott egy kvízkérdést, a vizsga előtt nyissa meg a leckét, amelyre mutat.\n\n## Merre tovább\n\n- Az **Agricultural Data Fundamentals** részletesebben foglalkozik az adatforrásokkal és a minőséggel.\n- A **Távérzékelés és a műholdas intelligencia** kiterjeszti a képeket és a vegetációs indexeket.\n- Az **AI-Powered Irrigation** ezeket az elképzeléseket részletesen alkalmazza a vízgazdálkodásban.\n\nKöszönjük, hogy az AGRO-AI Akadémián tanult. Ha készen áll, nyissa meg a záróvizsgát a kurzus menüjéből.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Üdvözöljük a tanfolyamon",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Mit fog tanulni, hogyan működik a tanfolyam, és hogyan szerezheti meg a bizonyítványt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Üdvözöljük a **Bevezetés a mesterséges intelligenciába a mezőgazdaságban**, az AGRO-AI Akadémia *Foundations of Agricultural AI* program első tanfolyamán.\n\nNem kell semmilyen technikai háttér ahhoz, hogy itt sikeres legyen. Ha valaha is megnézett egy időjárás-előrejelzést, elolvasott egy talajvizsgálatot vagy összehasonlította a két tábla termését, akkor már alkalmazza azokat a szokásait, amelyekre ez a tanfolyam épít: bizonyítékok gyűjtése, minták felderítése és a következő lépések eldöntése.\n\n## Mit fogsz megtanulni\n\nA tanfolyam végére képes leszel:\n\n- közérthető nyelven magyarázza el, mi az AI és mi nem;\n- írja le, honnan származnak a mezőgazdasági adatok, és mitől megbízhatóak;\n- követni, hogyan válik az adatokból előrejelzés, és az előrejelzésből ajánlás;\n- felismerni a hasznos mesterséges intelligencia alkalmazásokat a szezon során;\n- kritikusan ítélje meg az AI kimenetet és használja azt felelősségteljesen.\n\n## Hogyan működik a tanfolyam\n\nA kurzus **négy modulból** rövid leckéket tartalmaz. Az egy-három modul egy-egy gyakorlati kvízzel zárul, amely segít ellenőrizni a megértést; A negyedik modul egy gyakorlati feladattal és egy kurzus-összefoglalóval zárul, amelyek felkészítenek a záróvizsgára. A kvízek nem számítanak bele a bizonyítványba, és tetszés szerint újratöltheti őket.\n\nA folyamat automatikusan mentésre kerül. Megállhat a lecke közepén a telefonon, és később folytathatja a számítógépen.\n\n> **Tipp:** Az egyes leckék alatti **Jegyzetek** fülön írja le a saját működésére vonatkozó ötleteket. A jegyzetek privátak – csak Ön láthatja őket.\n\n## A tanúsítvány megszerzése\n\nHa minden szükséges leckét befejezett, a **záróvizsga** feloldódik. 20 kérdést húz egy nagyobb banktól, 30 percre van időzítve, és **80%** pontszám szükséges a sikeres teljesítéshez. Ha nem sikerül az első próbálkozás, áttekintheti az ajánlott leckéket, és egy óra múlva újra próbálkozhat.\n\nTegye le a vizsgát, és az AGRO-AI Academy automatikusan kiállítja a tanúsítványt – ingyenesen, egyedi hitelesítő azonosítóval és nyilvános ellenőrző oldallal, amelyet megoszthat a LinkedIn-en.\n\nKezdjük.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "A szabályoktól a tanulásig: mi az AI (és mi nem)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "A mesterséges intelligencia, a gépi tanulás, a mély tanulás és a generatív AI egyszerű nyelvű meghatározásai.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "A „mesterséges intelligencia” kifejezés mindent leír, az egyszerű szenzoros riasztástól az esszéket író chatbotig. Mielőtt a mezőgazdasággal foglalkoznánk, világos szavakra van szükségünk.\n\n## Mesterséges intelligencia\n\n**A mesterséges intelligencia (AI)** a számítógépes rendszerek felépítésének széles területe, amelyek olyan feladatokat hajtanak végre, amelyeket általában az emberi intelligenciával társítunk: minták felismerése, előrejelzések készítése, nyelv megértése és cselekvések kiválasztása.\n\nEz a meghatározás szándékosan tág. Nagyon különböző technológiákat tartalmaz, így segít elkülöníteni ezek két módját.\n\n## Szabályok kontra tanulás\n\n**Szabályalapú rendszerek** követik az emberek által írt utasításokat. Az öntözésvezérlő, amely szerint *\"ha a talaj nedvességtartalma 25% alá esik, indítsa el a szivattyút\"*, egy szabályt követ. A szabályok átláthatóak és kiszámíthatók, de valakinek előre tudnia kell a megfelelő szabályt, és a szabályok nem alkalmazkodnak a körülmények változásához.\n\n**Gépi tanulás (ML)** rendszerek inkább példákból tanulják a mintákat. Mutasson egy modellt több ezer elmúlt évszakról – időjárásról, talajról, öntözésről és az azt követő termésről –, és olyan összefüggéseket tanulhat meg, amelyeket senki sem írt le kifejezetten. A legtöbb, amit ma „AI-nak” neveznek, a gépi tanulás.\n\n| | Szabályalapú rendszer | Gépi tanulási modell |\n|---|---|---|\n| Honnan jön a logika | Az emberek írják | Az adatokból tanulva |\n| Erő | Átlátható, kiszámítható | Összetett mintákat talál, alkalmazkodik az új adatokhoz |\n| Gyengeség | Merev; kihagyja azt, amit a tervezők nem láttak előre | Csak annyira jó, mint az adatai; nehéz lehet megmagyarázni |\n| Farm példa | A szivattyú a nedvességküszöb alatt indul | A modell megjósolja a holnapi termés vízfelhasználását |\n\n## Mély tanulás\n\nA **Mély tanulás** gépi tanulási módszerek családja, amely sokrétegű „neurális hálózatokból” épül fel. Különösen jó a zavaros, nagy dimenziós adatokhoz, például képekhez és hangokhoz. Amikor egy telefonos alkalmazás felismer egy levélbetegséget a fényképről, általában mély tanulás áll a háttérben.\n\n## Generatív AI\n\nA **generatív mesterségesintelligencia** új tartalmat – szöveget, képeket, hangot vagy kódot – hoz létre a nagyon nagy adatkészletekből tanult minták alapján. A nagy nyelvi modellek (LLM), a társalgási asszisztensek mögött meghúzódó technológia, generatív mesterséges intelligencia. Számos nyelven képesek elmagyarázni a fogalmakat, összefoglalni a jelentéseket és válaszolni a kérdésekre.\n\nA generatív mesterséges intelligencia erőteljes, de *valószínű* szavakat jósol meg, nem ellenőrzött tényeket. Teljes bizalommal állíthat hamisat. A mezőgazdaságban a generatív asszisztens hasznos magyarázathoz és megfogalmazáshoz, de a fontos számokat és döntéseket össze kell vetni a megbízható adatokkal.\n\n> **A legfontosabb ötlet:** A mesterséges intelligencia nem egy gép. Ez egy eszköztár. A szabályok, a statisztikai modellek, a mély tanulás és a generatív modellek különböző problémákhoz illeszkednek.\n\n## Mi nem az AI\n\n- **Az AI nem varázslat.** Minden kimenet az emberek által hozott adatokból és tervezési döntésekből származik.\n- **Az AI nem úgy \"érti\" a farmodat**, ahogy te. Csak azt tudja, hogy milyen adatokat rögzített.\n- **Az AI-nak nincs automatikusan igaza.** Az előrejelzések bizonytalanságot hordoznak magukban, és a legjobb rendszerek megmondják, hogy mennyit.\n- **Az AI nem helyettesíti az ítélőképességet.** Ez egy döntéstámogató eszköz. A döntésért való felelősség az embereké marad.\n\n## Ellenőrizze, hogy megértette-e\n\nGondoljon egy olyan eszközre, amelyet már használ – időjárás-alkalmazás, hozamfigyelő, képleteket tartalmazó táblázat. A logikája szabályokként van megírva, vagy adatokból tanult? Válaszát írja le a jegyzeteibe; erre a gondolatra még visszatérünk a 2. modulban.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Miért fordul most a mezőgazdaság a mesterséges intelligencia felé?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Az AI farmokon történő elfogadását ösztönző nyomás és lehetőségek.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "A gazdálkodók mindig is felhasználták az információkat a döntéseik meghozatalához. Ami megváltozott, az a rendelkezésre álló információ mennyisége, a felhasználás sebessége, és minden erőforrásra nehezedő nyomás.\n\n## Nyomás a modern farmon\n\n**Víz.** A mezőgazdaság a világ legnagyobb édesvíz-felhasználója; Az ENSZ Élelmezésügyi és Mezőgazdasági Szervezete (FAO AQUASTAT) szerint a mezőgazdaság egésze, főként az öntözés, a globális édesvízkivétel mintegy 70%-át teszi ki. Sok régióban csökken a vízellátás, miközben nő a kereslet. Minden öntözési döntés számít.\n\n**Az éghajlat változékonysága.** Az évszakok kevésbé kiszámíthatók. A hőhullámok, a rendszertelen esőzések és az új kártevők nyomása kevésbé megbízhatóvá teszik a tavalyi játékkönyvet.\n\n**Költségek és haszonkulcsok.** A műtrágya, az energia, a munkaerő és a felszerelés költségei meredeken ingadozhatnak. A megfelelő mennyiség megfelelő helyre történő felhordása védi a margót és a környezetet is.\n\n**Munka.** Sok művelet nehézségekbe ütközik a képzett emberek megtalálása és megtartása érdekében. Az a tudás, amely egy tapasztalt vezető fejében él, veszélybe kerül, ha az illető nem elérhető.\n\n**Elvárások a vevőktől és a szabályozó hatóságoktól.** Az ellátási láncok egyre gyakrabban kérnek bizonyítékot: mennyi vizet használtak fel, milyen inputokat alkalmaztak, milyen gyakorlatot követtek.\n\n## Miért az AI, és miért most\n\nHárom dolog jött össze:\n\n1. **Az adatok bőségessé váltak.** A műholdak most néhány naponként újra felkeresik a legtöbb mezőgazdasági területet. A talajnedvesség-szondák, az időjárás-állomások, az öntözésvezérlők és a gépek mind folyamatos adatokat állítanak elő.\n2. **Olcsóvá és összekapcsolttá vált a számítástechnika.** Azok a modellek, amelyeknek korábban kutatólaborra volt szükségük, a felhőben futhatnak, és az eredményeket telefonra juttathatják.\n3. **A módszerek kiforrtak.** A gépi tanulás, a számítógépes látás és a nyelvi modellek gyorsan fejlődtek, és ma már gyakorlati eszközök.\n\n> **A legfontosabb ötlet:** A mesterséges intelligencia nem hoz létre új erőforrásokat. Segít jobban kihasználni a már meglévő vizet, ráfordításokat, időt és tudást.\n\n## Mire képes az AI reálisan\n\n- **Érzékelés** – a nyers képeket és az érzékelőadatokat információvá alakítja, például a mező mely zónái vannak feszültség alatt.\n- **Előrejelzés** – becsülje meg, mi fog történni, például a holnapi termésvízigény vagy a szezon végi hozam.\n- **Ajánlás** – javasoljon egy műveletet, például egy öntözési ütemtervet, és indokolja meg, miért.\n- **Ellenőrzés** — ellenőrizze, hogy történt-e művelet, és hogy működött-e.\n\nFigyeljük meg a mintát: érzékeljük, jósoljuk meg, ajánljuk, ellenőrizzük. Ezt a hurkot fogjuk használni a tanfolyam során.\n\n## Amit nem tud\n\nA mesterséges intelligencia nem látja azt, amit az adatai nem rögzítenek: törött szelepet, a szomszéd permetezését, az Ön gazdaságában egyedülálló kulturális gyakorlatot. Nem vállalhat felelősséget egy döntésért. És nem helyettesítheti a termelő és a tanácsadó közötti bizalmat. A jó mezőgazdasági mesterséges intelligencia célja, hogy olyan emberekkel dolgozzon, akik ismerik a földet.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

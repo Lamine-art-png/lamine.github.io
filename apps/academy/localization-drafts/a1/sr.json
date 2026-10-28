@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "sr",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Увод у вештачку интелигенцију у пољопривреди",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Шта је вештачка интелигенција, како функционише на фарми и како је одговорно користити.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Вештачка интелигенција стиже у пољопривреду преко контролора за наводњавање, сателитских услуга, софтвера за управљање фармама и телефона у џеповима узгајивача. Овај курс вам даје јасно, практично разумевање шта је та технологија, како функционише и како да је добро користите.\n\nНаучићете основне идеје које стоје иза вештачке интелигенције и машинског учења без једначина, видети како пољопривредни подаци постају предвиђање, а затим препорука, и пратити АИ током сезоне — од планирања и наводњавања до здравља усева и жетве. Изнад свега, научићете да процените излаз вештачке интелигенције: када му веровати, када га доводити у питање и како задржати људско расуђивање и знање фарме.\n\nКурс је намењен узгајивачима, оператерима, агрономима, менаџерима и студентима. Није потребна никаква техничка позадина.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Ниједан. Знатижеља о томе како технологија може да подржи пољопривредни рад је све што вам треба.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Објасните једноставним језиком шта су вештачка интелигенција, машинско учење и генеративна вештачка интелигенција\", \"Опишите главне изворе пољопривредних података и шта чини податке поузданим\", \"Пратите како модел претвара податке у предвиђање, а предвиђање у препоруку\", \"Препознајте практичне примене вештачке интелигенције током целе сезоне усева, од планирања до жетве\", \"Идентификујте границе и начине неуспеха пољопривредне вештачке интелигенције и када оспорити препоруку\", \"Примените принципе власништва над подацима, приватности и одговорног коришћења на сопствени рад\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Шта АИ значи за пољопривреду",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Основне идеје и зашто су сада важне.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Како пољопривредна вештачка интелигенција функционише",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Од података до модела до препоруке.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "АИ током целе сезоне",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Практичне примене од планирања до жетве.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Користите АИ одговорно",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Ограничења, права на податке и поуздано, критично коришћење.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Праћење здравља усева одозго и изблиза",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Сателитски снимци, индекси вегетације и компјутерски вид за здравље усева.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Здраве биљке и биљке под стресом различито рефлектују светлост. АИ користи ту разлику - снимљену сателитима, дроновима и камерама - да посматра усеве у размерама које ниједан извиђачки тим не може да покрије.\n\n## Како биљке изгледају на сателиту\n\nЗелени листови апсорбују већину црвене светлости за фотосинтезу и снажно рефлектују **блиску инфрацрвену (НИР)** светлост. Када су биљке под стресом, ретке или старе, црвена рефлексија расте, а НИР рефлексија пада.\n\n**Индекс нормализоване разлике вегетације (НДВИ)** обухвата овај контраст:\n\n**НДВИ = (НИР − црвена) ÷ (НИР + црвена)**\n\nВредности се крећу од −1 до +1. Густа, здрава вегетација је типично висока (често изнад 0,6); голо земљиште је ниско (око 0,1–0,2); вода је обично негативна.\n\n## Читање НДВИ мапа мудро\n\nНДВИ је користан за уочавање **где** се поље разликује, а не за дијагностицирање **зашто**. Крпа са ниским НДВИ може бити водени стрес, недостатак хранљивих материја, болест, штеточине, проблем са садњом или једноставно друга сорта. Мапа вам говори где да тражите; извиђање вам говори шта сте пронашли.\n\n> **Важно:** Облаци, сенке облака, измаглица и доба дана могу да искриве сателитска очитавања. Поуздане услуге маскирају облаке и упоређују слике током времена уместо да верују у један снимак.\n\nДруги индекси постоје за специфичне сврхе — неки су осетљивији на хлорофил, други на садржај воде или на густе крошње у којима је НДВИ засићен.\n\n## Компјутерски вид изблиза\n\nНа земљи, модели **компјутерског вида** анализирају фотографије са телефона, трактора или дронова како би:\n\n- идентификују болести и штеточине са слика лишћа;\n- разликовати коров од усева за циљано прскање;\n- пребројите воће, цвеће или биљке да бисте проценили принос.\n\nОви модели су обучени на великим збиркама означених слика. Њихова тачност у великој мери зависи од тога да ли те слике личе на ваш усев, ваше сорте и услове осветљења.\n\n## Од откривања до акције\n\nДобар ток рада за праћење усева претвара откривање у приоритетни задатак: *„Зона 3 показује опадање снаге током 10 дана. Прво извиђајте североисточни угао; проверите уједначеност наводњавања и потражите знаке болести корена.“* Налази извиђача се затим враћају у систем, побољшавајући будућа упозорења.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Подаци: сировина пољопривредне АИ",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Одакле долазе подаци о фарми и шта их чини поузданим.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Сваки АИ систем је изграђен од података. Ако су подаци непотпуни, пристрасни или погрешни, АИ ће такође бити. Разумевање ваших података је најважнија вештина у пољопривредној вештачкој интелигенцији.\n\n## Одакле долазе пољопривредни подаци\n\n| Извор | Примери | Шта вам говори |\n|---|---|---|\n| Време | Станице на фарми, регионалне мреже, прогнозе | Температура, падавине, влажност, ветар, сунчево зрачење |\n| Земља | Сонде за влагу, испитивања тла, карте земљишта | Вода доступна корену, хранљиве материје, текстура |\n| Даљинска детекција | Сателитски, авионски и дрон слике | Снага усева, покривање крошње, обрасци стреса преко поља |\n| Опрема | Регулатори за наводњавање, мерачи протока, монитори приноса, трактори | Шта је примењено, где и када |\n| Рецордс | Датуми садње, сорте, апликације за унос, белешке о извиђању | Управљачке одлуке и запажања |\n| Маркетс | Цене, уговори, сигнали потражње | Економски контекст за одлуке |\n\n## Квалитети добрих података\n\n**Тачност** — да ли мерење одражава стварност? Сонда за влагу постављена на мокром месту или кишомера испод дрвета ће довести у заблуду сваки модел који је користи.\n\n**Комплетност** — има ли празнина? Сензор који престаје да извештава недељу дана током топлотног таласа оставља рупу тачно када је то најважније.\n\n**Правовременост** — да ли су подаци довољно новији за одлуку? Јучерашња влажност земљишта је корисна за данашње наводњавање; прошломесечни није.\n\n**Доследност** — да ли су јединице, формати и дефиниције исти током времена и у различитим пољима? Мешање инча и милиметара, или два имена за исто поље, узрокује тихе грешке.\n\n**Репрезентативност** — да ли подаци покривају услове у којима ће се АИ користити? Модел обучен само на песковитим земљиштима можда неће радити на глини.\n\n> **Провера на терену:** Пре него што верујете контролној табли, поставите три питања: Одакле је дошао овај број? Када је измерено? Шта би то учинило погрешним?\n\n## Подацима је потребан контекст\n\nОчитавање влаге у земљишту од 30% само по себи мало значи. Важно је која је врста земљишта, колико дубоко се налази сензор, који усев расте и у којој фази. Добра пољопривредна вештачка интелигенција комбинује изворе података тако да сваки додаје контекст другима — на пример, упаривање сателитских снимака са временским подацима и историјом наводњавања поља.\n\n## Ваши подаци, ваше одлуке\n\nПодаци о фарми имају вредност — комерцијалне, оперативне и личне. Пре повезивања опреме или дељења записа са било којом услугом, схватите ко може да приступи подацима, како ће се користити и да ли можете да их понесете са собом ако одете. Вратићемо се на власништво података у Модулу 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Власништво података, приватност и поверење",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Практични принципи за поуздано дељење података са фарме.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Подаци о фарми могу открити приносе, праксу, финансије и локацију људи и имовине. Дељење може да откључа вредне услуге - али то увек треба да буде намеран избор.\n\n## Питања која треба поставити било ком добављачу технологије\n\n- **Власништво:** Ко поседује податке које пружам и податке које систем генерише о мојој фарми?\n- **Употреба:** За шта ће се користити подаци? Да ли ће се користити за обуку модела? Да ли ће се комбиновати са подацима других фарми?\n- **Дељење:** Да ли ће се делити или продавати трећим лицима? Које и зашто?\n- **Приступ и преносивост:** Могу ли да преузмем своје податке у употребљивом формату? Могу ли га понети са собом ако одем?\n- **Брисање:** Могу ли да избришем своје податке и шта остаје након тога?\n- **Безбедност:** Како су заштићени подаци? Ко то у компанији може видети?\n- **Контрола:** Могу ли да опозовем приступ повезаном уређају или партнеру у било ком тренутку?\n\nНеколико пољопривредних организација објавило је принципе података о фармама који се баве овим питањима; питање да ли их провајдер прати је добра полазна тачка.\n\n## Сагласност и дозволе\n\nДобри системи траже конкретну, информисану дозволу — на пример, омогућавање конектору да чита податке контролера за наводњавање без да му се даје дозвола за промену поставки. Омогућите најмањи приступ потребан за посао и редовно прегледајте повезане услуге.\n\n## Збирни и анонимни подаци\n\nКомбиновање података са многих фарми може побољшати моделе за све, као што су боље регионалне процене коришћења воде. Добро обављено, агрегација уклања информације које би могле идентификовати појединачну фарму. Питајте како се врши анонимизација и да ли можете да се одјавите.\n\n## Поверење је заслужено\n\n> **Кључна идеја:** Поуздана пољопривредна вештачка интелигенција је транспарентна о томе како користи податке, објашњава своје препоруке, признаје несигурност и оставља фармеру контролу.\n\nТи исти принципи важе и за саму Академију. Можете да преузмете или избришете своје податке за учење у било ком тренутку из подешавања налога.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Практична вежба: процените препоруку вештачке интелигенције",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Примените оно што сте научили на реалну препоруку.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "У овој вежби вежбаћете вештине критичког прегледа из овог модула на реалистичну препоруку.\n\n## Сценарио\n\nВи управљате операцијом парадајза на 60 хектара који се наводњава кап по кап. У уторак ујутро усред сезоне, ваш систем за подршку одлучивању показује:\n\n> *\"Препорука: Прескочите наводњавање Блока Ц у наредних 48 сати. Предвиђена потрошња воде за усеве: 3,1 мм/дан. Влажност земљишта: 82% капацитета поља. Поузданост: висока.\"*\n\nКада се возите поред Блока Ц, приметићете да биљке на источној ивици изгледају увеле на каснојутарњој врућини, а јучерашња максимална температура била је 37 °Ц — много топлија од прогнозе од 29 °Ц коју је систем користио пре два дана.\n\n## Ваш задатак\n\nПрођите кроз контролну листу испод. Напишите своје образложење на картици **Напомене** да бисте се могли вратити на њега.\n\n1. **Проверите улазе.** Који унос изгледа сумњиво? (Савет: упоредите предвиђену температуру са оним што се догодило.)\n2. **Проверите сензоре.** Где је инсталирана сонда за влажност земљишта? Може ли бити на месту које не представља источну ивицу?\n3. **Погледајте у поље.** Шта бисте проверили на увенулим биљкама? Узмите у обзир зачепљење емитера, притисак на крају линије и здравље корена.\n4. **Одлучите.** Да ли бисте следили, изменили или заменили препоруку? Зашто?\n5. **Снимање и извештавање.** Коју повратну информацију бисте дали да систем — и ваш тим — могу научити из овога?\n\n## Дискусија\n\nСнажан одговор примећује да је предвиђено коришћење воде вероватно засновано на прогнози која се показала превише хладна, па је стварна потражња била већа. Једна сонда која очитава 82% можда не представља источну ивицу, посебно ако су емитери тамо зачепљени или је притисак низак на крају бочне. Разумна одлука би могла бити да се одмах прегледа источна ивица, изврши кратко наводњавање ако инспекција потврди да је тло суво, и да се пријави и промашај прогнозе и могући проблем уједначености.\n\nРетко постоји само један тачан одговор — али увек постоји прави процес: проверите уносе, проверите контекст, погледајте у пољу, одлучите и забележите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Жетва, тржишта и ланац снабдевања",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Предвиђање приноса, тржишна интелигенција и логистика.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Како се сезона приближава жетви, одлуке се померају са узгоја усева на хватање његове вредности.\n\n## Предвиђање приноса\n\nПрогнозе приноса комбинују моделе раста усева, временске прилике и прогнозе, снагу засновану на сликама, а понекад и рачунање из компјутерског вида. Раније прогнозе су мање извесне; прецизност се побољшава како сезона напредује.\n\nПрогнозе подржавају одлуке као што су:\n\n- how much to sell forward, and when;\n- колико радника, камиона и складишних капацитета резервисати;\n- whether a late input is still worth applying.\n\n## Тржишна интелигенција\n\nАлати тржишне интелигенције прикупљају цене, фјучерсе, податке о извозу, временске прилике у конкурентским регионима и вести како би помогли у предвиђању кретања цена. АИ може брзо да сумира ове сигнале и истакне необичне промене. Ниједан модел не може са сигурношћу предвидети тржишта; третирати тржишне прогнозе као један инпут за план којим се управља ризиком, а не као гаранцију.\n\n## Време и квалитет жетве\n\nМодели који прате зрелост усева — ниво шећера у грожђу, влага у зрну, боја у воћу — помажу у планирању жетве за најбољи баланс квалитета, временских ризика и логистике. У комбинацији са доступношћу радне снаге и опреме, они могу помоћи у секвенцирању поља током операције.\n\n## Сљедивост и докази\n\nКупци све чешће траже доказе о томе како је усев произведен: коришћење воде, примењени инпути, сертификати. Системи који бележе препоруке, радње и верификацију током целе сезоне чине те доказе лаким за производњу — још један разлог зашто је важан корак верификације у петљи.\n\n> **Кључна идеја:** Током жетве, вредност вештачке интелигенције долази од смањења неизвесности у времену, количини и цени — и из документовања онога што је урађено.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Студија случаја: наводњавање и управљање водама",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Како се евапотранспирација, влага у земљишту и АИ комбинују у распореду наводњавања.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Наводњавање је један од најјаснијих примера вештачке интелигенције која ствара вредност на фарми, јер су одлуке о води честе, скупе и мерљиве.\n\n## Баланс воде\n\nЗамислите зону корена као банковни рачун за воду.\n\n- **Депозити:** падавине и наводњавање.\n- **Повлачење:** вода коју користи усев и испари из земље — заједно названа **евапотранспирација (ЕТ)** — плус дренажа испод корена.\n\nЦиљ планирања наводњавања је да се одржи равнотежа између доње границе, где усев почиње да трпи стрес, и горње границе, преко које вода отиче и губи се.\n\n## Процена употребе воде за усеве\n\nУпотреба воде за усеве се обично процењује у два корака:\n\n1. **Референтна евапотранспирација (ЕТ₀)** се израчунава на основу временских података — температуре, влажности, ветра и сунчевог зрачења — за стандардни референтни усев.\n2. **Коефицијент усева (Кц)** прилагођава ЕТ₀ за стварни усев и његову фазу раста: **ЕТц = ЕТ₀ × Кц**.\n\nМашинско учење може побољшати ову процену учењем од локалних сензора, слика крошње и сопствене историје фарме, посебно тамо где се стандардни коефицијенти лоше уклапају.\n\n## Сценарио заказивања\n\n> **Пример:** Виноградски блок има 40 мм лако доступне воде када је зона корена пуна. Сонде за влагу у земљишту показују да је остало 18 мм. Прогноза ЕТц је 5 мм дневно за наредна четири дана, а киша се не очекује.\n\nБез наводњавања, блок достиже своју доњу границу за око три и по дана (18 мм ÷ 5 мм/дан). Систем планирања би препоручио наводњавање у наредна два до три дана, величине да се поново напуни коренска зона без препуњавања, темпирано на расположиви капацитет пумпе и ниже цене електричне енергије ноћу.\n\nАко се прогноза промени на 15 мм кише другог дана, добар систем ажурира препоруку — и објашњава зашто.\n\n## Где АИ додаје вредност\n\n- **Боље процене коришћења воде** комбиновањем времена, сензора и слика.\n- **Заказивање са свешћу о прогнозама** које узима у обзир надолазећу кишу и врућину.\n- **Оптимизација** за многе блокове, ограничења пумпе и алокације воде.\n- **Провера** — потврђивање помоћу мерача протока и влаге у земљишту да се наводњавање одвија по плану и да је имало очекивани ефекат.\n\n## Шта може поћи по злу\n\nЗачепљен емитер, покварен вентил или сонда инсталирана на нерепрезентативном месту могу довести у заблуду систем. Зато је корак верификације важан: када уочена влажност земљишта не реагује како је предвиђено након наводњавања, то је сигнал да се истражи поље, а не само модел.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Ограничења, грешке и када оспорити препоруку",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Препознавање начина неуспеха и одржавање људских расуђивања.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Сваки АИ систем ће понекад бити погрешан. Циљ није слепо поверење или опште одбијање, већ **калибрисано поверење**: сазнати када препорука заслужује поверење, а када заслужује други поглед.\n\n## Уобичајени режими квара\n\n**Лоши улази.** Неисправан сензор, погрешно постављена сонда или извор података који недостаје стварају бесмислице. *Смеће унутра, смеће напоље.*\n\n**Услови ван домета.** Модели су најмање поуздани у ситуацијама које су ретко виђали током тренинга: екстремна врућина, нова сорта, необично тло.\n\n**Дрифт.** Услови се временом мењају, а модел који је био тачан пре три године можда више неће бити.\n\n**Пристрасност.** Ако подаци о обуци превише представљају одређене регионе, величине фарме или усеве, препоруке могу бити мање тачне за операције које се разликују.\n\n**Недостаје контекст.** Систем не зна за одношење хербицида суседа, поломљену цев или уговор који захтева жетву следеће недеље.\n\n**Пристрасност аутоматизације.** Људи имају тенденцију да претерано верују машинском излазу, посебно када је прецизно представљен. Број са две децимале није нужно тачан.\n\n## Када оспорити препоруку\n\nПаузирајте и истражите када:\n\n- препорука је у супротности са оним што видите на терену;\n- далеко је изван нормалног распона за сезону;\n- систем показује мало поверења, или уопште не показује поверење;\n- кључни подаци недостају, застарели или су очигледно погрешни;\n- последице грешке би биле озбиљне или их је тешко преокренути.\n\n> **Провера на терену:** Једноставно правило — што је одлука већа и мање реверзибилна, то би вам требало више доказа пре него што поступите по препоруци вештачке интелигенције.\n\n## Како добро изазвати\n\n1. **Проверите улазе.** Да ли сензори извештавају? Да ли су временски подаци актуелни?\n2. **Питајте разлог.** Који подаци су подстакли овај предлог?\n3. **Погледајте у поље.** Извиђајте дотично подручје.\n4. **Забележите шта сте одлучили и зашто.** Ваша замена је драгоцена повратна информација која помаже у побољшању система.\n\nОспоравање препоруке није неуспех технологије. То је начин на који људи и АИ добро раде заједно.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Модели, обука и предвиђања",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Како модел учи из примера и зашто свако предвиђање има неизвесност.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**Модел** је математички опис односа — на пример, између времена и количине воде коју усев користи. Машинско учење гради моделе учећи на примерима.\n\n## Учење на примерима\n\nЗамислите да желите да предвидите колико ће воде воћњак бадема потрошити сутра. Сакупљате много прошлих дана, сваки са:\n\n- **улази** (који се називају и *карактеристике*): температура, влажност, ветар, сунчево зрачење, старост дрвета, покривач крошње;\n- **исход** који желите да предвидите: воду коју је воћњак заправо користио тог дана, мерену сензорима.\n\nТоком **тренинга**, алгоритам прилагођава модел изнова и изнова све док се његова предвиђања не поклапају са забележеним исходима што је ближе могуће. Ово се зове **учење под надзором**, јер сваки пример долази са тачним одговором.\n\n## Тестирање података које модел никада није видео\n\nМодел може запамтити своје примере обуке и још увек не успе у новим данима. Зато научници података остављају неке податке по страни за **валидацију** — податке које модел никада није видео током обуке. Учинак на тим подацима који се чувају је поштена мера колико добро функционише.\n\n> **Важно:** Питајте како је модел потврђен. „Савршено се уклапа у наше историјске податке“ је знак упозорења, а не снага.\n\n## Прецизност мерења\n\nЗа нумеричка предвиђања, уобичајене мере укључују **просечну грешку** (колико су предвиђања далеко у просеку) и колики део варијација објашњава модел. За класификације — „под стресом“ или „здраво“ — питамо колико често је модел исправан и колико често изазива лажне узбуне или пропушта стварне проблеме.\n\nНе постоји јединствена \"добра\" тачност. Прогноза приноса која је унутар 5% може бити одлична за маркетиншке одлуке; аларм за мраз који пропусти један од десет догађаја може бити неприхватљив.\n\n## Свако предвиђање има неизвесност\n\nВременске промене, сензори се померају и поља варирају. Систем од поверења преноси несигурност: „сутрашња потрошња воде је 6,2 мм, вероватно између 5,6 и 6,8 мм“. Један број без опсега скрива важне информације.\n\n## Када модели застаре\n\nУслови се мењају. Нове сорте, сушна година или промењен систем наводњавања могу учинити претходне податке мање репрезентативним. Ово се зове **дрифт**. Добри системи прате сопствену тачност током времена и поново се обучавају када перформансе падну.\n\n## Уобичајени типови пољопривредних модела\n\n- **Регресија** — предвиђа број (употреба воде, принос, цена).\n- **Класификација** — додељује категорију (присутна или одсутна болест, врста усева).\n- **Прогноза** — предвиђа како ће се нешто променити током времена (влага у земљишту у наредних пет дана).\n- **Компјутерски вид** — тумачи слике (бројање воћа, откривање корова).\n- **Оптимизација** — проналази најбољи план у оквиру ограничења (распоред наводњавања који задовољава потребе усева са ограниченом водом).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Планирање и садња",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Коришћење података и АИ пре него што прво семе оде у земљу.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Многе од највреднијих одлука у сезони доносе се пре садње. АИ може помоћи тако што ће донијети више доказа за те одлуке.\n\n## Историја поља и зоне управљања\n\nПоља нису уједначена. Вишегодишње карте приноса, истраживања тла и сателитски снимци често откривају доследне обрасце: ниско подручје које остаје влажно, пешчани гребен који се први суши. Алгоритми могу да групишу ове области у **зоне управљања** које различито реагују на воду, семе и ђубриво.\n\nСа зонама, узгајивач може да мења стопе сетве, да бира где ће применити више или мање азота или планирати сетове за наводњавање који одговарају понашању сваког дела поља.\n\n## Одлуке о сорти и датуму садње\n\nМодели обучени на регионалним испитивањима и временским записима могу да процене како се сорте понашају у различитим условима и како датум садње утиче на ризик — на пример, могућност топлотног стреса током цветања. Ове процене су најкорисније када одражавају локална испитивања, а не само националне просеке.\n\n## Планирање сценарија\n\nАлати за вештачку интелигенцију могу брзо да покрену сценарије „шта ако“: Шта ако је сезона сува? Шта ако се издвајање воде смањи за 20%? Шта ако цене инпута порасту? Упоређивање сценарија вам помаже да одаберете план који се држи у многим могућим будућностима, а не само у очекиваној.\n\n> **Провера поља:** Када алатка препоручи количину или сорту, питајте на којим подацима је направљена. Подаци регионалних испитивања са вашег тла и климе су далеко релевантнији од националног просека.\n\n## Ограничења која треба имати на уму\n\nПрепоруке пред сезону почивају на дугорочним прогнозама, које су неизвесне. Третирајте их као почетни план који треба прилагођавати како се сезона одвија, а не као фиксни рецепт.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Модул 1 квиз",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Проверите своје разумевање основа вештачке интелигенције.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Одговорите на пет брзих питања о идејама у Модулу 1. Квизови су за вежбу: можете их понављати колико год пута желите и видећете објашњења након сваког покушаја.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Модул 2 квиз",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Проверите своје разумевање података, модела и препорука.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Пет питања о квалитету података, обуци модела и подршци при одлучивању. Понављајте онолико често колико желите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Модул 3 квиз",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Проверите своје разумевање АИ током сезоне.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Пет питања о планирању, наводњавању, праћењу усева и жетви. Понављајте онолико често колико желите.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Од предвиђања до препоруке",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Како системи за подршку одлучивању претварају предвиђања у акције - и држе људе у току.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Предвиђање вам говори шта ће се вероватно догодити. **Препорука** вам говори шта да радите у вези с тим. Претварање једног у друго захтева циљеве, ограничења и контекст.\n\n## Пример наводњавања\n\nПретпоставимо да модел предвиђа да ће поље сутра користити 7 мм воде и да је влага у земљишту већ близу доње границе коју усев толерише. Систем препорука комбинује то предвиђање са:\n\n- **циљеви** — заштитити принос и квалитет, избећи расипање;\n- **ограничења** — капацитет пумпе, преостала алокација воде, тарифе електричне енергије, распоред наводњавања;\n- **контекст** — прогнозирана киша, фаза усева, планирана жетва којој је потребна сува земља.\n\nРезултат може бити: *\"Наводњавајте блок 4 вечерас у трајању од 6 сати (око 18 мм). Прескочите блок 7: 12 мм кише се предвиђа са великом поузданошћу.\"*\n\n## Добре препоруке објашњавају саме себе\n\nПрепорука коју не можете да разумете је препорука коју не можете да процените. Потражите системе који показују:\n\n- **разлог** — који подаци и које предвиђање су покренули предлог;\n- **поуздање** — колико је систем сигуран;\n- **алтернативе** — шта се дешава ако сачекате или примените мање;\n- **траг доказа** — тако да можете накнадно проверити да ли се акција десила и да ли је успела.\n\n## Држите људе у току\n\nУ пољопривреди, већина АИ је **подршка одлучивању**: систем предлаже, особа одлучује. Чак и тамо где аутоматизација извршава радње — на пример, контролер који отвара вентил — одговорни дизајни укључују кораке одобрења, ограничења и могућност заобилажења.\n\n> **Кључна идеја:** Особа која је одговорна за исход увек треба да буде у стању да види зашто је препорука дата, да је промени и заустави.\n\n## Затварање петље: верификација\n\nНајвреднији системи се не заустављају на препоруци. Проверавају шта је заправо урађено и шта се даље догодило: да ли је наводњавање покренуто? Колико је воде примењено? Да ли се влага у тлу опоравила како се очекивало? Овај корак **верификације** гради поверење, открива проблеме са опремом и производи доказе које купци, ревизори и надлежни за воду све више траже.\n\nЗапамтите петљу из Модула 1: **осећај → предвиђа → препоручује → верификује**. Сваки окрет петље побољшава и одлуке и податке за наредну сезону.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Резиме курса и следећи кораци",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Кључне ствари и како се припремити за завршни испит.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Честитамо на завршетку курса. Хајде да спојимо главне идеје.\n\n## Кључни за понети\n\n- **АИ је кутија са алатима**, а не једна технологија. Правила, машинско учење, дубоко учење и генеративна вештачка интелигенција одговарају различитим проблемима.\n- **Подаци су основа.** Тачност, потпуност, правовременост, доследност и репрезентативност одређују шта сваки модел може да уради.\n- **Модели уче из примера** и морају бити потврђени на подацима које никада нису видели. Свако предвиђање има неизвесност, а модели се могу померити.\n- **Препоруке комбинују предвиђања са циљевима, ограничењима и контекстом.** Добре се саме објашњавају.\n- **петља је важна:** смисао → предвиђање → препоручивање → верификација.\n- **Током сезоне**, АИ подржава планирање, наводњавање, праћење усева, време жетве, маркетинг и следљивост.\n- **Користите калибрисано поверење.** Изазовите препоруке које су у супротности са тереном, које се заснивају на лошим подацима или имају велике улоге.\n- **Ваши подаци заслужују бригу.** Знајте ко их поседује, како се користе и како да их вратите.\n\n## Припрема за завршни испит\n\nЗавршни испит обухвата сва четири модула. Извлачи 20 питања из веће банке и даје вам 30 минута. Треба вам **80%** да бисте прошли.\n\n> **Савет:** Прегледајте своје белешке и квизове модула. Ако сте пропустили питање у квизу, отворите лекцију на коју указује пре испита.\n\n## Где даље\n\n- **Основе пољопривредних података** иде дубље у изворе података и квалитет.\n- **Даљинска детекција и сателитска интелигенција** проширују слике и индексе вегетације.\n- **Иригација на бази вештачке интелигенције** детаљно примењује ове идеје на управљање водама.\n\nХвала вам што сте учили са AGRO-AI Академијом. Када будете спремни, отворите завршни испит из менија курса.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Добродошли на курс",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Шта ћете научити, како курс функционише и како стећи сертификат.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Добродошли у **Увод у вештачку интелигенцију у пољопривреди**, први курс AGRO-AI програма Академије *Основе пољопривредне вештачке интелигенције*.\n\nОвде вам није потребна никаква техничка позадина да бисте успели. Ако сте икада гледали временску прогнозу, читали тест земљишта или упоређивали приносе између два поља, већ користите навике ума на којима се овај курс гради: прикупљање доказа, уочавање образаца и одлучивање шта даље.\n\n## Шта ћете научити\n\nДо краја курса моћи ћете да:\n\n- објасните шта АИ јесте — а шта није — једноставним језиком;\n- описати одакле долазе пољопривредни подаци и шта их чини поузданим;\n- пратите како подаци постају предвиђање, а предвиђање препорука;\n- препознају корисне АИ апликације током сезоне;\n- критички процените АИ излаз и користите га одговорно.\n\n## Како курс функционише\n\nКурс има **четири модула** кратких лекција. Модули један до три завршавају се квизом за вежбање који вам помаже да проверите своје разумевање; модул четири завршава се практичном вежбом и резимеом курса који вас припремају за завршни испит. Квизови се не рачунају у ваш сертификат и можете их поново полагати колико год желите.\n\nВаш напредак се аутоматски чува. Можете стати усред лекције на телефону и наставити касније на рачунару.\n\n> **Савет:** Користите картицу **Напомене** испод сваке лекције да бисте записали идеје које се односе на вашу операцију. Белешке су приватне — само ви можете да их видите.\n\n## Стицање сертификата\n\nКада завршите све потребне лекције, откључава се **завршни испит**. Извлачи 20 питања из веће банке, темпирано је на 30 минута и захтева резултат од **80%** да би прошао. Ако не прођете из првог покушаја, можете прегледати препоручене лекције и покушати поново након једног сата.\n\nПоложите испит и AGRO-AI Академија аутоматски издаје сертификат — бесплатно, са јединственим ИД-ом акредитива и јавном страницом за верификацију коју можете да делите на ЛинкедИн-у.\n\nХајде да почнемо.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Од правила до учења: шта АИ јесте (а није)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Дефиниције вештачке интелигенције, машинског учења, дубоког учења и генеративне вештачке интелигенције на једноставном језику.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "„Вештачка интелигенција“ се користи за описивање свега, од једноставног сензорског аларма до цхат бота који пише есеје. Пре него што погледамо пољопривреду, потребне су нам јасне речи.\n\n## Вештачка интелигенција\n\n**Вештачка интелигенција (АИ)** је широко поље изградње рачунарских система који обављају задатке које обично повезујемо са људском интелигенцијом: препознавање образаца, предвиђање, разумевање језика и бирање акција.\n\nТа дефиниција је намерно широка. Укључује веома различите технологије, тако да помаже да се раздвоје два начина њихове изградње.\n\n## Правила против учења\n\n**Системи засновани на правилима** прате упутства која су написали људи. Контролер за наводњавање који каже *\"ако влажност тла падне испод 25%, покрените пумпу\"* следи правило. Правила су транспарентна и предвидљива, али неко мора унапред да зна право правило, а правила се не прилагођавају када се услови промене.\n\nУместо тога, системи **Машинско учење (МЛ)** уче обрасце из примера. Покажите моделу хиљаде прошлих сезона — временске прилике, земљиште, наводњавање и приносе који су уследили — и он може научити односе које нико није експлицитно записао. Већина онога што људи данас називају \"АИ\" је машинско учење.\n\n| | Систем заснован на правилима | Модел машинског учења |\n|---|---|---|\n| Одакле долази логика | Људи то пишу | Научио из података |\n| Снага | Транспарентно, предвидљиво | Проналази сложене обрасце, прилагођава се новим подацима |\n| Слабост | Ригид; недостаје оно што дизајнери нису предвидели | Само онолико колико су добри њени подаци; може бити тешко објаснити |\n| Пример фарме | Пумпа се покреће испод прага влажности | Модел предвиђа употребу воде за усјеве сутра |\n\n## Дубоко учење\n\n**Дубоко учење** је породица метода машинског учења изграђена од вишеслојних „неуронских мрежа“. Посебно је добар за неуредне податке високе димензије као што су слике и звук. Када апликација за телефон препозна болест листа на фотографији, дубоко учење обично стоји иза тога.\n\n## Генеративна АИ\n\n**Генеративни АИ** креира нови садржај — текст, слике, аудио или код — на основу образаца научених из веома великих скупова података. Модели великих језика (ЛЛМ), технологија која стоји иза конверзацијских асистената, су генеративна АИ. Они могу да објасне концепте, сумирају извештаје и одговоре на питања на многим језицима.\n\nГенеративна АИ је моћна, али предвиђа *вероватне* речи, а не проверене чињенице. Са потпуним поверењем може да каже нешто лажно. У пољопривреди, генеративни помоћник је користан за објашњавање и израду нацрта, али важни бројеви и одлуке морају се проверити у односу на поуздане податке.\n\n> **Кључна идеја:** АИ није једна машина. То је кутија са алатима. Правила, статистички модели, дубоко учење и генеративни модели одговарају различитим проблемима.\n\n## Шта АИ није\n\n- **АИ није магија.** Сваки резултат долази из података и избора дизајна које су направили људи.\n- **АИ не \"разуме\" вашу фарму** као ви. Оно зна само шта су његови подаци ухватили.\n- **АИ није аутоматски у праву.** Предвиђања носе неизвесност, а најбољи системи вам говоре колико.\n- **АИ не замењује расуђивање.** То је алат за подршку одлучивању. Одговорност за одлуку остаје на људима.\n\n## Проверите своје разумевање\n\nЗамислите алат који већ користите — временску апликацију, монитор приноса, табелу са формулама. Да ли је његова логика написана као правила или је научена из података? Упишите свој одговор у своје белешке; вратићемо се на ову идеју у Модулу 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Зашто се пољопривреда сада окреће вештачкој интелигенцији",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Притисци и могућности које покрећу усвајање АИ на фармама.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Пољопривредници су одувек користили информације за доношење одлука. Оно што се променило је количина доступних информација, брзина којом се морају користити и притисак на сваки ресурс.\n\n## Притисци на модерној фарми\n\n**Вода.** Пољопривреда је највећи корисник слатке воде у свету; према Организацији УН за храну и пољопривреду (ФАО АКУАСТАТ), пољопривреда у целини, углавном наводњавање, чини око 70% глобалног повлачења слатке воде. У многим регионима, алокације воде се смањују док потражња расте. Свака одлука о наводњавању је важна.\n\n**Варијабилност климе.** Годишња доба су мање предвидљива. Топлотни таласи, нередовне падавине и нови притисци штеточина чине прошлогодишњи приручник мање поузданим.\n\n**Трошкови и марже.** Трошкови ђубрива, енергије, рада и опреме могу нагло да варирају. Примена праве количине на правом месту штити и маргину и животну средину.\n\n**Радна снага.** Многе операције се боре да пронађу и задрже квалификоване људе. Знање које живи у глави једног искусног менаџера је у опасности када је та особа недоступна.\n\n**Очекивања од купаца и регулатора.** Ланци снабдевања све чешће траже доказе: колико је воде коришћено, који инпути су примењени, које праксе су испоштоване.\n\n## Зашто АИ, и зашто сада\n\nТри ствари су се спојиле:\n\n1. **Подаци су постали обилни.** Сателити сада поново посећују већину пољопривредних површина сваких неколико дана. Сонде за влажност земљишта, метеоролошке станице, контролери за наводњавање и машине производе континуиране податке.\n2. **Рачунарење је постало јефтино и повезано.** Модели којима је некада била потребна истраживачка лабораторија могу да раде у облаку и испоручују резултате на телефон.\n3. **Методе су сазреле.** Машинско учење, компјутерски вид и језички модели су се брзо побољшали и сада су практични алати.\n\n> **Кључна идеја:** АИ не ствара нове ресурсе. Помаже вам да боље искористите воду, инпуте, време и знање које већ имате.\n\n## Шта АИ реално може да уради\n\n- **Сенсе** — претворите необрађене слике и податке сензора у информације, на пример које су зоне поља наглашене.\n- **Предвидите** — процените шта ће се догодити, као што су сутрашња потражња за водом за усеве или принос на крају сезоне.\n- **Препоручити** — предложити радњу, као што је распоред наводњавања, и објаснити зашто.\n- **Верификуј** — проверите да ли се нека радња десила и да ли је функционисала.\n\nОбратите пажњу на образац: осетите, предвидите, препоручите, проверите. Користићемо ову петљу током целог курса.\n\n## Шта не може\n\nАИ не може да види шта његови подаци не обухватају: покварени вентил, прскање од комшије, културна пракса јединствена за вашу фарму. Не може да носи одговорност за одлуку. И не може да замени поверење између узгајивача и саветника. Добра пољопривредна вештачка интелигенција је дизајнирана да ради *са* људима који познају земљу.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

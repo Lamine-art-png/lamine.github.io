@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "cs",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Úvod do umělé inteligence v zemědělství",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Co je AI, jak funguje na farmě a jak ji zodpovědně používat.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Umělá inteligence se dostává do zemědělství prostřednictvím ovladačů zavlažování, satelitních služeb, softwaru pro správu farem a telefonů v kapsách pěstitelů. Tento kurz vám poskytne jasné a praktické pochopení toho, co tato technologie je, jak funguje a jak ji správně používat.\n\nNaučíte se základní myšlenky umělé inteligence a strojového učení bez rovnic, uvidíte, jak se zemědělská data stanou předpovědí a poté doporučením, a budete sledovat umělou inteligenci v průběhu sezóny – od plánování a zavlažování po zdraví plodin a sklizeň. Především se naučíte posuzovat výstup umělé inteligence: kdy mu věřit, kdy ho zpochybňovat a jak udržet lidský úsudek a znalosti farmy pod kontrolou.\n\nKurz je určen pro pěstitele, provozovatele, agronomy, manažery a studenty. Není vyžadováno žádné technické zázemí.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Žádný. Vše, co potřebujete, je zvědavost, jak technologie může podpořit zemědělskou práci.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Vysvětlete srozumitelným jazykem, co je umělá inteligence, strojové učení a generativní AI\", \"Popište hlavní zdroje zemědělských dat a proč jsou data důvěryhodná\", \"Sledujte, jak model mění data na předpověď a předpověď na doporučení\", \"Poznejte praktické aplikace umělé inteligence v průběhu sezóny, od plánování až po sklizeň\", \"Identifikujte limity a způsoby selhání zemědělské umělé inteligence a kdy napadnout doporučení\", \"Aplikujte zásady vlastnictví dat, soukromí a odpovědného používání na svůj vlastní provoz\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Co znamená AI pro zemědělství",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Základní myšlenky a proč na nich nyní záleží.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Jak funguje zemědělská umělá inteligence",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Od dat přes model až po doporučení.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI v průběhu sezóny",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Praktické aplikace od plánování až po sklizeň.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Odpovědné používání AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Omezení, práva na data a spolehlivé, kritické použití.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Monitorování zdraví plodin shora a zblízka",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Satelitní snímky, vegetační indexy a počítačové vidění pro zdraví plodin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Zdravé rostliny a stresované rostliny odrážejí světlo jinak. Umělá inteligence využívá tento rozdíl – zachycený satelity, drony a kamerami – ke sledování plodin v měřítku, které žádný průzkumný tým nedokáže pokrýt.\n\n## Jak rostliny vypadají na satelitu\n\nZelené listy absorbují většinu červeného světla pro fotosyntézu a silně odrážejí **blízké infračervené (NIR)** světlo. Když jsou rostliny ve stresu, řídké nebo sestupné, červená odrazivost stoupá a odrazivost NIR klesá.\n\n**Normalized Difference Vegetation Index (NDVI)** zachycuje tento kontrast:\n\n**NDVI = (NIR − červená) ÷ (NIR + červená)**\n\nHodnoty se pohybují od -1 do +1. Hustá, zdravá vegetace je typicky vysoká (často nad 0,6); holá půda je nízká (kolem 0,1–0,2); voda je obvykle negativní.\n\n## Chytré čtení map NDVI\n\nNDVI je užitečné pro zjištění, **kde** se pole liší, ne pro diagnostiku **proč**. Náplastí s nízkým NDVI může být vodní stres, nedostatek živin, nemoc, škůdci, problém s výsadbou nebo jednoduše jiná odrůda. Mapa vám řekne, kam se podívat; skauting vám řekne, co jste našli.\n\n> **Důležité:** Mraky, stíny mraků, opar a denní doba mohou zkreslit údaje ze satelitů. Spolehlivé služby spíše maskují mraky a porovnávají obrázky v průběhu času, než aby důvěřovaly jedinému snímku.\n\nJiné indexy existují pro specifické účely — některé jsou citlivější na chlorofyl, jiné na obsah vody nebo na husté koruny, kde se NDVI nasycuje.\n\n## Počítačové vidění zblízka\n\nNa zemi modely **počítačového vidění** analyzují fotografie z telefonů, traktorů nebo dronů, aby:\n\n- identifikovat choroby a škůdce z obrázků listů;\n- odlišit plevele od plodin pro cílené postřiky;\n- spočítat ovoce, květiny nebo rostliny pro odhad výnosu.\n\nTyto modely jsou trénovány na velkých sbírkách označených obrázků. Jejich přesnost do značné míry závisí na tom, zda tyto obrázky připomínají vaši plodinu, vaše odrůdy a vaše světelné podmínky.\n\n## Od detekce k akci\n\nDobrý pracovní postup při sledování plodin změní detekci na prioritní úkol: *\"Zóna 3 vykazuje klesající sílu během 10 dnů. Nejprve prozkoumejte severovýchodní roh; zkontrolujte rovnoměrnost zavlažování a hledejte známky kořenové choroby.\"* Zjištění průzkumníka se poté vrátí zpět do systému a zlepší budoucí výstrahy.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Data: surovina zemědělské AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Odkud data farmy pocházejí a proč jsou důvěryhodná.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Každý systém umělé inteligence je postaven z dat. Pokud jsou data neúplná, zaujatá nebo nesprávná, AI bude také. Porozumění vašim datům je nejdůležitější dovedností v zemědělské AI.\n\n## Odkud pocházejí zemědělská data\n\n| Zdroj | Příklady | Co vám to říká |\n|---|---|---|\n| Počasí | Farmářské stanice, regionální sítě, předpovědi | Teplota, srážky, vlhkost, vítr, sluneční záření |\n| Půda | Vlhkostní sondy, půdní testy, půdní mapy | Voda dostupná pro kořeny, živiny, textura |\n| Dálkový průzkum Země | Satelitní snímky, snímky letadel a dronů | Síla plodin, zakrytí vrchlíku, vzory stresu na poli |\n| Vybavení | Regulátory závlah, průtokoměry, monitory výnosů, traktory | Co bylo použito, kde a kdy |\n| Záznamy | Termíny výsadby, odrůdy, vstupní aplikace, poznámky k vyhledávání | Rozhodnutí a připomínky vedení |\n| Trhy | Ceny, smlouvy, signály poptávky | Ekonomické souvislosti pro rozhodování |\n\n## Vlastnosti dobrých dat\n\n**Přesnost** – odráží měření realitu? Vlhkostní sonda instalovaná na mokrém místě nebo srážkoměr pod stromem vyvede z omylu každý model, který ji používá.\n\n**Úplnost** – jsou tam mezery? Senzor, který přestane hlásit na týden během vlny veder, zanechá díru přesně ve chvíli, kdy na tom nejvíce záleží.\n\n**Včasnost** – jsou data dostatečně aktuální pro rozhodnutí? Včerejší vlhkost půdy je užitečná pro dnešní zavlažování; minulý měsíc není.\n\n**Konzistence** — jsou jednotky, formáty a definice stejné v čase a napříč poli? Míchání palců a milimetrů nebo dvou názvů pro stejné pole způsobuje tiché chyby.\n\n**Reprezentativnost** – pokrývají data podmínky, za kterých bude AI používána? Model cvičený pouze na písčitých půdách nemusí fungovat na hlíně.\n\n> **Kontrola v terénu:** Než začnete důvěřovat řídicímu panelu, položte si tři otázky: Odkud toto číslo pochází? Kdy se to měřilo? Co by to dělalo špatně?\n\n## Data potřebují kontext\n\nHodnota vlhkosti půdy 30 % sama o sobě znamená málo. Záleží, jaký je typ půdy, jak hluboko je senzor, jaká plodina roste a v jaké fázi. Dobrá zemědělská umělá inteligence kombinuje zdroje dat, takže každý z nich přidává kontext k ostatním – například spárování satelitních snímků s údaji o počasí a historií zavlažování pole.\n\n## Vaše data, vaše rozhodnutí\n\nÚdaje o farmě mají hodnotu – obchodní, provozní a osobní. Před připojením zařízení nebo sdílením záznamů s jakoukoli službou si uvědomte, kdo má k datům přístup, jak budou použita a zda si je můžete vzít s sebou, pokud odejdete. K vlastnictví dat se vrátíme v modulu 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Vlastnictví dat, soukromí a důvěra",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Praktické zásady pro důvěryhodné sdílení farmářských dat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Údaje o farmách mohou odhalit výnosy, postupy, finance a umístění lidí a majetku. Sdílení může odemknout cenné služby – ale vždy by to mělo být záměrné rozhodnutí.\n\n## Otázky, které můžete položit kterémukoli poskytovateli technologií\n\n- **Vlastnictví:** Kdo vlastní data, která poskytnu, a data, která systém generuje o mé farmě?\n- **Použití:** K čemu budou data použita? Bude sloužit k výcviku modelů? Bude to kombinováno s údaji jiných farem?\n- **Sdílení:** Bude to sdíleno nebo prodáno třetím stranám? Které a proč?\n- **Přístup a přenositelnost:** Mohu si svá data stáhnout v použitelném formátu? Mohu si to vzít s sebou, když odejdu?\n- **Smazání:** Mohu smazat svá data a co po nich zůstane?\n- **Zabezpečení:** Jak jsou data chráněna? Kdo ve firmě to může vidět?\n- **Kontrola:** Mohu kdykoli zrušit přístup pro připojené zařízení nebo partnera?\n\nNěkolik zemědělských organizací zveřejnilo principy farmářských údajů, které se těmito otázkami zabývají; Dobrým výchozím bodem je otázka, zda je poskytovatel dodržuje.\n\n## Souhlas a oprávnění\n\nDobré systémy požadují konkrétní, informované povolení – například umožňují konektoru číst data ovladače zavlažování, aniž by mu bylo uděleno povolení ke změně nastavení. Udělte co nejmenší přístup potřebný pro danou úlohu a pravidelně kontrolujte připojené služby.\n\n## Agregovaná a anonymizovaná data\n\nKombinace dat z mnoha farem může zlepšit modely pro každého, jako jsou lepší regionální odhady využití vody. Dobře provedená agregace odstraní informace, které by mohly identifikovat jednotlivou farmu. Zeptejte se, jak se provádí anonymizace a zda se můžete odhlásit.\n\n## Důvěra se získává\n\n> **Klíčová myšlenka:** Důvěryhodná zemědělská umělá inteligence je transparentní ohledně toho, jak využívá data, vysvětluje svá doporučení, připouští nejistotu a nechává zemědělce kontrolu.\n\nStejné principy platí i pro Akademii samotnou. Svá výuková data si můžete kdykoli stáhnout nebo smazat z nastavení svého účtu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Praktické cvičení: vyhodnoťte doporučení AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Aplikujte to, co jste se naučili, na realistická doporučení.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "V tomto cvičení si procvičíte dovednosti kritické kontroly z tohoto modulu na realistickém doporučení.\n\n## Scénář\n\nŘídíte provoz na 60 hektarech s kapkovou závlahou na rajčatech. V úterý ráno uprostřed sezóny váš systém podpory rozhodování ukazuje:\n\n> *\"Doporučení: Vynechat zavlažování na bloku C na dalších 48 hodin. Předpokládaná spotřeba vody pro plodiny: 3,1 mm/den. Vlhkost půdy: 82 % kapacity pole. Spolehlivost: vysoká.\"*\n\nKdyž projedete kolem bloku C, všimnete si, že rostliny na východním okraji vypadají v pozdním ranním vedru zvadlé a včerejší maximální teplota byla 37 °C – mnohem tepleji než předpověď 29 °C, kterou systém používal před dvěma dny.\n\n## Váš úkol\n\nPostupujte podle níže uvedeného kontrolního seznamu. Své zdůvodnění napište do záložky **Poznámky**, abyste se k němu mohli vrátit.\n\n1. **Zkontrolujte vstupy.** Který vstup vypadá pochybně? (Tip: porovnejte předpovídanou teplotu s tím, co se stalo.)\n2. **Zkontrolujte senzory.** Kde je instalována sonda půdní vlhkosti? Mohlo by to být na místě, které nepředstavuje východní okraj?\n3. **Podívejte se na pole.** Co byste zkontrolovali na zvadlých rostlinách? Zvažte ucpání emitoru, tlak na konci vedení a zdraví kořenů.\n4. **Rozhodněte se.** Dodrželi byste, upravili nebo přepsali doporučení? Proč?\n5. **Zaznamenejte a nahlaste.** Jakou zpětnou vazbu byste poskytli, aby se z toho systém – a váš tým – mohl poučit?\n\n## Diskuse\n\nDůrazná odpověď uvádí, že předpokládaná spotřeba vody byla pravděpodobně založena na předpovědi, která se ukázala být příliš chladná, takže skutečná poptávka byla vyšší. Jediný údaj sondy 82 % nemusí představovat východní okraj, zvláště pokud jsou tam ucpané vysílače nebo je na konci laterálu nízký tlak. Rozumným rozhodnutím může být okamžitá inspekce východního okraje, krátké zavlažování, pokud inspekce potvrdí suchou půdu, a nahlásit jak nedodržení předpovědi, tak možný problém s uniformitou.\n\nMálokdy existuje jediná správná odpověď – ale vždy existuje správný postup: kontrola vstupů, kontrola kontextu, pohled do pole, rozhodnutí a záznam.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Sklizeň, trhy a dodavatelský řetězec",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Předpovídání výnosů, tržní zpravodajství a logistika.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Jak se sezóna blíží ke sklizni, rozhodnutí se přesouvají od pěstování plodiny k zachycení její hodnoty.\n\n## Prognóza výnosu\n\nPředpovědi výnosů kombinují modely růstu plodin, aktuální počasí a předpovědi, ráznost snímků a někdy i počty z počítačového vidění. Dřívější předpovědi jsou méně jisté; přesnost se s postupem sezóny zlepšuje.\n\nPrognózy podporují rozhodnutí, jako jsou:\n\n- kolik prodat dopředu a kdy;\n- kolik pracovníků, nákladních automobilů a skladovací kapacity zarezervovat;\n- zda se pozdní zadání stále vyplatí použít.\n\n## Inteligence trhu\n\nNástroje tržního zpravodajství shromažďují ceny, futures, exportní data, počasí v konkurenčních regionech a zprávy, aby pomohly předvídat pohyb cen. Umělá inteligence dokáže tyto signály rychle shrnout a upozornit na neobvyklé změny. Žádný model nemůže s jistotou předpovídat trhy; považovat tržní prognózy za jeden vstup do plánu řízeného rizikem, nikoli za záruku.\n\n## Načasování a kvalita sklizně\n\nModely, které sledují zralost plodin – hladinu cukru v hroznech, vlhkost zrna, barvu ovoce – pomáhají naplánovat sklizeň pro nejlepší rovnováhu kvality, rizika počasí a logistiky. V kombinaci s dostupností práce a vybavení mohou pomoci seřadit pole v rámci operace.\n\n## Sledovatelnost a důkazy\n\nKupující stále častěji žádají důkaz o tom, jak byla plodina vyprodukována: využití vody, použité vstupy, certifikace. Systémy, které zaznamenávají doporučení, akce a ověřování v průběhu sezóny, usnadňují vytváření těchto důkazů – další důvod, proč je ověřovací krok smyčky důležitý.\n\n> **Klíčová myšlenka:** Při sklizni pochází hodnota umělé inteligence ze snížení nejistoty ohledně načasování, množství a ceny – a z dokumentace toho, co bylo uděláno.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Případová studie: zavlažování a vodní hospodářství",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Jak se evapotranspirace, vlhkost půdy a umělá inteligence kombinují při plánování zavlažování.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Zavlažování je jedním z nejjasnějších příkladů, jak umělá inteligence vytváří hodnotu na farmě, protože rozhodnutí o vodě jsou častá, nákladná a měřitelná.\n\n## Vodní bilance\n\nPředstavte si kořenovou zónu jako bankovní účet pro vodu.\n\n- **Ložiska:** srážky a zavlažování.\n- **Odběry:** voda použitá plodinou a odpařená z půdy – společně nazývaná **evapotranspirace (ET)** – plus drenáž pod kořeny.\n\nCílem plánování zavlažování je udržet rovnováhu mezi spodní hranicí, kdy plodina začíná trpět stresem, a horní hranicí, za kterou voda odtéká a plýtvá se.\n\n## Odhad spotřeby vody pro plodiny\n\nSpotřeba vody pro plodiny se obvykle odhaduje ve dvou krocích:\n\n1. **Referenční evapotranspirace (ET₀)** se vypočítává z údajů o počasí – teplota, vlhkost, vítr a sluneční záření – pro standardní referenční plodinu.\n2. **Koeficient plodiny (Kc)** upravuje ET₀ pro aktuální plodinu a její růstovou fázi: **ETc = ET₀ × Kc**.\n\nStrojové učení může tento odhad vylepšit učením se z místních senzorů, zobrazení vrchlíku a vlastní historie farmy, zejména tam, kde standardní koeficienty špatně sedí.\n\n## Scénář plánování\n\n> **Příklad:** Viniční blok má 40 mm snadno dostupné vody, když je kořenová zóna plná. Sondy půdní vlhkosti ukazují zbývajících 18 mm. Předpověď ETc je 5 mm za den na další čtyři dny a neočekává se žádný déšť.\n\nBez zavlažování dosáhne blok spodní hranice asi za tři a půl dne (18 mm ÷ 5 mm/den). Plánovací systém by doporučoval zavlažování v následujících dvou až třech dnech, dimenzovaný tak, aby znovu naplnil kořenovou zónu, aniž by ji přeplňoval, načasované na dostupnou kapacitu čerpadla a nižší ceny elektřiny v noci.\n\nPokud se předpověď změní na 15 mm srážek druhý den, dobrý systém doporučení aktualizuje – a vysvětluje proč.\n\n## Kde AI přidává hodnotu\n\n- **Lepší odhady spotřeby vody** díky kombinaci počasí, senzorů a snímků.\n- **Plánování s ohledem na předpověď**, které zohledňuje nadcházející déšť a horko.\n- **Optimalizace** napříč mnoha bloky, limity čerpadel a alokací vody.\n- **Ověření** – potvrzení z průtokoměrů a půdní vlhkosti, že zavlažování proběhlo podle plánu a mělo očekávaný účinek.\n\n## Co se může pokazit\n\nUcpaný emitor, rozbitý ventil nebo sonda nainstalovaná na nereprezentativním místě, to vše může systém uvést v omyl. Proto je důležitý krok ověření: když pozorovaná vlhkost půdy po zavlažování nereaguje tak, jak se předpovídalo, je to signál k prozkoumání pole, nejen modelu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Limity, chyby a kdy napadnout doporučení",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Rozpoznání způsobů selhání a zachování lidského úsudku.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Každý systém umělé inteligence bude někdy chybný. Cílem není slepá důvěra nebo plošné odmítnutí, ale **kalibrovaná důvěra**: vědět, kdy si doporučení zaslouží důvěru a kdy si zaslouží druhý pohled.\n\n## Běžné režimy selhání\n\n**Špatné vstupy.** Selhání senzoru, nesprávně umístěná sonda nebo chybějící datový zdroj vytváří sebevědomý nesmysl. *Odpadky dovnitř, odpadky ven.*\n\n**Podmínky mimo rozsah.** Modely jsou nejméně spolehlivé v situacích, které během tréninku viděli jen zřídka: extrémní horko, nová odrůda, neobvyklá půda.\n\n**Dift.** Podmínky se v průběhu času mění a model, který byl před třemi lety přesný, již nemusí být.\n\n**Předjatost.** Pokud tréninková data převyšují určité regiony, velikosti farem nebo plodiny, doporučení mohou být méně přesná pro operace, které se liší.\n\n**Chybí kontext.** Systém neví o sousedově úletu herbicidu, prasklém potrubí ani o smlouvě, která vyžaduje sklizeň příští týden.\n\n**Zaujatost automatizace.** Lidé mají tendenci přehnaně důvěřovat výstupu stroje, zvláště když je prezentován přesně. Číslo se dvěma desetinnými místy nemusí být nutně přesné.\n\n## Kdy napadnout doporučení\n\nPozastavit a prozkoumat, když:\n\n- doporučení je v rozporu s tím, co vidíte v terénu;\n- je daleko mimo normální rozsah pro sezónu;\n- systém vykazuje nízkou nebo nevykazuje důvěru vůbec;\n- klíčová data chybí, jsou zastaralá nebo zjevně chybná;\n- následky chyby by byly závažné nebo by bylo obtížné je zvrátit.\n\n> **Kontrola v terénu:** Jednoduché pravidlo – čím větší a méně reverzibilní rozhodnutí, tím více důkazů byste měli potřebovat, než budete jednat na základě doporučení AI.\n\n## Jak dobře vyzvat\n\n1. **Zkontrolujte vstupy.** Hlásí senzory? Jsou údaje o počasí aktuální?\n2. **Zeptejte se na důvod.** Jaká data vedla k tomuto návrhu?\n3. **Podívejte se do terénu.** Prozkoumejte danou oblast.\n4. **Zaznamenejte si, co jste se rozhodli a proč.** Vaše přepsání je cenná zpětná vazba, která pomáhá zlepšovat systém.\n\nZpochybnění doporučení není selháním technologie. Lidé a AI tak dobře spolupracují.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Modely, trénink a předpovědi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Jak se model učí z příkladů a proč má každá předpověď nejistotu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**Model** je matematický popis vztahu — například mezi počasím a množstvím vody, které plodina spotřebuje. Strojové učení vytváří modely učením se z příkladů.\n\n## Učit se z příkladů\n\nPředstavte si, že chcete předpovědět, kolik vody zítra spotřebuje mandlový sad. Sbíráte mnoho minulých dnů, každý s:\n\n- **vstupy** (také nazývané *vlastnosti*): teplota, vlhkost, vítr, sluneční záření, stáří stromů, pokryv koruny;\n- **výsledek**, který chcete předpovědět: voda, kterou sad ten den skutečně spotřeboval, měřeno senzory.\n\nBěhem **tréninku** algoritmus znovu a znovu upravuje model, dokud jeho předpovědi co nejvíce neodpovídají zaznamenaným výsledkům. Tomu se říká **učení pod dohledem**, protože každý příklad přichází se správnou odpovědí.\n\n## Testování na datech, která model nikdy neviděl\n\nModelka si může zapamatovat své tréninkové příklady a přesto selže v nových dnech. To je důvod, proč datoví vědci uchovávají některá data stranou pro **validaci** – data, která model během školení nikdy neviděl. Výkon na těchto držených datech je poctivým měřítkem toho, jak dobře to funguje.\n\n> **Důležité:** Zeptejte se, jak byl model ověřen. „Dokonale se hodí k našim historickým datům“ je varovným signálem, nikoli silou.\n\n## Přesnost měření\n\nU numerických předpovědí patří mezi běžné míry **průměrná chyba** (jak daleko jsou v průměru předpovědi) a jak velkou variaci model vysvětluje. U klasifikací – „stresový“ nebo „zdravý“ – se ptáme, jak často je model správný a jak často vyvolává falešné poplachy nebo přehlédne skutečné problémy.\n\nNeexistuje jediná „dobrá“ přesnost. Prognóza výnosu v rozmezí 5 % může být vynikající pro marketingová rozhodnutí; alarm mrazu, který vynechá jednu událost z deseti, může být nepřijatelný.\n\n## Každá předpověď má nejistotu\n\nZměny počasí, posun senzorů a pole se liší. Důvěryhodný systém sděluje nejistotu: \"Zítřejší spotřeba vody je 6,2 mm, pravděpodobně mezi 5,6 a 6,8 mm.\" Jediné číslo bez rozsahu skryje důležité informace.\n\n## Když modely zatuchnou\n\nPodmínky se mění. Nové odrůdy, rok sucha nebo změněný systém zavlažování mohou způsobit, že údaje z minulosti budou méně reprezentativní. Tomu se říká **drift**. Dobré systémy sledují svou vlastní přesnost v průběhu času a jsou přeškoleny, když výkon klesne.\n\n## Běžné typy zemědělských modelů\n\n- **Regrese** — předpovídá číslo (spotřeba vody, výnos, cena).\n- **Klasifikace** – přiřadí kategorii (přítomná nebo nepřítomná choroba, typ plodiny).\n- **Forecasting** – předpovídá, jak se něco změní v průběhu času (vlhkost půdy během příštích pěti dnů).\n- **Počítačové vidění** — interpretuje obrázky (počítání ovoce, detekce plevele).\n- **Optimalizace** – najde nejlepší plán v rámci omezení (plán zavlažování, který splňuje požadavky na plodiny s omezenou vodou).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Plánování a výsadba",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Používání dat a umělé inteligence předtím, než se první semeno dostane do země.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Mnoho z nejcennějších rozhodnutí sezóny se dělá před výsadbou. Umělá inteligence může pomoci tím, že k těmto rozhodnutím přinese více důkazů.\n\n## Historie pole a zóny správy\n\nPole nejsou jednotná. Roky výnosových map, průzkumů půdy a satelitních snímků často odhalují konzistentní vzory: nízká oblast, která zůstává mokrá, písečná vyvýšenina, která jako první vysychá. Algoritmy mohou tyto oblasti seskupit do **zón řízení**, které reagují odlišně na vodu, osivo a hnojivo.\n\nPomocí zón může pěstitel měnit rychlost setí, zvolit, kde bude aplikovat více či méně dusíku, nebo naplánovat zavlažovací sady, které odpovídají tomu, jak se každá část pole chová.\n\n## Rozhodnutí o odrůdě a datu výsadby\n\nModely vyškolené na regionálních zkouškách a záznamech počasí mohou odhadnout, jak si odrůdy vedou za různých podmínek a jak datum výsadby ovlivňuje riziko – například možnost tepelného stresu při kvetení. Tyto odhady jsou nejužitečnější, když odrážejí místní testy, nikoli pouze národní průměry.\n\n## Plánování scénářů\n\nNástroje umělé inteligence dokážou rychle spustit scénáře „co kdyby“: Co když je období sucha? Co když se příděly vody sníží o 20 %? Co když ceny vstupů porostou? Porovnání scénářů vám pomůže vybrat plán, který obstojí v mnoha možných budoucnostech, nejen v té očekávané.\n\n> **Kontrola v terénu:** Když nástroj doporučí výsevek nebo odrůdu, zeptejte se, na jakých datech byl postaven. Údaje z regionálních zkoušek z vašich půd a klimatu jsou mnohem relevantnější než celostátní průměr.\n\n## Limity, které je třeba mít na paměti\n\nPředsezónní doporučení spočívají na dlouhodobých prognózách, které jsou nejisté. Berte je jako počáteční plán, který se má upravit podle sezóny, nikoli jako pevný předpis.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Modul 1 kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Zkontrolujte, zda rozumíte základům umělé inteligence.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Odpovězte na pět rychlých otázek o nápadech v modulu 1. Kvízy jsou pro procvičování: můžete je opakovat, kolikrát chcete, a po každém pokusu uvidíte vysvětlení.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Modul 2 kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Zkontrolujte, zda rozumíte datům, modelům a doporučením.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Pět otázek o kvalitě dat, modelovém školení a podpoře rozhodování. Snímejte znovu, jak často chcete.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Modul 3 kvíz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Ověřte si, jak rozumíte AI v průběhu sezóny.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Pět otázek týkajících se plánování, zavlažování, monitorování plodin a sklizně. Snímejte znovu, jak často chcete.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Od předpovědi k doporučení",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Jak systémy na podporu rozhodování proměňují předpovědi v činy – a udržují lidi v obraze.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Předpověď vám říká, co se pravděpodobně stane. **doporučení** vám řekne, co s tím dělat. Přeměna jednoho na druhého vyžaduje cíle, omezení a kontext.\n\n## Příklad zavlažování\n\nPředpokládejme, že model předpovídá, že pole zítra spotřebuje 7 mm vody a že vlhkost půdy se již blíží spodní hranici, kterou plodina toleruje. Systém doporučení kombinuje tuto předpověď s:\n\n- **cíle** — chránit výnos a kvalitu, vyhnout se plýtvání;\n- **omezení** – kapacita čerpadla, zbývající příděl vody, tarify za elektřinu, plán zavlažování;\n- **kontext** – předpověď deště, fáze sklizně, plánovaná sklizeň, která potřebuje suchou půdu.\n\nVýsledek může být: *\"Zavlažujte blok 4 dnes v noci po dobu 6 hodin (asi 18 mm). Vynechejte blok 7: 12 mm deště je předpovídáno s vysokou spolehlivostí.\"*\n\n## Dobrá doporučení se vysvětlují sama\n\nDoporučení, kterému nerozumíte, je doporučení, které nemůžete posoudit. Hledejte systémy, které ukazují:\n\n- **důvod** — která data a která předpověď vedla k návrhu;\n- **důvěra** — jak jistý je systém;\n- **alternativy** — co se stane, když počkáte nebo použijete méně;\n- **evidenční stopa** — takže si můžete později ověřit, zda se akce stala a fungovala.\n\n## Udržujte lidi ve smyčce\n\nV zemědělství je většina AI **podpora rozhodování**: systém navrhuje, člověk rozhoduje. I tam, kde automatizace provádí akce – například řídicí jednotka otevírá ventil – odpovědné návrhy zahrnují schvalovací kroky, limity a možnost přepsání.\n\n> **Klíčová myšlenka:** Osoba odpovědná za výsledek by měla vždy vidět, proč bylo doporučení učiněno, změnit ho a zastavit.\n\n## Uzavření smyčky: ověření\n\nNejhodnotnější systémy nekončí u doporučení. Kontrolují, co se vlastně udělalo a co se dělo dál: Proběhla závlaha? Kolik vody bylo aplikováno? Obnovila se půdní vlhkost podle očekávání? Tento **ověřovací** krok buduje důvěru, zachycuje problémy se zařízením a vytváří důkazy, které kupující, auditoři a vodohospodářské úřady stále častěji vyžadují.\n\nPamatujte si smyčku z Modulu 1: **smysl → předvídat → doporučit → ověřit**. Každé otočení smyčky zlepšuje jak rozhodnutí, tak data pro příští sezónu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Shrnutí kurzu a další kroky",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Klíčové poznatky a jak se připravit na závěrečnou zkoušku.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Gratulujeme k dosažení konce kurzu. Pojďme shrnout hlavní myšlenky dohromady.\n\n## Klíčové věci\n\n- **AI je sada nástrojů**, nikoli jedna technologie. Pravidla, strojové učení, hluboké učení a generativní umělá inteligence vyhovují různým problémům.\n- **Základem jsou data.** Přesnost, úplnost, včasnost, konzistentnost a reprezentativnost určují, co každý model dokáže.\n- **Modely se učí z příkladů** a musí být ověřeny na datech, která nikdy neviděly. Každá předpověď má nejistotu a modely se mohou unášet.\n- **Doporučení kombinují předpovědi s cíli, omezeními a kontextem.** Dobrá se vysvětlují.\n- **Na smyčce záleží:** smysl → předvídat → doporučit → ověřit.\n- **V průběhu sezóny** AI podporuje plánování, zavlažování, monitorování plodin, načasování sklizně, marketing a sledovatelnost.\n- **Použijte kalibrovanou důvěryhodnost.** Vyzvěte doporučení, která jsou v rozporu s terénem, ​​spočívají na špatných datech nebo mají vysoké sázky.\n- **Vaše data si zaslouží péči.** Zjistěte, kdo je vlastní, jak se používají a jak je vzít zpět.\n\n## Příprava na závěrečnou zkoušku\n\nZávěrečná zkouška zahrnuje všechny čtyři moduly. Vylosuje 20 otázek z větší banky a dá vám 30 minut. K úspěšnému složení potřebujete **80 %**.\n\n> **Tip:** Zkontrolujte své poznámky a modulové kvízy. Pokud jste vynechali kvízovou otázku, otevřete si před zkouškou lekci, na kterou ukazuje.\n\n## Kam dál\n\n- **Agricultural Data Fundamentals** jde hlouběji do zdrojů a kvality dat.\n- **Vzdálené snímání a satelitní inteligence** rozšiřuje snímky a vegetační indexy.\n- **Zavlažování s pohonem AI** podrobně aplikuje tyto myšlenky na hospodaření s vodou.\n\nDěkujeme, že se učíte s AGRO-AI Academy. Až budete připraveni, otevřete závěrečnou zkoušku z nabídky kurzu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Vítejte v kurzu",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Co se naučíte, jak kurz probíhá a jak získat certifikát.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Vítejte v **Úvodu do umělé inteligence v zemědělství**, prvním kurzu programu AGRO-AI Academy *Foundations of Agricultural AI*.\n\nK úspěchu zde nepotřebujete žádné technické zázemí. Pokud jste se někdy podívali na předpověď počasí, četli test půdy nebo porovnávali výnosy mezi dvěma poli, již používáte návyky mysli, na kterých tento kurz staví: sbírání důkazů, zjišťování vzorců a rozhodování, co dál.\n\n## Co se naučíte\n\nNa konci kurzu budete schopni:\n\n- vysvětlit, co AI je – a co není – srozumitelným jazykem;\n- popsat, odkud zemědělské údaje pocházejí a proč jsou spolehlivé;\n- sledovat, jak se data stávají predikcí a předpověď se stává doporučením;\n- rozpoznat užitečné aplikace AI v průběhu sezóny;\n- kriticky posuzovat výstup AI a používat jej zodpovědně.\n\n## Jak kurz funguje\n\nKurz má **čtyři moduly** krátkých lekcí. Každý modul jeden až tři končí cvičným kvízem, který vám pomůže ověřit vaše porozumění; modul čtyři končí praktickým cvičením a shrnutím kurzu, které vás připraví na závěrečnou zkoušku. Kvízy se nezapočítávají do vašeho certifikátu a můžete je opakovat, jak často chcete.\n\nVáš postup se automaticky ukládá. Můžete se zastavit uprostřed lekce na telefonu a pokračovat později na počítači.\n\n> **Tip:** Použijte záložku **Poznámky** pod každou lekcí a zapište si nápady, které se vztahují k vaší vlastní operaci. Poznámky jsou soukromé – vidíte je pouze vy.\n\n## Získání certifikátu\n\nKdyž dokončíte každou požadovanou lekci, odemkne se **závěrečná zkouška**. Vylosuje 20 otázek z větší banky, je načasován na 30 minut a ke splnění vyžaduje skóre **80 %**. Pokud neuspějete na první pokus, můžete si doporučené lekce prohlédnout a zkusit to znovu po jedné hodině.\n\nSložte zkoušku a AGRO-AI Academy automaticky vydá váš certifikát – zdarma, s jedinečným ID pověření a veřejnou ověřovací stránkou, kterou můžete sdílet na LinkedIn.\n\nZačněme.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Od pravidel k učení: co AI je (a co není)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Jasné definice umělé inteligence, strojového učení, hlubokého učení a generativní umělé inteligence.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "„Umělá inteligence“ se používá k popisu všeho, od jednoduchého senzorového alarmu až po chatbota, který píše eseje. Než se podíváme na zemědělství, potřebujeme jasná slova.\n\n## Umělá inteligence\n\n**Umělá inteligence (AI)** je široká oblast budování počítačových systémů, které provádějí úkoly, které si běžně spojujeme s lidskou inteligencí: rozpoznávání vzorců, vytváření předpovědí, porozumění jazyku a výběr akcí.\n\nTa definice je záměrně široká. Zahrnuje velmi odlišné technologie, takže pomáhá oddělit dva způsoby jejich budování.\n\n## Pravidla versus učení\n\n**Systémy založené na pravidlech** se řídí pokyny napsanými lidmi. Řídicí jednotka zavlažování, která říká *„pokud vlhkost půdy klesne pod 25 %, spusťte čerpadlo“*, se řídí pravidlem. Pravidla jsou transparentní a předvídatelná, ale někdo musí znát správné pravidlo předem a pravidla se nepřizpůsobují, když se podmínky změní.\n\nSystémy **Strojové učení (ML)** se místo toho učí vzory z příkladů. Ukažte model tisíců minulých sezón – počasí, půdu, zavlažování a výnosy, které následovaly – a můžete se naučit vztahy, které nikdo výslovně nezapsal. Většina toho, čemu dnes lidé říkají „AI“, je strojové učení.\n\n| | Systém založený na pravidlech | Model strojového učení |\n|---|---|---|\n| Odkud pochází logika | Lidé to píšou | Zjištěno z údajů |\n| Síla | Transparentní, předvídatelné | Najde složité vzory, přizpůsobí se novým datům |\n| Slabost | tuhý; chybí to, co designéři nepředvídali | Jen tak dobré, jak dobré jsou jeho data; lze těžko vysvětlit |\n| Příklad farmy | Čerpadlo se spustí pod prahovou hodnotou vlhkosti | Model předpovídá zítřejší spotřebu vody z plodin |\n\n## Hluboké učení\n\n**Hluboké učení** je skupina metod strojového učení vytvořená z mnohavrstvých „neuronových sítí“. Je obzvláště dobrý v chaotických, vysokorozměrných datech, jako jsou obrázky a zvuk. Když aplikace v telefonu z fotografie rozpozná chorobu listů, je za tím obvykle hluboké učení.\n\n## Generativní AI\n\n**Generativní AI** vytváří nový obsah – text, obrázky, zvuk nebo kód – na základě vzorů získaných z velmi rozsáhlých datových sad. Velké jazykové modely (LLM), technologie za konverzačními asistenty, jsou generativní AI. Umí vysvětlit pojmy, shrnout zprávy a odpovědět na otázky v mnoha jazycích.\n\nGenerativní umělá inteligence je výkonná, ale předpovídá *věrohodná* slova, nikoli ověřená fakta. Může s naprostou důvěrou konstatovat něco nepravdivého. V zemědělství je generativní asistent užitečný pro vysvětlování a navrhování, ale důležitá čísla a rozhodnutí musí být porovnána s důvěryhodnými údaji.\n\n> **Klíčová myšlenka:** AI není jeden stroj. Je to sada nástrojů. Pravidla, statistické modely, hluboké učení a generativní modely se hodí pro různé problémy.\n\n## Co AI není\n\n- **AI není magie.** Každý výstup pochází z dat a návrhů provedených lidmi.\n- **AI „nerozumí“ vaší farmě** tak, jak vy. Ví jen to, co jeho data zachytila.\n- **AI není automaticky správná.** Předpovědi s sebou nesou nejistotu a nejlepší systémy vám řeknou, jak moc.\n- **AI nenahrazuje úsudek.** Je to nástroj na podporu rozhodování. Odpovědnost za rozhodnutí zůstává na lidech.\n\n## Zkontrolujte své porozumění\n\nVzpomeňte si na nástroj, který již používáte – aplikaci pro počasí, monitor výnosů, tabulku se vzorci. Je jeho logika napsaná jako pravidla nebo naučená z dat? Svou odpověď napište do poznámek; k této myšlence se vrátíme v modulu 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Proč se zemědělství nyní obrací k AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Tlaky a příležitosti vedoucí k přijetí AI na farmách.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Zemědělci vždy používali informace k rozhodování. Co se změnilo, je množství dostupných informací, rychlost, s jakou musí být použity, a tlak na každý zdroj.\n\n## Tlaky na moderní farmu\n\n**Voda.** Zemědělství je největším uživatelem sladké vody na světě; podle Organizace OSN pro výživu a zemědělství (FAO AQUASTAT) představuje zemědělství jako celek, většinou zavlažování, asi 70 % celosvětových odběrů sladké vody. V mnoha regionech se příděly vody zmenšují, zatímco poptávka roste. Každé rozhodnutí o zavlažování je důležité.\n\n**Proměnlivost klimatu.** Roční období jsou méně předvídatelná. Vlny veder, nepravidelné srážky a nové tlaky škůdců snižují spolehlivost loňské příručky.\n\n**Náklady a marže.** Náklady na hnojiva, energii, práci a vybavení mohou prudce kolísat. Nanesením správného množství na správné místo chráníte marži i životní prostředí.\n\n**Práce.** Mnoho provozů se snaží najít a udržet kvalifikované lidi. Znalosti, které žijí v hlavě jednoho zkušeného manažera, jsou ohroženy, když je tento člověk nedostupný.\n\n**Očekávání ze strany kupujících a regulátorů.** Dodavatelské řetězce stále častěji žádají důkazy: kolik vody bylo použito, jaké vstupy byly použity, jaké postupy byly dodržovány.\n\n## Proč AI a proč teď\n\nSešly se tři věci:\n\n1. **Data se stala hojnou.** Satelity nyní každých pár dní znovu navštíví většinu zemědělské půdy. Sondy půdní vlhkosti, meteostanice, řídicí jednotky zavlažování a strojní zařízení produkují nepřetržité údaje.\n2. **Výpočetní technika se stala levnou a propojenou.** Modely, které kdysi potřebovaly výzkumnou laboratoř, mohou běžet v cloudu a poskytovat výsledky do telefonu.\n3. **Metody vyzrály.** Strojové učení, počítačové vidění a jazykové modely se rychle zlepšily a nyní jsou praktickými nástroji.\n\n> **Klíčová myšlenka:** Umělá inteligence nevytváří nové zdroje. Pomáhá vám lépe využívat vodu, vstupy, čas a znalosti, které již máte.\n\n## Co umělá inteligence reálně dokáže\n\n- **Smysl** – přeměňte nezpracované snímky a data ze senzorů na informace, například které zóny pole jsou namáhány.\n- **Předvídat** – odhadněte, co se stane, jako je zítřejší potřeba vody pro plodiny nebo výnos na konci sezóny.\n- **Doporučit** – navrhněte akci, například plán zavlažování, a vysvětlete proč.\n- **Ověřit** — zkontrolujte, zda došlo k akci a zda fungovala.\n\nVšimněte si vzoru: vycítit, předpovědět, doporučit, ověřit. Tuto smyčku budeme používat po celou dobu kurzu.\n\n## Co to neumí\n\nUmělá inteligence nevidí to, co její data nezachycují: prasklý ventil, postřik souseda, kulturní praktika jedinečná pro vaši farmu. Nemůže nést odpovědnost za rozhodnutí. A nemůže nahradit důvěru mezi pěstitelem a poradcem. Dobrá zemědělská umělá inteligence je navržena tak, aby spolupracovala *s* lidmi, kteří znají zemi.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

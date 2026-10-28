@@ -1,0 +1,532 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "tr",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 63,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Tarımda Yapay Zekaya Giriş",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Yapay zeka nedir, çiftlikte nasıl çalışır ve nasıl sorumlu bir şekilde kullanılır?",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Yapay zeka, sulama kontrolörleri, uydu hizmetleri, çiftlik yönetimi yazılımı ve üreticilerin cebindeki telefonlar aracılığıyla tarıma giriyor. Bu kurs size teknolojinin ne olduğu, nasıl çalıştığı ve nasıl iyi kullanılacağı konusunda net ve pratik bir anlayış sunar.\n\nYapay zeka ve denklemler olmadan makine öğreniminin arkasındaki temel fikirleri öğrenecek, tarımsal verilerin nasıl bir tahmine ve ardından öneriye dönüştüğünü görecek ve planlama ve sulamadan mahsul sağlığı ve hasada kadar yapay zekayı sezon boyunca takip edeceksiniz. Her şeyden önce, yapay zeka çıktısını yargılamayı öğreneceksiniz: ona ne zaman güveneceğinizi, ne zaman sorgulayacağınızı ve insan yargısını ve çiftlik bilgisini nasıl kontrol altında tutacağınızı.\n\nKurs yetiştiriciler, operatörler, tarım uzmanları, yöneticiler ve öğrenciler için tasarlanmıştır. Hiçbir teknik altyapıya gerek yoktur.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Hiçbiri. İhtiyacınız olan tek şey teknolojinin tarımsal çalışmayı nasıl destekleyebileceğine dair meraktır.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Yapay zekanın, makine öğreniminin ve üretken yapay zekanın ne olduğunu sade bir dille açıklayın\", \"Tarımsal verilerin ana kaynaklarını ve verileri güvenilir kılan şeyin ne olduğunu açıklayın\", \"Bir modelin verileri nasıl tahmine, tahmini de öneriye dönüştürdüğünü izleyin\", \"Planlamadan hasada kadar mahsul mevsimi boyunca pratik yapay zeka uygulamalarını tanır\", \"Tarımsal yapay zekanın sınırlarını ve başarısızlık türlerini ve bir öneriye ne zaman itiraz edileceğini belirleyin\", \"Veri sahipliği, gizlilik ve sorumlu kullanım ilkelerini kendi faaliyetlerinizde uygulayın\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Tarım için yapay zeka ne anlama geliyor?",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Temel fikirler ve neden şimdi önemli oldukları.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Tarımsal yapay zeka nasıl çalışır?",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Verilerden modele ve öneriye.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "Sezon boyunca yapay zeka",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Planlamadan hasada kadar pratik uygulamalar.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Yapay zekayı sorumlu bir şekilde kullanma",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Sınırlar, veri hakları ve güvenli, kritik kullanım.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Mahsul sağlığının yukarıdan ve yakından izlenmesi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Mahsul sağlığı için uydu görüntüleri, bitki örtüsü endeksleri ve bilgisayarlı görüş.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Sağlıklı bitkiler ve stresli bitkiler ışığı farklı şekilde yansıtır. Yapay zeka, uydular, dronlar ve kameralar tarafından yakalanan bu farkı, hiçbir keşif ekibinin kapsayamayacağı bir ölçekte mahsulleri izlemek için kullanıyor.\n\n## Bitkiler uyduya nasıl görünüyor?\n\nYeşil yapraklar fotosentez için kırmızı ışığın çoğunu emer ve **yakın kızılötesi (NIR)** ışığı güçlü bir şekilde yansıtır. Bitkiler strese girdiğinde, seyrekleştiğinde veya yaşlandığında, kırmızı yansıma artar ve NIR yansıması düşer.\n\n**Normalleştirilmiş Fark Bitki Örtüsü İndeksi (NDVI)** bu karşıtlığı yakalar:\n\n**NDVI = (NIR − Kırmızı) ÷ (NIR + Kırmızı)**\n\nDeğerler −1 ile +1 arasında değişir. Yoğun, sağlıklı bitki örtüsü tipik olarak yüksektir (genellikle 0,6'nın üzerinde); çıplak toprak azdır (0,1-0,2 civarında); su genellikle negatiftir.\n\n## NDVI haritalarını akıllıca okumak\n\nNDVI, **nedenini** teşhis etmek için değil, bir alanın **nerede** farklılık gösterdiğini tespit etmek için kullanışlıdır. Düşük NDVI yaması su stresi, besin eksikliği, hastalık, zararlılar, ekim sorunu veya sadece farklı bir çeşit olabilir. Harita size nereye bakmanız gerektiğini söyler; İzcilik size ne bulduğunuzu söyler.\n\n> **Önemli:** Bulutlar, bulut gölgeleri, sis ve günün saati uydu okumalarını bozabilir. Güvenilir hizmetler, tek bir anlık görüntüye güvenmek yerine bulutları maskeler ve görüntüleri zaman içinde karşılaştırır.\n\nBelirli amaçlar için başka indeksler mevcuttur; bazıları klorofil, diğerleri su içeriği veya NDVI'nın doyduğu yoğun kanopilere karşı daha duyarlıdır.\n\n## Yakından bilgisayar görüşü\n\n**Bilgisayarlı görüş** modelleri, yerdeyken telefonlardan, traktörlerden veya drone'lardan alınan fotoğrafları analiz ederek şunları sağlar:\n\n- yaprak görüntülerinden hastalıkları ve zararlıları tespit etmek;\n- hedefli ilaçlama için yabani otları mahsullerden ayırmak;\n- Verimi tahmin etmek için meyveleri, çiçekleri veya bitkileri sayın.\n\nBu modeller, etiketli görsellerden oluşan geniş koleksiyonlar üzerinde eğitilmiştir. Bunların doğruluğu büyük ölçüde bu görüntülerin mahsulünüze, çeşitlerinize ve aydınlatma koşullarınıza benzeyip benzemediğine bağlıdır.\n\n## Tespitten eyleme\n\nİyi bir mahsul izleme iş akışı, tespit işlemini öncelikli bir göreve dönüştürür: *\"Bölge 3, 10 gün boyunca gücün azaldığını gösteriyor. Önce kuzeydoğu köşesini araştırın; sulama tekdüzeliğini kontrol edin ve kök hastalığı belirtileri arayın.\"* Gözcünün bulguları daha sonra sisteme geri bildirim sağlayarak gelecekteki uyarıları iyileştirir.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Veri: Tarımsal yapay zekanın hammaddesi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Çiftlik verilerinin nereden geldiği ve onu güvenilir kılan şey nedir?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Her yapay zeka sistemi verilerden oluşturulur. Veriler eksik, taraflı veya yanlışsa yapay zeka da öyle olacaktır. Verilerinizi anlamak tarımsal yapay zekadaki en önemli beceridir.\n\n## Tarımsal veriler nereden geliyor?\n\n| Kaynak | Örnekler | Size ne söylüyor |\n|---|---|---|\n| Hava Durumu | Çiftlik istasyonları, bölgesel ağlar, tahminler | Sıcaklık, yağış, nem, rüzgar, güneş radyasyonu |\n| Toprak | Nem sondaları, toprak testleri, toprak haritaları | Kökler için mevcut su, besinler, doku |\n| Uzaktan algılama | Uydu, uçak ve drone görüntüleri | Mahsul gücü, gölgelik örtüsü, tarladaki stres desenleri |\n| Ekipman | Sulama kontrolörleri, debimetreler, verim monitörleri, traktörler | Ne, nerede ve ne zaman uygulandı |\n| Kayıtlar | Dikim tarihleri, çeşitleri, girdi uygulamaları, keşif notları | Yönetim kararları ve gözlemleri |\n| Piyasalar | Fiyatlar, sözleşmeler, talep sinyalleri | Kararlar için ekonomik bağlam |\n\n## İyi verinin nitelikleri\n\n**Doğruluk** — Ölçüm gerçeği yansıtıyor mu? Islak bir yere yerleştirilen nem sondası ya da bir ağacın altına yağmur ölçer takan her modeli yanıltacaktır.\n\n**Tamlık** — boşluklar var mı? Sıcak hava dalgası sırasında bir hafta boyunca raporlamayı durduran bir sensör, tam da en önemli anda bir boşluk bırakıyor.\n\n**Zamanındalık** — Veriler karar için yeterince güncel mi? Dünün toprak nemi bugünün sulamasında faydalıdır; geçen ayki değil.\n\n**Tutarlılık** — Birimler, formatlar ve tanımlar zaman içinde ve alanlar arasında aynı mıdır? İnç ve milimetrenin karıştırılması veya aynı alan için iki adın karıştırılması sessiz hatalara neden olur.\n\n**Temsil edilebilirlik** — veriler yapay zekanın kullanılacağı koşulları kapsıyor mu? Yalnızca kumlu topraklarda eğitilen bir model kil üzerinde çalışmayabilir.\n\n> **Saha kontrolü:** Bir kontrol paneline güvenmeden önce üç soru sorun: Bu numara nereden geldi? Ne zaman ölçüldü? Bunu yanlış yapan ne olabilir?\n\n## Verinin bağlama ihtiyacı var\n\n%30'luk bir toprak nemi okuması tek başına çok az şey ifade eder. Toprağın cinsinin ne olduğu, sensörün ne kadar derine oturduğu, hangi ürünün yetiştiği ve hangi aşamada olduğu önemlidir. İyi tarımsal yapay zeka, veri kaynaklarını birleştirerek her birinin diğerine bağlam katmasını sağlar; örneğin uydu görüntülerini hava durumu verileriyle ve tarlanın sulama geçmişiyle eşleştirir.\n\n## Sizin verileriniz, sizin kararlarınız\n\nÇiftlik verilerinin ticari, operasyonel ve kişisel açıdan değeri vardır. Ekipmanı bağlamadan veya kayıtları herhangi bir hizmetle paylaşmadan önce verilere kimin erişebileceğini, verilerin nasıl kullanılacağını ve ayrılırsanız bunları yanınızda götürüp götüremeyeceğinizi öğrenin. Modül 4'te veri sahipliği konusuna geri döneceğiz.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Veri sahipliği, gizlilik ve güven",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Çiftlik verilerini güvenle paylaşmanın pratik ilkeleri.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Çiftlik verileri, verimi, uygulamaları, finansmanı ve insanların ve varlıkların konumunu ortaya çıkarabilir. Paylaşmak değerli hizmetlerin kilidini açabilir ancak bu her zaman kasıtlı bir seçim olmalıdır.\n\n## Herhangi bir teknoloji sağlayıcısına sorulacak sorular\n\n- **Sahiplik:** Sağladığım verilerin ve sistemin çiftliğim hakkında ürettiği verilerin sahibi kim?\n- **Kullanım:** Veriler ne için kullanılacak? Modelleri eğitmek için kullanılacak mı? Diğer çiftliklerin verileriyle birleştirilecek mi?\n- **Paylaşım:** Üçüncü şahıslarla paylaşılacak mı veya onlara satılacak mı? Hangileri ve neden?\n- **Erişim ve taşınabilirlik:** Verilerimi kullanılabilir bir biçimde indirebilir miyim? Ayrılırsam onu ​​yanıma alabilir miyim?\n- **Silme:** Verilerimi ve sonrasında kalanları silebilir miyim?\n- **Güvenlik:** Veriler nasıl korunuyor? Şirketin içinden kimler görebilir?\n- **Kontrol:** Bağlı bir cihazın veya iş ortağının erişimini istediğim zaman iptal edebilir miyim?\n\nÇeşitli tarım kuruluşları bu sorulara yanıt veren çiftlik verileri ilkeleri yayınlamıştır; Bir sağlayıcının onları takip edip etmediğini sormak iyi bir başlangıç ​​noktasıdır.\n\n## Onay ve izinler\n\nİyi sistemler belirli, bilgilendirilmiş izin ister; örneğin, bir konektörün, ayarları değiştirme izni vermeden sulama kontrol cihazı verilerini okumasına izin vermek. İş için gereken en az erişimi sağlayın ve bağlı hizmetleri düzenli olarak inceleyin.\n\n## Toplanmış ve anonimleştirilmiş veriler\n\nBirçok çiftlikten elde edilen verilerin birleştirilmesi, daha iyi bölgesel su kullanımı tahminleri gibi herkes için modeller geliştirebilir. İyi uygulandığında toplama, tek bir çiftliği tanımlayabilecek bilgileri ortadan kaldırır. Anonimleştirmenin nasıl yapıldığını ve kapsam dışında kalmayı tercih edip edemeyeceğinizi sorun.\n\n## Güven kazanılır\n\n> **Ana fikir:** Güvenilir tarımsal yapay zeka, verileri nasıl kullandığı konusunda şeffaftır, önerilerini açıklar, belirsizliği kabul eder ve kontrolü çiftçiye bırakır.\n\nAynı ilkeler Akademi'nin kendisi için de geçerlidir. Öğrenim verilerinizi istediğiniz zaman hesap ayarlarınızdan indirebilir veya silebilirsiniz.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Pratik alıştırma: Yapay zeka önerisini değerlendirin",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Öğrendiklerinizi gerçekçi bir öneriye uygulayın.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Bu alıştırmada, bu modüldeki eleştirel inceleme becerilerini gerçekçi bir öneri üzerine uygulayacaksınız.\n\n## Senaryo\n\n60 hektarlık damlama sulamalı domates işletmesini yönetiyorsunuz. Sezon ortasında bir Salı sabahı, karar destek sisteminiz şunları gösterir:\n\n> *\"Tavsiye: Önümüzdeki 48 saat boyunca C Blokta sulamayı atlayın. Tahmini mahsul su kullanımı: 3,1 mm/gün. Toprak nemi: Tarla kapasitesinin %82'si. Güven: yüksek.\"*\n\nC Blok'un yanından geçerken, doğu ucundaki bitkilerin sabahın geç saatlerindeki sıcakta solmuş göründüğünü ve dünkü maksimum sıcaklığın 37 °C olduğunu fark ettiniz; bu, sistemin iki gün önce kullandığı 29 °C tahmininden çok daha yüksekti.\n\n## Göreviniz\n\nAşağıdaki kontrol listesini inceleyin. Gerekçenizi **Notlar** sekmesine yazın, böylece ona geri dönebilirsiniz.\n\n1. **Girişleri kontrol edin.** Hangi giriş şüpheli görünüyor? (İpucu: tahmin edilen sıcaklığı, olanlarla karşılaştırın.)\n2. **Sensörleri kontrol edin.** Toprak nemi probu nereye takılıdır? Doğu ucunu temsil etmeyen bir noktada olabilir mi?\n3. **Tarlaya bakın.** Solmuş bitkilerde neyi kontrol edersiniz? Emitör tıkanmasını, hattın sonundaki basıncı ve kök sağlığını göz önünde bulundurun.\n4. **Karar verin.** Öneriyi takip eder misiniz, değiştirir misiniz veya geçersiz kılar mısınız? Neden?\n5. **Kaydedin ve raporlayın.** Sistemin ve ekibinizin bundan ders alabilmesi için ne gibi geri bildirimler verirsiniz?\n\n## Tartışma\n\nGüçlü bir yanıt, tahmin edilen su kullanımının muhtemelen çok soğuk çıkan bir tahmine dayandığını, dolayısıyla gerçek talebin daha yüksek olduğunu fark eder. %82 okuyan tek bir sonda, özellikle oradaki yayıcılar tıkanmışsa veya yanal uçtaki basınç düşükse, doğu kenarını temsil etmeyebilir. Mantıklı bir karar, derhal doğu kenarını incelemek, incelemede toprağın kuru olduğu teyit edilirse kısa bir sulama yapmak ve hem tahmin hatasının hem de olası tekdüzelik sorununun rapor edilmesi olabilir.\n\nNadiren tek bir doğru cevap vardır, ancak her zaman doğru bir süreç vardır: girdileri kontrol edin, bağlamı kontrol edin, alana bakın, karar verin ve kaydedin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Hasat, pazarlar ve tedarik zinciri",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Verim tahmini, pazar istihbaratı ve lojistik.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Sezon hasada doğru ilerledikçe kararlar mahsulün yetiştirilmesinden değerini yakalamaya doğru değişiyor.\n\n## Verim tahmini\n\nVerim tahminleri, mahsul büyüme modellerini, güncel hava durumunu ve tahminleri, görüntüye dayalı gücü ve bazen bilgisayar görüşünden elde edilen sayımları birleştirir. Daha önceki tahminler daha az kesindir; sezon ilerledikçe doğruluk artar.\n\nTahminler aşağıdaki gibi kararları destekler:\n\n- ne kadar ileriye doğru satılacağı ve ne zaman;\n- kaç işçi, kamyon ve depolama kapasitesi için rezervasyon yapılması gerektiği;\n- geç bir girdinin hâlâ uygulamaya değer olup olmadığı.\n\n## Pazar zekası\n\nPiyasa istihbarat araçları, fiyat hareketlerini tahmin etmeye yardımcı olmak için fiyatları, vadeli işlemleri, ihracat verilerini, rakip bölgelerdeki hava durumunu ve haberleri toplar. Yapay zeka bu sinyalleri hızla özetleyebilir ve olağandışı değişiklikleri vurgulayabilir. Hiçbir model piyasaları kesin olarak tahmin edemez; Piyasa tahminlerini bir garanti olarak değil, risk yönetimli bir planın girdilerinden biri olarak ele alın.\n\n## Hasat zamanlaması ve kalitesi\n\nMahsulün olgunluğunu takip eden modeller (üzümdeki şeker seviyeleri, tahıldaki nem, meyvedeki renk), kalite, hava durumu riski ve lojistik arasında en iyi dengeyi sağlayacak şekilde hasatın planlanmasına yardımcı olur. İşgücü ve ekipman mevcudiyeti ile birleştirildiğinde, bir operasyon boyunca alanların sıralanmasına yardımcı olabilirler.\n\n## İzlenebilirlik ve kanıt\n\nAlıcılar giderek artan bir şekilde bir ürünün nasıl üretildiğine dair kanıt istiyor: su kullanımı, uygulanan girdiler, sertifikalar. Sezon boyunca önerileri, eylemleri ve doğrulamayı kaydeden sistemler bu kanıtların üretilmesini kolaylaştırır; bu da döngünün doğrulama adımının önemli olmasının bir başka nedenidir.\n\n> **Ana fikir:** Hasat sırasında yapay zekanın değeri zamanlama, miktar ve fiyattaki belirsizliğin azaltılmasından ve yapılanların belgelenmesinden gelir.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Örnek olay: sulama ve su yönetimi",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Sulama planlamasında buharlaşma, toprak nemi ve yapay zekanın nasıl birleştiği.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Sulama, yapay zekanın bir çiftlikte değer yaratmasının en açık örneklerinden biridir çünkü su kararları sık, maliyetli ve ölçülebilirdir.\n\n## Su dengesi\n\nKök bölgesini su için bir banka hesabı olarak düşünün.\n\n- **Mevduat:** yağış ve sulama.\n- **Çekilenler:** mahsul tarafından kullanılan ve topraktan buharlaştırılan su (topluca **evapotranspirasyon (ET)** olarak adlandırılır) artı köklerin altındaki drenaj.\n\nSulama programlamasının amacı, mahsulün strese maruz kalmaya başladığı alt sınır ile bunun ötesinde suyun çekilip israf edildiği üst sınır arasındaki dengeyi korumaktır.\n\n## Mahsulün su kullanımını tahmin etmek\n\nBitkisel su kullanımı genellikle iki adımda tahmin edilir:\n\n1. **Referans buharlaşma terleme (ET₀)**, standart bir referans mahsul için hava durumu verilerinden (sıcaklık, nem, rüzgar ve güneş radyasyonu) hesaplanır.\n2. **Ürün katsayısı (Kc)**, ET₀'yi gerçek ürün ve büyüme aşamasına göre ayarlar: **ETc = ET₀ × Kc**.\n\nMakine öğrenimi, özellikle standart katsayıların yetersiz uyum sağladığı durumlarda, yerel sensörlerden, kanopi görüntülerinden ve çiftliğin kendi geçmişinden öğrenerek bu tahmini iyileştirebilir.\n\n## Bir planlama senaryosu\n\n> **Örnek:** Kök bölgesi dolduğunda bir bağ bloğunda 40 mm'lik hazır su bulunur. Toprak nemi probları 18 mm kaldığını gösteriyor. Tahmin ETc önümüzdeki dört gün boyunca günlük 5 mm'dir ve yağmur beklenmemektedir.\n\nSulama yapılmazsa blok yaklaşık üç buçuk günde (18 mm ÷ 5 mm/gün) alt sınırına ulaşır. Bir planlama sistemi, önümüzdeki iki ila üç gün içinde, kök bölgesini aşırı doldurmadan yeniden dolduracak boyutta, mevcut pompa kapasitesine göre zamanlanmış ve geceleri elektrik fiyatlarını düşürecek şekilde sulama yapılmasını önerecektir.\n\nTahminin ikinci günde 15 mm yağmur olarak değişmesi halinde, iyi bir sistem tavsiyeyi günceller ve nedenini açıklar.\n\n## Yapay zekanın değer kattığı yer\n\n- **Hava durumunu, sensörleri ve görüntüleri birleştirerek daha iyi su kullanımı tahminleri**.\n- **Gelecek yağmur ve sıcaklığı hesaba katan, tahmine dayalı planlama**.\n- Birçok blokta, pompa limitlerinde ve su tahsislerinde **optimizasyon**.\n- **Doğrulama** — akış ölçerlerden ve toprak neminden sulamanın planlandığı gibi gerçekleştiğinin ve beklenen etkiye sahip olduğunun doğrulanması.\n\n## Ne ters gidebilir?\n\nTıkalı bir emitör, kırık bir valf veya temsili olmayan bir noktaya monte edilmiş bir prob, sistemi yanıltabilir. Doğrulama adımının önemli olmasının nedeni budur: Gözlemlenen toprak nemi sulama sonrasında tahmin edildiği gibi tepki vermediğinde, bu yalnızca modeli değil, tarlayı da araştırmak için bir sinyaldir.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Sınırlar, hatalar ve bir öneriye ne zaman itiraz edileceği",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Başarısızlık türlerini tanımak ve insan muhakemesini kontrol altında tutmak.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Her yapay zeka sistemi bazen hatalı olacaktır. Amaç, körü körüne güven ya da toptan reddetme değil, **ayarlanmış güven**: Bir önerinin ne zaman güveni hak ettiğini ve ne zaman ikinci bir bakışı hak ettiğini bilmek.\n\n## Yaygın arıza modları\n\n**Kötü girişler.** Arızalı bir sensör, yanlış yerleştirilmiş bir prob veya eksik bir veri akışı kendinden emin saçmalıklara neden olur. *Çöp içeri, çöp dışarı.*\n\n**Aralık dışı koşullar.** Modeller, antrenman sırasında nadiren karşılaştıkları durumlarda en az güvenilirdir: aşırı sıcaklık, yeni bir çeşit, alışılmadık bir toprak.\n\n**Sürüklenme.** Koşullar zamanla değişir ve üç yıl önce doğru olan bir model artık doğru olmayabilir.\n\n**Önyargı.** Eğitim verileri belirli bölgeleri, çiftlik büyüklüklerini veya mahsulleri gereğinden fazla temsil ediyorsa, farklı operasyonlar için öneriler daha az doğru olabilir.\n\n**Bağlam eksik.** Sistem, komşunun bitki ilacı yığınından, kırık borudan veya gelecek hafta hasat yapılmasını gerektiren sözleşmeden haberdar değil.\n\n**Otomasyon önyargısı.** İnsanlar, özellikle tam olarak sunulduğunda makine çıktısına aşırı güvenme eğilimindedir. İki ondalık basamağa sahip bir sayı mutlaka doğru değildir.\n\n## Bir öneriye ne zaman itiraz edilmeli\n\nAşağıdaki durumlarda duraklatın ve araştırın:\n\n- tavsiyenin sahada gördüklerinizle çelişmesi;\n- sezon için normal aralığın çok dışında;\n- sistem düşük düzeyde güven gösteriyor veya hiç güven göstermiyor;\n- anahtar veriler eksik, eski veya açıkça yanlış;\n- Bir hatanın sonuçlarının ağır olması veya tersine çevrilmesinin zor olması.\n\n> **Saha kontrolü:** Basit bir kural; karar ne kadar büyükse ve geri döndürülebilirliği ne kadar azsa, bir yapay zeka tavsiyesine göre hareket etmeden önce o kadar fazla kanıta ihtiyaç duymanız gerekir.\n\n## Nasıl iyi mücadele edilir\n\n1. **Girişleri kontrol edin.** Sensörler rapor veriyor mu? Hava durumu verileri güncel mi?\n2. **Nedenini sorun.** Bu öneriye hangi veriler yol açtı?\n3. **Alana bakın.** Söz konusu alanı araştırın.\n4. **Neye ve neden karar verdiğinizi kaydedin.** Geçersiz kılmanız, sistemi iyileştirmeye yardımcı olan değerli geri bildirimlerdir.\n\nBir öneriye itiraz etmek teknolojinin başarısızlığı değildir. İnsanlar ve yapay zeka bu şekilde birlikte iyi çalışır.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Modeller, eğitim ve tahminler",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Bir modelin örneklerden nasıl öğrendiği ve neden her tahminde belirsizlik olduğu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**Model**, örneğin hava durumu ile bir mahsulün kullandığı su miktarı arasındaki ilişkinin matematiksel bir açıklamasıdır. Makine öğrenimi örneklerden öğrenerek modeller oluşturur.\n\n## Örneklerden öğrenmek\n\nYarın bir badem bahçesinin ne kadar su kullanacağını tahmin etmek istediğinizi hayal edin. Her biri aşağıdakileri içeren birçok geçmiş günü topluyorsunuz:\n\n- **girdiler** (*özellikler* olarak da bilinir): sıcaklık, nem, rüzgar, güneş radyasyonu, ağaç yaşı, gölgelik örtüsü;\n- tahmin etmek istediğiniz **sonuç**: sensörler tarafından ölçülen, meyve bahçesinin o gün gerçekten kullandığı su.\n\n**Eğitim** sırasında algoritma, tahminleri kaydedilen sonuçlarla mümkün olduğunca yakından eşleşene kadar modeli tekrar tekrar ayarlar. Buna **denetimli öğrenme** denir çünkü her örnek doğru cevabı içerir.\n\n## Modelin daha önce görmediği veriler üzerinde test yapma\n\nBir model, eğitim örneklerini ezberlese de yeni günlerde başarısız olabilir. Bu nedenle veri bilimcileri **doğrulama** için bazı verileri bir kenara bırakırlar; bu veriler modelin eğitim sırasında hiç görmediği verilerdir. Bu uzatılmış veriler üzerindeki performans, ne kadar iyi çalıştığının dürüst ölçüsüdür.\n\n> **Önemli:** Bir modelin nasıl doğrulandığını sorun. \"Tarihsel verilerimize mükemmel bir şekilde uyuyor\" bir güçlü yön değil, bir uyarı işaretidir.\n\n## Ölçüm doğruluğu\n\nSayısal tahminler için yaygın ölçümler **ortalama hatayı** (tahminlerin ortalama olarak ne kadar uzak olduğunu) ve modelin açıkladığı varyasyonu içerir. \"Stresli\" veya \"sağlıklı\" sınıflandırmaları için modelin ne sıklıkla doğru olduğunu ve ne sıklıkla yanlış alarmlara yol açtığını veya gerçek sorunları gözden kaçırdığını soruyoruz.\n\nTek bir \"iyi\" doğruluk yoktur. %5 dahilindeki bir getiri tahmini, pazarlama kararları için mükemmel olabilir; on olaydan birini kaçıran bir donma alarmı kabul edilemez olabilir.\n\n## Her tahminde belirsizlik vardır\n\nHava durumu değişir, sensörler kayar ve alanlar değişir. Güvenilir bir sistem belirsizliği iletir: \"yarının su kullanımı 6,2 mm, muhtemelen 5,6 ila 6,8 mm arasındadır.\" Aralığı olmayan tek bir sayı, önemli bilgileri gizler.\n\n## Modeller bayatladığında\n\nKoşullar değişir. Yeni çeşitler, kuraklık yılı veya değişen sulama sistemi geçmiş verileri daha az temsil edici hale getirebilir. Buna **sürüklenme** denir. İyi sistemler zamanla kendi doğruluğunu izler ve performans düştüğünde yeniden eğitilir.\n\n## Yaygın tarım modeli türleri\n\n- **Regresyon** — bir sayıyı tahmin eder (su kullanımı, verim, fiyat).\n- **Sınıflandırma** — bir kategori atar (hastalık mevcut veya yok, ürün türü).\n- **Tahmin** — bir şeyin zaman içinde nasıl değişeceğini tahmin eder (önümüzdeki beş gündeki toprak nemi).\n- **Bilgisayarlı görüş** — görüntüleri yorumlar (meyve sayma, yabani otları tespit etme).\n- **Optimizasyon** — kısıtlamalar dahilinde en iyi planı bulur (sınırlı suyla mahsul talebini karşılayan bir sulama programı).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Planlama ve ekim",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "İlk tohum toprağa düşmeden önce verileri ve yapay zekayı kullanmak.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Sezonun en değerli kararlarının çoğu ekimden önce alınır. Yapay zeka bu kararlara daha fazla kanıt getirerek yardımcı olabilir.\n\n## Saha geçmişi ve yönetim bölgeleri\n\nAlanlar tek tip değildir. Yıllar süren verim haritaları, toprak araştırmaları ve uydu görüntüleri sıklıkla tutarlı modelleri ortaya koyuyor: ıslak kalan alçak bir alan, önce kuruyan kumlu bir sırt. Algoritmalar bu alanları suya, tohuma ve gübreye farklı tepki veren **yönetim bölgeleri** halinde gruplandırabilir.\n\nBölgeler sayesinde yetiştirici ekim oranlarını değiştirebilir, nereye daha fazla veya daha az nitrojen uygulayacağını seçebilir veya tarlanın her bölümünün davranışına uygun sulama setleri planlayabilir.\n\n## Çeşit ve ekim tarihi kararları\n\nBölgesel denemeler ve hava durumu kayıtları üzerine eğitilen modeller, çeşitlerin farklı koşullar altında nasıl performans gösterdiğini ve ekim tarihinin, örneğin çiçeklenme sırasında sıcaklık stresi olasılığını nasıl etkilediğini tahmin edebilir. Bu tahminler, yalnızca ulusal ortalamaları değil, yerel araştırmaları da yansıttıklarında çok faydalıdır.\n\n## Senaryo planlama\n\nYapay zeka araçları \"ya şöyle olursa\" senaryolarını hızlı bir şekilde çalıştırabilir: Ya sezon kuru geçerse? Su tahsisleri %20 oranında kesilirse ne olur? Girdi fiyatları artarsa ​​ne olur? Senaryoları karşılaştırmak, yalnızca bekleneni değil, birçok olası geleceği de kapsayan bir plan seçmenize yardımcı olur.\n\n> **Alan kontrolü:** Bir araç bir ekim oranı veya çeşidi önerdiğinde, bunun hangi verilere dayandığını sorun. Topraklarınızdan ve ikliminizden elde edilen bölgesel deneme verileri, ulusal ortalamadan çok daha anlamlıdır.\n\n## Akılda tutulması gereken sınırlar\n\nSezon öncesi tavsiyeler belirsiz olan uzun vadeli tahminlere dayanıyor. Bunları sabit bir reçete olarak değil, sezon ilerledikçe ayarlanacak bir başlangıç ​​planı olarak değerlendirin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Modül 1 sınavı",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Yapay zekanın temellerine ilişkin bilginizi kontrol edin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Modül 1'deki fikirlerle ilgili beş kısa soruyu yanıtlayın. Sınavlar pratik amaçlıdır: sınavları istediğiniz kadar tekrarlayabilirsiniz ve her denemeden sonra açıklamalar görürsünüz.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Modül 2 sınavı",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Verileri, modelleri ve önerileri anladığınızı kontrol edin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Veri kalitesi, model eğitimi ve karar desteğine ilişkin beş soru. İstediğiniz sıklıkta tekrar alın.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Modül 3 sınavı",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Sezon boyunca yapay zeka konusundaki anlayışınızı kontrol edin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Planlama, sulama, mahsul izleme ve hasatla ilgili beş soru. İstediğiniz sıklıkta tekrar alın.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Tahminden tavsiyeye",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Karar destek sistemleri tahminleri nasıl eyleme dönüştürüyor ve insanları nasıl gelişmelerden haberdar ediyor?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Bir tahmin size ne olacağını söyler. Bir **öneri** size bu konuda ne yapmanız gerektiğini söyler. Birini diğerine dönüştürmek hedefler, kısıtlamalar ve bağlam gerektirir.\n\n## Bir sulama örneği\n\nBir modelin, tarlanın yarın 7 mm su kullanacağını ve toprak neminin halihazırda mahsulün tolere edebileceği alt sınıra yakın olduğunu öngördüğünü varsayalım. Bir öneri sistemi bu tahmini aşağıdakilerle birleştirir:\n\n- **hedefler** — verimi ve kaliteyi koruyun, israfı önleyin;\n- **kısıtlamalar** — pompa kapasitesi, kalan su tahsisi, elektrik tarifeleri, sulama seti programı;\n- **bağlam** — yağmur tahmini, mahsul aşaması, kuru toprağa ihtiyaç duyan planlı bir hasat.\n\nSonuç şöyle olabilir: *\"Bu gece 4. bloğu 6 saat boyunca sulayın (yaklaşık 18 mm). 7. bloğu atlayın: 12 mm yağmur yüksek güvenle tahmin ediliyor.\"*\n\n## İyi öneriler kendilerini açıklar\n\nAnlayamayacağınız bir öneri, yargılayamayacağınız bir öneridir. Aşağıdakileri gösteren sistemleri arayın:\n\n- **sebep** — hangi veri ve hangi tahminin öneriye yol açtığı;\n- **güven** — sistemin ne kadar kesin olduğu;\n- **alternatifler** — beklerseniz veya daha az başvurursanız ne olur;\n- **kanıt izi** — böylece eylemin gerçekleşip gerçekleşmediğini ve işe yarayıp yaramadığını daha sonra kontrol edebilirsiniz.\n\n## İnsanları gelişmelerden haberdar etmek\n\nTarımda çoğu yapay zeka **karar desteğidir**: sistem önerir, kişi karar verir. Otomasyonun eylemleri gerçekleştirdiği durumlarda bile (örneğin, bir kontrolörün vanayı açması) sorumlu tasarımlar arasında onay adımları, sınırlar ve geçersiz kılma yeteneği yer alır.\n\n> **Ana fikir:** Sonuçtan sorumlu kişi her zaman bir tavsiyenin neden yapıldığını görebilmeli, değiştirebilmeli ve durdurabilmelidir.\n\n## Döngüyü kapatıyoruz: doğrulama\n\nEn değerli sistemler öneriyle sınırlı değildir. Gerçekte ne yapıldığını ve sonrasında ne olduğunu kontrol ediyorlar: Sulama yapıldı mı? Ne kadar su uygulandı? Toprak nemi beklendiği gibi düzeldi mi? Bu **doğrulama** adımı güven oluşturur, ekipman sorunlarını tespit eder ve alıcıların, denetçilerin ve su yetkililerinin giderek daha fazla talep ettiği kanıtları üretir.\n\nModül 1'deki döngüyü hatırlayın: **algılama → tahmin etme → tavsiye etme → doğrulama**. Döngünün her dönüşü, bir sonraki sezonun hem kararlarını hem de verilerini iyileştirir.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Kurs özeti ve sonraki adımlar",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Temel çıkarımlar ve final sınavına nasıl hazırlanılacağı.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Kursun sonuna ulaştığınız için sizi tebrik ederiz. Ana fikirleri bir araya getirelim.\n\n## Temel çıkarımlar\n\n- **Yapay zeka bir araç kutusudur**, tek bir teknoloji değildir. Kurallar, makine öğrenimi, derin öğrenme ve üretken yapay zeka farklı sorunlara uygundur.\n- **Veriler temeldir.** Doğruluk, eksiksizlik, güncellik, tutarlılık ve temsil edilebilirlik herhangi bir modelin neler yapabileceğini belirler.\n- **Modeller örneklerden öğrenir** ve daha önce görmedikleri verilerle doğrulanmaları gerekir. Her tahminde belirsizlik vardır ve modeller sürüklenebilir.\n- **Öneriler, tahminleri hedefler, kısıtlamalar ve bağlamla birleştirir.** İyi olanlar kendilerini açıklar.\n- **Döngü önemlidir:** algılama → tahmin etme → tavsiye etme → doğrulama.\n- **Sezon boyunca** yapay zeka planlamayı, sulamayı, mahsul izlemeyi, hasat zamanlamasını, pazarlamayı ve izlenebilirliği destekler.\n- **Ayarlanmış güven kullanın.** Alanıyla çelişen, zayıf verilere dayanan veya yüksek riskli önerilere meydan okuyun.\n- **Verileriniz ilgiyi hak ediyor.** Verilerinizin kime ait olduğunu, nasıl kullanıldığını ve nasıl geri alınacağını öğrenin.\n\n## Final sınavına hazırlanıyoruz\n\nFinal sınavı dört modülün tamamını kapsar. Daha büyük bir bankadan 20 soru çekiyor ve size 30 dakika süre veriyor. Geçmek için **%80**'e ihtiyacınız var.\n\n> **İpucu:** Notlarınızı ve modül testlerini inceleyin. Bir sınav sorusunu kaçırdıysanız, sınavdan önce o sorunun işaret ettiği dersi açın.\n\n## Bundan sonra nereye gitmeli\n\n- **Tarımsal Verilerin Temelleri**, veri kaynakları ve kalitesini daha da derinlemesine ele alır.\n- **Uzaktan Algılama ve Uydu Zekası**, görüntü ve bitki örtüsü endekslerini genişletir.\n- **Yapay Zeka Destekli Sulama** bu fikirleri su yönetimine ayrıntılı olarak uyguluyor.\n\nAGRO-AI Akademi ile öğrendiğiniz için teşekkür ederiz. Hazır olduğunuzda ders menüsünden final sınavını açın.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Kursa hoş geldiniz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Ne öğreneceksiniz, kursun işleyişi ve sertifikanızı nasıl kazanacağınız.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "AGRO-AI Akademi *Tarımsal Yapay Zekanın Temelleri* programının ilk kursu olan **Tarımda Yapay Zekaya Giriş**'e hoş geldiniz.\n\nBurada başarılı olmak için herhangi bir teknik altyapıya ihtiyacınız yok. Eğer bir hava durumu tahminine baktıysanız, bir toprak testi okuduysanız ya da iki tarla arasındaki verimi karşılaştırdıysanız, bu kursun üzerine inşa edildiği zihinsel alışkanlıkları zaten kullanmışsınızdır: kanıt toplamak, kalıpları tespit etmek ve bundan sonra ne yapacağınıza karar vermek.\n\n## Ne öğreneceksiniz\n\nKursun sonunda şunları yapabileceksiniz:\n\n- Yapay zekanın ne olduğunu ve ne olmadığını sade bir dille açıklayın;\n- Tarımsal verilerin nereden geldiğini ve onu neyin güvenilir kıldığını açıklamak;\n- Verilerin nasıl tahmine, tahminin ise öneriye dönüştüğünü takip edin;\n- sezon boyunca faydalı yapay zeka uygulamalarını tanımak;\n- AI çıktısını eleştirel bir şekilde değerlendirin ve onu sorumlu bir şekilde kullanın.\n\n## Kurs nasıl işliyor?\n\nKursta kısa derslerden oluşan **dört modül** bulunmaktadır. Birden üçe kadar olan modüllerin her biri, anlayışınızı kontrol etmenize yardımcı olacak bir uygulama sınavıyla sona ermektedir; Dördüncü modül, sizi final sınavına hazırlayacak pratik bir alıştırma ve ders özetiyle sona ermektedir. Sınavlar sertifikanız için sayılmaz ve sınavlara istediğiniz sıklıkta tekrar girebilirsiniz.\n\nİlerlemeniz otomatik olarak kaydedilir. Telefonunuzda dersin ortasında durabilir ve daha sonra bilgisayarda devam edebilirsiniz.\n\n> **İpucu:** Kendi operasyonunuz için geçerli olan fikirleri yazmak için her dersin altındaki **Notlar** sekmesini kullanın. Notlar özeldir; onları yalnızca siz görebilirsiniz.\n\n## Sertifikanızı kazanma\n\nGerekli her dersi tamamladığınızda **final sınavının** kilidi açılır. Daha büyük bir bankadan 20 soru alınır, süresi 30 dakikadır ve geçmek için **%80** puan gerekir. İlk denemede geçemezseniz önerilen dersleri inceleyebilir ve bir saat sonra tekrar deneyebilirsiniz.\n\nSınavı geçin ve AGRO-AI Akademi, benzersiz bir kimlik bilgisi kimliği ve LinkedIn'de paylaşabileceğiniz genel bir doğrulama sayfasıyla birlikte ücretsiz olarak sertifikanızı otomatik olarak verir.\n\nHaydi başlayalım.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Kurallardan öğrenmeye: Yapay Zeka nedir (ve değildir)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Yapay zeka, makine öğrenimi, derin öğrenme ve üretken yapay zekanın sade dildeki tanımları.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "status": "source_fallback"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Tarım neden şimdi yapay zekaya yöneliyor?",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Çiftliklerde yapay zekanın benimsenmesine neden olan baskılar ve fırsatlar.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Çiftçiler karar vermek için her zaman bilgiyi kullanmışlardır. Değişen şey, mevcut bilgi miktarı, kullanılması gereken hız ve her kaynak üzerindeki baskıdır.\n\n## Modern çiftlik üzerindeki baskılar\n\n**Su.** Tarım dünya çapında tatlı suyun en büyük kullanıcısıdır; BM Gıda ve Tarım Örgütü'ne (FAO AQUASTAT) göre, tarımın tamamı, çoğunlukla sulama, küresel tatlı su çekiminin yaklaşık %70'ini oluşturuyor. Birçok bölgede talep artarken su tahsisleri daralıyor. Her sulama kararı önemlidir.\n\n**İklim değişkenliği.** Mevsimler daha az tahmin edilebilir. Sıcak hava dalgaları, düzensiz yağışlar ve yeni haşere baskıları, geçen yılın taktik kitabını daha az güvenilir hale getiriyor.\n\n**Maliyetler ve marjlar.** Gübre, enerji, işçilik ve ekipman maliyetleri keskin bir şekilde değişebilir. Doğru yere doğru miktarda uygulamak hem marjı hem de çevreyi korur.\n\n**İşgücü.** Birçok operasyon vasıflı insanları bulmak ve elde tutmakta zorluk çekiyor. Deneyimli bir yöneticinin kafasında yaşayan bilgi, o kişi müsait olmadığında risk altındadır.\n\n**Alıcılardan ve düzenleyicilerden beklentiler.** Tedarik zincirleri giderek daha fazla kanıt istiyor: ne kadar su kullanıldı, hangi girdiler uygulandı, hangi uygulamalar takip edildi.\n\n## Neden yapay zeka ve neden şimdi\n\nÜç şey bir araya geldi:\n\n1. **Veriler çoğaldı.** Uydular artık tarım arazilerinin çoğunu birkaç günde bir yeniden ziyaret ediyor. Toprak nemi sondaları, hava durumu istasyonları, sulama kontrolörleri ve makinelerin tümü sürekli veri üretir.\n2. **Bilgi işlem ucuz ve bağlantılı hale geldi.** Bir zamanlar araştırma laboratuvarına ihtiyaç duyan modeller bulutta çalışabilir ve sonuçları telefona iletebilir.\n3. **Yöntemler olgunlaştı.** Makine öğrenimi, bilgisayarla görme ve dil modelleri hızla gelişti ve artık pratik araçlar haline geldi.\n\n> **Ana fikir:** Yapay zeka yeni kaynaklar yaratmaz. Halihazırda sahip olduğunuz su, girdi, zaman ve bilgiden daha iyi yararlanmanıza yardımcı olur.\n\n## Yapay Zeka gerçekçi olarak neler yapabilir?\n\n- **Sense** — Ham görüntüleri ve sensör verilerini, alanın hangi bölgelerinin vurgulandığı gibi bilgilere dönüştürün.\n- **Tahmin** — yarının mahsul su talebi veya sezon sonu verimi gibi ne olacağını tahmin edin.\n- **Öner** — sulama programı gibi bir eylem önerin ve nedenini açıklayın.\n- **Doğrula** — bir eylemin gerçekleşip gerçekleşmediğini ve işe yarayıp yaramadığını kontrol edin.\n\nDesene dikkat edin: algılayın, tahmin edin, tavsiye edin, doğrulayın. Bu döngüyü ders boyunca kullanacağız.\n\n## Ne yapamaz\n\nYapay zeka, verilerinin yakalayamadığı şeyleri göremez: kırık bir vana, bir komşunun ilaçlaması, çiftliğinize özgü bir kültürel uygulama. Bir kararın sorumluluğunu taşıyamaz. Ve yetiştirici ile danışman arasındaki güvenin yerini alamaz. İyi tarımsal yapay zeka, toprağı bilen insanlarla *birlikte* çalışmak üzere tasarlanmıştır.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": [
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "reason": "markdown/placeholder or URL structure changed"
+    }
+  ]
+}

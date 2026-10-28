@@ -1,0 +1,98 @@
+name: Academy A1 Machine Content Authoring
+
+# Authoring only. Existing learning progress, production D1, reviewed exams,
+# video assets and user sessions are not touched. Output is an import-ready PR.
+on:
+  push:
+    branches: [feature/academy-a1-content-locales-20261028]
+    paths:
+      - scripts/author-academy-a1-lesson-translations.py
+      - .github/workflows/academy-a1-translate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: academy-a1-translate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Author A1 public lesson text (never exam questions or keys)
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python -m py_compile scripts/author-academy-a1-lesson-translations.py
+          python - <<'PY' >/tmp/locales.txt
+          import json,os
+          from pathlib import Path
+          data=json.loads(Path("shared/supported-locales.json").read_text())
+          codes=[c for c in data['enabledUiLocales'] if c not in ('auto','en')]
+          print(*codes[int(os.environ['SHARD'])::12],sep=' ')
+          PY
+          for code in $(cat /tmp/locales.txt); do
+            python scripts/author-academy-a1-lesson-translations.py --locale "$code"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-a1-shard-${{ matrix.shard }}
+          path: apps/academy/localization-drafts/a1/*.json
+          if-no-files-found: error
+          retention-days: 5
+
+  commit-review-packs:
+    needs: author
+    if: ${{ github.ref == 'refs/heads/feature/academy-a1-content-locales-20261028' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: academy-a1-shard-*
+          path: apps/academy/localization-drafts/a1/
+          merge-multiple: true
+      - name: Validate exact locale coverage and machine-only status
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('apps/academy/localization-drafts/a1')
+          codes=set(json.loads(Path('shared/supported-locales.json').read_text())['enabledUiLocales'])-{'auto','en'}
+          got={p.stem for p in root.glob('*.json')}
+          assert len(codes)==59 and got==codes, (codes-got,got-codes)
+          for code in codes:
+              x=json.loads((root/(code+'.json')).read_text())
+              assert x['status']=='machine_draft_requires_review' and x['target_locale']==code
+              assert len(x['items'])==x['total_fields']
+              assert all(it['type'] in ('course','module','lesson') and it['status'] in ('machine','source_fallback') for it in x['items'])
+              translated=[it for it in x['items'] if it['status']=='machine']
+              fallback=[it for it in x['items'] if it['status']=='source_fallback']
+              assert len(translated)==x['translated_fields']
+              assert len(fallback)==len(x['untranslated'])
+              assert all(it['translation']==it['source'] for it in fallback)
+              assert {(it['type'],it['id'],it['field']) for it in fallback} == {(it['type'],it['id'],it['field']) for it in x['untranslated']}
+              print(f"{code}: {len(translated)} machine fields; {len(fallback)} English fallbacks; NOT approved for import")
+          print('59 locales: unreviewed public A1 content drafts; no exam questions; no production import')
+          PY
+      - name: Commit reviewable content packs, do not deploy
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/academy/localization-drafts/a1/
+          if ! git diff --cached --quiet; then
+            git commit -m "i18n(academy): author machine A1 lesson packs in 59 languages"
+            git push origin HEAD:feature/academy-a1-content-locales-20261028
+          fi

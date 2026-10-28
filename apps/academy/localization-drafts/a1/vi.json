@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "vi",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Giới thiệu về trí tuệ nhân tạo trong nông nghiệp",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "AI là gì, nó hoạt động như thế nào trong trang trại và cách sử dụng nó một cách có trách nhiệm.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Trí tuệ nhân tạo đang đến với nông nghiệp thông qua bộ điều khiển tưới tiêu, dịch vụ vệ tinh, phần mềm quản lý trang trại và điện thoại trong túi của người trồng trọt. Khóa học này cung cấp cho bạn sự hiểu biết rõ ràng, thực tế về công nghệ đó là gì, cách thức hoạt động và cách sử dụng nó hiệu quả.\n\nBạn sẽ tìm hiểu những ý tưởng cốt lõi đằng sau AI và học máy mà không cần phương trình, xem cách dữ liệu nông nghiệp trở thành dự đoán và sau đó là đề xuất cũng như theo dõi AI trong suốt mùa vụ - từ lập kế hoạch và tưới tiêu đến tình trạng cây trồng và thu hoạch. Trên hết, bạn sẽ học cách đánh giá kết quả đầu ra của AI: khi nào nên tin tưởng nó, khi nào nên đặt câu hỏi về nó và cách kiểm soát khả năng phán đoán của con người cũng như kiến ​​thức trang trại.\n\nKhóa học được thiết kế cho người trồng trọt, người vận hành, nhà nông học, nhà quản lý và sinh viên. Không cần nền tảng kỹ thuật.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Không có. Sự tò mò về cách công nghệ có thể hỗ trợ công việc nông nghiệp là tất cả những gì bạn cần.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Giải thích bằng ngôn ngữ đơn giản trí tuệ nhân tạo, học máy và AI sáng tạo là gì\", \"Mô tả các nguồn dữ liệu nông nghiệp chính và điều gì khiến dữ liệu trở nên đáng tin cậy\", \"Theo dõi cách mô hình biến dữ liệu thành dự đoán và dự đoán thành đề xuất\", \"Nhận biết các ứng dụng AI thực tế trong suốt vụ mùa, từ khâu lập kế hoạch đến thu hoạch\", \"Xác định các giới hạn và phương thức thất bại của AI nông nghiệp và thời điểm phản đối khuyến nghị\", \"Áp dụng các nguyên tắc về quyền sở hữu dữ liệu, quyền riêng tư và sử dụng có trách nhiệm đối với hoạt động của chính bạn\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "AI có ý nghĩa gì đối với nông nghiệp",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Những ý tưởng cốt lõi và tại sao chúng lại quan trọng ở thời điểm hiện tại.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "AI nông nghiệp hoạt động như thế nào",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Từ dữ liệu đến mô hình đến khuyến nghị.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI xuyên suốt mùa giải",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Ứng dụng thực tế từ khâu lập kế hoạch đến thu hoạch.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Sử dụng AI có trách nhiệm",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Các giới hạn, quyền dữ liệu và cách sử dụng quan trọng, tự tin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Theo dõi sức khỏe cây trồng từ trên cao và cận cảnh",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Hình ảnh vệ tinh, chỉ số thực vật và thị giác máy tính đối với sức khỏe cây trồng.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Cây khỏe mạnh và cây bị căng thẳng phản chiếu ánh sáng khác nhau. AI sử dụng sự khác biệt đó – được ghi lại bởi vệ tinh, máy bay không người lái và máy ảnh – để quan sát cây trồng ở quy mô mà không đội trinh sát nào có thể bao quát được.\n\n## Cách thực vật nhìn vào vệ tinh\n\nLá xanh hấp thụ hầu hết ánh sáng đỏ để quang hợp và phản xạ mạnh ánh sáng **cận hồng ngoại (NIR)**. Khi cây bị căng thẳng, thưa thớt hoặc già đi, hệ số phản xạ màu đỏ tăng và hệ số phản xạ NIR giảm.\n\n**Chỉ số thực vật khác biệt chuẩn hóa (NDVI)** thể hiện sự tương phản này:\n\n**NDVI = (NIR − Đỏ) ÷ (NIR + Đỏ)**\n\nCác giá trị nằm trong khoảng từ −1 đến +1. Thảm thực vật dày đặc, khỏe mạnh thường cao (thường trên 0,6); đất trống thấp (khoảng 0,1–0,2); nước thường âm.\n\n## Đọc bản đồ NDVI một cách khôn ngoan\n\nNDVI rất hữu ích trong việc phát hiện **nơi** một trường khác biệt chứ không phải để chẩn đoán **tại sao**. Mảnh đất có NDVI thấp có thể là do căng thẳng về nước, thiếu chất dinh dưỡng, bệnh tật, sâu bệnh, vấn đề trồng trọt hoặc đơn giản là do một giống khác. Bản đồ cho bạn biết nơi để tìm; trinh sát cho bạn biết những gì bạn tìm thấy.\n\n> **Quan trọng:** Mây, bóng mây, sương mù và thời gian trong ngày có thể làm sai lệch các chỉ số vệ tinh. Các dịch vụ đáng tin cậy che giấu các đám mây và so sánh hình ảnh theo thời gian thay vì tin tưởng vào một ảnh chụp nhanh.\n\nCác chỉ số khác tồn tại cho các mục đích cụ thể - một số nhạy cảm hơn với chất diệp lục, một số khác với hàm lượng nước hoặc tán cây dày đặc nơi NDVI bão hòa.\n\n## Tầm nhìn máy tính cận cảnh\n\nTrên mặt đất, các mô hình **thị giác máy tính** phân tích ảnh từ điện thoại, máy kéo hoặc máy bay không người lái để:\n\n- xác định bệnh và sâu bệnh từ hình ảnh lá;\n- phân biệt cỏ dại với cây trồng để phun thuốc có mục tiêu;\n- đếm trái cây, hoa hoặc cây để ước tính năng suất.\n\nNhững mô hình này được đào tạo trên bộ sưu tập lớn các hình ảnh được gắn nhãn. Độ chính xác của chúng phụ thuộc rất nhiều vào việc những hình ảnh đó có giống với cây trồng, giống cây trồng và điều kiện ánh sáng của bạn hay không.\n\n## Từ phát hiện đến hành động\n\nQuy trình giám sát cây trồng tốt sẽ biến việc phát hiện thành nhiệm vụ ưu tiên: *\"Vùng 3 cho thấy sức sống giảm dần trong 10 ngày. Trước tiên, hãy trinh sát góc đông bắc; kiểm tra độ đồng đều của nước tưới và tìm kiếm các dấu hiệu của bệnh rễ.\"* Sau đó, phát hiện của người trinh sát sẽ phản hồi lại hệ thống, cải thiện các cảnh báo trong tương lai.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Dữ liệu: nguyên liệu thô của AI nông nghiệp",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Dữ liệu trang trại đến từ đâu và điều gì làm cho nó đáng tin cậy.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Mọi hệ thống AI đều được xây dựng từ dữ liệu. Nếu dữ liệu không đầy đủ, sai lệch hoặc sai thì AI cũng sẽ như vậy. Hiểu dữ liệu của bạn là kỹ năng quan trọng nhất trong AI nông nghiệp.\n\n## Dữ liệu nông nghiệp đến từ đâu\n\n| Nguồn | Ví dụ | Nó nói gì với bạn |\n|---|---|---|\n| Thời tiết | Trạm tại trang trại, mạng lưới khu vực, dự báo | Nhiệt độ, lượng mưa, độ ẩm, gió, bức xạ mặt trời |\n| Đất | Đầu dò độ ẩm, kiểm tra đất, bản đồ đất | Nước có sẵn cho rễ, chất dinh dưỡng, kết cấu |\n| Viễn thám | Hình ảnh vệ tinh, máy bay và máy bay không người lái | Sức sống cây trồng, độ che phủ tán, mô hình căng thẳng trên cánh đồng |\n| Thiết bị | Bộ điều khiển tưới, đồng hồ đo lưu lượng, máy theo dõi năng suất, máy kéo | Áp dụng cái gì, ở đâu và khi nào |\n| Kỷ lục | Ngày gieo trồng, giống, hồ sơ đầu vào, ghi chú khảo sát | Các quyết định và quan sát quản lý |\n| Thị trường | Giá cả, hợp đồng, tín hiệu nhu cầu | Bối cảnh kinh tế cho các quyết định |\n\n## Phẩm chất của dữ liệu tốt\n\n**Độ chính xác** — phép đo có phản ánh thực tế không? Một đầu dò độ ẩm được lắp đặt ở nơi ẩm ướt hoặc máy đo mưa dưới gốc cây sẽ đánh lừa mọi mô hình sử dụng nó.\n\n**Sự hoàn thiện** — có khoảng trống nào không? Một cảm biến ngừng báo cáo trong một tuần trong đợt nắng nóng sẽ để lại lỗ hổng vào đúng thời điểm quan trọng nhất.\n\n**Tính kịp thời** — dữ liệu có đủ mới để đưa ra quyết định không? Độ ẩm của đất ngày hôm qua có ích cho việc tưới tiêu ngày nay; tháng trước thì không.\n\n**Tính nhất quán** — các đơn vị, định dạng và định nghĩa có giống nhau theo thời gian và giữa các lĩnh vực không? Việc trộn lẫn inch và milimet hoặc hai tên cho cùng một trường sẽ gây ra lỗi im lặng.\n\n**Tính đại diện** — dữ liệu có bao gồm các điều kiện mà AI sẽ được sử dụng không? Một mô hình chỉ được đào tạo trên đất cát có thể không hoạt động trên đất sét.\n\n> **Kiểm tra hiện trường:** Trước khi tin cậy một trang tổng quan, hãy hỏi ba câu hỏi: Con số này đến từ đâu? Nó được đo khi nào? Điều gì sẽ làm cho nó sai?\n\n## Ngữ cảnh nhu cầu dữ liệu\n\nChỉ số độ ẩm đất ở mức 30% có ý nghĩa rất nhỏ. Điều quan trọng là loại đất là gì, cảm biến nằm ở độ sâu bao nhiêu, cây trồng nào đang phát triển và ở giai đoạn nào. AI nông nghiệp tốt kết hợp các nguồn dữ liệu để mỗi nguồn bổ sung ngữ cảnh cho các nguồn khác — ví dụ: ghép nối hình ảnh vệ tinh với dữ liệu thời tiết và lịch sử tưới tiêu trên cánh đồng.\n\n## Dữ liệu của bạn, quyết định của bạn\n\nDữ liệu trang trại có giá trị - thương mại, hoạt động và cá nhân. Trước khi kết nối thiết bị hoặc chia sẻ hồ sơ với bất kỳ dịch vụ nào, hãy hiểu ai có thể truy cập dữ liệu, dữ liệu sẽ được sử dụng như thế nào và liệu bạn có thể mang theo dữ liệu đó nếu rời đi hay không. Chúng ta sẽ quay lại quyền sở hữu dữ liệu trong Mô-đun 4.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Quyền sở hữu dữ liệu, quyền riêng tư và sự tin cậy",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Các nguyên tắc thực tế để chia sẻ dữ liệu trang trại một cách tự tin.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Dữ liệu trang trại có thể tiết lộ sản lượng, thực hành, tài chính và vị trí của con người và tài sản. Chia sẻ thông tin có thể mở khóa các dịch vụ có giá trị — nhưng đó phải luôn là một lựa chọn có chủ ý.\n\n## Câu hỏi nên hỏi bất kỳ nhà cung cấp công nghệ nào\n\n- **Quyền sở hữu:** Ai sở hữu dữ liệu tôi cung cấp và dữ liệu mà hệ thống tạo ra về trang trại của tôi?\n- **Sử dụng:** Dữ liệu sẽ được sử dụng để làm gì? Nó sẽ được sử dụng để đào tạo mô hình? Nó có được kết hợp với dữ liệu của các trang trại khác không?\n- **Chia sẻ:** Nội dung đó sẽ được chia sẻ hoặc bán cho bên thứ ba phải không? Những cái nào, và tại sao?\n- **Quyền truy cập và tính di động:** Tôi có thể tải xuống dữ liệu của mình ở định dạng có thể sử dụng được không? Tôi có thể mang nó theo nếu tôi rời đi không?\n- **Xóa:** Tôi có thể xóa dữ liệu của mình không và những gì còn lại sau đó?\n- **Bảo mật:** Dữ liệu được bảo vệ như thế nào? Ai trong công ty có thể nhìn thấy nó?\n- **Kiểm soát:** Tôi có thể thu hồi quyền truy cập của thiết bị hoặc đối tác được kết nối bất kỳ lúc nào không?\n\nMột số tổ chức nông nghiệp đã xuất bản các nguyên tắc dữ liệu trang trại nhằm giải quyết những câu hỏi này; hỏi liệu nhà cung cấp có tuân theo họ hay không là điểm khởi đầu tốt.\n\n## Sự đồng ý và quyền\n\nCác hệ thống tốt yêu cầu quyền cụ thể, đầy đủ thông tin — ví dụ: cho phép đầu nối đọc dữ liệu của bộ điều khiển tưới mà không cấp cho nó quyền thay đổi cài đặt. Cấp ít quyền truy cập cần thiết nhất cho công việc và thường xuyên xem xét các dịch vụ được kết nối.\n\n## Dữ liệu tổng hợp và ẩn danh\n\nViệc kết hợp dữ liệu từ nhiều trang trại có thể cải thiện các mô hình cho mọi người, chẳng hạn như ước tính tốt hơn lượng nước sử dụng trong khu vực. Thực hiện tốt, việc tổng hợp sẽ loại bỏ thông tin có thể xác định một trang trại riêng lẻ. Hỏi cách thực hiện ẩn danh và liệu bạn có thể chọn không tham gia hay không.\n\n## Niềm tin có được\n\n> **Ý tưởng chính:** AI nông nghiệp đáng tin cậy minh bạch về cách sử dụng dữ liệu, giải thích các đề xuất, thừa nhận sự không chắc chắn và để người nông dân nắm quyền kiểm soát.\n\nNhững nguyên tắc tương tự này cũng được áp dụng cho chính Học viện. Bạn có thể tải xuống hoặc xóa dữ liệu học tập của mình bất kỳ lúc nào từ cài đặt tài khoản của mình.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Bài tập thực hành: đánh giá đề xuất của AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Áp dụng những gì bạn đã học vào một đề xuất thực tế.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "Trong bài tập này, bạn sẽ thực hành các kỹ năng đánh giá phản biện từ mô-đun này dựa trên đề xuất thực tế.\n\n## Kịch bản\n\nBạn quản lý một cơ sở trồng cà chua được tưới nhỏ giọt trên diện tích 60 ha. Vào một buổi sáng thứ Ba giữa mùa giải, hệ thống hỗ trợ quyết định của bạn hiển thị:\n\n> *\"Khuyến nghị: Bỏ qua việc tưới nước ở Khu C trong 48 giờ tới. Lượng nước sử dụng cho cây trồng dự đoán: 3,1 mm/ngày. Độ ẩm của đất: 82% công suất đồng ruộng. Độ tin cậy: cao.\"*\n\nKhi lái xe qua Khu C, bạn nhận thấy cây cối ở rìa phía đông trông héo úa vì nắng nóng vào cuối buổi sáng và nhiệt độ tối đa của ngày hôm qua là 37 °C - nóng hơn nhiều so với dự báo 29 °C mà hệ thống đưa ra hai ngày trước.\n\n## Nhiệm vụ của bạn\n\nLàm việc thông qua danh sách kiểm tra dưới đây. Viết lý do của bạn vào tab **Ghi chú** để bạn có thể quay lại xem.\n\n1. **Kiểm tra thông tin đầu vào.** Đầu vào nào có vẻ đáng nghi ngờ? (Gợi ý: so sánh nhiệt độ dự báo với những gì đã xảy ra.)\n2. **Kiểm tra cảm biến.** Đầu dò độ ẩm đất được lắp đặt ở đâu? Nó có thể ở một nơi không đại diện cho rìa phía đông?\n3. **Nhìn vào cánh đồng.** Bạn sẽ kiểm tra những gì trên cây héo? Hãy xem xét tình trạng tắc nghẽn của bộ phát, áp suất ở cuối đường dây và tình trạng của rễ cây.\n4. **Quyết định.** Bạn sẽ làm theo, sửa đổi hay ghi đè đề xuất? Tại sao?\n5. **Ghi lại và báo cáo.** Bạn sẽ đưa ra phản hồi gì để hệ thống — và nhóm của bạn — có thể học hỏi từ điều này?\n\n## Cuộc thảo luận\n\nMột câu trả lời mạnh mẽ lưu ý rằng việc sử dụng nước dự đoán có thể dựa trên một dự báo quá mát mẻ, do đó nhu cầu thực tế cao hơn. Một đầu dò duy nhất có kết quả 82% có thể không đại diện cho rìa phía đông, đặc biệt nếu các bộ phát ở đó bị tắc hoặc áp suất thấp ở cuối cạnh. Một quyết định hợp lý có thể là kiểm tra rìa phía đông ngay lập tức, tiến hành tưới ngắn hạn nếu việc kiểm tra xác nhận đất khô và báo cáo cả sai sót dự báo và vấn đề đồng nhất có thể xảy ra.\n\nHiếm khi có một câu trả lời đúng duy nhất — nhưng luôn có một quy trình đúng: kiểm tra thông tin đầu vào, kiểm tra bối cảnh, xem xét hiện trường, quyết định và ghi lại.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Thu hoạch, thị trường và chuỗi cung ứng",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Dự báo năng suất, thông tin thị trường và hậu cần.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Khi mùa vụ tiến tới thu hoạch, các quyết định chuyển từ trồng trọt sang thu giữ giá trị của nó.\n\n##Dự báo năng suất\n\nDự báo năng suất kết hợp các mô hình tăng trưởng cây trồng, thời tiết cập nhật và dự báo, sức sống dựa trên hình ảnh và đôi khi được tính từ thị giác máy tính. Những dự báo trước đây ít chắc chắn hơn; độ chính xác được cải thiện khi mùa giải diễn ra.\n\nDự báo hỗ trợ các quyết định như:\n\n- bán kỳ hạn bao nhiêu và khi nào;\n- có bao nhiêu công nhân, xe tải và sức chứa kho cần đặt;\n- liệu việc nhập muộn có còn đáng áp dụng hay không.\n\n## Thông tin thị trường\n\nCác công cụ thông tin thị trường thu thập giá cả, hợp đồng tương lai, dữ liệu xuất khẩu, thời tiết ở các khu vực cạnh tranh và tin tức để giúp dự đoán biến động giá. AI có thể tóm tắt những tín hiệu này một cách nhanh chóng và làm nổi bật những thay đổi bất thường. Không có mô hình nào có thể dự đoán thị trường một cách chắc chắn; coi dự báo thị trường là đầu vào cho kế hoạch quản lý rủi ro chứ không phải là sự đảm bảo.\n\n## Thời gian và chất lượng thu hoạch\n\nCác mô hình theo dõi độ chín của cây trồng — hàm lượng đường trong nho, độ ẩm trong ngũ cốc, màu sắc trong trái cây — giúp lên lịch thu hoạch để có sự cân bằng tốt nhất về chất lượng, rủi ro thời tiết và hậu cần. Kết hợp với tính sẵn có của lao động và thiết bị, chúng có thể giúp sắp xếp các trường trong toàn bộ hoạt động.\n\n## Truy xuất nguồn gốc và bằng chứng\n\nNgười mua ngày càng yêu cầu bằng chứng về cách sản xuất cây trồng: sử dụng nước, đầu vào được áp dụng, chứng nhận. Các hệ thống ghi lại các đề xuất, hành động và xác minh trong suốt mùa giải giúp dễ dàng tạo ra bằng chứng đó — một lý do khác khiến bước xác minh của vòng lặp trở nên quan trọng.\n\n> **Ý tưởng chính:** Khi thu hoạch, giá trị của AI đến từ việc giảm bớt sự không chắc chắn về thời gian, số lượng và giá cả — cũng như từ việc ghi lại những gì đã được thực hiện.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Nghiên cứu điển hình: tưới tiêu và quản lý nước",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Sự thoát hơi nước, độ ẩm của đất và AI kết hợp như thế nào trong lịch trình tưới tiêu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Thủy lợi là một trong những ví dụ rõ ràng nhất về việc AI tạo ra giá trị cho trang trại vì các quyết định về nước là thường xuyên, tốn kém và có thể đo lường được.\n\n## Cân bằng nước\n\nHãy coi vùng rễ cây như một tài khoản ngân hàng chứa nước.\n\n- **Tiền gửi:** lượng mưa và tưới tiêu.\n- **Hút nước:** nước được cây trồng sử dụng và bốc hơi khỏi đất — gọi chung là **sự thoát hơi nước (ET)** — cộng với khả năng thoát nước bên dưới rễ.\n\nMục tiêu của việc lập kế hoạch tưới là giữ cân bằng giữa giới hạn dưới, nơi cây trồng bắt đầu gặp căng thẳng và giới hạn trên, khi vượt quá giới hạn này nước sẽ chảy đi và bị lãng phí.\n\n## Ước tính lượng nước sử dụng cho cây trồng\n\nViệc sử dụng nước cho cây trồng thường được ước tính theo hai bước:\n\n1. **Lượng thoát hơi nước tham chiếu (ET₀)** được tính toán từ dữ liệu thời tiết — nhiệt độ, độ ẩm, bức xạ gió và mặt trời — đối với cây trồng tham chiếu tiêu chuẩn.\n2. **Hệ số cây trồng (Kc)** điều chỉnh ET₀ cho cây trồng thực tế và giai đoạn tăng trưởng của nó: **ETc = ET₀ × Kc**.\n\nHọc máy có thể cải thiện ước tính này bằng cách học hỏi từ các cảm biến cục bộ, hình ảnh tán cây và lịch sử của chính trang trại, đặc biệt khi các hệ số tiêu chuẩn không phù hợp.\n\n## Một kịch bản lập kế hoạch\n\n> **Ví dụ:** Một khu vườn nho có sẵn 40 mm nước khi vùng rễ đầy. Đầu dò độ ẩm đất cho thấy vẫn còn 18 mm. Dự báo ETc là 5 mm mỗi ngày trong bốn ngày tới và dự kiến ​​sẽ không có mưa.\n\nNếu không tưới nước, khối sẽ đạt đến giới hạn dưới trong khoảng ba ngày rưỡi (18 mm 5 mm/ngày). Một hệ thống lập kế hoạch sẽ khuyến nghị tưới nước trong hai đến ba ngày tới, với quy mô tưới vừa đủ cho vùng rễ mà không làm ngập quá mức, tính thời gian tưới phù hợp với công suất bơm sẵn có và giảm giá điện vào ban đêm.\n\nNếu dự báo thay đổi thành lượng mưa 15 mm vào ngày thứ hai, hệ thống tốt sẽ cập nhật khuyến nghị — và giải thích lý do.\n\n## Nơi AI gia tăng giá trị\n\n- **Ước tính mức sử dụng nước tốt hơn** bằng cách kết hợp thời tiết, cảm biến và hình ảnh.\n- **Lập kế hoạch nhận biết dự báo** có tính đến lượng mưa và nắng nóng sắp tới.\n- **Tối ưu hóa** trên nhiều khối, giới hạn bơm và phân bổ nước.\n- **Xác minh** — xác nhận từ máy đo lưu lượng và độ ẩm của đất rằng việc tưới tiêu đã diễn ra theo đúng kế hoạch và có hiệu quả như mong đợi.\n\n## Điều gì có thể xảy ra\n\nBộ phát bị tắc, van bị hỏng hoặc đầu dò được lắp đặt ở vị trí không chính xác đều có thể gây hiểu lầm cho hệ thống. Đó là lý do tại sao bước xác minh lại quan trọng: khi quan sát thấy độ ẩm của đất không phản ứng như dự đoán sau khi tưới, đó là tín hiệu để điều tra hiện trường chứ không chỉ là mô hình.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Giới hạn, lỗi và thời điểm phản đối đề xuất",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Nhận biết các dạng thất bại và đảm bảo sự phán xét của con người.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Hệ thống AI nào cũng có lúc mắc lỗi. Mục tiêu không phải là sự tin tưởng mù quáng hay sự từ chối chung chung, mà là **niềm tin đã được hiệu chỉnh**: biết khi nào một đề xuất đáng được tin cậy và khi nào nó đáng được xem xét lần thứ hai.\n\n## Các chế độ lỗi thường gặp\n\n**Đầu vào không tốt.** Cảm biến bị hỏng, đầu dò bị đặt sai vị trí hoặc nguồn cấp dữ liệu bị thiếu sẽ tạo ra những kết quả vô nghĩa. *Rác vào, rác ra.*\n\n**Điều kiện ngoài phạm vi.** Các mô hình kém tin cậy nhất trong các tình huống mà chúng hiếm khi gặp trong quá trình đào tạo: nhiệt độ cực cao, giống mới, đất bất thường.\n\n**Trôi.** Các điều kiện thay đổi theo thời gian và mô hình chính xác cách đây ba năm có thể không còn nữa.\n\n**Thành kiến.** Nếu dữ liệu đào tạo đại diện quá mức cho một số khu vực, quy mô trang trại hoặc cây trồng nhất định thì các đề xuất có thể kém chính xác hơn đối với các hoạt động khác nhau.\n\n**Thiếu ngữ cảnh.** Hệ thống không biết về vụ trôi dạt thuốc diệt cỏ của hàng xóm, đường ống bị hỏng hoặc hợp đồng yêu cầu thu hoạch vào tuần tới.\n\n**Thành kiến ​​tự động hóa.** Mọi người có xu hướng tin tưởng quá mức vào kết quả đầu ra của máy, đặc biệt khi nó được trình bày chính xác. Một số có hai chữ số thập phân không nhất thiết phải chính xác.\n\n## Khi nào cần phản đối một đề xuất\n\nTạm dừng và điều tra khi:\n\n- khuyến nghị mâu thuẫn với những gì bạn thấy trong hiện trường;\n- nó nằm ngoài phạm vi bình thường của mùa giải;\n- hệ thống thể hiện độ tin cậy thấp hoặc hoàn toàn không thể hiện độ tin cậy;\n- dữ liệu chính bị thiếu, cũ hoặc rõ ràng là sai;\n- hậu quả của một sai sót sẽ nghiêm trọng hoặc khó khắc phục.\n\n> **Kiểm tra thực địa:** Một quy tắc đơn giản — quyết định càng lớn và càng khó đảo ngược thì bạn càng cần nhiều bằng chứng hơn trước khi hành động theo đề xuất của AI.\n\n##Làm thế nào để thử thách tốt\n\n1. **Kiểm tra đầu vào.** Cảm biến có báo cáo không? Dữ liệu thời tiết có cập nhật không?\n2. **Hỏi lý do.** Dữ liệu nào dẫn đến đề xuất này?\n3. **Nhìn vào hiện trường.** Tìm kiếm khu vực được đề cập.\n4. **Ghi lại những gì bạn đã quyết định và lý do.** Ghi chú của bạn là phản hồi có giá trị giúp cải thiện hệ thống.\n\nViệc thách thức một khuyến nghị không phải là một thất bại của công nghệ. Đó là cách con người và AI phối hợp tốt với nhau.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Mô hình, đào tạo và dự đoán",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Cách một mô hình học hỏi từ các ví dụ và tại sao mọi dự đoán đều có sự không chắc chắn.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "**mô hình** là mô tả toán học về mối quan hệ — ví dụ: giữa thời tiết và lượng nước mà cây trồng sử dụng. Học máy xây dựng mô hình bằng cách học từ các ví dụ.\n\n## Học từ ví dụ\n\nHãy tưởng tượng bạn muốn dự đoán lượng nước mà một vườn hạnh nhân sẽ sử dụng vào ngày mai. Bạn thu thập nhiều ngày qua, mỗi ngày có:\n\n- **đầu vào** (còn gọi là *tính năng*): nhiệt độ, độ ẩm, gió, bức xạ mặt trời, tuổi cây, độ che phủ tán cây;\n- **kết quả** bạn muốn dự đoán: lượng nước mà vườn cây ăn quả thực sự sử dụng vào ngày hôm đó, được đo bằng cảm biến.\n\nTrong quá trình **đào tạo**, thuật toán sẽ điều chỉnh mô hình nhiều lần cho đến khi các dự đoán của nó khớp với kết quả được ghi lại càng sát càng tốt. Điều này được gọi là **học có giám sát** vì mọi ví dụ đều có câu trả lời đúng.\n\n## Thử nghiệm trên dữ liệu mà mô hình chưa từng thấy\n\nMột mô hình có thể ghi nhớ các ví dụ huấn luyện của nó nhưng vẫn thất bại trong những ngày mới. Đó là lý do tại sao các nhà khoa học dữ liệu giữ một số dữ liệu để **xác thực** - dữ liệu mà mô hình chưa từng thấy trong quá trình đào tạo. Hiệu suất trên dữ liệu được lưu trữ đó là thước đo trung thực về mức độ hoạt động của nó.\n\n> **Quan trọng:** Hỏi cách xác thực mô hình. “Nó hoàn toàn phù hợp với dữ liệu lịch sử của chúng tôi” là một dấu hiệu cảnh báo, không phải là điểm mạnh.\n\n## Đo độ chính xác\n\nĐối với các dự đoán bằng số, các thước đo phổ biến bao gồm **sai số trung bình** (trung bình sai số dự đoán là bao xa) và mức độ biến thiên mà mô hình giải thích. Đối với các phân loại - \"căng thẳng\" hoặc \"khỏe mạnh\" - chúng tôi hỏi tần suất mô hình đúng và tần suất mô hình đưa ra cảnh báo sai hoặc bỏ sót các vấn đề thực sự.\n\nKhông có độ chính xác \"tốt\" duy nhất. Dự báo lợi nhuận trong khoảng 5% có thể là điều tuyệt vời cho các quyết định tiếp thị; một cảnh báo sương giá mà bỏ lỡ một phần mười sự kiện có thể không được chấp nhận.\n\n## Mọi dự đoán đều có sự không chắc chắn\n\nThay đổi thời tiết, cảm biến trôi dạt và các trường khác nhau. Một hệ thống đáng tin cậy đưa ra thông báo không chắc chắn: \"lượng nước sử dụng ngày mai là 6,2 mm, có thể là từ 5,6 đến 6,8 mm\". Một số duy nhất không có phạm vi ẩn thông tin quan trọng.\n\n## Khi mô hình trở nên lỗi thời\n\nĐiều kiện thay đổi. Các giống mới, một năm hạn hán hoặc hệ thống tưới tiêu thay đổi có thể làm cho dữ liệu trong quá khứ ít mang tính đại diện hơn. Điều này được gọi là **trôi dạt**. Các hệ thống tốt sẽ tự giám sát độ chính xác của chúng theo thời gian và được đào tạo lại khi hiệu suất giảm xuống.\n\n##Các loại hình mô hình nông nghiệp phổ biến\n\n- **Hồi quy** — dự đoán một con số (mức sử dụng nước, năng suất, giá cả).\n- **Phân loại** — chỉ định một danh mục (có hoặc không có bệnh, loại cây trồng).\n- **Dự báo** — dự đoán một số điều sẽ thay đổi theo thời gian (độ ẩm của đất trong 5 ngày tới).\n- **Thị giác máy tính** — diễn giải hình ảnh (đếm trái cây, phát hiện cỏ dại).\n- **Tối ưu hóa** — tìm ra kế hoạch tốt nhất trong điều kiện hạn chế (lịch tưới đáp ứng nhu cầu cây trồng với lượng nước hạn chế).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Lập kế hoạch và trồng trọt",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Sử dụng dữ liệu và AI trước khi hạt giống đầu tiên rơi xuống đất.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Nhiều quyết định có giá trị nhất trong mùa vụ được đưa ra trước khi trồng trọt. AI có thể trợ giúp bằng cách đưa ra nhiều bằng chứng hơn cho những quyết định đó.\n\n## Lịch sử hiện trường và vùng quản lý\n\nCác trường không đồng nhất. Bản đồ năng suất, khảo sát đất đai và hình ảnh vệ tinh qua nhiều năm thường cho thấy các mô hình nhất quán: khu vực thấp luôn ẩm ướt, dải cát khô trước. Các thuật toán có thể nhóm các khu vực này thành **vùng quản lý** phản ứng khác nhau với nước, hạt giống và phân bón.\n\nVới các vùng, người trồng có thể thay đổi tỷ lệ gieo hạt, chọn nơi bón nhiều hay ít nitơ hoặc lập kế hoạch tưới tiêu phù hợp với từng phần của cánh đồng.\n\n## Quyết định giống và ngày trồng\n\nCác mô hình được đào tạo về các thử nghiệm khu vực và hồ sơ thời tiết có thể ước tính mức độ hoạt động của các giống trong các điều kiện khác nhau và ngày trồng ảnh hưởng đến rủi ro như thế nào - ví dụ: khả năng bị stress nhiệt khi ra hoa. Những ước tính này hữu ích nhất khi chúng phản ánh các thử nghiệm địa phương, không chỉ mức trung bình quốc gia.\n\n## Lập kế hoạch kịch bản\n\nCác công cụ AI có thể chạy nhanh các kịch bản “nếu như”: Nếu mùa khô thì sao? Điều gì sẽ xảy ra nếu việc phân bổ nước bị cắt giảm 20%? Nếu giá đầu vào tăng thì sao? So sánh các kịch bản giúp bạn chọn một kế hoạch phù hợp với nhiều tương lai có thể xảy ra chứ không chỉ tương lai dự kiến.\n\n> **Kiểm tra thực địa:** Khi một công cụ đề xuất tỷ lệ gieo hạt hoặc giống, hãy hỏi xem công cụ đó được xây dựng dựa trên dữ liệu nào. Dữ liệu thử nghiệm khu vực từ đất và khí hậu của bạn phù hợp hơn nhiều so với mức trung bình quốc gia.\n\n## Những giới hạn cần ghi nhớ\n\nCác khuyến nghị trước mùa giải dựa trên những dự báo dài hạn, không chắc chắn. Hãy coi chúng như một kế hoạch khởi đầu để điều chỉnh khi mùa giải diễn ra chứ không phải một đơn thuốc cố định.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Bài kiểm tra học phần 1",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Kiểm tra sự hiểu biết của bạn về các nguyên tắc cơ bản của AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Trả lời năm câu hỏi nhanh về các ý tưởng trong Mô-đun 1. Các câu hỏi là để thực hành: bạn có thể làm lại bao nhiêu lần tùy thích và bạn sẽ thấy phần giải thích sau mỗi lần thử.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Bài kiểm tra mô-đun 2",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Kiểm tra sự hiểu biết của bạn về dữ liệu, mô hình và đề xuất.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Năm câu hỏi về chất lượng dữ liệu, đào tạo mô hình và hỗ trợ quyết định. Thi lại bao nhiêu lần tùy thích.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Bài kiểm tra học phần 3",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Kiểm tra sự hiểu biết của bạn về AI trong suốt mùa giải.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Năm câu hỏi về lập kế hoạch, tưới tiêu, giám sát cây trồng và thu hoạch. Thi lại bao nhiêu lần tùy thích.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Từ dự đoán đến khuyến nghị",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Cách các hệ thống hỗ trợ quyết định biến dự đoán thành hành động — và giúp mọi người luôn cập nhật.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Một dự đoán cho bạn biết điều gì có thể xảy ra. **đề xuất** cho bạn biết phải làm gì với vấn đề đó. Biến cái này thành cái khác đòi hỏi phải có mục tiêu, ràng buộc và bối cảnh.\n\n## Ví dụ về tưới tiêu\n\nGiả sử một mô hình dự đoán rằng một cánh đồng sẽ sử dụng 7 mm nước vào ngày mai và độ ẩm của đất đã gần đến giới hạn dưới mà cây trồng có thể chịu đựng được. Một hệ thống khuyến nghị kết hợp dự đoán đó với:\n\n- **mục tiêu** — bảo vệ năng suất và chất lượng, tránh lãng phí;\n- **ràng buộc** — công suất máy bơm, lượng nước phân bổ còn lại, giá điện, lịch trình tưới tiêu;\n- **bối cảnh** — dự báo lượng mưa, giai đoạn trồng trọt, vụ thu hoạch theo kế hoạch cần đất khô.\n\nKết quả có thể là: *\"Tối nay tưới khối 4 trong 6 giờ (khoảng 18 mm). Bỏ qua khối 7: Dự báo lượng mưa 12 mm với độ tin cậy cao.\"*\n\n## Những đề xuất tốt sẽ tự giải thích\n\nMột lời khuyên bạn không thể hiểu là một lời khuyên bạn không thể đánh giá. Hãy tìm các hệ thống cho thấy:\n\n- **lý do** — dữ liệu nào và dự đoán nào đã đưa ra gợi ý;\n- **sự tự tin** — mức độ chắc chắn của hệ thống;\n- **các lựa chọn thay thế** — điều gì sẽ xảy ra nếu bạn chờ đợi hoặc nộp đơn ít hơn;\n- **dấu vết bằng chứng** — để sau này bạn có thể kiểm tra xem hành động đó có xảy ra và hiệu quả hay không.\n\n## Luôn cập nhật thông tin cho mọi người\n\nTrong nông nghiệp, hầu hết AI đều **hỗ trợ quyết định**: hệ thống đề xuất, con người quyết định. Ngay cả khi tự động hóa thực hiện các hành động - ví dụ: bộ điều khiển mở van - các thiết kế có trách nhiệm bao gồm các bước phê duyệt, giới hạn và khả năng ghi đè.\n\n> **Ý tưởng chính:** Người chịu trách nhiệm về kết quả phải luôn có thể biết lý do đưa ra đề xuất, thay đổi và dừng đề xuất đó.\n\n## Đóng vòng lặp: xác minh\n\nCác hệ thống có giá trị nhất không dừng lại ở khuyến nghị. Họ kiểm tra những gì đã thực sự được thực hiện và những gì xảy ra tiếp theo: Việc tưới tiêu có diễn ra không? Bao nhiêu nước đã được áp dụng? Độ ẩm đất có phục hồi như mong đợi không? Bước **xác minh** này tạo dựng niềm tin, nắm bắt các vấn đề về thiết bị và tạo ra bằng chứng mà người mua, kiểm toán viên và cơ quan cấp nước ngày càng yêu cầu.\n\nHãy nhớ vòng lặp ở Mô-đun 1: **ý nghĩa → dự đoán → đề xuất → xác minh**. Mỗi vòng lặp sẽ cải thiện cả quyết định và dữ liệu cho mùa tiếp theo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Tóm tắt khóa học và các bước tiếp theo",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Những nội dung chính và cách chuẩn bị cho kỳ thi cuối kỳ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Chúc mừng bạn đã kết thúc khóa học. Hãy tập hợp những ý chính lại với nhau.\n\n## Bài học chính\n\n- **AI là một hộp công cụ**, không phải một công nghệ đơn lẻ. Các quy tắc, học máy, học sâu và AI tổng quát phù hợp với các vấn đề khác nhau.\n- **Dữ liệu là nền tảng.** Độ chính xác, đầy đủ, kịp thời, nhất quán và mang tính đại diện quyết định những gì bất kỳ mô hình nào cũng có thể làm được.\n- **Mô hình học hỏi từ các ví dụ** và phải được xác thực trên dữ liệu mà chúng chưa từng thấy. Mọi dự đoán đều có sự không chắc chắn và các mô hình có thể bị trôi dạt.\n- **Đề xuất kết hợp dự đoán với mục tiêu, ràng buộc và bối cảnh.** Những đề xuất tốt sẽ tự giải thích.\n- **Vòng lặp quan trọng:** ý nghĩa → dự đoán → đề xuất → xác minh.\n- **Trong suốt mùa vụ**, AI hỗ trợ lập kế hoạch, tưới tiêu, giám sát cây trồng, thời điểm thu hoạch, tiếp thị và truy xuất nguồn gốc.\n- **Sử dụng độ tin cậy đã được hiệu chỉnh.** Thách thức các đề xuất xung đột với hiện trường, dựa trên dữ liệu kém hoặc mang tính rủi ro cao.\n- **Dữ liệu của bạn xứng đáng được chăm sóc.** Biết ai sở hữu dữ liệu đó, dữ liệu đó được sử dụng như thế nào và cách lấy lại dữ liệu đó.\n\n##Chuẩn bị cho kỳ thi cuối kỳ\n\nBài kiểm tra cuối cùng bao gồm tất cả bốn học phần. Nó rút ra 20 câu hỏi từ một ngân hàng lớn hơn và cho bạn 30 phút. Bạn cần **80%** để vượt qua.\n\n> **Mẹo:** Xem lại ghi chú của bạn và các câu hỏi trong học phần. Nếu bạn bỏ lỡ một câu hỏi trắc nghiệm, hãy mở bài học mà nó chỉ ra trước kỳ thi.\n\n## Đi đâu tiếp theo\n\n- **Nguyên tắc cơ bản về dữ liệu nông nghiệp** đi sâu hơn vào nguồn dữ liệu và chất lượng.\n- **Viễn thám và Thông tin Vệ tinh** mở rộng về các chỉ số hình ảnh và thực vật.\n- **Tưới tiêu được hỗ trợ bởi AI** áp dụng những ý tưởng này vào việc quản lý nước một cách chi tiết.\n\nCảm ơn bạn đã học hỏi với Học viện AGRO-AI. Khi bạn đã sẵn sàng, hãy mở bài kiểm tra cuối cùng từ menu khóa học.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Chào mừng đến với khóa học",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Bạn sẽ học những gì, khóa học hoạt động như thế nào và làm thế nào để lấy được chứng chỉ.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Chào mừng bạn đến với **Giới thiệu về Trí tuệ nhân tạo trong Nông nghiệp**, khóa học đầu tiên của chương trình AGRO-AI Học viện *Cơ sở AI trong nông nghiệp*.\n\nBạn không cần bất kỳ nền tảng kỹ thuật nào để thành công ở đây. Nếu bạn đã từng xem dự báo thời tiết, đọc bài kiểm tra đất hoặc so sánh năng suất giữa hai cánh đồng, thì bạn đã sử dụng các thói quen tư duy mà khóa học này xây dựng: thu thập bằng chứng, phát hiện các mô hình và quyết định phải làm gì tiếp theo.\n\n## Bạn sẽ học được gì\n\nĐến cuối khóa học, bạn sẽ có thể:\n\n- giải thích AI là gì — và không phải — bằng ngôn ngữ đơn giản;\n- mô tả dữ liệu nông nghiệp đến từ đâu và điều gì làm cho dữ liệu đó đáng tin cậy;\n- theo dõi cách dữ liệu trở thành dự đoán và dự đoán trở thành đề xuất;\n- nhận biết các ứng dụng AI hữu ích trong suốt mùa giải;\n- đánh giá đầu ra AI một cách nghiêm túc và sử dụng nó một cách có trách nhiệm.\n\n## Khóa học hoạt động như thế nào\n\nKhóa học có **bốn mô-đun** các bài học ngắn. Các mô-đun từ một đến ba mỗi mô-đun kết thúc bằng một bài kiểm tra thực hành giúp bạn kiểm tra mức độ hiểu biết của mình; học phần bốn kết thúc bằng một bài tập thực hành và bản tóm tắt khóa học giúp bạn chuẩn bị cho kỳ thi cuối kỳ. Các bài kiểm tra không được tính vào chứng chỉ của bạn và bạn có thể thi lại bao nhiêu lần tùy thích.\n\nTiến trình của bạn được lưu tự động. Bạn có thể dừng giữa bài học trên điện thoại và tiếp tục sau đó trên máy tính.\n\n> **Mẹo:** Sử dụng tab **Ghi chú** dưới mỗi bài học để viết ra những ý tưởng áp dụng cho hoạt động của chính bạn. Ghi chú là riêng tư — chỉ bạn mới có thể xem chúng.\n\n## Nhận được chứng chỉ của bạn\n\nKhi bạn đã hoàn thành mọi bài học bắt buộc, **bài kiểm tra cuối cùng** sẽ mở ra. Cuộc thi gồm 20 câu hỏi từ một ngân hàng lớn hơn, kéo dài 30 phút và yêu cầu số điểm **80%** để vượt qua. Nếu bạn không vượt qua trong lần thử đầu tiên, bạn có thể xem lại các bài học được đề xuất và thử lại sau một giờ.\n\nVượt qua bài kiểm tra và AGRO-AI Học viện tự động cấp chứng chỉ của bạn — miễn phí, với ID thông tin xác thực duy nhất và trang xác minh công khai mà bạn có thể chia sẻ trên LinkedIn.\n\nHãy bắt đầu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Từ quy tắc đến học tập: AI là gì (và không)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Các định nghĩa bằng ngôn ngữ đơn giản về AI, học máy, học sâu và AI sáng tạo.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "“Trí tuệ nhân tạo” được dùng để mô tả mọi thứ, từ cảnh báo cảm biến đơn giản đến chatbot viết bài luận. Trước khi nhìn vào nông nghiệp, chúng ta cần những từ ngữ rõ ràng.\n\n##Trí tuệ nhân tạo\n\n**Trí tuệ nhân tạo (AI)** là lĩnh vực rộng lớn trong việc xây dựng hệ thống máy tính thực hiện các nhiệm vụ mà chúng ta thường liên kết với trí thông minh của con người: nhận dạng mẫu, đưa ra dự đoán, hiểu ngôn ngữ và chọn hành động.\n\nĐịnh nghĩa đó có mục đích rộng rãi. Nó bao gồm các công nghệ rất khác nhau, vì vậy nó giúp tách biệt hai cách xây dựng chúng.\n\n## Quy tắc so với việc học\n\n**Hệ thống dựa trên quy tắc** tuân theo hướng dẫn do mọi người viết. Bộ điều khiển tưới có nội dung *\"nếu độ ẩm của đất giảm xuống dưới 25%, hãy khởi động máy bơm\"* đang tuân theo một quy tắc. Các quy tắc minh bạch và có thể dự đoán được, nhưng ai đó phải biết trước quy tắc phù hợp và các quy tắc không thích ứng khi điều kiện thay đổi.\n\n**Thay vào đó, hệ thống máy học (ML)** học các mẫu từ các ví dụ. Hiển thị mô hình của hàng nghìn mùa trước - thời tiết, đất đai, thủy lợi và sản lượng sau đó - và nó có thể tìm hiểu các mối quan hệ mà không ai viết ra một cách rõ ràng. Hầu hết những gì mọi người gọi là \"AI\" ngày nay đều là học máy.\n\n| | Hệ thống dựa trên quy tắc | Mô hình học máy |\n|---|---|---|\n| Logic đến từ đâu | Người ta viết nó | Học từ dữ liệu |\n| Sức mạnh | Minh bạch, có thể dự đoán được | Tìm các mẫu phức tạp, thích ứng với dữ liệu mới |\n| Điểm yếu | Cứng nhắc; bỏ lỡ điều nhà thiết kế không lường trước | Chỉ tốt như dữ liệu của nó; có thể khó giải thích |\n| Ví dụ về trang trại | Máy bơm khởi động dưới ngưỡng độ ẩm | Mô hình dự đoán lượng nước sử dụng cho cây trồng ngày mai |\n\n## Học sâu\n\n**Học sâu** là một nhóm các phương pháp học máy được xây dựng từ \"mạng lưới thần kinh\" nhiều lớp. Nó đặc biệt tốt với dữ liệu lộn xộn, nhiều chiều như hình ảnh và âm thanh. Khi một ứng dụng điện thoại nhận ra bệnh lá từ một bức ảnh, công nghệ học sâu thường thực hiện việc đó.\n\n## AI sáng tạo\n\n**Generative AI** tạo nội dung mới — văn bản, hình ảnh, âm thanh hoặc mã — dựa trên các mẫu đã học được từ các tập dữ liệu rất lớn. Các mô hình ngôn ngữ lớn (LLM), công nghệ đằng sau trợ lý đàm thoại, là AI có tính sáng tạo. Họ có thể giải thích các khái niệm, tóm tắt báo cáo và trả lời các câu hỏi bằng nhiều ngôn ngữ.\n\nAI sáng tạo rất mạnh mẽ nhưng nó dự đoán những từ *hợp lý* chứ không phải sự thật đã được xác minh. Nó có thể tuyên bố điều gì đó sai trái với sự tự tin hoàn toàn. Trong nông nghiệp, trợ lý tổng quát rất hữu ích trong việc giải thích và soạn thảo, nhưng những con số và quyết định quan trọng phải được kiểm tra dựa trên dữ liệu đáng tin cậy.\n\n> **Ý tưởng chính:** AI không phải là một cỗ máy. Nó là một hộp công cụ. Mỗi quy tắc, mô hình thống kê, mô hình học sâu và mô hình tổng quát phù hợp với các vấn đề khác nhau.\n\n## AI không phải là gì\n\n- **AI không phải là phép thuật.** Mọi kết quả đầu ra đều đến từ dữ liệu và lựa chọn thiết kế do con người thực hiện.\n- **AI không \"hiểu\" trang trại của bạn** theo cách của bạn. Nó chỉ biết những gì dữ liệu của nó thu được.\n- **AI không tự động đúng.** Các dự đoán mang đến sự không chắc chắn và các hệ thống tốt nhất sẽ cho bạn biết mức độ không chắc chắn.\n- **AI không thay thế khả năng phán đoán.** Đây là một công cụ hỗ trợ ra quyết định. Trách nhiệm về quyết định thuộc về mọi người.\n\n## Kiểm tra sự hiểu biết của bạn\n\nHãy nghĩ về một công cụ bạn đã sử dụng — ứng dụng thời tiết, trình theo dõi lợi nhuận, bảng tính có công thức. Logic của nó được viết dưới dạng quy tắc hay học từ dữ liệu? Viết câu trả lời của bạn vào ghi chú của bạn; chúng ta sẽ quay lại ý tưởng này trong Mô-đun 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Tại sao nông nghiệp hiện đang chuyển sang AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "Những áp lực và cơ hội thúc đẩy việc áp dụng AI tại các trang trại.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Nông dân luôn sử dụng thông tin để đưa ra quyết định. Điều đã thay đổi là lượng thông tin có sẵn, tốc độ sử dụng thông tin đó và áp lực lên mọi nguồn lực.\n\n## Áp lực lên trang trại hiện đại\n\n**Nước.** Nông nghiệp là ngành sử dụng nước ngọt lớn nhất trên toàn thế giới; Theo Tổ chức Lương thực và Nông nghiệp Liên Hợp Quốc (FAO AQUASTAT), nông nghiệp nói chung, chủ yếu là thủy lợi, chiếm khoảng 70% lượng nước ngọt sử dụng trên toàn cầu. Ở nhiều vùng, việc phân bổ nước đang bị thu hẹp trong khi nhu cầu ngày càng tăng. Mọi quyết định tưới tiêu đều quan trọng.\n\n**Biến đổi khí hậu.** Các mùa khó dự đoán hơn. Sóng nhiệt, lượng mưa không đều và áp lực sâu bệnh mới khiến cẩm nang năm ngoái kém tin cậy hơn.\n\n**Chi phí và lợi nhuận.** Chi phí phân bón, năng lượng, nhân công và thiết bị có thể dao động mạnh. Áp dụng đúng số lượng, đúng chỗ sẽ bảo vệ cả lề và môi trường.\n\n**Lao động.** Nhiều hoạt động gặp khó khăn trong việc tìm kiếm và giữ chân những người có tay nghề cao. Kiến thức tồn tại trong đầu một người quản lý có kinh nghiệm sẽ gặp rủi ro khi người đó không có mặt.\n\n**Kỳ vọng từ người mua và cơ quan quản lý.** Chuỗi cung ứng ngày càng yêu cầu bằng chứng: lượng nước đã được sử dụng, đầu vào nào đã được áp dụng, những biện pháp thực hành nào đã được tuân theo.\n\n## Tại sao lại là AI và tại sao lại là bây giờ\n\nBa điều kết hợp với nhau:\n\n1. **Dữ liệu trở nên phong phú.** Giờ đây, cứ sau vài ngày, vệ tinh sẽ quay lại hầu hết đất nông nghiệp. Đầu dò độ ẩm đất, trạm thời tiết, bộ điều khiển tưới tiêu và máy móc đều tạo ra dữ liệu liên tục.\n2. **Máy tính trở nên rẻ và được kết nối.** Các mô hình từng cần đến phòng thí nghiệm nghiên cứu có thể chạy trên đám mây và cung cấp kết quả tới điện thoại.\n3. **Các phương pháp đã hoàn thiện.** Học máy, thị giác máy tính và các mô hình ngôn ngữ đã được cải thiện nhanh chóng và hiện là những công cụ thiết thực.\n\n> **Ý tưởng chính:** AI không tạo ra tài nguyên mới. Nó giúp bạn tận dụng tốt hơn nguồn nước, đầu vào, thời gian và kiến ​​thức bạn đã có.\n\n## AI thực tế có thể làm được những gì\n\n- **Sense** — biến hình ảnh thô và dữ liệu cảm biến thành thông tin, chẳng hạn như vùng nào của trường được nhấn mạnh.\n- **Dự đoán** — ước tính điều gì sẽ xảy ra, chẳng hạn như nhu cầu nước cho cây trồng vào ngày mai hoặc năng suất cuối vụ.\n- **Đề xuất** — đề xuất một hành động, chẳng hạn như lịch tưới và giải thích lý do.\n- **Xác minh** — kiểm tra xem một hành động có xảy ra hay không và nó có hiệu quả hay không.\n\nLưu ý mẫu: cảm nhận, dự đoán, đề xuất, xác minh. Chúng ta sẽ sử dụng vòng lặp này trong suốt khóa học.\n\n## Việc nó không thể làm được\n\nAI không thể nhìn thấy những gì dữ liệu của nó không thu thập được: van bị hỏng, việc phun thuốc của hàng xóm, một tập quán văn hóa độc đáo ở trang trại của bạn. Nó không thể chịu trách nhiệm về một quyết định. Và nó không thể thay thế được niềm tin giữa người trồng trọt và cố vấn. AI nông nghiệp tốt được thiết kế để làm việc *với* những người hiểu biết về đất đai.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}

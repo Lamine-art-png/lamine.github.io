@@ -1,0 +1,525 @@
+{
+  "format": "agroai-academy-translations/v1",
+  "source_locale": "en",
+  "target_locale": "nl",
+  "status": "machine_draft_requires_review",
+  "translated_fields": 64,
+  "total_fields": 64,
+  "limitations": "Public A1 course/module/lesson text only; NO exam questions or answer keys. Source fallbacks MUST be translated before import.",
+  "provenance": "unreviewed machine, source must match production before import",
+  "items": [
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "title",
+      "source": "Introduction to Artificial Intelligence in Agriculture",
+      "translation": "Inleiding tot kunstmatige intelligentie in de landbouw",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "subtitle",
+      "source": "What AI is, how it works on the farm, and how to use it responsibly.",
+      "translation": "Wat AI is, hoe het werkt op de boerderij en hoe je het verantwoord kunt gebruiken.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "description",
+      "source": "Artificial intelligence is arriving in agriculture through irrigation controllers, satellite services, farm management software and the phones in growers' pockets. This course gives you a clear, practical understanding of what that technology is, how it works, and how to use it well.\n\nYou will learn the core ideas behind AI and machine learning without equations, see how agricultural data becomes a prediction and then a recommendation, and follow AI through the season — from planning and irrigation to crop health and harvest. Above all, you will learn to judge AI output: when to trust it, when to question it, and how to keep human judgment and farm knowledge in charge.\n\nThe course is designed for growers, operators, agronomists, managers and students. No technical background is required.",
+      "translation": "Kunstmatige intelligentie komt de landbouw binnen via irrigatiecontrollers, satellietdiensten, software voor landbouwbeheer en de telefoons in de zakken van telers. Deze cursus geeft u een duidelijk, praktisch inzicht in wat die technologie is, hoe deze werkt en hoe u deze goed kunt gebruiken.\n\nJe leert de kernideeën achter AI en machine learning zonder vergelijkingen, ziet hoe landbouwgegevens een voorspelling en vervolgens een aanbeveling worden, en volgt AI het hele seizoen door – van planning en irrigatie tot de gezondheid van gewassen en de oogst. Bovenal leer je de output van AI te beoordelen: wanneer je erop moet vertrouwen, wanneer je er vraagtekens bij moet zetten en hoe je het menselijk oordeel en de kennis van de boerderij de baas kunt houden.\n\nDe cursus is bedoeld voor telers, operators, agronomen, managers en studenten. Er is geen technische achtergrond vereist.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "prerequisites_text",
+      "source": "None. Curiosity about how technology can support agricultural work is all you need.",
+      "translation": "Geen. Nieuwsgierigheid naar hoe technologie landbouwwerk kan ondersteunen is alles wat je nodig hebt.",
+      "status": "machine"
+    },
+    {
+      "type": "course",
+      "id": "crs_a1",
+      "field": "objectives_json",
+      "source": "[\"Explain in plain language what artificial intelligence, machine learning and generative AI are\",\"Describe the main sources of agricultural data and what makes data trustworthy\",\"Follow how a model turns data into a prediction and a prediction into a recommendation\",\"Recognize practical AI applications across the crop season, from planning to harvest\",\"Identify the limits and failure modes of agricultural AI and when to challenge a recommendation\",\"Apply principles of data ownership, privacy and responsible use on your own operation\"]",
+      "translation": "[\"Leg in duidelijke taal uit wat kunstmatige intelligentie, machine learning en generatieve AI zijn\", \"Beschrijf de belangrijkste bronnen van landbouwgegevens en wat gegevens betrouwbaar maakt\", \"Volg hoe een model gegevens omzet in een voorspelling en een voorspelling in een aanbeveling\", \"Herken praktische AI-toepassingen gedurende het hele oogstseizoen, van planning tot oogst\", \"Identificeer de grenzen en faalwijzen van AI in de landbouw en wanneer u een aanbeveling ter discussie moet stellen\", \"Pas de principes van data-eigendom, privacy en verantwoord gebruik toe op uw eigen bedrijfsvoering\"]",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "title",
+      "source": "What AI means for agriculture",
+      "translation": "Wat AI betekent voor de landbouw",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_1",
+      "field": "summary",
+      "source": "Core ideas and why they matter now.",
+      "translation": "Kernideeën en waarom ze er nu toe doen.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "title",
+      "source": "How agricultural AI works",
+      "translation": "Hoe agrarische AI ​​werkt",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_2",
+      "field": "summary",
+      "source": "From data to model to recommendation.",
+      "translation": "Van data naar model naar aanbeveling.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "title",
+      "source": "AI across the season",
+      "translation": "AI gedurende het seizoen",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_3",
+      "field": "summary",
+      "source": "Practical applications from planning to harvest.",
+      "translation": "Praktische toepassingen van planning tot oogst.",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "title",
+      "source": "Using AI responsibly",
+      "translation": "Verantwoord gebruik maken van AI",
+      "status": "machine"
+    },
+    {
+      "type": "module",
+      "id": "mod_a1_4",
+      "field": "summary",
+      "source": "Limits, data rights and confident, critical use.",
+      "translation": "Grenzen, datarechten en zelfverzekerd, kritisch gebruik.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "title",
+      "source": "Crop health monitoring from above and up close",
+      "translation": "Gewasgezondheidsmonitoring van bovenaf en van dichtbij",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "summary",
+      "source": "Satellite imagery, vegetation indices and computer vision for crop health.",
+      "translation": "Satellietbeelden, vegetatie-indexen en computervisie voor de gezondheid van gewassen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_crop_health",
+      "field": "body_md",
+      "source": "Healthy plants and stressed plants reflect light differently. AI uses that difference — captured by satellites, drones and cameras — to watch crops at a scale no scouting team could cover.\n\n## How plants look to a satellite\n\nGreen leaves absorb most red light for photosynthesis and strongly reflect **near-infrared (NIR)** light. When plants are stressed, sparse or senescing, red reflectance rises and NIR reflectance falls.\n\nThe **Normalized Difference Vegetation Index (NDVI)** captures this contrast:\n\n**NDVI = (NIR − Red) ÷ (NIR + Red)**\n\nValues range from −1 to +1. Dense, healthy vegetation is typically high (often above 0.6); bare soil is low (around 0.1–0.2); water is usually negative.\n\n## Reading NDVI maps wisely\n\nNDVI is useful for spotting **where** a field differs, not for diagnosing **why**. A low-NDVI patch might be water stress, nutrient deficiency, disease, pests, a planting problem, or simply a different variety. The map tells you where to look; scouting tells you what you found.\n\n> **Important:** Clouds, cloud shadows, haze and the time of day can distort satellite readings. Reliable services mask clouds and compare images over time rather than trusting a single snapshot.\n\nOther indices exist for specific purposes — some are more sensitive to chlorophyll, others to water content or to dense canopies where NDVI saturates.\n\n## Computer vision up close\n\nOn the ground, **computer vision** models analyze photos from phones, tractors or drones to:\n\n- identify diseases and pests from leaf images;\n- distinguish weeds from crops for targeted spraying;\n- count fruit, flowers or plants to estimate yield.\n\nThese models are trained on large collections of labeled images. Their accuracy depends heavily on whether those images resemble your crop, your varieties and your lighting conditions.\n\n## From detection to action\n\nA good crop-monitoring workflow turns a detection into a prioritized task: *\"Zone 3 shows declining vigor over 10 days. Scout the northeast corner first; check irrigation uniformity and look for signs of root disease.\"* The scout's findings then feed back into the system, improving future alerts.",
+      "translation": "Gezonde planten en gestreste planten reflecteren het licht op een andere manier. AI gebruikt dat verschil – vastgelegd door satellieten, drones en camera’s – om gewassen te bekijken op een schaal die geen scoutingteam zou kunnen dekken.\n\n## Hoe planten naar een satelliet kijken\n\nGroene bladeren absorberen het meeste rode licht voor fotosynthese en reflecteren sterk **nabij-infrarood (NIR)** licht. Wanneer planten onder druk staan, schaars zijn of verouderen, stijgt de rode reflectie en daalt de NIR-reflectie.\n\nDe **Normalized Difference Vegetation Index (NDVI)** geeft dit contrast weer:\n\n**NDVI = (NIR − Rood) ÷ (NIR + Rood)**\n\nWaarden variëren van −1 tot +1. Dichte, gezonde vegetatie is doorgaans hoog (vaak boven 0,6); kale grond is laag (ongeveer 0,1–0,2); water is meestal negatief.\n\n## NDVI-kaarten verstandig lezen\n\nNDVI is nuttig om te ontdekken **waar** een veld verschilt, niet om **waarom** te diagnosticeren. Een laag-NDVI-plek kan waterstress, tekort aan voedingsstoffen, ziekte, ongedierte, een plantprobleem of gewoon een andere variëteit zijn. De kaart vertelt je waar je moet kijken; Scouting vertelt je wat je hebt gevonden.\n\n> **Belangrijk:** Wolken, wolkenschaduwen, nevel en het tijdstip van de dag kunnen de satellietmetingen vertekenen. Betrouwbare services maskeren wolken en vergelijken afbeeldingen in de loop van de tijd in plaats van te vertrouwen op een enkele momentopname.\n\nEr bestaan ​​andere indices voor specifieke doeleinden: sommige zijn gevoeliger voor chlorofyl, andere voor het watergehalte of voor dichte bladerdaken waar NDVI verzadigt.\n\n## Computervisie van dichtbij\n\nOp de grond analyseren **computer vision**-modellen foto's van telefoons, tractoren of drones om:\n\n- ziekten en plagen identificeren aan de hand van bladbeelden;\n- onkruid van gewassen onderscheiden voor gericht spuiten;\n- tel fruit, bloemen of planten om de opbrengst te schatten.\n\nDeze modellen zijn getraind op grote verzamelingen gelabelde afbeeldingen. De nauwkeurigheid ervan hangt sterk af van de vraag of die beelden lijken op uw gewas, uw variëteiten en uw lichtomstandigheden.\n\n## Van detectie naar actie\n\nEen goede workflow voor gewasmonitoring maakt van detectie een prioriteitstaak: *\"Zone 3 vertoont afnemende kracht gedurende 10 dagen. Verken eerst de noordoostelijke hoek; controleer de uniformiteit van de irrigatie en zoek naar tekenen van wortelziekte.\"* De bevindingen van de verkenner worden vervolgens teruggekoppeld naar het systeem, waardoor toekomstige waarschuwingen worden verbeterd.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "title",
+      "source": "Data: the raw material of agricultural AI",
+      "translation": "Data: de grondstof van agrarische AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "summary",
+      "source": "Where farm data comes from and what makes it trustworthy.",
+      "translation": "Waar bedrijfsgegevens vandaan komen en wat deze betrouwbaar maakt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data",
+      "field": "body_md",
+      "source": "Every AI system is built from data. If the data is incomplete, biased or wrong, the AI will be too. Understanding your data is the most important skill in agricultural AI.\n\n## Where agricultural data comes from\n\n| Source | Examples | What it tells you |\n|---|---|---|\n| Weather | On-farm stations, regional networks, forecasts | Temperature, rainfall, humidity, wind, solar radiation |\n| Soil | Moisture probes, soil tests, soil maps | Water available to roots, nutrients, texture |\n| Remote sensing | Satellite, aircraft and drone imagery | Crop vigor, canopy cover, stress patterns across a field |\n| Equipment | Irrigation controllers, flow meters, yield monitors, tractors | What was applied, where and when |\n| Records | Planting dates, varieties, input applications, scouting notes | Management decisions and observations |\n| Markets | Prices, contracts, demand signals | Economic context for decisions |\n\n## The qualities of good data\n\n**Accuracy** — does the measurement reflect reality? A moisture probe installed in a wet spot, or a rain gauge under a tree, will mislead every model that uses it.\n\n**Completeness** — are there gaps? A sensor that stops reporting for a week during a heat wave leaves a hole exactly when it matters most.\n\n**Timeliness** — is the data recent enough for the decision? Yesterday's soil moisture is useful for today's irrigation; last month's is not.\n\n**Consistency** — are units, formats and definitions the same over time and across fields? Mixing inches and millimeters, or two names for the same field, causes silent errors.\n\n**Representativeness** — does the data cover the conditions where the AI will be used? A model trained only on sandy soils may not work on clay.\n\n> **Field check:** Before trusting a dashboard, ask three questions: Where did this number come from? When was it measured? What would make it wrong?\n\n## Data needs context\n\nA soil moisture reading of 30% means little on its own. It matters what the soil type is, how deep the sensor sits, which crop is growing and at what stage. Good agricultural AI combines data sources so that each one adds context to the others — for example, pairing satellite imagery with weather data and the field's irrigation history.\n\n## Your data, your decisions\n\nFarm data has value — commercial, operational and personal. Before connecting equipment or sharing records with any service, understand who can access the data, how it will be used, and whether you can take it with you if you leave. We will return to data ownership in Module 4.",
+      "translation": "Elk AI-systeem is opgebouwd uit data. Als de gegevens onvolledig, bevooroordeeld of verkeerd zijn, zal de AI dat ook zijn. Het begrijpen van uw gegevens is de belangrijkste vaardigheid in agrarische AI.\n\n## Waar landbouwgegevens vandaan komen\n\n| Bron | Voorbeelden | Wat het je vertelt |\n|---|---|---|\n| Weer | Stations op de boerderij, regionale netwerken, voorspellingen | Temperatuur, regenval, vochtigheid, wind, zonnestraling |\n| Bodem | Vochtsondes, bodemonderzoek, bodemkaarten | Beschikbaar water voor wortels, voedingsstoffen, textuur |\n| Teledetectie | Satelliet-, vliegtuig- en dronebeelden | Gewaskracht, bladerdakbedekking, stresspatronen over een veld |\n| Uitrusting | Irrigatiecontrollers, debietmeters, opbrengstmonitors, tractoren | Wat werd toegepast, waar en wanneer |\n| Opnames | Plantdata, rassen, invoeraanvragen, verkenningsnotities | Managementbeslissingen en observaties |\n| Markten | Prijzen, contracten, vraagsignalen | Economische context voor beslissingen |\n\n## De kwaliteiten van goede data\n\n**Nauwkeurigheid** — weerspiegelt de meting de werkelijkheid? Een vochtsonde die op een natte plek is geïnstalleerd, of een regenmeter onder een boom, zal elk model dat er gebruik van maakt, misleiden.\n\n**Volledigheid** — zijn er hiaten? Een sensor die tijdens een hittegolf een week lang stopt met rapporteren, laat een gat achter precies op het moment dat het er het meest toe doet.\n\n**Tijdigheid** — zijn de gegevens recent genoeg voor de beslissing? Het bodemvocht van gisteren is nuttig voor de irrigatie van vandaag; die van vorige maand niet.\n\n**Consistentie** — zijn eenheden, formaten en definities in de loop van de tijd en voor alle velden hetzelfde? Het combineren van inches en millimeters, of twee namen voor hetzelfde veld, veroorzaakt stille fouten.\n\n**Representativiteit** — dekken de gegevens de omstandigheden waarin de AI zal worden gebruikt? Een model dat alleen op zandgrond is getraind, werkt mogelijk niet op klei.\n\n> **Veldcontrole:** Voordat u een dashboard vertrouwt, moet u drie vragen stellen: Waar komt dit nummer vandaan? Wanneer is het gemeten? Wat zou het verkeerd maken?\n\n## Gegevens hebben context nodig\n\nEen bodemvochtwaarde van 30% betekent op zichzelf weinig. Het maakt uit wat de grondsoort is, hoe diep de sensor zit, welk gewas groeit en in welk stadium. Goede landbouw-AI combineert gegevensbronnen zodat ze allemaal context aan de andere toevoegen, bijvoorbeeld door satellietbeelden te koppelen aan weergegevens en de irrigatiegeschiedenis van het veld.\n\n## Jouw gegevens, jouw beslissingen\n\nBedrijfsgegevens hebben waarde: commercieel, operationeel en persoonlijk. Voordat u apparatuur aansluit of gegevens deelt met welke dienst dan ook, moet u weten wie toegang heeft tot de gegevens, hoe deze zullen worden gebruikt en of u deze mee kunt nemen als u weggaat. In Module 4 komen we terug op het eigendom van data.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "title",
+      "source": "Data ownership, privacy and trust",
+      "translation": "Eigendom van gegevens, privacy en vertrouwen",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "summary",
+      "source": "Practical principles for sharing farm data with confidence.",
+      "translation": "Praktische principes voor het vol vertrouwen delen van bedrijfsgegevens.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_data_rights",
+      "field": "body_md",
+      "source": "Farm data can reveal yields, practices, finances and the location of people and assets. Sharing it can unlock valuable services — but it should always be a deliberate choice.\n\n## Questions to ask any technology provider\n\n- **Ownership:** Who owns the data I provide and the data the system generates about my farm?\n- **Use:** What will the data be used for? Will it be used to train models? Will it be combined with other farms' data?\n- **Sharing:** Will it be shared with or sold to third parties? Which ones, and why?\n- **Access and portability:** Can I download my data in a usable format? Can I take it with me if I leave?\n- **Deletion:** Can I delete my data, and what remains afterward?\n- **Security:** How is the data protected? Who inside the company can see it?\n- **Control:** Can I revoke access for a connected device or partner at any time?\n\nSeveral agricultural organizations have published farm-data principles that address these questions; asking whether a provider follows them is a good starting point.\n\n## Consent and permissions\n\nGood systems ask for specific, informed permission — for example, allowing a connector to read irrigation controller data without granting it permission to change settings. Grant the least access needed for the job, and review connected services regularly.\n\n## Aggregated and anonymized data\n\nCombining data from many farms can improve models for everyone, such as better regional water-use estimates. Done well, aggregation removes information that could identify an individual farm. Ask how anonymization is performed and whether you can opt out.\n\n## Trust is earned\n\n> **Key idea:** Trustworthy agricultural AI is transparent about how it uses data, explains its recommendations, admits uncertainty, and leaves the farmer in control.\n\nThese same principles apply to the Academy itself. You can download or delete your learning data at any time from your account settings.",
+      "translation": "Bedrijfsgegevens kunnen opbrengsten, praktijken, financiën en de locatie van mensen en activa onthullen. Het delen ervan kan waardevolle diensten ontsluiten, maar het moet altijd een bewuste keuze zijn.\n\n## Vragen die u aan elke technologieleverancier kunt stellen\n\n- **Eigendom:** Wie is eigenaar van de gegevens die ik verstrek en de gegevens die het systeem over mijn bedrijf genereert?\n- **Gebruik:** Waarvoor worden de gegevens gebruikt? Zal het worden gebruikt om modellen te trainen? Wordt het gecombineerd met de gegevens van andere bedrijven?\n- **Delen:** Wordt het gedeeld met of verkocht aan derden? Welke, en waarom?\n- **Toegang en draagbaarheid:** Kan ik mijn gegevens in een bruikbaar formaat downloaden? Kan ik het meenemen als ik wegga?\n- **Verwijdering:** Kan ik mijn gegevens verwijderen, en wat blijft er daarna over?\n- **Beveiliging:** Hoe worden de gegevens beschermd? Wie binnen het bedrijf kan het zien?\n- **Controle:** Kan ik op elk moment de toegang voor een aangesloten apparaat of partner intrekken?\n\nVerschillende landbouworganisaties hebben principes voor bedrijfsgegevens gepubliceerd die deze vragen beantwoorden; vragen of een aanbieder ze volgt, is een goed startpunt.\n\n## Toestemming en machtigingen\n\nGoede systemen vragen om specifieke, geïnformeerde toestemming, bijvoorbeeld door een connector de gegevens van de irrigatiecontroller te laten lezen zonder hem toestemming te geven om instellingen te wijzigen. Verleen zo min mogelijk toegang die nodig is voor de taak en controleer de aangesloten services regelmatig.\n\n## Geaggregeerde en geanonimiseerde gegevens\n\nHet combineren van gegevens van veel boerderijen kan modellen voor iedereen verbeteren, zoals betere schattingen van het regionale watergebruik. Als het goed wordt gedaan, verwijdert aggregatie informatie die een individueel landbouwbedrijf zou kunnen identificeren. Vraag hoe de anonimisering wordt uitgevoerd en of u zich kunt afmelden.\n\n## Vertrouwen wordt verdiend\n\n> **Belangrijkste idee:** Betrouwbare AI in de landbouw is transparant over de manier waarop zij gegevens gebruikt, legt haar aanbevelingen uit, geeft onzekerheid toe en laat de boer de controle over.\n\nDezelfde principes gelden voor de Academie zelf. U kunt uw leergegevens op elk gewenst moment downloaden of verwijderen via uw accountinstellingen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "title",
+      "source": "Practical exercise: evaluate an AI recommendation",
+      "translation": "Praktische oefening: evalueer een AI-aanbeveling",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "summary",
+      "source": "Apply what you've learned to a realistic recommendation.",
+      "translation": "Pas het geleerde toe op een realistische aanbeveling.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_exercise",
+      "field": "body_md",
+      "source": "In this exercise you will practice the critical review skills from this module on a realistic recommendation.\n\n## The scenario\n\nYou manage a 60-hectare drip-irrigated tomato operation. On a Tuesday morning in mid-season, your decision-support system shows:\n\n> *\"Recommendation: Skip irrigation on Block C for the next 48 hours. Predicted crop water use: 3.1 mm/day. Soil moisture: 82% of field capacity. Confidence: high.\"*\n\nWhen you drive past Block C, you notice the plants on the eastern edge look wilted in the late-morning heat, and yesterday's maximum temperature was 37 °C — much hotter than the 29 °C forecast the system used two days ago.\n\n## Your task\n\nWork through the checklist below. Write your reasoning in the **Notes** tab so you can return to it.\n\n1. **Check the inputs.** Which input looks questionable? (Hint: compare the forecast temperature with what happened.)\n2. **Check the sensors.** Where is the soil moisture probe installed? Could it be in a spot that does not represent the eastern edge?\n3. **Look in the field.** What would you check on the wilted plants? Consider emitter clogging, pressure at the end of the line, and root health.\n4. **Decide.** Would you follow, modify or override the recommendation? Why?\n5. **Record and report.** What feedback would you give so the system — and your team — can learn from this?\n\n## Discussion\n\nA strong answer notices that the predicted water use was probably based on a forecast that turned out too cool, so actual demand was higher. A single probe reading 82% may not represent the eastern edge, especially if emitters there are clogged or pressure is low at the end of the lateral. A sensible decision might be to inspect the eastern edge immediately, run a short irrigation if inspection confirms dry soil, and report both the forecast miss and the possible uniformity problem.\n\nThere is rarely a single right answer — but there is always a right process: check inputs, check context, look in the field, decide, and record.",
+      "translation": "In deze oefening oefen je de kritische beoordelingsvaardigheden uit deze module op basis van een realistisch advies.\n\n## Het scenario\n\nJe geeft leiding aan een druppelgeïrrigeerd tomatenbedrijf van 60 hectare. Op een dinsdagochtend halverwege het seizoen laat uw beslissingsondersteunende systeem het volgende zien:\n\n> *\"Aanbeveling: sla de irrigatie op blok C de komende 48 uur over. Voorspeld gewaswaterverbruik: 3,1 mm/dag. Bodemvocht: 82% van de veldcapaciteit. Vertrouwen: hoog.\"*\n\nAls je langs blok C rijdt, zie je dat de planten aan de oostelijke rand er verwelkt uitzien door de hitte van de late ochtend, en de maximale temperatuur van gisteren was 37 °C – veel heter dan de 29 °C-voorspelling die het systeem twee dagen geleden gebruikte.\n\n## Jouw taak\n\nWerk onderstaande checklist af. Schrijf uw redenering op het tabblad **Opmerkingen**, zodat u ernaar kunt terugkeren.\n\n1. **Controleer de invoer.** Welke invoer ziet er twijfelachtig uit? (Tip: vergelijk de voorspelde temperatuur met wat er is gebeurd.)\n2. **Controleer de sensoren.** Waar is de bodemvochtsonde geïnstalleerd? Zou het op een plek kunnen zijn die niet de oostelijke rand vertegenwoordigt?\n3. **Kijk in het veld.** Wat zou jij controleren op de verwelkte planten? Denk aan verstopping van de emitter, druk aan het einde van de lijn en de gezondheid van de wortels.\n4. **Beslis.** Zou u de aanbeveling opvolgen, wijzigen of negeren? Waarom?\n5. **Registreer en rapporteer.** Welke feedback zou u geven zodat het systeem (en uw team) hiervan kan leren?\n\n## Discussie\n\nEen sterk antwoord merkt op dat het voorspelde waterverbruik waarschijnlijk gebaseerd was op een voorspelling die te koud bleek te zijn, waardoor de werkelijke vraag hoger was. Een enkele sonde die 82% aangeeft, vertegenwoordigt mogelijk niet de oostelijke rand, vooral als de zenders daar verstopt zijn of als de druk laag is aan het uiteinde van de laterale rand. Een verstandige beslissing zou kunnen zijn om de oostelijke rand onmiddellijk te inspecteren, een korte irrigatie uit te voeren als de inspectie droge grond bevestigt, en zowel de voorspelde fout als het mogelijke uniformiteitsprobleem te melden.\n\nEr is zelden één juist antwoord, maar er is altijd een juist proces: de invoer controleren, de context controleren, in het veld kijken, beslissen en vastleggen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "title",
+      "source": "Harvest, markets and the supply chain",
+      "translation": "Oogst, markten en de toeleveringsketen",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "summary",
+      "source": "Yield forecasting, market intelligence and logistics.",
+      "translation": "Opbrengstprognoses, marktinformatie en logistiek.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_harvest",
+      "field": "body_md",
+      "source": "As the season moves toward harvest, decisions shift from growing the crop to capturing its value.\n\n## Yield forecasting\n\nYield forecasts combine crop growth models, weather to date and forecasts, imagery-based vigor, and sometimes counts from computer vision. Earlier forecasts are less certain; accuracy improves as the season progresses.\n\nForecasts support decisions such as:\n\n- how much to sell forward, and when;\n- how many workers, trucks and storage capacity to book;\n- whether a late input is still worth applying.\n\n## Market intelligence\n\nMarket intelligence tools gather prices, futures, export data, weather in competing regions and news to help anticipate price movements. AI can summarize these signals quickly and highlight unusual changes. No model can predict markets with certainty; treat market forecasts as one input to a risk-managed plan, not as a guarantee.\n\n## Harvest timing and quality\n\nModels that track crop maturity — sugar levels in grapes, moisture in grain, color in fruit — help schedule harvest for the best balance of quality, weather risk and logistics. Combined with labor and equipment availability, they can help sequence fields across an operation.\n\n## Traceability and evidence\n\nBuyers increasingly ask for proof of how a crop was produced: water use, inputs applied, certifications. Systems that record recommendations, actions and verification throughout the season make that evidence easy to produce — another reason the verify step of the loop matters.\n\n> **Key idea:** At harvest, AI's value comes from reducing uncertainty in timing, quantity and price — and from documenting what was done.",
+      "translation": "Naarmate het seizoen dichter bij de oogst komt, verschuiven de beslissingen van het verbouwen van het gewas naar het vastleggen van de waarde ervan.\n\n## Opbrengstvoorspelling\n\nOpbrengstvoorspellingen combineren modellen voor de groei van gewassen, het weer tot nu toe en voorspellingen, op beelden gebaseerde kracht en soms tellingen uit computervisie. Eerdere voorspellingen zijn minder zeker; De nauwkeurigheid verbetert naarmate het seizoen vordert.\n\nPrognoses ondersteunen beslissingen zoals:\n\n- hoeveel moet u vooruit verkopen, en wanneer;\n- hoeveel werknemers, vrachtwagens en opslagcapaciteit u moet boeken;\n- of een late inbreng nog de moeite waard is om toe te passen.\n\n## Marktinformatie\n\nMarktinformatietools verzamelen prijzen, futures, exportgegevens, het weer in concurrerende regio's en nieuws om te helpen anticiperen op prijsbewegingen. AI kan deze signalen snel samenvatten en ongebruikelijke veranderingen benadrukken. Geen enkel model kan markten met zekerheid voorspellen; behandel marktvoorspellingen als een input voor een plan met risicobeheersing, en niet als een garantie.\n\n## Oogsttiming en kwaliteit\n\nModellen die de rijpheid van gewassen volgen – suikerniveaus in druiven, vocht in graan, kleur in fruit – helpen de oogst te plannen voor de beste balans tussen kwaliteit, weersrisico’s en logistiek. In combinatie met de beschikbaarheid van arbeidskrachten en apparatuur kunnen ze helpen bij het ordenen van velden binnen een operatie.\n\n## Traceerbaarheid en bewijs\n\nKopers vragen steeds vaker om bewijs van hoe een gewas is geproduceerd: watergebruik, toegepaste inputs, certificeringen. Systemen die aanbevelingen, acties en verificatie gedurende het seizoen registreren, maken dat bewijs eenvoudig te produceren – nog een reden waarom de verificatiestap van de lus belangrijk is.\n\n> **Belangrijkste idee:** Bij de oogst komt de waarde van AI voort uit het verminderen van de onzekerheid in timing, hoeveelheid en prijs – en uit het documenteren van wat er is gedaan.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "title",
+      "source": "Case study: irrigation and water management",
+      "translation": "Casestudy: irrigatie en waterbeheer",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "summary",
+      "source": "How evapotranspiration, soil moisture and AI combine in irrigation scheduling.",
+      "translation": "Hoe verdamping, bodemvocht en AI samenkomen in de irrigatieplanning.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_irrigation",
+      "field": "body_md",
+      "source": "Irrigation is one of the clearest examples of AI creating value on a farm, because water decisions are frequent, costly and measurable.\n\n## The water balance\n\nThink of the root zone as a bank account for water.\n\n- **Deposits:** rainfall and irrigation.\n- **Withdrawals:** water used by the crop and evaporated from the soil — together called **evapotranspiration (ET)** — plus drainage below the roots.\n\nThe goal of irrigation scheduling is to keep the balance between a lower limit, where the crop starts to suffer stress, and an upper limit, beyond which water drains away and is wasted.\n\n## Estimating crop water use\n\nCrop water use is usually estimated in two steps:\n\n1. **Reference evapotranspiration (ET₀)** is calculated from weather data — temperature, humidity, wind and solar radiation — for a standard reference crop.\n2. A **crop coefficient (Kc)** adjusts ET₀ for the actual crop and its growth stage: **ETc = ET₀ × Kc**.\n\nMachine learning can improve this estimate by learning from local sensors, canopy imagery and the farm's own history, especially where standard coefficients fit poorly.\n\n## A scheduling scenario\n\n> **Example:** A vineyard block has 40 mm of readily available water when the root zone is full. Soil moisture probes show 18 mm remain. Forecast ETc is 5 mm per day for the next four days, and no rain is expected.\n\nWithout irrigation, the block reaches its lower limit in about three and a half days (18 mm ÷ 5 mm/day). A scheduling system would recommend irrigating in the next two to three days, sized to refill the root zone without overfilling it, timed to available pump capacity and lower electricity prices at night.\n\nIf the forecast changes to 15 mm of rain on day two, a good system updates the recommendation — and explains why.\n\n## Where AI adds value\n\n- **Better water-use estimates** by combining weather, sensors and imagery.\n- **Forecast-aware scheduling** that accounts for coming rain and heat.\n- **Optimization** across many blocks, pump limits and water allocations.\n- **Verification** — confirming from flow meters and soil moisture that irrigation happened as planned and had the expected effect.\n\n## What can go wrong\n\nA clogged emitter, a broken valve or a probe installed in an unrepresentative spot can all mislead the system. That is why the verification step matters: when observed soil moisture does not respond as predicted after an irrigation, it is a signal to investigate the field, not just the model.",
+      "translation": "Irrigatie is een van de duidelijkste voorbeelden van AI die waarde creëert op een boerderij, omdat waterbeslissingen frequent, kostbaar en meetbaar zijn.\n\n## De waterbalans\n\nBeschouw de wortelzone als een bankrekening voor water.\n\n- **Deposito's:** regenval en irrigatie.\n- **Onttrekkingen:** water dat door het gewas wordt gebruikt en uit de grond verdampt — samen **evapotranspiratie (ET)** genoemd — plus drainage onder de wortels.\n\nHet doel van de irrigatieplanning is om het evenwicht te bewaren tussen een ondergrens, waarbij het gewas onder druk begint te staan, en een bovengrens, waarboven water wegvloeit en wordt verspild.\n\n## Schatting van het watergebruik van gewassen\n\nHet watergebruik van gewassen wordt gewoonlijk in twee stappen geschat:\n\n1. **Referentie-evapotranspiratie (ET₀)** wordt berekend op basis van weergegevens (temperatuur, vochtigheid, wind en zonnestraling) voor een standaard referentiegewas.\n2. Een **gewascoëfficiënt (Kc)** past de ET₀ aan voor het daadwerkelijke gewas en zijn groeifase: **ETc = ET₀ × Kc**.\n\nMachine learning kan deze schatting verbeteren door te leren van lokale sensoren, beelden van het bladerdak en de eigen geschiedenis van het landbouwbedrijf, vooral waar de standaardcoëfficiënten slecht passen.\n\n## Een planningsscenario\n\n> **Voorbeeld:** Een wijngaardblok heeft 40 mm direct beschikbaar water als de wortelzone vol is. Bodemvochtsondes laten zien dat er nog 18 mm over is. Voorspelling ETc is 5 mm per dag voor de komende vier dagen en er wordt geen regen verwacht.\n\nZonder irrigatie bereikt het blok zijn ondergrens in ongeveer drie en een halve dag (18 mm ÷ 5 mm/dag). Een planningssysteem zou aanbevelen om in de komende twee tot drie dagen te irrigeren, op maat gemaakt om de wortelzone opnieuw te vullen zonder deze te vol te maken, getimed op de beschikbare pompcapaciteit en lagere elektriciteitsprijzen 's nachts.\n\nAls de voorspelling verandert naar 15 mm regen op dag twee, werkt een goed systeem de aanbeveling bij – en legt uit waarom.\n\n## Waar AI waarde toevoegt\n\n- **Betere schattingen van het waterverbruik** door weer, sensoren en beelden te combineren.\n- **Voorspellingbewuste planning** die rekening houdt met komende regen en hitte.\n- **Optimalisatie** over vele blokken, pomplimieten en watertoewijzingen.\n- **Verificatie** — bevestiging van stroommeters en bodemvocht dat de irrigatie plaatsvond zoals gepland en het verwachte effect had.\n\n## Wat kan er misgaan\n\nEen verstopte zender, een kapotte klep of een sonde die op een niet-representatieve plek is geïnstalleerd, kunnen allemaal het systeem misleiden. Daarom is de verificatiestap van belang: wanneer waargenomen bodemvocht na een irrigatie niet reageert zoals voorspeld, is dit een signaal om het veld te onderzoeken, en niet alleen het model.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "title",
+      "source": "Limits, errors and when to challenge a recommendation",
+      "translation": "Grenzen, fouten en wanneer u een aanbeveling moet betwisten",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "summary",
+      "source": "Recognizing failure modes and keeping human judgment in charge.",
+      "translation": "Het herkennen van faalwijzen en het menselijk oordeel bepalend houden.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_limits",
+      "field": "body_md",
+      "source": "Every AI system will sometimes be wrong. The goal is not blind trust or blanket rejection, but **calibrated trust**: knowing when a recommendation deserves confidence and when it deserves a second look.\n\n## Common failure modes\n\n**Bad inputs.** A failed sensor, a misplaced probe or a missing data feed produces confident nonsense. *Garbage in, garbage out.*\n\n**Out-of-range conditions.** Models are least reliable in situations they rarely saw during training: extreme heat, a new variety, an unusual soil.\n\n**Drift.** Conditions change over time, and a model that was accurate three years ago may no longer be.\n\n**Bias.** If training data over-represents certain regions, farm sizes or crops, recommendations may be less accurate for operations that differ.\n\n**Missing context.** The system does not know about the neighbor's herbicide drift, the broken pipe, or the contract that requires harvest next week.\n\n**Automation bias.** People tend to over-trust machine output, especially when it is presented precisely. A number with two decimal places is not necessarily accurate.\n\n## When to challenge a recommendation\n\nPause and investigate when:\n\n- the recommendation contradicts what you see in the field;\n- it is far outside the normal range for the season;\n- the system shows low confidence, or does not show confidence at all;\n- key data is missing, stale, or obviously wrong;\n- the consequences of an error would be severe or hard to reverse.\n\n> **Field check:** A simple rule — the bigger and less reversible the decision, the more evidence you should require before acting on an AI recommendation.\n\n## How to challenge well\n\n1. **Check the inputs.** Are the sensors reporting? Is the weather data current?\n2. **Ask for the reason.** What data drove this suggestion?\n3. **Look in the field.** Scout the area in question.\n4. **Record what you decided and why.** Your override is valuable feedback that helps improve the system.\n\nChallenging a recommendation is not a failure of the technology. It is how people and AI work well together.",
+      "translation": "Elk AI-systeem zal wel eens ongelijk hebben. Het doel is geen blind vertrouwen of algehele afwijzing, maar **gekalibreerd vertrouwen**: weten wanneer een aanbeveling vertrouwen verdient en wanneer deze een tweede blik verdient.\n\n## Veelvoorkomende faalmodi\n\n**Slechte invoer.** Een defecte sensor, een verkeerd geplaatste sonde of een ontbrekende datafeed produceert zelfverzekerde onzin. *Afval erin, afval eruit.*\n\n**Omstandigheden buiten bereik.** Modellen zijn het minst betrouwbaar in situaties die ze tijdens de training zelden tegenkwamen: extreme hitte, een nieuwe variëteit, een ongewone bodem.\n\n**Afwijking.** De omstandigheden veranderen in de loop van de tijd, en een model dat drie jaar geleden accuraat was, is dat misschien niet meer.\n\n**Vertekening.** Als trainingsgegevens bepaalde regio's, bedrijfsomvang of gewassen oververtegenwoordigen, kunnen aanbevelingen minder nauwkeurig zijn voor activiteiten die verschillen.\n\n**Ontbrekende context.** Het systeem is niet op de hoogte van de herbicidendrift van de buurman, de kapotte leiding of het contract waarvoor volgende week moet worden geoogst.\n\n**Automatiseringsvooroordeel.** Mensen hebben de neiging om de uitvoer van machines te veel te vertrouwen, vooral als deze nauwkeurig wordt gepresenteerd. Een getal met twee decimalen is niet noodzakelijkerwijs nauwkeurig.\n\n## Wanneer moet u een aanbeveling betwisten?\n\nPauzeer en onderzoek wanneer:\n\n- het advies is in tegenspraak met wat je in de praktijk ziet;\n- het ligt ver buiten het normale bereik voor het seizoen;\n- het systeem toont weinig vertrouwen, of toont helemaal geen vertrouwen;\n- belangrijke gegevens ontbreken, zijn verouderd of zijn duidelijk onjuist;\n- de gevolgen van een fout ernstig of moeilijk ongedaan te maken zouden zijn.\n\n> **Veldcontrole:** Een eenvoudige regel: hoe groter en minder omkeerbaar de beslissing, hoe meer bewijsmateriaal u nodig heeft voordat u gevolg geeft aan een AI-aanbeveling.\n\n## Hoe je goed kunt uitdagen\n\n1. **Controleer de ingangen.** Rapporteren de sensoren? Zijn de weergegevens actueel?\n2. **Vraag naar de reden.** Welke gegevens hebben deze suggestie veroorzaakt?\n3. **Kijk in het veld.** Verken het betreffende gebied.\n4. **Leg vast wat u hebt besloten en waarom.** Uw overschrijving is waardevolle feedback die helpt het systeem te verbeteren.\n\nHet ter discussie stellen van een aanbeveling betekent niet dat de technologie faalt. Het is hoe mensen en AI goed samenwerken.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "title",
+      "source": "Models, training and predictions",
+      "translation": "Modellen, training en voorspellingen",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "summary",
+      "source": "How a model learns from examples and why every prediction has uncertainty.",
+      "translation": "Hoe een model leert van voorbeelden en waarom elke voorspelling onzekerheid kent.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_models",
+      "field": "body_md",
+      "source": "A **model** is a mathematical description of a relationship — for example, between weather and the amount of water a crop uses. Machine learning builds models by learning from examples.\n\n## Learning from examples\n\nImagine you want to predict how much water an almond orchard will use tomorrow. You collect many past days, each with:\n\n- the **inputs** (also called *features*): temperature, humidity, wind, solar radiation, tree age, canopy cover;\n- the **outcome** you want to predict: the water the orchard actually used that day, measured by sensors.\n\nDuring **training**, the algorithm adjusts the model again and again until its predictions match the recorded outcomes as closely as possible. This is called **supervised learning**, because every example comes with the correct answer.\n\n## Testing on data the model has never seen\n\nA model can memorize its training examples and still fail on new days. That is why data scientists keep some data aside for **validation** — data the model never saw during training. Performance on that held-out data is the honest measure of how well it works.\n\n> **Important:** Ask how a model was validated. \"It fit our historical data perfectly\" is a warning sign, not a strength.\n\n## Measuring accuracy\n\nFor numerical predictions, common measures include the **average error** (how far off predictions are, on average) and how much of the variation the model explains. For classifications — \"stressed\" or \"healthy\" — we ask how often the model is right, and how often it raises false alarms or misses real problems.\n\nThere is no single \"good\" accuracy. A yield forecast that is within 5% may be excellent for marketing decisions; a frost alarm that misses one event in ten may be unacceptable.\n\n## Every prediction has uncertainty\n\nWeather changes, sensors drift and fields vary. A trustworthy system communicates uncertainty: \"tomorrow's water use is 6.2 mm, likely between 5.6 and 6.8 mm.\" A single number with no range hides important information.\n\n## When models go stale\n\nConditions change. New varieties, a drought year or a changed irrigation system can make past data less representative. This is called **drift**. Good systems monitor their own accuracy over time and are retrained when performance drops.\n\n## Common types of agricultural models\n\n- **Regression** — predicts a number (water use, yield, price).\n- **Classification** — assigns a category (disease present or absent, crop type).\n- **Forecasting** — predicts how something will change over time (soil moisture over the next five days).\n- **Computer vision** — interprets images (counting fruit, detecting weeds).\n- **Optimization** — finds the best plan within constraints (an irrigation schedule that meets crop demand with limited water).",
+      "translation": "Een **model** is een wiskundige beschrijving van een relatie, bijvoorbeeld tussen het weer en de hoeveelheid water die een gewas gebruikt. Machine learning bouwt modellen door te leren van voorbeelden.\n\n## Leren van voorbeelden\n\nStel je voor dat je wilt voorspellen hoeveel water een amandelboomgaard morgen zal verbruiken. Je verzamelt veel afgelopen dagen, elk met:\n\n- de **invoer** (ook wel *kenmerken* genoemd): temperatuur, vochtigheid, wind, zonnestraling, boomleeftijd, bladerdak;\n- de **uitkomst** die u wilt voorspellen: het water dat de boomgaard die dag daadwerkelijk heeft gebruikt, gemeten door sensoren.\n\nTijdens **training** past het algoritme het model steeds opnieuw aan, totdat de voorspellingen zo goed mogelijk overeenkomen met de geregistreerde uitkomsten. Dit wordt **begeleid leren** genoemd, omdat bij elk voorbeeld het juiste antwoord wordt gegeven.\n\n## Testen op gegevens die het model nog nooit heeft gezien\n\nEen model kan zijn trainingsvoorbeelden uit het hoofd leren en op nieuwe dagen toch falen. Dat is de reden dat datawetenschappers bepaalde gegevens opzij houden voor **validatie**: gegevens die het model tijdens de training nooit heeft gezien. Prestaties op basis van die beschikbare gegevens zijn de eerlijke maatstaf voor hoe goed het werkt.\n\n> **Belangrijk:** Vraag hoe een model gevalideerd is. ‘Het paste perfect bij onze historische gegevens’ is een waarschuwingssignaal, geen kracht.\n\n## Meetnauwkeurigheid\n\nVoor numerieke voorspellingen omvatten gebruikelijke maatstaven de **gemiddelde fout** (hoe ver liggen de voorspellingen gemiddeld af) en hoeveel van de variatie het model verklaart. Voor classificaties – ‘gestresst’ of ‘gezond’ – vragen we ons af hoe vaak het model gelijk heeft, en hoe vaak het vals alarm geeft of echte problemen over het hoofd ziet.\n\nEr bestaat niet één ‘goede’ nauwkeurigheid. Een rendementsvoorspelling die binnen de 5% ligt, kan uitstekend zijn voor marketingbeslissingen; een vorstalarm dat één op de tien gebeurtenissen mist, kan onaanvaardbaar zijn.\n\n## Elke voorspelling kent onzekerheid\n\nWeersveranderingen, sensoren afwijken en velden variëren. Een betrouwbaar systeem communiceert onzekerheid: \"Het waterverbruik van morgen is 6,2 mm, waarschijnlijk tussen 5,6 en 6,8 mm.\" Een enkel nummer zonder bereik verbergt belangrijke informatie.\n\n## Als modellen oud worden\n\nVoorwaarden veranderen. Nieuwe rassen, een droogtejaar of een veranderd irrigatiesysteem kunnen de gegevens uit het verleden minder representatief maken. Dit heet **drift**. Goede systemen monitoren hun eigen nauwkeurigheid in de loop van de tijd en worden opnieuw getraind als de prestaties afnemen.\n\n## Veel voorkomende soorten landbouwmodellen\n\n- **Regressie** — voorspelt een getal (waterverbruik, opbrengst, prijs).\n- **Classificatie** — wijst een categorie toe (ziekte aanwezig of afwezig, type gewas).\n- **Prognoses** — voorspelt hoe iets in de loop van de tijd zal veranderen (bodemvocht gedurende de komende vijf dagen).\n- **Computervisie** — interpreteert beelden (fruit tellen, onkruid detecteren).\n- **Optimalisatie** — vindt het beste plan binnen de beperkingen (een irrigatieschema dat met beperkt water aan de vraag naar gewassen voldoet).",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "title",
+      "source": "Planning and planting",
+      "translation": "Plannen en planten",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "summary",
+      "source": "Using data and AI before the first seed goes in the ground.",
+      "translation": "Data en AI gebruiken voordat het eerste zaadje de grond in gaat.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_planning",
+      "field": "body_md",
+      "source": "Many of the most valuable decisions of the season are made before planting. AI can help by bringing more evidence to those decisions.\n\n## Field history and management zones\n\nFields are not uniform. Years of yield maps, soil surveys and satellite imagery often reveal consistent patterns: a low area that stays wet, a sandy ridge that dries out first. Algorithms can group these areas into **management zones** that respond differently to water, seed and fertilizer.\n\nWith zones, a grower can vary seeding rates, choose where to apply more or less nitrogen, or plan irrigation sets that match how each part of the field behaves.\n\n## Variety and planting date decisions\n\nModels trained on regional trials and weather records can estimate how varieties perform under different conditions and how planting date affects risk — for example, the chance of heat stress at flowering. These estimates are most useful when they reflect local trials, not only national averages.\n\n## Scenario planning\n\nAI tools can run \"what if\" scenarios quickly: What if the season is dry? What if water allocations are cut by 20%? What if input prices rise? Comparing scenarios helps you choose a plan that holds up across many possible futures, not only the expected one.\n\n> **Field check:** When a tool recommends a seeding rate or variety, ask what data it was built on. Regional trial data from your soils and climate is far more relevant than a national average.\n\n## Limits to keep in mind\n\nPre-season recommendations rest on long-range forecasts, which are uncertain. Treat them as a starting plan to be adjusted as the season unfolds, not a fixed prescription.",
+      "translation": "Veel van de meest waardevolle beslissingen van het seizoen worden vóór het planten genomen. AI kan helpen door meer bewijs voor deze beslissingen te leveren.\n\n## Veldgeschiedenis en beheerzones\n\nVelden zijn niet uniform. Jarenlange opbrengstkaarten, bodemonderzoeken en satellietbeelden brengen vaak consistente patronen aan het licht: een laag gebied dat nat blijft, een zandrug die eerst uitdroogt. Algoritmen kunnen deze gebieden groeperen in **beheerzones** die verschillend reageren op water, zaad en kunstmest.\n\nMet zones kan een teler de zaaihoeveelheid variëren, kiezen waar hij meer of minder stikstof wil toedienen, of irrigatiesets plannen die passen bij hoe elk deel van het veld zich gedraagt.\n\n## Beslissingen over variëteiten en plantdatums\n\nModellen die zijn getraind op basis van regionale proeven en weerregistraties kunnen inschatten hoe variëteiten presteren onder verschillende omstandigheden en hoe de plantdatum het risico beïnvloedt, bijvoorbeeld de kans op hittestress tijdens de bloei. Deze schattingen zijn het nuttigst als ze lokale onderzoeken weerspiegelen, en niet alleen nationale gemiddelden.\n\n## Scenarioplanning\n\nAI-tools kunnen snel 'wat als'-scenario's uitvoeren: wat als het seizoen droog is? Wat als de watertoewijzingen met 20% worden verlaagd? Wat als de inputprijzen stijgen? Door scenario's te vergelijken, kunt u een plan kiezen dat stand houdt in veel mogelijke toekomsten, en niet alleen in de verwachte toekomst.\n\n> **Veldcontrole:** Wanneer een tool een zaaihoeveelheid of variëteit aanbeveelt, vraag dan op basis van welke gegevens deze is gebouwd. Regionale proefgegevens van uw bodem en klimaat zijn veel relevanter dan een landelijk gemiddelde.\n\n## Grenzen om in gedachten te houden\n\nDe aanbevelingen voor het seizoen zijn gebaseerd op langetermijnvoorspellingen, die onzeker zijn. Beschouw ze als een startplan dat kan worden aangepast naarmate het seizoen vordert, en niet als een vast recept.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "title",
+      "source": "Module 1 quiz",
+      "translation": "Module 1-quiz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "summary",
+      "source": "Check your understanding of AI fundamentals.",
+      "translation": "Controleer uw begrip van de basisbeginselen van AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz1",
+      "field": "body_md",
+      "source": "Answer five quick questions about the ideas in Module 1. Quizzes are for practice: you can retake them as many times as you like, and you'll see explanations after each attempt.",
+      "translation": "Beantwoord vijf korte vragen over de ideeën uit Module 1. Quizzen zijn bedoeld om te oefenen: je kunt ze zo vaak opnieuw maken als je wilt, en na elke poging krijg je uitleg te zien.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "title",
+      "source": "Module 2 quiz",
+      "translation": "Module 2-quiz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "summary",
+      "source": "Check your understanding of data, models and recommendations.",
+      "translation": "Controleer uw begrip van gegevens, modellen en aanbevelingen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz2",
+      "field": "body_md",
+      "source": "Five questions on data quality, model training and decision support. Retake as often as you like.",
+      "translation": "Vijf vragen over datakwaliteit, modeltraining en beslissingsondersteuning. Herhaal dit zo vaak als je wilt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "title",
+      "source": "Module 3 quiz",
+      "translation": "Module 3-quiz",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "summary",
+      "source": "Check your understanding of AI across the season.",
+      "translation": "Controleer uw begrip van AI gedurende het seizoen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_quiz3",
+      "field": "body_md",
+      "source": "Five questions on planning, irrigation, crop monitoring and harvest. Retake as often as you like.",
+      "translation": "Vijf vragen over planning, irrigatie, gewasmonitoring en oogst. Herhaal dit zo vaak als je wilt.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "title",
+      "source": "From prediction to recommendation",
+      "translation": "Van voorspelling tot aanbeveling",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "summary",
+      "source": "How decision-support systems turn predictions into actions — and keep people in the loop.",
+      "translation": "Hoe beslissingsondersteunende systemen voorspellingen omzetten in acties – en mensen op de hoogte houden.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_recommendations",
+      "field": "body_md",
+      "source": "A prediction tells you what is likely to happen. A **recommendation** tells you what to do about it. Turning one into the other requires goals, constraints and context.\n\n## An irrigation example\n\nSuppose a model predicts that a field will use 7 mm of water tomorrow and that soil moisture is already near the lower limit the crop tolerates. A recommendation system combines that prediction with:\n\n- **goals** — protect yield and quality, avoid waste;\n- **constraints** — the pump capacity, the water allocation remaining, electricity tariffs, the irrigation set schedule;\n- **context** — forecast rain, crop stage, a planned harvest that needs dry ground.\n\nThe result might be: *\"Irrigate block 4 tonight for 6 hours (about 18 mm). Skip block 7: 12 mm of rain is forecast with high confidence.\"*\n\n## Good recommendations explain themselves\n\nA recommendation you cannot understand is a recommendation you cannot judge. Look for systems that show:\n\n- **the reason** — which data and which prediction drove the suggestion;\n- **the confidence** — how certain the system is;\n- **the alternatives** — what happens if you wait, or apply less;\n- **the evidence trail** — so you can check afterward whether the action happened and worked.\n\n## Keeping people in the loop\n\nIn agriculture, most AI is **decision support**: the system proposes, a person decides. Even where automation executes actions — for example, a controller opening a valve — responsible designs include approval steps, limits, and the ability to override.\n\n> **Key idea:** The person accountable for the outcome should always be able to see why a recommendation was made, change it, and stop it.\n\n## Closing the loop: verification\n\nThe most valuable systems do not stop at the recommendation. They check what was actually done and what happened next: Did the irrigation run? How much water was applied? Did soil moisture recover as expected? This **verification** step builds trust, catches equipment problems, and produces the evidence that buyers, auditors and water authorities increasingly ask for.\n\nRemember the loop from Module 1: **sense → predict → recommend → verify**. Each turn of the loop improves both the decisions and the data for the next season.",
+      "translation": "Een voorspelling vertelt u wat er waarschijnlijk zal gebeuren. Een **aanbeveling** vertelt u wat u eraan kunt doen. Om het een in het ander om te zetten zijn doelen, beperkingen en context nodig.\n\n## Een irrigatievoorbeeld\n\nStel dat een model voorspelt dat een veld morgen 7 mm water zal verbruiken en dat de bodemvochtigheid al dichtbij de ondergrens ligt die het gewas verdraagt. Een aanbevelingssysteem combineert die voorspelling met:\n\n- **doelen** — opbrengst en kwaliteit beschermen, verspilling voorkomen;\n- **beperkingen** — de pompcapaciteit, de resterende watertoewijzing, elektriciteitstarieven, het ingestelde irrigatieschema;\n- **context** — voorspelde regen, gewasfase, een geplande oogst waarvoor droge grond nodig is.\n\nHet resultaat zou kunnen zijn: *\"Irrigeer blok 4 vanavond gedurende 6 uur (ongeveer 18 mm). Sla blok 7 over: er wordt met grote zekerheid 12 mm regen voorspeld.\"*\n\n## Goede aanbevelingen verklaren zichzelf\n\nEen aanbeveling die u niet kunt begrijpen, is een aanbeveling die u niet kunt beoordelen. Zoek naar systemen die het volgende laten zien:\n\n- **de reden** — welke gegevens en welke voorspelling tot de suggestie hebben geleid;\n- **het vertrouwen** — hoe zeker het systeem is;\n- **de alternatieven** — wat er gebeurt als u wacht of minder aanvraagt;\n- **het bewijsspoor** — zodat u achteraf kunt controleren of de actie heeft plaatsgevonden en gewerkt.\n\n## Mensen op de hoogte houden\n\nIn de landbouw is de meeste AI **beslissingsondersteuning**: het systeem doet voorstellen, een persoon beslist. Zelfs waar automatisering acties uitvoert – bijvoorbeeld een controller die een klep opent – ​​omvatten verantwoorde ontwerpen goedkeuringsstappen, limieten en de mogelijkheid om deze te negeren.\n\n> **Belangrijkste idee:** De persoon die verantwoordelijk is voor de uitkomst moet altijd kunnen zien waarom een ​​aanbeveling is gedaan, deze kunnen wijzigen en stopzetten.\n\n## De cirkel sluiten: verificatie\n\nDe meest waardevolle systemen stoppen niet bij het advies. Ze controleren wat er daadwerkelijk is gedaan en wat er vervolgens is gebeurd: Heeft de irrigatie gelopen? Hoeveel water is er toegepast? Herstelde het bodemvocht zich zoals verwacht? Deze stap **verificatie** schept vertrouwen, spoort apparatuurproblemen op en levert het bewijsmateriaal op waar kopers, auditors en waterautoriteiten steeds vaker om vragen.\n\nDenk aan de lus uit Module 1: **voelen → voorspellen → aanbevelen → verifiëren**. Elke draai aan de lus verbetert zowel de beslissingen als de gegevens voor het volgende seizoen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "title",
+      "source": "Course summary and next steps",
+      "translation": "Samenvatting van de cursus en volgende stappen",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "summary",
+      "source": "Key takeaways and how to prepare for the final exam.",
+      "translation": "Belangrijkste inzichten en hoe u zich kunt voorbereiden op het eindexamen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_summary",
+      "field": "body_md",
+      "source": "Congratulations on reaching the end of the course. Let's bring the main ideas together.\n\n## Key takeaways\n\n- **AI is a toolbox**, not a single technology. Rules, machine learning, deep learning and generative AI suit different problems.\n- **Data is the foundation.** Accuracy, completeness, timeliness, consistency and representativeness determine what any model can do.\n- **Models learn from examples** and must be validated on data they have never seen. Every prediction has uncertainty, and models can drift.\n- **Recommendations combine predictions with goals, constraints and context.** Good ones explain themselves.\n- **The loop matters:** sense → predict → recommend → verify.\n- **Across the season**, AI supports planning, irrigation, crop monitoring, harvest timing, marketing and traceability.\n- **Use calibrated trust.** Challenge recommendations that conflict with the field, rest on poor data, or carry high stakes.\n- **Your data deserves care.** Know who owns it, how it is used, and how to take it back.\n\n## Preparing for the final exam\n\nThe final exam covers all four modules. It draws 20 questions from a larger bank and gives you 30 minutes. You need **80%** to pass.\n\n> **Tip:** Review your notes and the module quizzes. If you missed a quiz question, open the lesson it points to before the exam.\n\n## Where to go next\n\n- **Agricultural Data Fundamentals** goes deeper into data sources and quality.\n- **Remote Sensing and Satellite Intelligence** expands on imagery and vegetation indices.\n- **AI-Powered Irrigation** applies these ideas to water management in detail.\n\nThank you for learning with AGRO-AI Academy. When you are ready, open the final exam from the course menu.",
+      "translation": "Gefeliciteerd met het bereiken van het einde van de cursus. Laten we de belangrijkste ideeën samenbrengen.\n\n## Belangrijkste afhaalrestaurants\n\n- **AI is een gereedschapskist**, geen enkele technologie. Regels, machine learning, deep learning en generatieve AI passen bij verschillende problemen.\n- **Data vormen de basis.** Nauwkeurigheid, volledigheid, tijdigheid, consistentie en representativiteit bepalen wat elk model kan doen.\n- **Modellen leren van voorbeelden** en moeten worden gevalideerd op basis van gegevens die ze nog nooit hebben gezien. Elke voorspelling kent onzekerheid en modellen kunnen afwijken.\n- **Aanbevelingen combineren voorspellingen met doelen, beperkingen en context.** Goede aanbevelingen verklaren zichzelf.\n- **De lus is belangrijk:** besef → voorspellen → aanbevelen → verifiëren.\n- **Gedurende het seizoen** ondersteunt AI planning, irrigatie, gewasmonitoring, oogsttiming, marketing en traceerbaarheid.\n- **Gebruik gekalibreerd vertrouwen.** Daag aanbevelingen uit die in strijd zijn met de praktijk, gebaseerd zijn op slechte gegevens of die hoge belangen met zich meebrengen.\n- **Uw gegevens verdienen zorg.** Weet wie de eigenaar is, hoe ze worden gebruikt en hoe u ze terug kunt nemen.\n\n## Voorbereiden op het eindexamen\n\nHet eindexamen omvat alle vier de modules. Het stelt 20 vragen van een grotere bank en geeft u 30 minuten. Je hebt **80%** nodig om te slagen.\n\n> **Tip:** Controleer uw aantekeningen en de modulequizzen. Als je een quizvraag hebt gemist, open dan vóór het examen de les waarnaar deze verwijst.\n\n## Waar nu heen\n\n- **Agricultural Data Fundamentals** gaat dieper in op gegevensbronnen en kwaliteit.\n- **Remote Sensing en Satellite Intelligence** breidt zich uit op beeldmateriaal en vegetatie-indexen.\n- **AI-Powered Irrigation** past deze ideeën tot in detail toe op waterbeheer.\n\nBedankt voor het leren met de AGRO-AI Academie. Wanneer je er klaar voor bent, open je het eindexamen vanuit het cursusmenu.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "title",
+      "source": "Welcome to the course",
+      "translation": "Welkom bij de cursus",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "summary",
+      "source": "What you will learn, how the course works, and how to earn your certificate.",
+      "translation": "Wat u leert, hoe de cursus werkt en hoe u uw certificaat kunt behalen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_welcome",
+      "field": "body_md",
+      "source": "Welcome to **Introduction to Artificial Intelligence in Agriculture**, the first course of the AGRO-AI Academy *Foundations of Agricultural AI* program.\n\nYou do not need any technical background to succeed here. If you have ever looked at a weather forecast, read a soil test or compared yields between two fields, you already use the habits of mind that this course builds on: collecting evidence, spotting patterns and deciding what to do next.\n\n## What you will learn\n\nBy the end of the course you will be able to:\n\n- explain what AI is — and is not — in plain language;\n- describe where agricultural data comes from and what makes it reliable;\n- follow how data becomes a prediction, and a prediction becomes a recommendation;\n- recognize useful AI applications across the season;\n- judge AI output critically and use it responsibly.\n\n## How the course works\n\nThe course has **four modules** of short lessons. Modules one to three each end with a practice quiz that helps you check your understanding; module four ends with a practical exercise and a course summary that prepare you for the final exam. Quizzes do not count toward your certificate, and you can retake them as often as you like.\n\nYour progress is saved automatically. You can stop in the middle of a lesson on your phone and continue later on a computer.\n\n> **Tip:** Use the **Notes** tab under each lesson to write down ideas that apply to your own operation. Notes are private — only you can see them.\n\n## Earning your certificate\n\nWhen you have completed every required lesson, the **final exam** unlocks. It draws 20 questions from a larger bank, is timed at 30 minutes, and requires a score of **80%** to pass. If you do not pass on the first try, you can review the recommended lessons and try again after one hour.\n\nPass the exam and AGRO-AI Academy issues your certificate automatically — free, with a unique credential ID and a public verification page you can share on LinkedIn.\n\nLet's begin.",
+      "translation": "Welkom bij **Inleiding tot kunstmatige intelligentie in de landbouw**, de eerste cursus van het AGRO-AI Academy *Foundations of Agricultural AI*-programma.\n\nJe hebt geen technische achtergrond nodig om hier te slagen. Als je ooit naar een weersvoorspelling hebt gekeken, een bodemtest hebt gelezen of de opbrengsten van twee velden hebt vergeleken, maak je al gebruik van de gewoonten waar deze cursus op voortbouwt: het verzamelen van bewijsmateriaal, het ontdekken van patronen en het beslissen wat je vervolgens gaat doen.\n\n## Wat je gaat leren\n\nAan het einde van de cursus kun je:\n\n- in gewone taal uitleggen wat AI is – en niet is;\n- beschrijven waar landbouwgegevens vandaan komen en wat deze betrouwbaar maakt;\n- volg hoe data een voorspelling worden, en een voorspelling een aanbeveling;\n- herken nuttige AI-toepassingen gedurende het seizoen;\n- AI-output kritisch beoordelen en op verantwoorde wijze gebruiken.\n\n## Hoe de cursus werkt\n\nDe cursus bestaat uit **vier modules** van korte lessen. Modules één tot en met drie eindigen elk met een oefenquiz waarmee u uw begrip kunt controleren; module vier eindigt met een praktische oefening en een cursussamenvatting die je voorbereiden op het eindexamen. Quizzen tellen niet mee voor uw certificaat en u kunt ze zo vaak opnieuw afleggen als u wilt.\n\nJe voortgang wordt automatisch opgeslagen. U kunt halverwege een les op uw telefoon stoppen en later op een computer doorgaan.\n\n> **Tip:** Gebruik het tabblad **Opmerkingen** onder elke les om ideeën op te schrijven die op uw eigen activiteit van toepassing zijn. Notities zijn privé; alleen jij kunt ze zien.\n\n## Uw certificaat verdienen\n\nWanneer je elke vereiste les hebt voltooid, wordt het **eindexamen** ontgrendeld. Het stelt 20 vragen van een grotere bank, duurt 30 minuten en vereist een score van **80%** om te slagen. Als je de eerste poging niet haalt, kun je de aanbevolen lessen bekijken en het na een uur opnieuw proberen.\n\nSlaag voor het examen en AGRO-AI Academy verstrekt uw certificaat automatisch – gratis, met een unieke identificatie-ID en een openbare verificatiepagina die u op LinkedIn kunt delen.\n\nLaten we beginnen.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "title",
+      "source": "From rules to learning: what AI is (and isn't)",
+      "translation": "Van regels tot leren: wat AI is (en niet is)",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "summary",
+      "source": "Plain-language definitions of AI, machine learning, deep learning and generative AI.",
+      "translation": "Duidelijke definities van AI, machine learning, deep learning en generatieve AI.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_what_is_ai",
+      "field": "body_md",
+      "source": "\"Artificial intelligence\" is used to describe everything from a simple sensor alarm to a chatbot that writes essays. Before we look at agriculture, we need clear words.\n\n## Artificial intelligence\n\n**Artificial intelligence (AI)** is the broad field of building computer systems that perform tasks we normally associate with human intelligence: recognizing patterns, making predictions, understanding language and choosing actions.\n\nThat definition is wide on purpose. It includes very different technologies, so it helps to separate two ways of building them.\n\n## Rules versus learning\n\n**Rule-based systems** follow instructions written by people. An irrigation controller that says *\"if soil moisture falls below 25%, start the pump\"* is following a rule. Rules are transparent and predictable, but someone has to know the right rule in advance, and rules do not adapt when conditions change.\n\n**Machine learning (ML)** systems learn patterns from examples instead. Show a model thousands of past seasons — weather, soil, irrigation and the yields that followed — and it can learn relationships that no one wrote down explicitly. Most of what people call \"AI\" today is machine learning.\n\n| | Rule-based system | Machine learning model |\n|---|---|---|\n| Where the logic comes from | People write it | Learned from data |\n| Strength | Transparent, predictable | Finds complex patterns, adapts with new data |\n| Weakness | Rigid; misses what designers didn't foresee | Only as good as its data; can be hard to explain |\n| Farm example | Pump starts below a moisture threshold | Model predicts tomorrow's crop water use |\n\n## Deep learning\n\n**Deep learning** is a family of machine learning methods built from many-layered \"neural networks\". It is especially good at messy, high-dimensional data such as images and sound. When a phone app recognizes a leaf disease from a photo, deep learning is usually behind it.\n\n## Generative AI\n\n**Generative AI** creates new content — text, images, audio or code — based on patterns learned from very large datasets. Large language models (LLMs), the technology behind conversational assistants, are generative AI. They can explain concepts, summarize reports and answer questions in many languages.\n\nGenerative AI is powerful, but it predicts *plausible* words, not verified facts. It can state something false with complete confidence. In agriculture, a generative assistant is useful for explaining and drafting, but important numbers and decisions must be checked against trusted data.\n\n> **Key idea:** AI is not one machine. It is a toolbox. Rules, statistical models, deep learning and generative models each fit different problems.\n\n## What AI is not\n\n- **AI is not magic.** Every output comes from data and design choices made by people.\n- **AI does not \"understand\" your farm** the way you do. It knows only what its data captured.\n- **AI is not automatically right.** Predictions carry uncertainty, and the best systems tell you how much.\n- **AI does not replace judgment.** It is a decision-support tool. Responsibility for the decision stays with people.\n\n## Check your understanding\n\nThink of a tool you already use — a weather app, a yield monitor, a spreadsheet with formulas. Is its logic written as rules, or learned from data? Write your answer in your notes; we will return to this idea in Module 2.",
+      "translation": "‘Kunstmatige intelligentie’ wordt gebruikt om alles te beschrijven, van een eenvoudig sensoralarm tot een chatbot die essays schrijft. Voordat we naar de landbouw kijken, hebben we duidelijke woorden nodig.\n\n## Kunstmatige intelligentie\n\n**Kunstmatige intelligentie (AI)** is het brede terrein van het bouwen van computersystemen die taken uitvoeren die we normaal gesproken associëren met menselijke intelligentie: patronen herkennen, voorspellingen doen, taal begrijpen en acties kiezen.\n\nDie definitie is met opzet breed. Het omvat heel verschillende technologieën, dus het helpt om twee manieren om ze te bouwen te scheiden.\n\n## Regels versus leren\n\n**Op regels gebaseerde systemen** volgen instructies die door mensen zijn geschreven. Een irrigatiecontroller die zegt: \"als het bodemvocht onder de 25% daalt, start dan de pomp\"* volgt een regel. Regels zijn transparant en voorspelbaar, maar iemand moet vooraf de juiste regel kennen, en regels passen zich niet aan als de omstandigheden veranderen.\n\n**Machine learning (ML)**-systemen leren in plaats daarvan patronen uit voorbeelden. Laat een model duizenden voorgaande seizoenen zien – weer, bodem, irrigatie en de opbrengsten die daarop volgden – en het kan relaties leren die niemand expliciet heeft opgeschreven. Het meeste van wat mensen tegenwoordig ‘AI’ noemen, is machinaal leren.\n\n| | Op regels gebaseerd systeem | Machine learning-model |\n|---|---|---|\n| Waar de logica vandaan komt | Mensen schrijven het | Geleerd uit data |\n| Sterkte | Transparant, voorspelbaar | Vindt complexe patronen, past zich aan met nieuwe gegevens |\n| Zwakte | Onbuigzaam; mist wat ontwerpers niet hadden voorzien | Slechts zo goed als de gegevens; kan moeilijk uit te leggen zijn |\n| Voorbeeld boerderij | Pomp start onder een vochtdrempel | Model voorspelt het watergebruik van morgen |\n\n## Diep leren\n\n**Deep learning** is een familie van machine learning-methoden die zijn opgebouwd uit veelgelaagde ‘neurale netwerken’. Het is vooral goed in rommelige, hoogdimensionale gegevens zoals afbeeldingen en geluid. Wanneer een telefoonapp een bladziekte op een foto herkent, zit er meestal deep learning achter.\n\n## Generatieve AI\n\n**Generatieve AI** creëert nieuwe inhoud (tekst, afbeeldingen, audio of code) op basis van patronen die zijn geleerd uit zeer grote datasets. Grote taalmodellen (LLM's), de technologie achter gespreksassistenten, zijn generatieve AI. Ze kunnen concepten uitleggen, rapporten samenvatten en vragen in vele talen beantwoorden.\n\nGeneratieve AI is krachtig, maar voorspelt *plausibele* woorden, geen geverifieerde feiten. Het kan met volledig vertrouwen iets onwaars beweren. In de landbouw is een generatieve assistent handig bij het uitleggen en opstellen, maar belangrijke cijfers en beslissingen moeten worden getoetst aan betrouwbare gegevens.\n\n> **Belangrijkste idee:** AI is niet één machine. Het is een gereedschapskist. Regels, statistische modellen, deep learning en generatieve modellen passen elk bij verschillende problemen.\n\n## Wat AI niet is\n\n- **AI is geen magie.** Elke output is afkomstig van gegevens en ontwerpkeuzes die door mensen zijn gemaakt.\n- **AI begrijpt uw ​​boerderij** niet zoals u dat doet. Het weet alleen welke gegevens het heeft vastgelegd.\n- **AI heeft niet automatisch gelijk.** Voorspellingen brengen onzekerheid met zich mee, en de beste systemen vertellen u hoeveel.\n- **AI vervangt het oordeel niet.** Het is een beslissingsondersteunend instrument. De verantwoordelijkheid voor de beslissing blijft bij mensen.\n\n## Controleer je begrip\n\nDenk aan een hulpmiddel dat u al gebruikt: een weer-app, een opbrengstmonitor, een spreadsheet met formules. Is de logica ervan geschreven als regels, of geleerd uit data? Schrijf je antwoord in je aantekeningen; we komen op dit idee terug in Module 2.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "title",
+      "source": "Why agriculture is turning to AI now",
+      "translation": "Waarom de landbouw nu overgaat op AI",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "summary",
+      "source": "The pressures and opportunities driving AI adoption on farms.",
+      "translation": "De druk en kansen die de adoptie van AI op boerderijen stimuleren.",
+      "status": "machine"
+    },
+    {
+      "type": "lesson",
+      "id": "les_a1_why_now",
+      "field": "body_md",
+      "source": "Farmers have always used information to make decisions. What has changed is the amount of information available, the speed at which it must be used, and the pressure on every resource.\n\n## Pressures on the modern farm\n\n**Water.** Agriculture is the largest user of fresh water worldwide; according to the UN Food and Agriculture Organization (FAO AQUASTAT), agriculture as a whole, mostly irrigation, accounts for about 70% of global freshwater withdrawals. In many regions, water allocations are shrinking while demand grows. Every irrigation decision matters.\n\n**Climate variability.** Seasons are less predictable. Heat waves, irregular rainfall and new pest pressures make last year's playbook less reliable.\n\n**Costs and margins.** Fertilizer, energy, labor and equipment costs can swing sharply. Applying the right amount in the right place protects both the margin and the environment.\n\n**Labor.** Many operations struggle to find and retain skilled people. Knowledge that lives in one experienced manager's head is at risk when that person is unavailable.\n\n**Expectations from buyers and regulators.** Supply chains increasingly ask for evidence: how much water was used, which inputs were applied, what practices were followed.\n\n## Why AI, and why now\n\nThree things came together:\n\n1. **Data became abundant.** Satellites now revisit most farmland every few days. Soil moisture probes, weather stations, irrigation controllers and machinery all produce continuous data.\n2. **Computing became cheap and connected.** Models that once needed a research lab can run in the cloud and deliver results to a phone.\n3. **Methods matured.** Machine learning, computer vision and language models have improved rapidly and are now practical tools.\n\n> **Key idea:** AI does not create new resources. It helps you make better use of the water, inputs, time and knowledge you already have.\n\n## What AI can realistically do\n\n- **Sense** — turn raw imagery and sensor data into information, such as which zones of a field are stressed.\n- **Predict** — estimate what will happen, such as tomorrow's crop water demand or end-of-season yield.\n- **Recommend** — suggest an action, such as an irrigation schedule, and explain why.\n- **Verify** — check whether an action happened and whether it worked.\n\nNotice the pattern: sense, predict, recommend, verify. We will use this loop throughout the course.\n\n## What it cannot do\n\nAI cannot see what its data does not capture: a broken valve, a neighbor's spraying, a cultural practice unique to your farm. It cannot carry responsibility for a decision. And it cannot replace the trust between a grower and an advisor. Good agricultural AI is designed to work *with* people who know the land.",
+      "translation": "Boeren hebben altijd informatie gebruikt om beslissingen te nemen. Wat is veranderd is de hoeveelheid beschikbare informatie, de snelheid waarmee deze moet worden gebruikt en de druk op alle hulpbronnen.\n\n## Druk op de moderne boerderij\n\n**Water.** De landbouw is wereldwijd de grootste gebruiker van zoet water; Volgens de Voedsel- en Landbouworganisatie van de VN (FAO AQUASTAT) is de landbouw als geheel, voornamelijk irrigatie, verantwoordelijk voor ongeveer 70% van de mondiale zoetwateronttrekking. In veel regio's krimpt de watertoewijzing terwijl de vraag groeit. Elke irrigatiebeslissing is van belang.\n\n**Klimaatvariabiliteit.** Seizoenen zijn minder voorspelbaar. Hittegolven, onregelmatige regenval en nieuwe plaagdruk maken het draaiboek van vorig jaar minder betrouwbaar.\n\n**Kosten en marges.** De kosten voor kunstmest, energie, arbeid en apparatuur kunnen sterk schommelen. Het aanbrengen van de juiste hoeveelheid op de juiste plaats beschermt zowel de marge als het milieu.\n\n**Arbeid.** Veel bedrijven hebben moeite om geschoolde mensen te vinden en te behouden. Kennis die in het hoofd van de ene ervaren manager leeft, komt in gevaar als die persoon niet beschikbaar is.\n\n**Verwachtingen van kopers en toezichthouders.** Toeleveringsketens vragen steeds vaker om bewijs: hoeveel water werd gebruikt, welke inputs werden toegepast, welke praktijken werden gevolgd.\n\n## Waarom AI, en waarom nu\n\nDrie dingen kwamen samen:\n\n1. **Gegevens kwamen in overvloed.** Satellieten bezoeken nu de meeste landbouwgronden om de paar dagen opnieuw. Bodemvochtsondes, weerstations, irrigatiecontrollers en machines produceren allemaal continue gegevens.\n2. **Computing werd goedkoop en verbonden.** Modellen die ooit een onderzoekslaboratorium nodig hadden, kunnen in de cloud draaien en resultaten op een telefoon weergeven.\n3. **Methoden zijn volwassen geworden.** Machine learning, computervisie en taalmodellen zijn snel verbeterd en zijn nu praktische hulpmiddelen.\n\n> **Belangrijkste idee:** AI creëert geen nieuwe hulpbronnen. Het helpt u beter gebruik te maken van het water, de input, de tijd en de kennis die u al heeft.\n\n## Wat AI realistisch gezien kan doen\n\n- **Sense** — zet onbewerkte beelden en sensorgegevens om in informatie, zoals welke zones van een veld onder druk staan.\n- **Voorspellen** — schat wat er zal gebeuren, zoals de vraag naar water van morgen of de opbrengst aan het einde van het seizoen.\n- **Aanbevelen** — stel een actie voor, zoals een irrigatieschema, en leg uit waarom.\n- **Verifiëren** — controleer of een actie heeft plaatsgevonden en of deze heeft gewerkt.\n\nLet op het patroon: waarnemen, voorspellen, aanbevelen, verifiëren. Deze lus zullen we gedurende de hele cursus gebruiken.\n\n## Wat het niet kan doen\n\nAI kan niet zien wat zijn gegevens niet vastleggen: een kapotte klep, het sproeien van een buurman, een culturele praktijk die uniek is voor uw boerderij. Zij kan geen verantwoordelijkheid dragen voor een besluit. En het kan het vertrouwen tussen teler en adviseur niet vervangen. Goede landbouw-AI is ontworpen om *met* mensen te werken die het land kennen.",
+      "status": "machine"
+    }
+  ],
+  "untranslated": []
+}
