@@ -314,13 +314,14 @@ test("a learner who exceeds the playback-token limit is refused and recorded in 
   assert.match(rows[0].detail, /les_a1_data/);
 });
 
-test("a video presented by an AI avatar is disclosed under the player, even while the presenter's profile is hidden", async () => {
+test("AI presenter provenance remains visible without a repetitive named disclosure under each video", async () => {
   const { env, learner } = await setup();
   const presenter = await env.DB.prepare("SELECT i.status, i.is_ai_avatar FROM video_assets v JOIN instructors i ON i.id = v.instructor_id WHERE v.id = 'vid_a1_data'").first();
   assert.equal(presenter.is_ai_avatar, 1);
   const r = await learner.get(LESSON_URL);
-  assert.match(r.text, /data-ai-disclosure>.*Joshua is an AI-generated presenter \(Synthesia\)\. He is not a real person\./s);
-  // A human presenter carries no such label.
+  assert.match(r.text, /data-ai-disclosure>AI presenter<\/span>/);
+  assert.doesNotMatch(r.text, /Joshua is an AI-generated presenter|He is not a real person|<p class="ai-disclosure/);
+  // A human presenter carries no disclosure badge.
   await env.DB.prepare("UPDATE instructors SET is_ai_avatar = 0 WHERE id = 'ins_joshua'").run();
   assert.doesNotMatch((await learner.get(LESSON_URL)).text, /data-ai-disclosure/);
 });
