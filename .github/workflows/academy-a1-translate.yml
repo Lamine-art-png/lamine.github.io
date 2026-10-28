@@ -35,6 +35,10 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           python -m py_compile scripts/author-academy-a1-lesson-translations.py
+          # The repository already contains 59 committed draft packs. Each
+          # shard must upload ONLY its own regenerated locales; otherwise
+          # merge-multiple can overwrite fresh output with stale copies.
+          rm -f apps/academy/localization-drafts/a1/*.json
           python - <<'PY' >/tmp/locales.txt
           import json,os
           from pathlib import Path
