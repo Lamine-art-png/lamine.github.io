@@ -29,7 +29,7 @@ const statements=[
 let n=0,omitted=0;
 for(const lang of codes){
  const pack=JSON.parse(readFileSync(resolve(packsDir,lang+".json"),"utf8"));
- check(pack.format==="agroai-academy-translations/v1"&&pack.status==="machine"&&pack.target_locale===lang,lang+": invalid source format");
+ check(pack.format==="agroai-academy-translations/v1"&&pack.status==="machine_draft_requires_review"&&pack.target_locale===lang,lang+": invalid source format");
  check(pack.total_fields===64&&pack.items.length===64,lang+": incomplete pack");
  check(pack.items.filter(it=>it.status==="source_fallback").length===pack.untranslated.length,lang+": fallback provenance mismatch");
  const unique=new Set();
