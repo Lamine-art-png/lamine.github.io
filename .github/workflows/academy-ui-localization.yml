@@ -15,7 +15,7 @@ permissions:
   contents: write
 concurrency:
   group: academy-author-ui-locales-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   author:
     runs-on: ubuntu-latest
