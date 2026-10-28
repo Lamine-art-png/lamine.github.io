@@ -19,8 +19,15 @@ test("critical learner journey with persistent backend data", async () => {
   const anon = new Client(env);
   let r = await anon.get(`/courses/${COURSE}`);
   assert.equal(r.status, 200);
-  assert.match(r.text, /Opens Oct 29, 2026/);
+  assert.match(r.text, /Coming soon/);
+  assert.doesNotMatch(r.text, /Opens Oct 29, 2026/);
   assert.doesNotMatch(r.text, /action="\/courses\/[^"]+\/enroll"/);
+  const homePage = await anon.get("/");
+  assert.match(homePage.text, /Our first course is undergoing final review/);
+  assert.doesNotMatch(homePage.text, /October 29, 2026/);
+  const faqPage = await anon.get("/faq");
+  assert.match(faqPage.text, /after the required reviews are complete/);
+  assert.doesNotMatch(faqPage.text, /October 29, 2026/);
 
   // Publication is blocked until mandatory reviews and instructor videos are approved.
   r = await admin.get("/admin/courses/crs_a1");
