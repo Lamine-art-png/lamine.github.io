@@ -163,7 +163,8 @@ export async function getSyllabus(env, courseId, locale, { includeDrafts = false
   const lessons = (
     await env.DB.prepare(
       `SELECT l.id, l.course_id, l.module_id, l.slug, l.title, l.type, l.summary, l.est_minutes, l.video_id, l.assessment_id,
-              l.is_required, l.is_preview, l.sort_order, l.status, v.status AS video_status
+              l.is_required, l.is_preview, l.sort_order, l.status, v.status AS video_status,
+              v.duration_seconds AS video_duration_seconds
          FROM lessons l LEFT JOIN video_assets v ON v.id = l.video_id
         WHERE l.course_id = ? ${includeDrafts ? "AND l.slug NOT LIKE '\\_\\_rev\\_%' ESCAPE '\\'" : "AND l.status = 'ready'"}
         ORDER BY l.sort_order, l.created_at`,
