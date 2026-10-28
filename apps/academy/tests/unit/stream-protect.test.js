@@ -208,3 +208,76 @@ test("production refuses to write captions without the reviewed caption set", as
   fakeAccount({ uploads: a1Uploads() });
   await assert.rejects(() => protect({ out: outDir(), captionMode: "writer" }), /needs --captions/);
 });
+
+
+test("transient Cloudflare 500/10500 on video 6 download inventory is retried and still fully verified", async () => {
+  const { videos } = fakeAccount({ uploads: a1Uploads() });
+  const real = globalThis.fetch;
+  const urlPart = `/stream/${uidFor(6)}/downloads`;
+  let reads = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes(urlPart) && (init.method || "GET") === "GET") {
+      reads++;
+      if (reads === 1) return new Response(JSON.stringify({ success: false, errors: [{ code: 10500 }] }), { status: 500 });
+    }
+    return real(url, init);
+  };
+  const { code, out } = await quiet(() => protect({ out: outDir(), captionsFile: captionsFile([]), captionMode: "writer" }));
+  assert.equal(code, 0, out);
+  assert.equal(reads, 3, "the failed GET was retried; both download inventory reads completed");
+  assert.match(out, /All 14 uploads verified private/);
+  assert.equal(Object.keys(videos.get(uidFor(6)).downloads).length, 0, "video 6 downloads remain disabled");
+});
+
+test("persistent Cloudflare 500/10500 still fails the production protection gate", async () => {
+  const { videos } = fakeAccount({ uploads: a1Uploads() });
+  const real = globalThis.fetch;
+  let reads = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes(`/stream/${uidFor(6)}/downloads`) && (init.method || "GET") === "GET") {
+      reads++;
+      return new Response(JSON.stringify({ success: false, errors: [{ code: 10500 }] }), { status: 500 });
+    }
+    return real(url, init);
+  };
+  const { code, out } = await quiet(() => protect({ out: outDir(), captionsFile: captionsFile([]), captionMode: "writer" }));
+  assert.equal(code, 1);
+  assert.equal(reads, 4, "GET retries stop after four attempts");
+  assert.match(out, /HTTP 500 10500/);
+  assert.doesNotMatch(out, /All 14 uploads verified private/);
+  assert.equal(videos.get(uidFor(6)).requireSignedURLs, true, "the signed URL setting was not weakened");
+});
+
+test("Cloudflare non-transient 403 is not retried or treated as protected", async () => {
+  fakeAccount({ uploads: a1Uploads() });
+  const real = globalThis.fetch;
+  let reads = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes(`/stream/${uidFor(6)}/downloads`) && (init.method || "GET") === "GET") {
+      reads++;
+      return new Response(JSON.stringify({ success: false, errors: [{ code: 10000 }] }), { status: 403 });
+    }
+    return real(url, init);
+  };
+  const { code, out } = await quiet(() => protect({ out: outDir(), captionsFile: captionsFile([]), captionMode: "writer" }));
+  assert.equal(code, 1);
+  assert.equal(reads, 1);
+  assert.match(out, /HTTP 403 10000/);
+});
+
+test("Cloudflare POST failures are not blindly retried", async () => {
+  fakeAccount({ uploads: a1Uploads() });
+  const real = globalThis.fetch;
+  let writes = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).endsWith(`/stream/${uidFor(6)}`) && init.method === "POST") {
+      writes++;
+      return new Response(JSON.stringify({ success: false, errors: [{ code: 10500 }] }), { status: 500 });
+    }
+    return real(url, init);
+  };
+  const { code, out } = await quiet(() => protect({ out: outDir(), captionsFile: captionsFile([]), captionMode: "writer" }));
+  assert.equal(code, 1);
+  assert.equal(writes, 1);
+  assert.match(out, /HTTP 500 10500/);
+});
