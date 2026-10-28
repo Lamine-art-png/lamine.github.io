@@ -1,7 +1,7 @@
 // Course catalog (search + filters), course landing pages, and enrollment.
 import { html, raw } from "../lib/html.js";
 import { redirect, HttpError, json } from "../lib/http.js";
-import { formatDuration } from "../lib/util.js";
+import { formatDuration, lessonDuration } from "../lib/util.js";
 import { LOCALES } from "../lib/i18n.js";
 import { icon } from "../views/icons.js";
 import { courseThumb } from "../views/art.js";
@@ -157,7 +157,7 @@ export async function courseLanding(c) {
           ${m.summary ? html`<p class="small muted mod-summary"${contentLang(c, m, "summary")}>${m.summary}</p>` : ""}
           <ol>${m.lessons.map(
             (l) => html`<li><span class="grow">${icon(lessonTypeIcon(l.type), { size: 16 })} <span${contentLang(c, l, "title")}>${l.title}</span></span>
-              <span class="small muted nowrap">${t("duration.minutes", { n: l.est_minutes })}</span></li>`,
+              <span class="small muted nowrap">${lessonDuration(l, t)}</span></li>`,
           )}</ol></details>`,
       )}</div>
 

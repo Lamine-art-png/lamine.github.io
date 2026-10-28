@@ -116,3 +116,24 @@ export function formatDuration(minutes, t) {
   const r = m % 60;
   return r ? t("duration.hours_minutes", { h, m: r }) : t("duration.hours", { h });
 }
+
+
+/**
+ * Display the actual media runtime for a lesson with an attached video.
+ * A video is timed from the saved Stream upload metadata, in seconds.
+ * The editorial est_minutes is a reading/study estimate and must never be
+ * presented as if it were the clip length. Quiz and text-only lessons retain
+ * their estimated study time. Unavailable video metadata safely falls back
+ * to the editorial estimate rather than inventing a runtime.
+ */
+export function lessonDuration(lesson, t) {
+  const seconds = Number(lesson?.video_duration_seconds);
+  if (lesson?.video_id && lesson?.video_duration_seconds != null && Number.isFinite(seconds) && seconds > 0) {
+    const total = Math.max(1, Math.round(seconds));
+    const m = Math.floor(total / 60);
+    const s = String(total % 60).padStart(2, "0");
+    if (m >= 60) return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${s}`;
+    return `${m}:${s}`;
+  }
+  return t("duration.minutes", { n: lesson?.est_minutes ?? 0 });
+}

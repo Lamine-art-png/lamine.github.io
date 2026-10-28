@@ -2,7 +2,7 @@
 // resources, transcripts, feedback, and the progress API.
 import { html, raw, safeUrl } from "../lib/html.js";
 import { redirect, json, HttpError } from "../lib/http.js";
-import { newId, nowIso, parseJson } from "../lib/util.js";
+import { newId, nowIso, parseJson, lessonDuration } from "../lib/util.js";
 import { rateLimit, audit } from "../lib/security.js";
 import { renderMarkdown, md } from "../lib/markdown.js";
 import { icon } from "../views/icons.js";
@@ -166,7 +166,7 @@ export async function lessonPage(c) {
         const done = progress.get(l.id)?.status === "completed";
         return html`<li class="${done ? "done" : ""}"><a href="/learn/${course.slug}/${l.slug}" ${l.id === lesson.id ? raw('aria-current="page"') : ""}>
           ${icon(done ? "check-circle" : lessonTypeIcon(l.type), { size: 18, label: done ? t("lesson.completed") : undefined })}
-          <span>${l.title}<span class="lesson-meta">${t(`lesson.type.${l.type}`)} · ${t("duration.minutes", { n: l.est_minutes })}</span></span></a></li>`;
+          <span>${l.title}<span class="lesson-meta">${t(`lesson.type.${l.type}`)} · ${lessonDuration(l, t)}</span></span></a></li>`;
       })}</ol>`,
     )}
     ${exam && canTrack
@@ -193,7 +193,7 @@ export async function lessonPage(c) {
       <article class="class-content" data-lesson-root data-lesson-id="${lesson.id}" data-lesson-type="${lesson.type}" data-track="${canTrack ? "1" : "0"}" data-completed="${completed ? "1" : "0"}">
         ${flash ? alert("success", t("lesson.marked_complete")) : ""}
         ${c.url.searchParams.get("watch") === "1" && !completed ? alert("info", t("lesson.watch_to_complete")) : ""}
-        <p class="eyebrow">${icon(lessonTypeIcon(lesson.type), { size: 14 })} ${t(`lesson.type.${lesson.type}`)} · ${t("duration.minutes", { n: lesson.est_minutes })}</p>
+        <p class="eyebrow">${icon(lessonTypeIcon(lesson.type), { size: 14 })} ${t(`lesson.type.${lesson.type}`)} · ${lessonDuration({ ...lesson, video_duration_seconds: video?.duration_seconds }, t)}</p>
         <h1 class="display-sm"${contentLang(c, lesson, "title")}>${lesson.title}</h1>
         ${translationNotice(c, lesson._tr)}
         ${lesson.type === "video" || lesson.video_id ? await videoBlock(c, lesson, video, lp) : ""}
