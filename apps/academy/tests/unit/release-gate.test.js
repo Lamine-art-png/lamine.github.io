@@ -45,8 +45,8 @@ test("production refuses a stale dispatch before backup, migration or deployment
   assert.ok(guard > 0 && deploy > guard, "stale-SHA guard precedes all production deployment side effects");
   const step = production.slice(guard, deploy);
   assert.match(step, /set -euo pipefail/);
-  assert.match(step, /git ls-remote --exit-code origin refs\\/heads\\/main/);
+  assert.match(step, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.match(step, /\$current_main\" != \"\$GITHUB_SHA\"/);
   assert.match(step, /exit 1/);
-  assert.doesNotMatch(step, /continue-on-error|\\|\\| true/);
+  assert.doesNotMatch(step, /continue-on-error|\|\| true/);
 });
