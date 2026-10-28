@@ -5,6 +5,7 @@ on:
     paths:
       - scripts/author-academy-ui-catalogs.py
       - apps/academy/tests/integration/localization.test.js
+      - apps/academy/tests/integration/platform.test.js
       - apps/academy/tests/integration/staging-harness.test.js
       - apps/academy/tests/remote/staging.mjs
       - apps/academy/scripts/smoke.sh
