@@ -22,7 +22,7 @@ const expectedVideos = [
 const rows = async (env, table) =>
   (await env.DB.prepare(`SELECT id, sort_order FROM ${table} WHERE course_id = 'crs_a1' ORDER BY sort_order, id`).all()).results;
 const snapshot = async (env, table) =>
-  (await env.DB.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results;
+  (await env.DB.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()).results;
 
 async function rotate(env) {
   for (const table of ["modules", "draft_modules"]) {
