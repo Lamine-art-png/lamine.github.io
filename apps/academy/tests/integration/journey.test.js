@@ -24,7 +24,7 @@ test("critical learner journey with persistent backend data", async () => {
   assert.doesNotMatch(r.text, /action="\/courses\/[^"]+\/enroll"/);
   const homePage = await anon.get("/");
   assert.match(homePage.text, /Our first course is undergoing final review/);
-  assert.doesNotMatch(homePage.text, /October 29, 2026/);
+  assert.match(homePage.text, /First classes<\/strong><span class="tiny">Coming soon<\/span>/);
   const faqPage = await anon.get("/faq");
   assert.match(faqPage.text, /after the required reviews are complete/);
   assert.doesNotMatch(faqPage.text, /October 29, 2026/);
