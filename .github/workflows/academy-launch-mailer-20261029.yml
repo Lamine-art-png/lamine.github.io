@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: academy-first-course-launch-20261029
+  group: academy-first-course-launch-20261029-prod-check
   cancel-in-progress: false
 jobs:
   academy-mail:
