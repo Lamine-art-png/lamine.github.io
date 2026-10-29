@@ -95,6 +95,14 @@ if [ "${ACADEMY_IMPORT_A1_MACHINE_TRANSLATIONS:-0}" = "1" ]; then
     echo "::error::A1 machine translation pack failed validation; refusing deploy." >&2
     exit 1
   }
+  # A1 production English description was published with CRLF paragraph breaks,
+  # whereas the original seed and 59 machine packs use LF. The initial import
+  # correctly skipped that field. Generate a NEW migration (0015) with an
+  # exact CRLF source guard; never loosen 0014 or modify English course content.
+  node "${HERE}/build-a1-machine-description-crlf-repair.mjs" || {
+    echo "::error::A1 description CRLF repair failed source validation; refusing deploy." >&2
+    exit 1
+  }
 fi
 CONFIG=(--config wrangler.generated.toml "${ENV_ARGS[@]}")
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
