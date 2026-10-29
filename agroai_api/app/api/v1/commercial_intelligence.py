@@ -913,6 +913,7 @@ def wallet_checkout(
             cancel_url=f"{PLATFORM_CONSOLE_URL}/billing?wallet=cancelled",
             metadata=metadata,
             payment_intent_data={"metadata": metadata},
+            after_expiration={"recovery": {"enabled": True}},
             automatic_tax={"enabled": bool(getattr(settings, "PLATFORM_API_STRIPE_TAX_ENABLED", False))},
             idempotency_key="agroai-intelligence-topup-" + hashlib.sha256(
                 f"{ctx.organization.id}|{idempotency_key}|{payload.amount_cents}".encode("utf-8")
