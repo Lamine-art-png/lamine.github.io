@@ -1,0 +1,27 @@
+name: Portal Source Snapshot
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/portal-source-snapshot-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portal-source-snapshot
+          path: |
+            figma-enterprise-v4/src/app
+            figma-enterprise-v4/vite.config.ts
+            figma-enterprise-v4/package.json
+            shared/ui-catalog.en.json
+            shared/supported-locales.json
+          retention-days: 2
