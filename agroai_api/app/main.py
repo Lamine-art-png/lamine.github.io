@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 import math
+import os
 import re
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -86,6 +87,19 @@ def saas_portal_schema_status() -> dict[str, Any]:
 async def lifespan(app: FastAPI):
     """Start optional background services without making them API boot blockers."""
     schema_status = saas_portal_schema_status()
+    # Explicitly gated, one-time Academy access announcement. Runs only when
+    # the operator sets the exact campaign ID and private BCC in Render. The
+    # daemon thread cannot delay readiness; each recipient is durably reserved
+    # in the production database before the Resend call for idempotency.
+    if os.environ.get("AGROAI_ACADEMY_A1_LAUNCH_SEND") == "academy-a1-live-2026-10-29-v1":
+        try:
+            from threading import Thread
+            from app.services.academy_course_launch_mailer import send_academy_launch_once
+
+            Thread(target=send_academy_launch_once, daemon=True, name="academy-launch-20261029").start()
+            logger.warning("ACADEMY_CAMPAIGN_DISPATCH_STARTED (opt-in, private audit)")
+        except Exception:
+            logger.exception("ACADEMY_CAMPAIGN_DISPATCH_INIT_FAILED")
     if not schema_status["ready"]:
         logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
     # Uvicorn owns the INFO handler in production; module logger INFO is suppressed.
