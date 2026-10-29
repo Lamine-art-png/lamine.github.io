@@ -14,6 +14,7 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -86,7 +87,7 @@ def send_academy_launch_once() -> dict[str, int]:
     if not settings.RESEND_API_KEY or not str(settings.RESEND_API_KEY).startswith("re_"):
         logger.error("ACADEMY_CAMPAIGN_BLOCKED: existing production Resend credential unavailable")
         return {"blocked": 1}
-    if "mail.agroai-pilot.com" != str(settings.FROM_EMAIL).rsplit("@", 1)[-1].lower():
+    if "mail.agroai-pilot.com" != parseaddr(str(settings.FROM_EMAIL))[1].rsplit("@", 1)[-1].lower():
         logger.error("ACADEMY_CAMPAIGN_BLOCKED: production Resend domain not verified in sender config")
         return {"blocked": 1}
     h = (TEMPLATE_DIR / "academy_launch_20261029.html").read_text(encoding="utf-8")
