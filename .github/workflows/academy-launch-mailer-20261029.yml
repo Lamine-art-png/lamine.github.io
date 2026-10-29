@@ -1,0 +1,124 @@
+name: Academy Launch Mailer (Scoped)
+on:
+  push:
+    branches: ["ops/academy-launch-mailer-20261029"]
+    paths:
+      - ".github/workflows/academy-launch-mailer-20261029.yml"
+      - "docs/campaigns/academy-2026-10-29/encrypted-audience.json"
+permissions:
+  contents: read
+concurrency:
+  group: academy-first-course-launch-20261029
+  cancel-in-progress: false
+jobs:
+  academy-mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup encryption dependencies
+        run: python3 -m pip install --disable-pip-version-check cryptography
+      - name: Inspect scoped production sender and produce safe encryption public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,hashlib,base64
+          from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+          from cryptography.hazmat.primitives.serialization import Encoding,PublicFormat
+          secret=(os.getenv('RESEND_API_KEY') or '').strip()
+          if not secret.startswith('re_'):
+              raise SystemExit('CONFIG_BLOCKED: No verified Resend API key available to this job.')
+          seed=hashlib.sha256(b'agro-ai-academy-launch-audience-v1|'+secret.encode()).digest()
+          pub=X25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(Encoding.Raw,PublicFormat.Raw)
+          print('ACADEMY_ENCRYPTION_PUBLIC_KEY='+base64.b64encode(pub).decode())
+          print('ACADEMY_SENDER_CREDENTIAL_PRESENT=yes')
+          PY
+      - name: Send only pre-approved encrypted audience with idempotency and private audit
+        if: ${{ hashFiles('docs/campaigns/academy-2026-10-29/encrypted-audience.json') != '' }}
+        shell: bash
+        env:
+          MAIL_CAMPAIGN_ID: academy-a1-live-2026-10-29-v1
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,hashlib,base64,datetime,re,time,urllib.request,urllib.error
+          from pathlib import Path
+          from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X25519PublicKey
+          from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+          from cryptography.hazmat.primitives import hashes
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          secret=(os.getenv('RESEND_API_KEY') or '').strip()
+          if not secret.startswith('re_'): raise SystemExit('BLOCKED: Resend credential not available')
+          seed=hashlib.sha256(b'agro-ai-academy-launch-audience-v1|'+secret.encode()).digest()
+          private=X25519PrivateKey.from_private_bytes(seed)
+          packet=json.loads(Path('docs/campaigns/academy-2026-10-29/encrypted-audience.json').read_text())
+          if packet.get('v')!=1 or packet.get('campaign')!='academy-a1-live-2026-10-29-v1':raise SystemExit('BLOCKED: wrong encrypted campaign')
+          eph=X25519PublicKey.from_public_bytes(base64.b64decode(packet['ephemeral_public']))
+          sym=HKDF(algorithm=hashes.SHA256(),length=32,salt=b'agroai-academy-20261029',info=b'campaign-audience-v1').derive(private.exchange(eph))
+          data=AESGCM(sym).decrypt(base64.b64decode(packet['nonce']),base64.b64decode(packet['ciphertext']),b'agro-ai-academy-20261029')
+          people=json.loads(data)
+          if not isinstance(people,list) or not 1<=len(people)<=60:raise SystemExit('BLOCKED: bad audience size')
+          sender='AGRO-AI Academy <academy@mail.agroai-pilot.com>'
+          audit='laminedabo221@outlook.com'
+          subject='Your early access starts now — AGRO-AI Academy is open'
+          html_template=Path('docs/campaigns/academy-2026-10-29/launch.html').read_text()
+          text_template=Path('docs/campaigns/academy-2026-10-29/launch.txt').read_text()
+          forbidden=['INTERNAL TEST PREVIEW','Register for free early access','2026-10-15']
+          if any(x in html_template for x in forbidden):raise SystemExit('BLOCKED: old content')
+          if 'https://academy.agroai-pilot.com/' not in html_template or 'https://agroai-pilot.com/news/agro-ai-academy-courses-now-open' not in html_template: raise SystemExit('BLOCKED: wrong links')
+          if '<img' not in html_template or 'academy-lockup-h-light.webp' not in html_template:raise SystemExit('BLOCKED: nonofficial email template')
+          if '{{first_name}}' not in html_template or '{{first_name}}' not in text_template:raise SystemExit('BLOCKED: lost personalization')
+          now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+          print('ACADEMY_EMAIL_SEND_START='+now)
+          print('SOURCE_AUDIENCE_COUNT='+str(len(people)))
+          seen=set();success=0;failures=[];skips=0
+          for ix,p in enumerate(people):
+              email=str(p.get('email') or '').strip().lower()
+              first=str(p.get('first_name') or '').strip()
+              if not re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+',email):raise SystemExit('BLOCKED: invalid recipient format index '+str(ix))
+              if p.get('opted_in') is not True:raise SystemExit('BLOCKED: non-consenting address index '+str(ix))
+              if email in seen:raise SystemExit('BLOCKED: duplicate address index '+str(ix))
+              if email==audit or email.endswith('.invalid') or 'example.' in email:raise SystemExit('BLOCKED: internal address')
+              seen.add(email)
+          for i,p in enumerate(people):
+              email=p['email'].strip().lower()
+              first=re.sub(r'[^\\w\\- \\u00c0-\\u024f]','',str(p.get('first_name') or '')).strip()[:50] or 'there'
+              h=html_template.replace('{{first_name}}',first.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;'))
+              t=text_template.replace('{{first_name}}',first)
+              key='academy-first-course-live-20261029-'+hashlib.sha256(email.encode()).hexdigest()[:24]
+              message={'from':sender,'to':[email],'bcc':[audit],'reply_to':'contact@agroai-pilot.com','subject':subject,'html':h,'text':t,
+                       'tags':[{'name':'campaign','value':'academy-a1-live-20261029'}]}
+              request=urllib.request.Request('https://api.resend.com/emails',method='POST',data=json.dumps(message).encode(),headers={
+               'Authorization':'Bearer '+secret,'Content-Type':'application/json','Idempotency-Key':key})
+              try:
+                  with urllib.request.urlopen(request,timeout=35) as resp:
+                      body=json.loads(resp.read().decode())
+                      if 200<=resp.status<300 and body.get('id'):
+                          success+=1
+                          print('SEND_ACCEPTED index='+str(i+1)+' provider_id='+body['id'])
+                      else:
+                          failures.append({'i':i+1,'type':'missing_id'})
+                          print('SEND_REJECTED index='+str(i+1)+' missing_id')
+              except urllib.error.HTTPError as e:
+                  try: ebody=json.loads(e.read().decode())
+                  except: ebody={}
+                  code=str(e.code); typ=str(ebody.get('name') or ebody.get('error') or 'provider_rejected')[:90]
+                  failures.append({'i':i+1,'http':code,'type':typ})
+                  print('SEND_REJECTED index='+str(i+1)+' status='+code+' type='+typ)
+                  if int(code) in (401,403,422):break
+              except Exception as e:
+                  failures.append({'i':i+1,'type':'network'})
+                  print('SEND_REJECTED index='+str(i+1)+' type=network')
+              time.sleep(.12)
+          print('ACADEMY_TOTAL_ACCEPTED='+str(success))
+          print('ACADEMY_TOTAL_FAILED='+str(len(failures)))
+          print('ACADEMY_BCC_TARGET='+audit)
+          if failures:
+              print('ACADEMY_FAILURE_DETAILS='+json.dumps(failures))
+              raise SystemExit('ACADEMY_MAIL_PARTIALLY_FAILED')
+          print('ACADEMY_CAMPAIGN_PROVIDER_ACCEPTED_ALL')
+          PY
