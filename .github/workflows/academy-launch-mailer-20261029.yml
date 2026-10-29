@@ -14,9 +14,9 @@ jobs:
   academy-mail:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: academy-production
+    environment: production
     env:
-      RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY || secrets.ACADEMY_STAGING_RESEND_API_KEY || secrets.OUTREACH_RESEND_API_KEY || secrets.RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup encryption dependencies
