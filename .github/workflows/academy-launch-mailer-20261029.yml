@@ -14,9 +14,9 @@ jobs:
   academy-mail:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: production
+    environment: academy-production
     env:
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.ACADEMY_PRODUCTION_RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup encryption dependencies
@@ -79,14 +79,14 @@ jobs:
           for ix,p in enumerate(people):
               email=str(p.get('email') or '').strip().lower()
               first=str(p.get('first_name') or '').strip()
-              if not re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+',email):raise SystemExit('BLOCKED: invalid recipient format index '+str(ix))
+              if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise SystemExit('BLOCKED: invalid recipient format index '+str(ix))
               if p.get('opted_in') is not True:raise SystemExit('BLOCKED: non-consenting address index '+str(ix))
               if email in seen:raise SystemExit('BLOCKED: duplicate address index '+str(ix))
               if email==audit or email.endswith('.invalid') or 'example.' in email:raise SystemExit('BLOCKED: internal address')
               seen.add(email)
           for i,p in enumerate(people):
               email=p['email'].strip().lower()
-              first=re.sub(r'[^\\w\\- \\u00c0-\\u024f]','',str(p.get('first_name') or '')).strip()[:50] or 'there'
+              first=re.sub(r'[^\w\- \u00c0-\u024f]','',str(p.get('first_name') or '')).strip()[:50] or 'there'
               h=html_template.replace('{{first_name}}',first.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;'))
               t=text_template.replace('{{first_name}}',first)
               key='academy-first-course-live-20261029-'+hashlib.sha256(email.encode()).hexdigest()[:24]
