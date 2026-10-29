@@ -1,0 +1,24 @@
+Hi {{first_name}},
+
+You registered for early access to AGRO-AI Academy. Today, we're opening the doors.
+
+Our first course, Introduction to Artificial Intelligence in Agriculture, is now available. Start learning at your own pace, completely free.
+
+Your first course includes:
+- Four practical learning modules
+- Fourteen video lessons
+- Quizzes and a final assessment
+- A free, publicly verifiable certificate
+
+Start learning free: https://academy.agroai-pilot.com/
+
+More courses will follow across our programs, including the AGRO-AI Enterprise Portal, Platform API, applied agricultural intelligence and advanced AI.
+
+Thank you for being here from the start. We're glad to have you learning with us.
+
+Read the official announcement: https://agroai-pilot.com/news/agro-ai-academy-courses-now-open
+
+The AGRO-AI Academy Team
+San Francisco, California
+
+You are receiving this because you registered for Academy course updates. To stop receiving updates, reply with "unsubscribe".
