@@ -670,7 +670,7 @@ async def api_stripe_webhook(
     if event_type == "checkout.session.completed":
         subscription.stripe_subscription_id = obj.get("subscription") or subscription.stripe_subscription_id
         subscription.stripe_customer_id = obj.get("customer") or subscription.stripe_customer_id
-        subscription.status = "active" if obj.get("payment_status") in {"paid", "no_payment_required"} else "trialing"
+        subscription.status = "active" if obj.get("payment_status") == "paid" else "pending"
     elif event_type.startswith("customer.subscription."):
         subscription.stripe_subscription_id = obj.get("id") or subscription.stripe_subscription_id
         subscription.stripe_customer_id = obj.get("customer") or subscription.stripe_customer_id
@@ -680,7 +680,7 @@ async def api_stripe_webhook(
             "past_due": "past_due",
             "unpaid": "unpaid",
             "canceled": "canceled",
-            "incomplete": "trialing",
+            "incomplete": "pending",
             "incomplete_expired": "canceled",
             "paused": "suspended",
         }
