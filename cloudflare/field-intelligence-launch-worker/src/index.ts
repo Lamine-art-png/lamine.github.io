@@ -12,6 +12,12 @@ const ACADEMY_COVER_PATH = `${ACADEMY_ARTICLE_PATH}/cover.svg`;
 const ACADEMY_ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-academy/index.html";
 const ACADEMY_COVER_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-academy/cover.svg";
 
+// Separate Oct 29 product launch; preserve the Oct 15 Academy introduction unmodified.
+const ACADEMY_COURSES_LIVE_PATH = "/news/agro-ai-academy-courses-now-open";
+const ACADEMY_COURSES_LIVE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/agro-ai-academy-courses-now-open/index.html";
+const ACADEMY_COURSES_LIVE_PUBLISH_AT = "2026-10-29T08:00:00-07:00";
+const ACADEMY_COURSES_LIVE_PUBLISH_MS = Date.parse(ACADEMY_COURSES_LIVE_PUBLISH_AT);
+
 const ASSURANCE_ARTICLE_PATH = "/news/agro-ai-assurance-enterprise-portal";
 const FIELD_INTELLIGENCE_UPDATE_ARTICLE_PATH = "/news/agro-ai-field-intelligence-upgrade";
 const PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch";
@@ -60,6 +66,15 @@ const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefa
 
 const NEWSROOM_CARD_SCRIPT = `(()=>{
   const managed=[
+    {
+      path:"/news/agro-ai-academy-courses-now-open",
+      image:"https://img.youtube.com/vi/727cWPWdfI4/maxresdefault.jpg",
+      category:"Company News",
+      title:"AGRO-AI Academy is open. The future is yours to learn.",
+      description:"Our first free agricultural AI course is live: 14 video lessons, practical assessments, a verifiable certificate, and a five-program roadmap.",
+      date:"San Francisco, California — October 29, 2026",
+      publishAt:"2026-10-29T08:00:00-07:00"
+    },
     {
       path:"/news/agro-ai-multi-state-research-milestone",
       image:"/news/agro-ai-multi-state-research-milestone/cover.svg",
@@ -250,6 +265,21 @@ async function academyArticleResponse(request: Request): Promise<Response> {
   return sourceArticleResponse(request, ACADEMY_ARTICLE_SOURCE, "AGRO-AI-Academy-News/1.0", "The AGRO-AI Academy announcement is temporarily unavailable.");
 }
 
+async function academyCoursesLiveResponse(request: Request): Promise<Response> {
+  // Do not disclose the publication page before the promised 8 a.m. Pacific launch.
+  if (Date.now() < ACADEMY_COURSES_LIVE_PUBLISH_MS) {
+    const headers = new Headers({
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow",
+      "x-agroai-scheduled-publication": ACADEMY_COURSES_LIVE_PUBLISH_AT,
+      "retry-after": String(Math.max(1, Math.ceil((ACADEMY_COURSES_LIVE_PUBLISH_MS - Date.now()) / 1000))),
+    });
+    return new Response(null, { status: 404, headers });
+  }
+  return sourceArticleResponse(request, ACADEMY_COURSES_LIVE_SOURCE, "AGRO-AI-Academy-Courses-Launch/1.0", "The AGRO-AI Academy course launch article is temporarily unavailable.");
+}
+
 async function cropIntelligenceArticleResponse(request: Request): Promise<Response> {
   if (!cropIntelligencePublished()) return cropIntelligenceScheduledResponse();
   return sourceArticleResponse(request, CROP_INTELLIGENCE_ARTICLE_SOURCE, "AGRO-AI-Crop-Intelligence-Launch/1.0", "The AGRO-AI Crop Intelligence launch article is temporarily unavailable.");
@@ -382,6 +412,7 @@ export default {
     if (normalized === RESEARCH_COVER_PATH) return repositoryAssetResponse(request, RESEARCH_COVER_SOURCE, "image/svg+xml", "supplied-research-milestone-cover");
 
     if (normalized === ACADEMY_ARTICLE_PATH) return academyArticleResponse(request);
+    if (normalized === ACADEMY_COURSES_LIVE_PATH) return academyCoursesLiveResponse(request);
     if (normalized === ACADEMY_COVER_PATH) {
       return repositoryAssetResponse(request, ACADEMY_COVER_SOURCE, "image/svg+xml", "supplied-academy-cover");
     }

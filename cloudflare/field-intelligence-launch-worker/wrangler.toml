@@ -14,6 +14,10 @@ routes = [
   { pattern = "agroai-pilot.com/news/introducing-agro-ai-academy", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/introducing-agro-ai-academy/*", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/introducing-agro-ai-academy*", zone_name = "agroai-pilot.com" },
+  # Exact, isolated course launch article route; existing Newsroom and Academy URLs are unchanged.
+  { pattern = "agroai-pilot.com/news/agro-ai-academy-courses-now-open", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/news/agro-ai-academy-courses-now-open/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/news/agro-ai-academy-courses-now-open*", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal/*", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/agro-ai-crop-intelligence-enterprise-portal*", zone_name = "agroai-pilot.com" },
