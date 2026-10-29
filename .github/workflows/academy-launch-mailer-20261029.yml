@@ -1,7 +1,7 @@
 name: Academy Launch Mailer (Scoped)
 on:
   push:
-    branches: ["ops/academy-launch-mailer-20261029"]
+    branches: ["main"]
     paths:
       - ".github/workflows/academy-launch-mailer-20261029.yml"
       - "docs/campaigns/academy-2026-10-29/encrypted-audience.json"
