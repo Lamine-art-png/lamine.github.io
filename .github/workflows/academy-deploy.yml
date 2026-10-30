@@ -68,9 +68,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # The staging write-path test needs a token shared by the staging Worker
-      # and the test. Unless one is configured, each run generates a fresh one
-      # (deploy.sh sets it on the Worker), so it rotates on every deploy.
+      # Refuse to create an unencrypted backup before any staging mutation.
       - name: Require encrypted staging backups (release gate)
         shell: bash
         run: |
@@ -79,6 +77,9 @@ jobs:
             echo "::error::ACADEMY_STAGING_BACKUP_PASSPHRASE (20+ characters) is required. Refusing to deploy staging or store an unencrypted database backup. Configure it in the protected academy-staging environment."
             exit 1
           fi
+      # The staging write-path test needs a token shared by the staging Worker
+      # and the test. Unless one is configured, each run generates a fresh one
+      # (deploy.sh sets it on the Worker), so it rotates on every deploy.
       - name: Staging test token (configured, or generated for this run)
         run: |
           token="${CONFIGURED_STAGING_TEST_INBOX_TOKEN:-}"
